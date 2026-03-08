@@ -1,9 +1,9 @@
 import { useState, useCallback, useEffect } from 'react'
-import { hasConfigured, getTabVisibility, DEFAULT_LAYER_TOGGLES, getVisualsPrefs } from './constants'
-import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { hasConfigured, setConfigured as persistConfigured, setConfigProfile, getTabVisibility, DEFAULT_LAYER_TOGGLES, getVisualsPrefs } from './constants'
+import { AuthProvider } from './contexts/AuthContext'
 import { SavedArticlesProvider } from './contexts/SavedArticlesContext'
 import { SavedXPostsProvider } from './contexts/SavedXPostsContext'
-import ConfigProfileSetup from './components/ConfigProfileSetup'
+import { SavedPlacesProvider } from './contexts/SavedPlacesContext'
 import HomeScreen from './components/HomeScreen'
 import MapView from './components/MapView'
 import FeedsView from './components/FeedsView'
@@ -13,8 +13,8 @@ import PlaceSearch from './components/PlaceSearch'
 import WeatherHUD from './components/WeatherHUD'
 import AdvancedSearch from './components/AdvancedSearch'
 import OsintXView from './components/OsintXView'
-import OsintCamerasView from './components/OsintCamerasView'
 import UserUpdatesView from './components/UserUpdatesView'
+import MyPlacesView from './components/MyPlacesView'
 import BroadcastsView from './components/BroadcastsView'
 import SettingsView from './components/SettingsView'
 import ResourcesView from './components/ResourcesView'
@@ -36,7 +36,7 @@ const MAP_VIEWS = [
 const FEED_VIEWS = [
   { id: 'osint-feeds', label: 'OSINT Feeds', tabKey: 'osintFeeds' },
   { id: 'osint-x', label: 'OSINT (X/Twitter)', tabKey: 'osintX' },
-  { id: 'osint-cameras', label: 'Live Cameras', tabKey: 'osintCameras' },
+  { id: 'my-places', label: 'My Places', tabKey: 'places' },
   { id: 'advanced-search', label: 'Advanced Search', tabKey: 'advancedSearch' },
   { id: 'news-feeds', label: 'News Feeds', tabKey: 'newsFeeds' },
   { id: 'saved', label: 'Saved', tabKey: 'saved' },
@@ -81,6 +81,18 @@ function App() {
   const [eventFilterByView, setEventFilterByView] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [showTutorial, setShowTutorial] = useState(false)
+  const [deviceType, setDeviceType] = useState('desktop')
+
+  useEffect(() => {
+    const detectDevice = () => {
+      const isMobileViewport = window.matchMedia('(max-width: 900px)').matches
+      const isTouchDevice = window.matchMedia('(pointer: coarse)').matches
+      setDeviceType(isMobileViewport || isTouchDevice ? 'mobile' : 'desktop')
+    }
+    detectDevice()
+    window.addEventListener('resize', detectDevice)
+    return () => window.removeEventListener('resize', detectDevice)
+  }, [])
 
   useEffect(() => {
     if (!navigator.geolocation) return
@@ -115,25 +127,14 @@ function App() {
     setFlyToTarget({ lng, lat, zoom: 10, properties: feature.properties || {} })
   }, [])
 
-  const handleOnboardingComplete = useCallback(() => {
-    setConfigured(true)
-  }, [])
-
   useEffect(() => {
-    if (!configured) return
     try {
       if (localStorage.getItem('supermap_tutorial_seen') !== '1') setShowTutorial(true)
     } catch {}
-  }, [configured])
-
-  if (!configured) {
-    return (
-      <ConfigProfileSetup onComplete={handleOnboardingComplete} />
-    )
-  }
+  }, [])
 
   const isMapView = ['osint-map', 'conflict-map'].includes(activeView)
-  const isFeedView = ['osint-feeds', 'news-feeds', 'osint-x', 'osint-cameras', 'advanced-search', 'saved', 'updates', 'broadcasts'].includes(activeView)
+  const isFeedView = ['osint-feeds', 'news-feeds', 'osint-x', 'my-places', 'advanced-search', 'saved', 'updates', 'broadcasts'].includes(activeView)
   const isSettingsView = activeView === 'settings'
   const tabVisibility = getTabVisibility()
 
@@ -150,7 +151,7 @@ function App() {
   const setActiveViewWithMode = useCallback((viewId) => {
     setActiveView(viewId)
     if (['osint-map', 'conflict-map'].includes(viewId)) setFooterMode(FOOTER_MODES.MAPS)
-    else if (['osint-feeds', 'osint-x', 'osint-cameras', 'advanced-search', 'news-feeds', 'saved', 'updates', 'broadcasts'].includes(viewId)) setFooterMode(FOOTER_MODES.FEEDS)
+    else if (['osint-feeds', 'osint-x', 'my-places', 'advanced-search', 'news-feeds', 'saved', 'updates', 'broadcasts'].includes(viewId)) setFooterMode(FOOTER_MODES.FEEDS)
     else if (viewId === 'home') setFooterMode(FOOTER_MODES.HOME)
     else if (viewId === 'resources') setFooterMode(FOOTER_MODES.RESOURCES)
     else if (viewId === 'report-maker') setFooterMode(FOOTER_MODES.REPORTS)
@@ -177,12 +178,15 @@ function App() {
   }, [configured, apiBase])
 
   const visuals = getVisualsPrefs()
-  const appClass = ['app', `app--theme-${visuals.theme || 'dark'}`, visuals.compact ? 'app--compact' : '', `app--font-${visuals.fontSize || 'normal'}`].filter(Boolean).join(' ')
+  const activeLayoutMode = visuals.layoutMode || 'auto'
+  const resolvedDeviceType = activeLayoutMode === 'auto' ? deviceType : activeLayoutMode
+  const appClass = ['app', `app--theme-${visuals.theme || 'dark'}`, visuals.compact ? 'app--compact' : '', `app--font-${visuals.fontSize || 'normal'}`, `app--device-${resolvedDeviceType}`].filter(Boolean).join(' ')
 
   return (
     <AuthProvider>
       <SavedArticlesProvider>
-      <SavedXPostsProvider>
+        <SavedXPostsProvider>
+          <SavedPlacesProvider>
     <div className={appClass}>
       <header className="app-omnibar-strip">
         <div className="app-omnibar-inner">
@@ -225,7 +229,7 @@ function App() {
                 <TabButton
                   key={v.id}
                   viewId={v.id}
-                  label={v.id === 'osint-cameras' ? 'Live Cameras' : v.label}
+                  label={v.label}
                   visible={v.id === 'osint-x' ? true : tabVisibility[v.tabKey]}
                   activeView={activeView}
                   setActiveView={setActiveViewWithMode}
@@ -272,9 +276,9 @@ function App() {
         {activeView === 'osint-x' && (
           <OsintXView keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} onPinnedToMap={handlePinnedToMap} />
         )}
-        {activeView === 'osint-cameras' && (
+        {activeView === 'my-places' && (
           <div className="main-feed-view">
-            <OsintCamerasView onFlyTo={handleFlyTo} />
+            <MyPlacesView onFlyTo={handleFlyTo} onSignInRequired={() => setShowAuthModal(true)} />
           </div>
         )}
         {activeView === 'advanced-search' && (
@@ -379,13 +383,19 @@ function App() {
     {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
     {showTutorial && (
       <QuickTutorialModal
-        onClose={() => {
+        onClose={(profileName) => {
+          if (profileName) {
+            setConfigProfile({ name: profileName })
+          }
+          persistConfigured(true)
+          setConfigured(true)
           try { localStorage.setItem('supermap_tutorial_seen', '1') } catch {}
           setShowTutorial(false)
         }}
       />
     )}
-      </SavedXPostsProvider>
+          </SavedPlacesProvider>
+        </SavedXPostsProvider>
       </SavedArticlesProvider>
     </AuthProvider>
   )

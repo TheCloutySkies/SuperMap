@@ -279,3 +279,80 @@
   border: none;
   color: #8b949e;
 }
+
+/* Mobile-first dimension overrides without touching desktop defaults. */
+@media (max-width: 900px) {
+  .app--device-mobile {
+    padding-bottom: 58px;
+  }
+
+  .app--device-mobile .app-omnibar-strip {
+    padding: 0.55rem 0.6rem;
+  }
+
+  .app--device-mobile .app-omnibar-inner {
+    gap: 0.55rem;
+    max-width: 100%;
+  }
+
+  .app--device-mobile .app-omnibar-strip .omnibar-global-wrap {
+    min-width: 0;
+    max-width: none;
+    flex: 1 1 100%;
+  }
+
+  .app--device-mobile .app-body {
+    flex-direction: column;
+  }
+
+  .app--device-mobile .sidebar-left {
+    width: 100%;
+    min-width: 0;
+    border-right: none;
+    border-bottom: 1px solid #30363d;
+  }
+
+  .app--device-mobile .sidebar-title {
+    padding: 0.6rem 0.75rem;
+    font-size: 0.95rem;
+  }
+
+  .app--device-mobile .nav {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 0.45rem 0.5rem;
+    gap: 0.4rem;
+    scrollbar-width: thin;
+  }
+
+  .app--device-mobile .nav-tab {
+    margin: 0;
+    white-space: nowrap;
+    flex: 0 0 auto;
+    padding: 0.45rem 0.65rem;
+    font-size: 0.8rem;
+  }
+
+  .app--device-mobile .main .map-view-wrapper,
+  .app--device-mobile .main .map-view-wrapper .map-container {
+    min-height: calc(100vh - 260px);
+  }
+
+  .app--device-mobile .footer {
+    height: 58px;
+  }
+
+  .app--device-mobile .footer-switch {
+    width: calc(100vw - 14px);
+    overflow-x: auto;
+    justify-content: flex-start;
+    scrollbar-width: thin;
+  }
+
+  .app--device-mobile .footer-btn {
+    padding: 0.45rem 0.75rem;
+    font-size: 0.72rem;
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
+}

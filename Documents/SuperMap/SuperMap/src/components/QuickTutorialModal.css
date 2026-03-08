@@ -28,6 +28,25 @@
   color: #8b949e;
 }
 
+.quick-tutorial-profile {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.7rem;
+}
+
+.quick-tutorial-profile label {
+  font-size: 0.8rem;
+  color: #8b949e;
+}
+
+.quick-tutorial-profile input {
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  background: #0d1117;
+  color: #e6edf3;
+  padding: 0.55rem 0.6rem;
+}
+
 .quick-tutorial-steps {
   margin: 0;
   padding-left: 1rem;
@@ -57,5 +76,14 @@
   border-radius: 6px;
   color: #fff;
   cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .quick-tutorial-modal {
+    max-width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 0.9rem;
+  }
 }
 

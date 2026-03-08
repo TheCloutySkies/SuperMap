@@ -5,8 +5,10 @@
 2. In the Supabase dashboard, go to **SQL Editor** and run:
    - `migrations/001_saved_articles.sql`
    - `migrations/002_saved_x_posts_and_user_updates.sql`
+   - `migrations/003_saved_places_and_delete_account.sql`
+   - `migrations/004_saved_place_lists.sql`
 
-   These create `saved_articles`, `saved_x_posts`, and `user_updates` with Row Level Security so users only access their own saved content and authenticated users can read/post forum updates.
+   These create `saved_articles`, `saved_x_posts`, `user_updates`, `saved_places`, and `saved_place_lists` with Row Level Security so users only access their own saved content and authenticated users can read/post forum updates. They also add `delete_my_account()` for full user-data wipe + auth account deletion.
 
 3. In **Project Settings → API**, copy:
    - **Project URL** → use as `VITE_SUPABASE_URL`

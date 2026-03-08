@@ -19,9 +19,7 @@ export default function HomeScreen({ onNavigate }) {
       <div className="home-screen-hero">
         <h1 className="home-screen-title">SuperMap</h1>
         <p className="home-screen-tagline">Open-source OSINT & tactical dashboard</p>
-        <p className="home-screen-desc">
-          Unified search across news, infrastructure, safety events, and live sources. Draw areas, filter by tags, and correlate events on the map.
-        </p>
+        <p className="home-screen-desc">This tool is like Palantir if it wasn't evil.</p>
       </div>
 
       <section className="home-screen-section">

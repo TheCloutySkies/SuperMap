@@ -37,7 +37,6 @@ const OSINT_LAYER_SECTIONS = [
   {
     title: 'Surveillance & Utilities',
     layers: [
-      { key: 'flockCameras', label: 'Live Cameras' },
       { key: 'utilityOutages', label: 'Utility Outages' },
     ],
   },
@@ -190,9 +189,6 @@ export default function RightSidebar({
                       )}
                       {key === 'sentinel2BurnScars' && layerToggles[key] && (
                         <span className="layer-hint">Sentinel Hub instance active</span>
-                      )}
-                      {key === 'flockCameras' && layerToggles[key] && (
-                        <span className="layer-hint">Flock: RapidAPI key or backend /api/cameras</span>
                       )}
                       {statusKey === 'adsb' && layerToggles[key] && (
                         <span className="layer-status-pending">Data Connection Pending</span>

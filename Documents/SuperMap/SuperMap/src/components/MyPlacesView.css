@@ -1,0 +1,19 @@
+.my-places-view { padding: 1rem 1.25rem; color: var(--main-text, #e6edf3); }
+.my-places-hint { color: var(--main-muted, #8b949e); margin-top: -0.35rem; }
+.my-places-lists-admin, .my-places-bulk { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.6rem; max-width: 560px; }
+.my-places-lists-admin input, .my-places-bulk select { flex: 1; border: 1px solid var(--main-border, #30363d); border-radius: 8px; background: var(--main-card, #161b22); color: var(--main-text, #e6edf3); padding: 0.45rem 0.6rem; }
+.my-places-lists-admin button, .my-places-bulk button { border: 1px solid #30363d; background: #0d1117; color: #c9d1d9; border-radius: 8px; padding: 0.45rem 0.7rem; cursor: pointer; }
+.my-places-form { display: grid; gap: 0.5rem; max-width: 560px; margin-bottom: 0.9rem; }
+.my-places-form input, .my-places-form select, .my-places-form textarea {
+  border: 1px solid var(--main-border, #30363d); border-radius: 8px; background: var(--main-card, #161b22); color: var(--main-text, #e6edf3); padding: 0.5rem 0.6rem;
+}
+.my-places-form button { width: fit-content; border: 1px solid #2ea043; background: #238636; color: #fff; border-radius: 8px; padding: 0.45rem 0.8rem; cursor: pointer; }
+.my-places-group { margin-bottom: 0.8rem; border: 1px solid var(--main-border, #30363d); border-radius: 10px; padding: 0.55rem 0.65rem; background: var(--main-card, #161b22); }
+.my-places-group-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.3rem; }
+.my-places-group-actions { display: flex; gap: 0.35rem; }
+.my-places-group h3 { margin: 0 0 0.4rem; font-size: 0.95rem; }
+.my-places-group ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.45rem; }
+.my-places-group li { display: grid; grid-template-columns: auto 1fr auto auto; gap: 0.45rem; align-items: center; }
+.my-places-select input { accent-color: #238636; }
+.my-places-group li button { border: 1px solid #30363d; background: #0d1117; color: #c9d1d9; border-radius: 6px; padding: 0.3rem 0.5rem; cursor: pointer; }
+.my-places-group li span { color: #8b949e; font-size: 0.8rem; }

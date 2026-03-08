@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import './QuickTutorialModal.css'
 
 const STEPS = [
@@ -24,11 +25,23 @@ const STEPS = [
 ]
 
 export default function QuickTutorialModal({ onClose }) {
+  const [profileName, setProfileName] = useState('')
+
   return (
     <div className="quick-tutorial-overlay" role="dialog" aria-modal="true" aria-label="Quick tutorial">
       <div className="quick-tutorial-modal">
         <h2>Welcome to SuperMap</h2>
-        <p className="quick-tutorial-intro">Quick tour of your tools:</p>
+        <p className="quick-tutorial-intro">Quick setup + tour of your tools:</p>
+        <div className="quick-tutorial-profile">
+          <label htmlFor="tutorial-profile-name">Profile name (optional)</label>
+          <input
+            id="tutorial-profile-name"
+            type="text"
+            value={profileName}
+            onChange={(e) => setProfileName(e.target.value)}
+            placeholder="e.g. Operations"
+          />
+        </div>
         <ul className="quick-tutorial-steps">
           {STEPS.map((s) => (
             <li key={s.title}>
@@ -38,7 +51,7 @@ export default function QuickTutorialModal({ onClose }) {
           ))}
         </ul>
         <div className="quick-tutorial-actions">
-          <button type="button" onClick={onClose}>Start</button>
+          <button type="button" onClick={() => onClose?.(profileName.trim())}>Start</button>
         </div>
       </div>
     </div>

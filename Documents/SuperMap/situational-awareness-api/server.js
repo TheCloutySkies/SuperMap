@@ -6,7 +6,6 @@ const newsService = require('./services/news')
 const osintService = require('./services/osint')
 const osintXFeedService = require('./services/osintXFeedService')
 const redditCommentsIngestor = require('./services/redditCommentsIngestor')
-const { startCameraEngine } = require('./camera-discovery/cameraEngine')
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -101,5 +100,4 @@ app.listen(PORT, () => {
   setInterval(runOsintXIngest, OSINT_X_INTERVAL_MS)
   setTimeout(() => runRedditCommentsIngest(), 8000)
   setInterval(runRedditCommentsIngest, REDDIT_COMMENTS_INTERVAL_MS)
-  startCameraEngine()
 })

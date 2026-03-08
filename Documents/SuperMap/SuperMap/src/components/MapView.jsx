@@ -15,13 +15,20 @@ import {
   fetchAcled,
   fetchAdsbRapidApi,
   fetchAdsbPlaceholder,
-  fetchFlockCameras,
-  fetchCamerasFromApi,
   fetchUtilityOutages,
 } from '../services/layerServices'
 import MapControls from './MapControls'
 import DrawHUD from './DrawHUD'
+import { useAuth } from '../contexts/AuthContext'
+import { useSavedPlaces } from '../contexts/SavedPlacesContext'
 import './MapView.css'
+
+// Improve @mapbox/mapbox-gl-draw compatibility on MapLibre.
+MapboxDraw.constants.classes.CANVAS = 'maplibregl-canvas'
+MapboxDraw.constants.classes.CONTROL_BASE = 'maplibregl-ctrl'
+MapboxDraw.constants.classes.CONTROL_PREFIX = 'maplibregl-ctrl-'
+MapboxDraw.constants.classes.CONTROL_GROUP = 'maplibregl-ctrl-group'
+MapboxDraw.constants.classes.ATTRIBUTION = 'maplibregl-ctrl-attrib'
 
 const MIN_POWER_ZOOM = 14
 
@@ -32,8 +39,6 @@ const CLICKABLE_POINT_LAYERS = [
   'intel-geoconfirmed-layer',
   'intel-usgs-layer',
   'intel-acled-layer',
-  'intel-flock-layer',
-  'intel-flock-icons',
   'intel-outages-layer',
   'intel-comms-layer',
   'mapped-news-layer',
@@ -769,6 +774,8 @@ export default function MapView({
   eventCountry = null,
   eventFilterByView = false,
 }) {
+  const { user } = useAuth()
+  const { places, addPlace, clearPlaces } = useSavedPlaces()
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const drawRef = useRef(null)
@@ -779,6 +786,7 @@ export default function MapView({
   const activeViewRef = useRef(activeView)
   const eventFilterByViewRef = useRef(eventFilterByView)
   const moveendPendingRef = useRef(null)
+  const tapPinModeRef = useRef(false)
   const lastCenterRef = useRef([0, 20])
   const lastZoomRef = useRef(2)
   const [mapBoundsKey, setMapBoundsKey] = useState(0)
@@ -862,14 +870,35 @@ export default function MapView({
   }, [])
 
   const refreshSavedPointsLayer = useCallback(() => {
+    if (user?.id) {
+      const features = (places || []).map((p) => ({
+        type: 'Feature',
+        id: p.id,
+        properties: { title: p.title || 'Saved point', icon: p.icon || '📍', source: p.list_name || 'My Places' },
+        geometry: { type: 'Point', coordinates: [Number(p.lon), Number(p.lat)] },
+      }))
+      upsertSavedPointsLayer({ type: 'FeatureCollection', features })
+      return
+    }
     upsertSavedPointsLayer(getSavedPoints())
-  }, [upsertSavedPointsLayer])
+  }, [upsertSavedPointsLayer, user?.id, places])
 
-  const addSavedPointAtCenter = useCallback(() => {
+  const addSavedPointAtCenter = useCallback(async () => {
     const map = mapRef.current
     if (!map) return
     const center = map.getCenter()
     const name = window.prompt('Point label (optional):', '') || ''
+    const listName = window.prompt('List name (optional):', 'General') || 'General'
+    if (user?.id) {
+      await addPlace({
+        title: name.trim() || 'Pinned place',
+        lat: center.lat,
+        lon: center.lng,
+        icon: pointIcon || '📍',
+        listName: listName.trim() || 'General',
+      })
+      return
+    }
     const current = getSavedPoints()
     const feature = {
       type: 'Feature',
@@ -884,13 +913,17 @@ export default function MapView({
     const next = { type: 'FeatureCollection', features: [...(current.features || []), feature] }
     setSavedPoints(next)
     upsertSavedPointsLayer(next)
-  }, [pointIcon, upsertSavedPointsLayer])
+  }, [pointIcon, upsertSavedPointsLayer, user?.id, addPlace])
 
-  const clearSavedPoints = useCallback(() => {
+  const clearSavedPoints = useCallback(async () => {
+    if (user?.id) {
+      await clearPlaces()
+      return
+    }
     const empty = { type: 'FeatureCollection', features: [] }
     setSavedPoints(empty)
     upsertSavedPointsLayer(empty)
-  }, [upsertSavedPointsLayer])
+  }, [upsertSavedPointsLayer, user?.id, clearPlaces])
 
   const doFetch = useCallback(
     (map, toggles, onLoading) => {
@@ -1033,37 +1066,6 @@ export default function MapView({
           .finally(() => onLoading?.(false))
       } else helpers.removeComms()
 
-      if (toggles.flockCameras) {
-        onLoading?.(true)
-        const center = map.getCenter()
-        const bounds = bbox()
-        const tryFallback = () => fetchCamerasFromApi(center?.lat, center?.lng, bounds)
-        const mergeFeatureCollections = (a, b) => {
-          const features = [...(a?.features || []), ...(b?.features || [])]
-          const dedup = new Map()
-          features.forEach((f) => {
-            const p = f?.properties || {}
-            const key = String(p.id || p.stream || JSON.stringify(f.geometry?.coordinates || []))
-            if (!key) return
-            dedup.set(key, f)
-          })
-          return { type: 'FeatureCollection', features: Array.from(dedup.values()) }
-        }
-        fetchFlockCameras()
-          .then((geoJson) => {
-            return tryFallback().then((fallback) => {
-              const merged = mergeFeatureCollections(geoJson, fallback)
-              helpers.addFlockCameras(merged)
-              pushSearchLayerRef.current('flock', merged)
-            })
-          })
-          .catch(() => tryFallback().then((fallback) => {
-            helpers.addFlockCameras(fallback)
-            pushSearchLayerRef.current('flock', fallback)
-          }))
-          .finally(() => onLoading?.(false))
-      } else helpers.removeFlockCameras()
-
       if (toggles.utilityOutages) {
         onLoading?.(true)
         fetchUtilityOutages()
@@ -1158,6 +1160,35 @@ export default function MapView({
     })
 
     const handleMapClick = (e) => {
+      if (tapPinModeRef.current) {
+        const lng = Number(e?.lngLat?.lng)
+        const lat = Number(e?.lngLat?.lat)
+        if (Number.isFinite(lng) && Number.isFinite(lat)) {
+          const name = window.prompt('Pin title (optional):', '') || ''
+          const listName = window.prompt('List name:', 'General') || 'General'
+          if (user?.id) {
+            addPlace({
+              title: name.trim() || 'Pinned place',
+              lat,
+              lon: lng,
+              icon: pointIcon || '📍',
+              listName: listName.trim() || 'General',
+            }).catch(() => {})
+          } else {
+            const current = getSavedPoints()
+            const feature = {
+              type: 'Feature',
+              id: `pt-${Date.now()}`,
+              properties: { title: name.trim() || 'Saved point', icon: pointIcon || '📍', source: listName.trim() || 'General' },
+              geometry: { type: 'Point', coordinates: [lng, lat] },
+            }
+            const next = { type: 'FeatureCollection', features: [...(current.features || []), feature] }
+            setSavedPoints(next)
+            upsertSavedPointsLayer(next)
+          }
+        }
+        return
+      }
       const features = map.queryRenderedFeatures(e.point, { layers: CLICKABLE_POINT_LAYERS })
       const feat = features[0]
       if (!feat) return
@@ -1165,25 +1196,7 @@ export default function MapView({
       if (!coords) return
       const props = feat.properties || {}
       let html
-      if (feat.layer.id === 'intel-flock-layer' || feat.layer.id === 'intel-flock-icons') {
-        const title = props.title || props.name || 'Camera'
-        const image = props.image || props.preview || props.thumbnail
-        const stream = props.stream || props.url || props.link
-        const watchUrl = props.link || stream
-        const t = String(props.type || '').toLowerCase()
-        let media = ''
-        if (t === 'hls' && stream) {
-          media = `<video controls muted playsinline style="width:100%;max-width:260px;border-radius:6px;margin:.35rem 0;"><source src="${stream}" type="application/x-mpegURL" /></video>`
-        } else if (t === 'mjpeg' && stream) {
-          media = `<img src="${stream}" alt="${title}" style="width:100%;max-width:260px;border-radius:6px;margin:.35rem 0;" />`
-        } else if (image) {
-          media = `<img src="${image}" alt="${title}" style="width:100%;max-width:260px;border-radius:6px;margin:.35rem 0;" />`
-        }
-        const open = watchUrl
-          ? `<a href="${watchUrl}" target="_blank" rel="noopener noreferrer" class="map-popup-read-more">Open camera stream</a>`
-          : ''
-        html = `<div class="map-popup-content"><div class="map-popup-title">${title}</div>${media}${open}</div>`
-      } else if (feat.layer.id === 'search-results-layer' || feat.layer.id === 'mapped-news-layer' || feat.layer.id === 'mapped-osint-layer' || feat.layer.id === 'mapped-conflict-events-layer' || feat.layer.id === 'intel-geoconfirmed-layer') {
+      if (feat.layer.id === 'search-results-layer' || feat.layer.id === 'mapped-news-layer' || feat.layer.id === 'mapped-osint-layer' || feat.layer.id === 'mapped-conflict-events-layer' || feat.layer.id === 'intel-geoconfirmed-layer') {
         const title = props.title || 'Untitled'
         const link = props.link ? `<a href="${props.link}" target="_blank" rel="noopener noreferrer" class="map-popup-read-more">Read More</a>` : ''
         html = `<div class="map-popup-content"><div class="map-popup-title">${title}</div><div class="map-popup-source">${props.source || ''}</div>${link}</div>`
@@ -1262,6 +1275,11 @@ export default function MapView({
     }
 
     map.on('moveend', onMoveend)
+    const onTapPinToggle = (ev) => {
+      tapPinModeRef.current = !!ev?.detail?.enabled
+      map.getCanvas().style.cursor = tapPinModeRef.current ? 'crosshair' : ''
+    }
+    window.addEventListener('supermap-toggle-tap-pin', onTapPinToggle)
 
     const containerEl = containerRef.current
     const resizeObserver =
@@ -1289,12 +1307,13 @@ export default function MapView({
       if (map.getLayer('intel-saved-points-base')) map.removeLayer('intel-saved-points-base')
       if (map.getSource('intel-saved-points')) map.removeSource('intel-saved-points')
       map.off('moveend', onMoveend)
+      window.removeEventListener('supermap-toggle-tap-pin', onTapPinToggle)
       map.remove()
       mapRef.current = null
       mapReadyRef.current = false
       setMapInstance(null)
     }
-  }, [basemapId, doFetch, onLoadingChange])
+  }, [basemapId, doFetch, onLoadingChange, refreshSavedPointsLayer, user?.id, addPlace, pointIcon, upsertSavedPointsLayer])
 
   useEffect(() => {
     const map = mapRef.current
@@ -1507,13 +1526,9 @@ export default function MapView({
   }, [mapInstance, layerFilterKeyword, layerToggles, activeView, eventCountry, eventFilterByView, mapBoundsKey])
 
   useEffect(() => {
-    const map = mapRef.current
-    if (!map || !mapReadyRef.current || !layerToggles?.flockCameras) return
-    const id = setInterval(() => {
-      doFetch(map, layerTogglesRef.current || {}, onLoadingChange)
-    }, 60000)
-    return () => clearInterval(id)
-  }, [layerToggles?.flockCameras, doFetch, onLoadingChange])
+    if (!mapRef.current || !mapReadyRef.current) return
+    refreshSavedPointsLayer()
+  }, [refreshSavedPointsLayer, user?.id, places])
 
   useEffect(() => {
     const map = mapRef.current

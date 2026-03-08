@@ -24,7 +24,6 @@ export const DEFAULT_LAYER_TOGGLES = {
   noaaRadar: false,
   aoiDraw: false,
   sentinel2BurnScars: false,
-  flockCameras: false,
   utilityOutages: false,
   commsInfrastructure: false,
 }
@@ -67,7 +66,7 @@ export const DEFAULT_TAB_VISIBILITY = {
   osintFeeds: true,
   newsFeeds: true,
   osintX: true,
-  osintCameras: true,
+  places: true,
   advancedSearch: true,
   broadcasts: true,
   saved: true,

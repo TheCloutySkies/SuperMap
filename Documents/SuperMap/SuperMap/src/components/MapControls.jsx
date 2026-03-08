@@ -6,6 +6,7 @@ export default function MapControls({ map }) {
   const [bearing, setBearing] = useState(0)
   const [locating, setLocating] = useState(false)
   const [userLocation, setUserLocation] = useState(null)
+  const [tapPinMode, setTapPinMode] = useState(false)
 
   useEffect(() => {
     if (!map) return
@@ -49,6 +50,12 @@ export default function MapControls({ map }) {
     )
   }
 
+  const toggleTapPinMode = () => {
+    const next = !tapPinMode
+    setTapPinMode(next)
+    window.dispatchEvent(new CustomEvent('supermap-toggle-tap-pin', { detail: { enabled: next } }))
+  }
+
   return (
     <>
       <div className="map-controls">
@@ -85,6 +92,15 @@ export default function MapControls({ map }) {
         </button>
       </div>
       <div className="map-controls-locate-wrap">
+        <button
+          type="button"
+          className={`map-control-btn map-control-pin ${tapPinMode ? 'active' : ''}`}
+          onClick={toggleTapPinMode}
+          aria-label="Toggle tap-to-add pin mode"
+          title="Tap map to add pin"
+        >
+          📍
+        </button>
         <button
           type="button"
           className={`map-control-btn map-control-locate ${userLocation ? 'active' : ''} ${locating ? 'locating' : ''}`}

@@ -78,6 +78,9 @@
   bottom: 1rem;
   right: 1rem;
   z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
 }
 
 .map-control-locate {
@@ -98,6 +101,11 @@
 
 .map-controls-locate-wrap .map-control-locate:hover {
   background: #30363d;
+}
+
+.map-control-pin.active {
+  background: #238636;
+  border-color: #2ea043;
 }
 
 .map-control-locate.active .locate-pulse {

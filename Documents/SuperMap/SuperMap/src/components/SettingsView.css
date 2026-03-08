@@ -250,3 +250,28 @@
   font-size: 0.9rem;
   color: #8b949e;
 }
+
+.settings-link {
+  color: #58a6ff;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.settings-link:hover {
+  text-decoration: underline;
+}
+
+.settings-delete-account-btn {
+  padding: 0.55rem 0.9rem;
+  font-size: 0.9rem;
+  color: #fff;
+  background: #b62324;
+  border: 1px solid #f85149;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.settings-delete-account-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}

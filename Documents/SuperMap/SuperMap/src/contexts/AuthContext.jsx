@@ -8,6 +8,7 @@ const AuthContext = createContext({
   signIn: async () => {},
   signUp: async () => {},
   signOut: async () => {},
+  deleteAccount: async () => {},
   isConfigured: false,
 })
 
@@ -51,8 +52,16 @@ export function AuthProvider({ children }) {
     await supabase.auth.signOut()
   }
 
+  const deleteAccount = async () => {
+    if (!supabase) throw new Error('Supabase not configured')
+    const { data, error } = await supabase.rpc('delete_my_account')
+    if (error) throw error
+    if (data !== true) throw new Error('Account deletion failed')
+    await supabase.auth.signOut()
+  }
+
   return (
-    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut, isConfigured }}>
+    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut, deleteAccount, isConfigured }}>
       {children}
     </AuthContext.Provider>
   )

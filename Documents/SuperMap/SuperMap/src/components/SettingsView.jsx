@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import axios from 'axios'
+import { useAuth } from '../contexts/AuthContext'
 import {
   getTabVisibility,
   setTabVisibility,
@@ -15,7 +16,7 @@ const TAB_LABELS = {
   osintFeeds: 'OSINT Feeds',
   newsFeeds: 'News Feeds',
   osintX: 'OSINT (X)',
-  osintCameras: 'Live Cameras',
+  places: 'My Places',
   advancedSearch: 'Advanced Search',
   saved: 'Saved',
   updates: 'Updates',
@@ -23,6 +24,7 @@ const TAB_LABELS = {
 }
 
 export default function SettingsView({ apiBase, onVisualsChange }) {
+  const { user, deleteAccount } = useAuth()
   const [activeSection, setActiveSection] = useState('visuals')
   const [tabPrefs, setTabPrefs] = useState(() => getTabVisibility())
   const [visuals, setVisuals] = useState(() => getVisualsPrefs())
@@ -33,6 +35,7 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
   const [configSaving, setConfigSaving] = useState(false)
   const [newHandle, setNewHandle] = useState('')
   const [newSubreddit, setNewSubreddit] = useState('')
+  const [deletingAccount, setDeletingAccount] = useState(false)
 
   useEffect(() => setTabVisibility(tabPrefs), [tabPrefs])
   useEffect(() => {
@@ -116,6 +119,7 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
     { id: 'tabs', label: 'Tab visibility' },
     { id: 'xhandles', label: 'X (Twitter) handles' },
     { id: 'subreddits', label: 'Subreddits' },
+    { id: 'account', label: 'Account' },
   ]
 
   return (
@@ -174,6 +178,23 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
                 <option value="normal">Normal</option>
                 <option value="large">Large</option>
               </select>
+            </div>
+            <div className="settings-field">
+              <label>Layout mode</label>
+              <select
+                value={visuals.layoutMode || 'auto'}
+                onChange={(e) => setVisuals((v) => ({ ...v, layoutMode: e.target.value }))}
+                className="settings-select"
+              >
+                <option value="auto">Auto (detect device)</option>
+                <option value="desktop">Force desktop layout</option>
+                <option value="mobile">Force mobile layout</option>
+              </select>
+            </div>
+            <div className="settings-field">
+              <a className="settings-link" href="https://github.com/TheCloutySkies/SuperMap.git" target="_blank" rel="noopener noreferrer">
+                Open GitHub Repository
+              </a>
             </div>
           </section>
         )}
@@ -282,6 +303,37 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
                   ))}
                 </ul>
               </>
+            )}
+          </section>
+        )}
+
+        {activeSection === 'account' && (
+          <section className="settings-view-section">
+            <h2>Account</h2>
+            <p className="settings-hint">Danger zone: delete your account data from the database.</p>
+            {!user ? (
+              <p className="settings-loading">Sign in to manage account actions.</p>
+            ) : (
+              <button
+                type="button"
+                className="settings-delete-account-btn"
+                disabled={deletingAccount}
+                onClick={async () => {
+                  const ok = window.confirm('Delete your account and all your saved data? This cannot be undone.')
+                  if (!ok) return
+                  setDeletingAccount(true)
+                  try {
+                    await deleteAccount()
+                    window.location.reload()
+                  } catch (err) {
+                    window.alert(err?.message || 'Could not delete account')
+                  } finally {
+                    setDeletingAccount(false)
+                  }
+                }}
+              >
+                {deletingAccount ? 'Deleting…' : 'Delete account (wipe all user data)'}
+              </button>
             )}
           </section>
         )}

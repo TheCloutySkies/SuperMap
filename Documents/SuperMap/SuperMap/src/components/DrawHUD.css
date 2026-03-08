@@ -64,3 +64,34 @@
   border: 1px solid #30363d;
   border-radius: 6px;
 }
+
+.draw-hud-dialog {
+  display: grid;
+  gap: 0.35rem;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 0.45rem;
+  background: #0d1117;
+  margin-bottom: 0.5rem;
+}
+
+.draw-hud-dialog label {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.74rem;
+  color: #8b949e;
+}
+
+.draw-hud-dialog input,
+.draw-hud-dialog select {
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  background: #161b22;
+  color: #e6edf3;
+  padding: 0.3rem 0.45rem;
+}
+
+.draw-hud-dialog-actions {
+  display: flex;
+  gap: 0.35rem;
+}

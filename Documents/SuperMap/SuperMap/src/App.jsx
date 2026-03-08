@@ -4,6 +4,7 @@ import { AuthProvider } from './contexts/AuthContext'
 import { SavedArticlesProvider } from './contexts/SavedArticlesContext'
 import { SavedXPostsProvider } from './contexts/SavedXPostsContext'
 import { SavedPlacesProvider } from './contexts/SavedPlacesContext'
+import { SavedReportsProvider } from './contexts/SavedReportsContext'
 import HomeScreen from './components/HomeScreen'
 import MapView from './components/MapView'
 import FeedsView from './components/FeedsView'
@@ -15,6 +16,10 @@ import AdvancedSearch from './components/AdvancedSearch'
 import OsintXView from './components/OsintXView'
 import UserUpdatesView from './components/UserUpdatesView'
 import MyPlacesView from './components/MyPlacesView'
+import MyReportsView from './components/MyReportsView'
+import MyCommentsView from './components/MyCommentsView'
+import MyAccountView from './components/MyAccountView'
+import CommunityView from './components/CommunityView'
 import BroadcastsView from './components/BroadcastsView'
 import SettingsView from './components/SettingsView'
 import ResourcesView from './components/ResourcesView'
@@ -26,7 +31,7 @@ import ReportMakerView from './components/ReportMakerView'
 import QuickTutorialModal from './components/QuickTutorialModal'
 import './App.css'
 
-const FOOTER_MODES = { HOME: 'HOME', MAPS: 'MAPS', FEEDS: 'FEEDS', RESOURCES: 'RESOURCES', REPORTS: 'REPORTS', SETTINGS: 'SETTINGS' }
+const FOOTER_MODES = { HOME: 'HOME', MAPS: 'MAPS', FEEDS: 'FEEDS', COMMUNITY: 'COMMUNITY', RESOURCES: 'RESOURCES', REPORTS: 'REPORTS', SETTINGS: 'SETTINGS' }
 
 const MAP_VIEWS = [
   { id: 'osint-map', label: 'OSINT Map', tabKey: 'osintMap' },
@@ -134,7 +139,7 @@ function App() {
   }, [])
 
   const isMapView = ['osint-map', 'conflict-map'].includes(activeView)
-  const isFeedView = ['osint-feeds', 'news-feeds', 'osint-x', 'my-places', 'advanced-search', 'saved', 'updates', 'broadcasts'].includes(activeView)
+  const isFeedView = ['osint-feeds', 'news-feeds', 'osint-x', 'my-places', 'my-reports', 'my-comments', 'advanced-search', 'saved', 'updates', 'broadcasts'].includes(activeView)
   const isSettingsView = activeView === 'settings'
   const tabVisibility = getTabVisibility()
 
@@ -143,6 +148,7 @@ function App() {
     if (mode === FOOTER_MODES.HOME) setActiveView('home')
     else if (mode === FOOTER_MODES.MAPS) setActiveView('osint-map')
     else if (mode === FOOTER_MODES.FEEDS) setActiveView('news-feeds')
+    else if (mode === FOOTER_MODES.COMMUNITY) setActiveView('community')
     else if (mode === FOOTER_MODES.RESOURCES) setActiveView('resources')
     else if (mode === FOOTER_MODES.REPORTS) setActiveView('report-maker')
     else if (mode === FOOTER_MODES.SETTINGS) setActiveView('settings')
@@ -151,7 +157,9 @@ function App() {
   const setActiveViewWithMode = useCallback((viewId) => {
     setActiveView(viewId)
     if (['osint-map', 'conflict-map'].includes(viewId)) setFooterMode(FOOTER_MODES.MAPS)
-    else if (['osint-feeds', 'osint-x', 'my-places', 'advanced-search', 'news-feeds', 'saved', 'updates', 'broadcasts'].includes(viewId)) setFooterMode(FOOTER_MODES.FEEDS)
+    else if (['osint-feeds', 'osint-x', 'my-places', 'my-reports', 'my-comments', 'advanced-search', 'news-feeds', 'saved', 'updates', 'broadcasts'].includes(viewId)) setFooterMode(FOOTER_MODES.FEEDS)
+    else if (viewId === 'community') setFooterMode(FOOTER_MODES.COMMUNITY)
+    else if (viewId === 'my-account') setFooterMode(FOOTER_MODES.SETTINGS)
     else if (viewId === 'home') setFooterMode(FOOTER_MODES.HOME)
     else if (viewId === 'resources') setFooterMode(FOOTER_MODES.RESOURCES)
     else if (viewId === 'report-maker') setFooterMode(FOOTER_MODES.REPORTS)
@@ -187,6 +195,7 @@ function App() {
       <SavedArticlesProvider>
         <SavedXPostsProvider>
           <SavedPlacesProvider>
+            <SavedReportsProvider>
     <div className={appClass}>
       <header className="app-omnibar-strip">
         <div className="app-omnibar-inner">
@@ -204,11 +213,11 @@ function App() {
           {isMapView && (
             <PlaceSearch onFlyTo={handleFlyTo} />
           )}
-          <HeaderAuth onOpenAuth={() => setShowAuthModal(true)} />
+          <HeaderAuth onOpenAuth={() => setShowAuthModal(true)} onNavigateAccount={setActiveViewWithMode} />
         </div>
       </header>
       <div className="app-body">
-      {activeView !== 'home' && activeView !== 'settings' && activeView !== 'search-results' && activeView !== 'report-maker' && (
+      {activeView !== 'home' && activeView !== 'settings' && activeView !== 'search-results' && activeView !== 'report-maker' && activeView !== 'my-account' && activeView !== 'community' && (
         <aside className="sidebar sidebar-left">
           <h1 className="sidebar-title">SuperMap</h1>
           <nav className="nav">
@@ -279,6 +288,26 @@ function App() {
         {activeView === 'my-places' && (
           <div className="main-feed-view">
             <MyPlacesView onFlyTo={handleFlyTo} onSignInRequired={() => setShowAuthModal(true)} />
+          </div>
+        )}
+        {activeView === 'my-reports' && (
+          <div className="main-feed-view">
+            <MyReportsView onOpenReportMaker={() => setActiveViewWithMode('report-maker')} onSignInRequired={() => setShowAuthModal(true)} />
+          </div>
+        )}
+        {activeView === 'my-comments' && (
+          <div className="main-feed-view">
+            <MyCommentsView onSignInRequired={() => setShowAuthModal(true)} />
+          </div>
+        )}
+        {activeView === 'community' && (
+          <div className="main-feed-view">
+            <CommunityView onSignInRequired={() => setShowAuthModal(true)} />
+          </div>
+        )}
+        {activeView === 'my-account' && (
+          <div className="main-feed-view">
+            <MyAccountView onNavigateSection={setActiveViewWithMode} onSignInRequired={() => setShowAuthModal(true)} />
           </div>
         )}
         {activeView === 'advanced-search' && (
@@ -360,6 +389,12 @@ function App() {
             FEEDS
           </button>
           <button
+            className={`footer-btn ${footerMode === FOOTER_MODES.COMMUNITY ? 'active' : ''}`}
+            onClick={() => handleFooterNav(FOOTER_MODES.COMMUNITY)}
+          >
+            COMMUNITY
+          </button>
+          <button
             className={`footer-btn ${footerMode === FOOTER_MODES.RESOURCES ? 'active' : ''}`}
             onClick={() => handleFooterNav(FOOTER_MODES.RESOURCES)}
           >
@@ -394,6 +429,7 @@ function App() {
         }}
       />
     )}
+            </SavedReportsProvider>
           </SavedPlacesProvider>
         </SavedXPostsProvider>
       </SavedArticlesProvider>

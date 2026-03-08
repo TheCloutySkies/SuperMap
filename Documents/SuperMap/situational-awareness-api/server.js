@@ -38,6 +38,10 @@ app.get('/', (req, res) => {
       weatherNearby: '/api/weather/nearby?lat=&lon=',
       adsb: '/api/adsb?lat=&lon=',
       cameras: '/api/cameras?lat=&lon=&radius=',
+      forumCategories: '/api/forum/categories',
+      forumCommunities: '/api/forum/communities?category_id=',
+      forumPosts: '/api/forum/posts?community_id=',
+      forumThread: '/api/forum/post/:id',
       config: 'GET/POST /api/config (user X handles, subreddits)',
     },
   })

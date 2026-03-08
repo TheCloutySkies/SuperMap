@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useAuth } from '../contexts/AuthContext'
+import { useSavedReports } from '../contexts/SavedReportsContext'
 import './ReportMakerView.css'
 
 const REPORT_X_POSTS_KEY = 'supermap_report_x_posts'
+const REPORT_DRAFT_KEY = 'supermap_report_draft'
 
 function downloadFile(filename, content, mime = 'text/plain;charset=utf-8') {
   const blob = new Blob([content], { type: mime })
@@ -16,6 +19,9 @@ function downloadFile(filename, content, mime = 'text/plain;charset=utf-8') {
 }
 
 export default function ReportMakerView() {
+  const { user } = useAuth()
+  const { saveReport } = useSavedReports()
+  const [savedReportId, setSavedReportId] = useState(null)
   const [title, setTitle] = useState('Untitled Report')
   const [body, setBody] = useState('')
   const [articleInput, setArticleInput] = useState('')
@@ -55,6 +61,20 @@ export default function ReportMakerView() {
 
   useEffect(() => {
     importPinnedXPosts()
+    try {
+      const draft = JSON.parse(localStorage.getItem(REPORT_DRAFT_KEY) || 'null')
+      if (draft && typeof draft === 'object') {
+        if (draft.title) setTitle(draft.title)
+        if (draft.body) setBody(draft.body)
+        if (Array.isArray(draft.articles)) setArticles(draft.articles)
+        if (Array.isArray(draft.locations)) setLocations(draft.locations)
+        if (Array.isArray(draft.xEmbeds)) {
+          setXPosts(draft.xEmbeds.map((x) => (typeof x === 'string' ? { url: x } : x)))
+        }
+        if (draft.id) setSavedReportId(draft.id)
+      }
+      localStorage.removeItem(REPORT_DRAFT_KEY)
+    } catch {}
   }, [])
 
   const addArticle = () => {
@@ -145,6 +165,24 @@ export default function ReportMakerView() {
           <button type="button" onClick={() => downloadFile(`${report.title}.md`, markdown, 'text/markdown;charset=utf-8')}>Export .md</button>
           <button type="button" onClick={() => downloadFile(`${report.title}.txt`, markdown, 'text/plain;charset=utf-8')}>Export .txt</button>
           <button type="button" onClick={() => downloadFile(`${report.title}.json`, JSON.stringify(report, null, 2), 'application/json;charset=utf-8')}>Export .json</button>
+          <button
+            type="button"
+            onClick={async () => {
+              if (!user) {
+                window.alert('Sign in to save reports')
+                return
+              }
+              try {
+                const id = await saveReport(report, savedReportId)
+                if (id) setSavedReportId(id)
+                window.alert('Report saved to your account')
+              } catch (err) {
+                window.alert(err?.message || 'Could not save report')
+              }
+            }}
+          >
+            Save to account
+          </button>
         </div>
       </div>
 

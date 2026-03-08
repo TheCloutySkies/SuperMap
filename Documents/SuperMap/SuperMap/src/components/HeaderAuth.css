@@ -39,3 +39,39 @@
   background: #2ea043;
   border-color: #2ea043;
 }
+
+.header-auth-menu-wrap {
+  position: relative;
+}
+
+.header-auth-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 160px;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 0.3rem;
+  display: grid;
+  gap: 0.2rem;
+  z-index: 210;
+}
+
+.header-auth-menu button {
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: #e6edf3;
+  padding: 0.4rem 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.header-auth-menu button:hover {
+  background: #21262d;
+}
+
+.header-auth-menu button.danger {
+  color: #f85149;
+}

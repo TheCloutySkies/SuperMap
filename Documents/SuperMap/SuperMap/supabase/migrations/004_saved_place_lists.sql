@@ -2,6 +2,7 @@ create table if not exists public.saved_place_lists (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   name text not null,
+  icon text not null default '📂',
   created_at timestamptz not null default now(),
   unique (user_id, name)
 );
@@ -35,4 +36,7 @@ using (auth.uid() = user_id);
 
 alter table public.saved_places
 add column if not exists list_id uuid references public.saved_place_lists(id) on delete set null;
+
+alter table public.saved_place_lists
+add column if not exists icon text not null default '📂';
 

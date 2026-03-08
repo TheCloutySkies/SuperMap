@@ -1,0 +1,98 @@
+.community-view {
+  padding: 1rem 1.2rem;
+  color: var(--main-text, #e6edf3);
+  display: grid;
+  gap: 0.8rem;
+}
+
+.community-card {
+  border: 1px solid #30363d;
+  background: #161b22;
+  border-radius: 10px;
+  padding: 0.7rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.community-card input,
+.community-card textarea,
+.community-card select {
+  border: 1px solid #30363d;
+  background: #0d1117;
+  color: #e6edf3;
+  border-radius: 8px;
+  padding: 0.45rem 0.55rem;
+}
+
+.community-card button,
+.community-view > button,
+.community-row {
+  border: 1px solid #30363d;
+  background: #0d1117;
+  color: #e6edf3;
+  border-radius: 8px;
+  padding: 0.45rem 0.7rem;
+  cursor: pointer;
+}
+
+.community-editor .tiptap {
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  min-height: 140px;
+  background: #0d1117;
+  padding: 0.55rem;
+}
+
+.community-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.community-toolbar button {
+  border: 1px solid #30363d;
+  background: #21262d;
+  color: #e6edf3;
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+}
+
+.community-list {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.community-row {
+  text-align: left;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.community-row span {
+  color: #8b949e;
+  font-size: 0.84rem;
+}
+
+.community-comments {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.community-comments li {
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 0.45rem 0.55rem;
+  background: #0d1117;
+}
+
+.community-comments small {
+  color: #8b949e;
+}
+
+.community-error {
+  color: #f85149;
+}

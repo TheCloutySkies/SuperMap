@@ -1,0 +1,68 @@
+.my-account-view {
+  padding: 1rem 1.25rem;
+  color: var(--main-text, #e6edf3);
+  display: grid;
+  gap: 0.8rem;
+}
+
+.my-account-card {
+  border: 1px solid var(--main-border, #30363d);
+  border-radius: 10px;
+  background: var(--main-card, #161b22);
+  padding: 0.75rem 0.85rem;
+}
+
+.my-account-card h3 {
+  margin: 0 0 0.5rem;
+}
+
+.my-account-card p {
+  margin: 0.25rem 0;
+}
+
+.my-account-card input,
+.my-account-card textarea {
+  width: 100%;
+  margin-top: 0.2rem;
+  margin-bottom: 0.4rem;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  background: #0d1117;
+  color: #e6edf3;
+  padding: 0.45rem 0.55rem;
+}
+
+.my-account-card label {
+  font-size: 0.85rem;
+  color: #8b949e;
+}
+
+.my-account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.my-account-actions button {
+  border: 1px solid #30363d;
+  background: #0d1117;
+  color: #c9d1d9;
+  border-radius: 8px;
+  padding: 0.45rem 0.8rem;
+  cursor: pointer;
+}
+
+.my-account-actions .my-account-export {
+  border-color: #2ea043;
+  background: #238636;
+  color: #fff;
+}
+
+.my-account-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid #30363d;
+  margin-bottom: 0.45rem;
+}

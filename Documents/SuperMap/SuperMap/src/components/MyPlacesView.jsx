@@ -4,10 +4,11 @@ import { useSavedPlaces } from '../contexts/SavedPlacesContext'
 import './MyPlacesView.css'
 
 const ICON_OPTIONS = ['📍', '⭐', '⚠️', '🔥', '🚨', '🛰️', '🛡️', '📡', '🏠', '🏥']
+const LIST_ICON_OPTIONS = ['📂', '⭐', '🗂️', '📍', '🏠', '🚨', '🛰️', '🛡️']
 
 export default function MyPlacesView({ onFlyTo, onSignInRequired }) {
   const { user } = useAuth()
-  const { places, lists, loading, addPlace, removePlace, createList, renameList, deleteList, movePlacesToList } = useSavedPlaces()
+  const { places, lists, listMeta, loading, addPlace, removePlace, createList, renameList, deleteList, movePlacesToList } = useSavedPlaces()
   const [title, setTitle] = useState('')
   const [lat, setLat] = useState('')
   const [lon, setLon] = useState('')
@@ -16,6 +17,7 @@ export default function MyPlacesView({ onFlyTo, onSignInRequired }) {
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [newListName, setNewListName] = useState('')
+  const [newListIcon, setNewListIcon] = useState('📂')
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [bulkTargetList, setBulkTargetList] = useState('General')
 
@@ -65,14 +67,15 @@ export default function MyPlacesView({ onFlyTo, onSignInRequired }) {
   const handleCreateList = async () => {
     const name = newListName.trim()
     if (!name) return
-    await createList(name)
+    await createList(name, newListIcon)
     setNewListName('')
   }
 
   const handleRenameList = async (fromName) => {
     const toName = window.prompt(`Rename list "${fromName}" to:`, fromName) || ''
     if (!toName.trim() || toName.trim() === fromName) return
-    await renameList(fromName, toName.trim())
+    const toIcon = window.prompt('List icon (emoji):', getListIcon(fromName) || '📂') || getListIcon(fromName) || '📂'
+    await renameList(fromName, toName.trim(), toIcon)
   }
 
   const handleDeleteList = async (name) => {
@@ -88,6 +91,8 @@ export default function MyPlacesView({ onFlyTo, onSignInRequired }) {
     await movePlacesToList(ids, bulkTargetList)
     setSelectedIds(new Set())
   }
+
+  const getListIcon = (name) => listMeta.find((l) => l.name === name)?.icon || '📂'
 
   if (!user) {
     return (
@@ -105,6 +110,9 @@ export default function MyPlacesView({ onFlyTo, onSignInRequired }) {
       <p className="my-places-hint">Framework for account-bound pins/lists (Google Maps style).</p>
       <div className="my-places-lists-admin">
         <input value={newListName} onChange={(e) => setNewListName(e.target.value)} placeholder="Create new list" />
+        <select value={newListIcon} onChange={(e) => setNewListIcon(e.target.value)}>
+          {LIST_ICON_OPTIONS.map((i) => <option key={i} value={i}>{i}</option>)}
+        </select>
         <button type="button" onClick={handleCreateList} disabled={!newListName.trim()}>Create list</button>
       </div>
       <div className="my-places-bulk">
@@ -129,7 +137,7 @@ export default function MyPlacesView({ onFlyTo, onSignInRequired }) {
           {grouped.map(([name, rows]) => (
             <section key={name} className="my-places-group">
               <div className="my-places-group-head">
-                <h3>{name} ({rows.length})</h3>
+                <h3>{getListIcon(name)} {name} ({rows.length})</h3>
                 <div className="my-places-group-actions">
                   <button type="button" onClick={() => handleRenameList(name)}>Rename</button>
                   {name !== 'General' && <button type="button" onClick={() => handleDeleteList(name)}>Delete</button>}

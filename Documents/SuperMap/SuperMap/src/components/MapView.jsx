@@ -883,19 +883,20 @@ export default function MapView({
     upsertSavedPointsLayer(getSavedPoints())
   }, [upsertSavedPointsLayer, user?.id, places])
 
-  const addSavedPointAtCenter = useCallback(async () => {
+  const addSavedPointAtCenter = useCallback(async (options = {}) => {
     const map = mapRef.current
     if (!map) return
     const center = map.getCenter()
-    const name = window.prompt('Point label (optional):', '') || ''
-    const listName = window.prompt('List name (optional):', 'General') || 'General'
+    const name = String(options?.title || '').trim()
+    const listName = String(options?.listName || 'General').trim() || 'General'
+    const icon = options?.icon || pointIcon || '📍'
     if (user?.id) {
       await addPlace({
-        title: name.trim() || 'Pinned place',
+        title: name || 'Pinned place',
         lat: center.lat,
         lon: center.lng,
-        icon: pointIcon || '📍',
-        listName: listName.trim() || 'General',
+        icon,
+        listName,
       })
       return
     }
@@ -904,9 +905,9 @@ export default function MapView({
       type: 'Feature',
       id: `pt-${Date.now()}`,
       properties: {
-        title: name.trim() || 'Saved point',
-        icon: pointIcon || '📍',
-        source: 'Saved Points',
+        title: name || 'Saved point',
+        icon,
+        source: listName || 'Saved Points',
       },
       geometry: { type: 'Point', coordinates: [center.lng, center.lat] },
     }

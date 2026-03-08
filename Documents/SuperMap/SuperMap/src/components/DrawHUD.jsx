@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import Draggable from 'react-draggable'
 import './DrawHUD.css'
 
@@ -13,6 +13,10 @@ export default function DrawHUD({
   onPointIconChange,
 }) {
   const nodeRef = useRef(null)
+  const [showAddDialog, setShowAddDialog] = useState(false)
+  const [dialogTitle, setDialogTitle] = useState('')
+  const [dialogList, setDialogList] = useState('General')
+  const [dialogIcon, setDialogIcon] = useState(pointIcon)
   if (!visible) return null
 
   const trigger = (action) => {
@@ -53,16 +57,61 @@ export default function DrawHUD({
             ))}
           </select>
           <div className="draw-hud-buttons">
-            <button type="button" onClick={() => onAddPoint?.()}>
-              Save Center
+            <button
+              type="button"
+              onClick={() => {
+                setDialogIcon(pointIcon)
+                setShowAddDialog(true)
+              }}
+            >
+              Add Point
             </button>
             <button type="button" onClick={() => onClearPoints?.()}>
               Clear Points
             </button>
           </div>
         </div>
+        {showAddDialog && (
+          <div className="draw-hud-dialog">
+            <label>
+              Title
+              <input value={dialogTitle} onChange={(e) => setDialogTitle(e.target.value)} placeholder="Pinned place" />
+            </label>
+            <label>
+              List
+              <input value={dialogList} onChange={(e) => setDialogList(e.target.value)} placeholder="General" />
+            </label>
+            <label>
+              Icon
+              <select value={dialogIcon} onChange={(e) => setDialogIcon(e.target.value)}>
+                {ICON_OPTIONS.map((icon) => (
+                  <option key={icon} value={icon}>{icon}</option>
+                ))}
+              </select>
+            </label>
+            <div className="draw-hud-dialog-actions">
+              <button
+                type="button"
+                onClick={() => {
+                  onPointIconChange?.(dialogIcon)
+                  onAddPoint?.({
+                    title: dialogTitle.trim() || 'Pinned place',
+                    listName: dialogList.trim() || 'General',
+                    icon: dialogIcon,
+                  })
+                  setDialogTitle('')
+                  setDialogList('General')
+                  setShowAddDialog(false)
+                }}
+              >
+                Save
+              </button>
+              <button type="button" onClick={() => setShowAddDialog(false)}>Cancel</button>
+            </div>
+          </div>
+        )}
         <p className="draw-hud-hint">
-          Drawings auto-save. Use Save Center to bookmark map points.
+          Drawings auto-save. Use Add Point to bookmark exact coordinates.
         </p>
       </div>
     </Draggable>

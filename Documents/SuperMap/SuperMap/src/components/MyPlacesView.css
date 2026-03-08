@@ -1,7 +1,7 @@
 .my-places-view { padding: 1rem 1.25rem; color: var(--main-text, #e6edf3); }
 .my-places-hint { color: var(--main-muted, #8b949e); margin-top: -0.35rem; }
 .my-places-lists-admin, .my-places-bulk { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.6rem; max-width: 560px; }
-.my-places-lists-admin input, .my-places-bulk select { flex: 1; border: 1px solid var(--main-border, #30363d); border-radius: 8px; background: var(--main-card, #161b22); color: var(--main-text, #e6edf3); padding: 0.45rem 0.6rem; }
+.my-places-lists-admin input, .my-places-lists-admin select, .my-places-bulk select { flex: 1; border: 1px solid var(--main-border, #30363d); border-radius: 8px; background: var(--main-card, #161b22); color: var(--main-text, #e6edf3); padding: 0.45rem 0.6rem; }
 .my-places-lists-admin button, .my-places-bulk button { border: 1px solid #30363d; background: #0d1117; color: #c9d1d9; border-radius: 8px; padding: 0.45rem 0.7rem; cursor: pointer; }
 .my-places-form { display: grid; gap: 0.5rem; max-width: 560px; margin-bottom: 0.9rem; }
 .my-places-form input, .my-places-form select, .my-places-form textarea {

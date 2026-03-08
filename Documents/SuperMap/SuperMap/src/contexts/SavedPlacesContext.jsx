@@ -5,6 +5,7 @@ import { useAuth } from './AuthContext'
 const SavedPlacesContext = createContext({
   places: [],
   lists: [],
+  listMeta: [],
   loading: false,
   addPlace: async () => {},
   removePlace: async () => {},
@@ -18,13 +19,13 @@ const SavedPlacesContext = createContext({
 export function SavedPlacesProvider({ children }) {
   const { user } = useAuth()
   const [places, setPlaces] = useState([])
-  const [lists, setLists] = useState([])
+  const [listMeta, setListMeta] = useState([])
   const [loading, setLoading] = useState(false)
 
   const fetchPlaces = useCallback(async () => {
     if (!supabase || !user?.id) {
       setPlaces([])
-      setLists([])
+      setListMeta([])
       return
     }
     setLoading(true)
@@ -42,8 +43,8 @@ export function SavedPlacesProvider({ children }) {
     ])
     if (placesRes.error) setPlaces([])
     else setPlaces(placesRes.data || [])
-    if (listsRes.error) setLists([])
-    else setLists(listsRes.data || [])
+    if (listsRes.error) setListMeta([])
+    else setListMeta(listsRes.data || [])
     setLoading(false)
   }, [user?.id])
 
@@ -102,18 +103,18 @@ export function SavedPlacesProvider({ children }) {
     await fetchPlaces()
   }, [user?.id, fetchPlaces])
 
-  const createList = useCallback(async (name) => {
+  const createList = useCallback(async (name, icon = '📂') => {
     if (!supabase || !user?.id) throw new Error('Sign in required')
     const listName = String(name || '').trim().slice(0, 80)
     if (!listName) throw new Error('List name required')
     const { error } = await supabase
       .from('saved_place_lists')
-      .upsert({ user_id: user.id, name: listName }, { onConflict: 'user_id,name', ignoreDuplicates: true })
+      .upsert({ user_id: user.id, name: listName, icon: String(icon || '📂').slice(0, 8) }, { onConflict: 'user_id,name', ignoreDuplicates: true })
     if (error) throw error
     await fetchPlaces()
   }, [user?.id, fetchPlaces])
 
-  const renameList = useCallback(async (fromName, toName) => {
+  const renameList = useCallback(async (fromName, toName, toIcon = null) => {
     if (!supabase || !user?.id) throw new Error('Sign in required')
     const oldName = String(fromName || '').trim().slice(0, 80)
     const newName = String(toName || '').trim().slice(0, 80)
@@ -134,10 +135,13 @@ export function SavedPlacesProvider({ children }) {
       .limit(1)
     if (existingNew?.[0]?.id) {
       newListId = existingNew[0].id
+      if (toIcon) {
+        await supabase.from('saved_place_lists').update({ icon: String(toIcon).slice(0, 8) }).eq('user_id', user.id).eq('id', newListId)
+      }
     } else {
       const { data: created, error: createError } = await supabase
         .from('saved_place_lists')
-        .insert({ user_id: user.id, name: newName })
+        .insert({ user_id: user.id, name: newName, icon: String(toIcon || '📂').slice(0, 8) })
         .select('id,name')
         .limit(1)
       if (createError) throw createError
@@ -207,12 +211,12 @@ export function SavedPlacesProvider({ children }) {
 
   const listNames = useMemo(() => {
     const fromPlaces = places.map((p) => p.list_name || 'General')
-    const fromLists = lists.map((l) => l.name || 'General')
+    const fromLists = listMeta.map((l) => l.name || 'General')
     return [...new Set([...fromPlaces, ...fromLists, 'General'])].sort()
-  }, [places, lists])
+  }, [places, listMeta])
 
   return (
-    <SavedPlacesContext.Provider value={{ places, lists: listNames, loading, addPlace, removePlace, clearPlaces, createList, renameList, deleteList, movePlacesToList, refresh: fetchPlaces }}>
+    <SavedPlacesContext.Provider value={{ places, lists: listNames, listMeta, loading, addPlace, removePlace, clearPlaces, createList, renameList, deleteList, movePlacesToList, refresh: fetchPlaces }}>
       {children}
     </SavedPlacesContext.Provider>
   )

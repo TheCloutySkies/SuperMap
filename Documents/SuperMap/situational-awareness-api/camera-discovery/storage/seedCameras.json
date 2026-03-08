@@ -1,0 +1,38 @@
+[
+  {
+    "name": "Skyline Live Cam",
+    "lat": 43.7696,
+    "lon": 11.2558,
+    "stream": "https://hls.skylinewebcams.com/live.m3u8",
+    "type": "hls"
+  },
+  {
+    "name": "Windy Weather Cam",
+    "lat": 48.8566,
+    "lon": 2.3522,
+    "stream": "https://images-webcams.windy.com/88/1648892888/current/full/1648892888.jpg",
+    "type": "jpeg"
+  },
+  {
+    "name": "Axis Demo Cam",
+    "lat": 59.3293,
+    "lon": 18.0686,
+    "stream": "rtsp://root:pass@195.243.185.195/axis-media/media.amp",
+    "type": "rtsp"
+  },
+  {
+    "name": "California Traffic Cam",
+    "lat": 34.0522,
+    "lon": -118.2437,
+    "stream": "http://cwwp2.dot.ca.gov/data/datalake/cctv/video/705.jpg",
+    "type": "jpeg"
+  },
+  {
+    "name": "Jerusalem Panorama (SkylineWebcams)",
+    "lat": 31.7784,
+    "lon": 35.2066,
+    "stream": "https://embed.skylinewebcams.com/img/5528.jpg",
+    "type": "jpeg",
+    "link": "https://www.skylinewebcams.com/en/webcam/israel/jerusalem-district/jerusalem/panorama.html"
+  }
+]

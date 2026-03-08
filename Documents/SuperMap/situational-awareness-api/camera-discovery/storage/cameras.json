@@ -1,0 +1,14 @@
+[
+  {
+    "id": "06b13af13151d7283ff519c26eacf6af3e62f29e",
+    "name": "California Traffic Cam",
+    "lat": 34.0522,
+    "lon": -118.2437,
+    "stream": "http://cwwp2.dot.ca.gov/data/datalake/cctv/video/705.jpg",
+    "type": "jpeg",
+    "source": "seed_cameras",
+    "lastSeen": 1772954496629
+  }
+]6629
+  }
+]

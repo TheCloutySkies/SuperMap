@@ -1,0 +1,89 @@
+.osint-cameras-view {
+  padding: 1rem 1.25rem;
+  color: #e6edf3;
+}
+
+.osint-cameras-toolbar {
+  display: grid;
+  grid-template-columns: 1fr 160px auto;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.osint-cameras-toolbar input,
+.osint-cameras-toolbar select {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  background: #161b22;
+  color: #e6edf3;
+}
+
+.osint-cameras-toolbar button {
+  padding: 0.45rem 0.7rem;
+  border: 1px solid #2ea043;
+  border-radius: 6px;
+  background: #238636;
+  color: #fff;
+  cursor: pointer;
+}
+
+.osint-cameras-count {
+  margin: 0.2rem 0 0.6rem;
+  color: #8b949e;
+  font-size: 0.85rem;
+}
+
+.osint-cameras-list {
+  display: grid;
+  gap: 0.5rem;
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.osint-cameras-item {
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  background: #161b22;
+}
+
+.osint-cameras-title {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #79b8ff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.osint-cameras-meta {
+  display: flex;
+  gap: 0.7rem;
+  color: #8b949e;
+  font-size: 0.8rem;
+  margin: 0.25rem 0;
+}
+
+.osint-cameras-item a {
+  color: #58a6ff;
+  font-size: 0.82rem;
+}
+
+.osint-cameras-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.osint-cameras-actions button {
+  border: 1px solid #30363d;
+  background: #0d1117;
+  color: #c9d1d9;
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  font-size: 0.78rem;
+}
+

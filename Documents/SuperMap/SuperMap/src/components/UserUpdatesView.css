@@ -1,0 +1,62 @@
+.user-updates-view {
+  padding: 1rem 1.25rem;
+  color: var(--main-text, #e6edf3);
+}
+
+.user-updates-subtitle {
+  color: var(--main-muted, #8b949e);
+  margin-top: -0.25rem;
+}
+
+.user-updates-compose {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.user-updates-compose textarea {
+  resize: vertical;
+  min-height: 92px;
+  border: 1px solid var(--main-border, #30363d);
+  border-radius: 8px;
+  background: var(--main-card, #161b22);
+  color: var(--main-text, #e6edf3);
+  padding: 0.65rem;
+}
+
+.user-updates-compose button {
+  justify-self: start;
+  border: 1px solid #2ea043;
+  background: #238636;
+  color: #fff;
+  border-radius: 8px;
+  padding: 0.45rem 0.8rem;
+  cursor: pointer;
+}
+
+.user-updates-error {
+  color: #ff7b72;
+}
+
+.user-updates-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.user-updates-item {
+  border: 1px solid var(--main-border, #30363d);
+  background: var(--main-card, #161b22);
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
+}
+
+.user-updates-meta {
+  display: flex;
+  justify-content: space-between;
+  color: var(--main-muted, #8b949e);
+  font-size: 0.8rem;
+  margin-bottom: 0.3rem;
+}

@@ -1,0 +1,125 @@
+.map-controls {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(22, 27, 34, 0.9);
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 0.5rem;
+}
+
+.map-controls-zoom-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.map-control-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1;
+  color: #e6edf3;
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.map-control-btn:hover {
+  background: #30363d;
+}
+
+.map-controls-zoom-slider {
+  width: 24px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.zoom-slider {
+  width: 80px;
+  height: 24px;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  accent-color: #58a6ff;
+}
+
+.map-controls-zoom-indicator {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #8b949e;
+  font-variant-numeric: tabular-nums;
+}
+
+.map-control-compass {
+  padding: 0;
+  transition: transform 0.2s ease-out;
+}
+
+.map-control-compass svg {
+  flex-shrink: 0;
+}
+
+.map-controls-locate-wrap {
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 50;
+}
+
+.map-control-locate {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  color: #e6edf3;
+  background: rgba(22, 27, 34, 0.9);
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.map-controls-locate-wrap .map-control-locate:hover {
+  background: #30363d;
+}
+
+.map-control-locate.active .locate-pulse {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid #3b82f6;
+  animation: locate-pulse 1.5s ease-out infinite;
+  pointer-events: none;
+}
+
+.map-control-locate.locating .locate-pulse {
+  animation: locate-pulse 0.8s ease-out infinite;
+}
+
+@keyframes locate-pulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}

@@ -1,0 +1,39 @@
+.liveuamap-widget {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #30363d;
+}
+
+.liveuamap-widget h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #e6edf3;
+}
+
+.liveuamap-loading,
+.liveuamap-empty {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #8b949e;
+}
+
+.liveuamap-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.liveuamap-list li {
+  margin-bottom: 0.4rem;
+}
+
+.liveuamap-list a {
+  font-size: 0.8rem;
+  color: #58a6ff;
+  text-decoration: none;
+}
+
+.liveuamap-list a:hover {
+  text-decoration: underline;
+}

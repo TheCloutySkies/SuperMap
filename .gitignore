@@ -1,0 +1,19 @@
+# Keep this repository scoped to the SuperMap project directory.
+*
+!.gitignore
+!Documents/
+Documents/*
+!Documents/SuperMap/
+!Documents/SuperMap/**
+
+# Never commit local secrets or heavy generated files.
+Documents/SuperMap/**/.env
+Documents/SuperMap/**/node_modules/
+Documents/SuperMap/**/dist/
+Documents/SuperMap/**/*.log
+Documents/SuperMap/**/*.sqlite
+Documents/SuperMap/**/*.db
+Documents/SuperMap/.cursor/
+
+# General OS/editor noise.
+.DS_Store

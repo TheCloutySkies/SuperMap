@@ -1,0 +1,61 @@
+.quick-tutorial-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.quick-tutorial-modal {
+  width: 100%;
+  max-width: 640px;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  color: #e6edf3;
+}
+
+.quick-tutorial-modal h2 {
+  margin: 0 0 0.35rem;
+}
+
+.quick-tutorial-intro {
+  margin: 0 0 0.65rem;
+  color: #8b949e;
+}
+
+.quick-tutorial-steps {
+  margin: 0;
+  padding-left: 1rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.quick-tutorial-steps li {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.quick-tutorial-steps span {
+  color: #8b949e;
+}
+
+.quick-tutorial-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.8rem;
+}
+
+.quick-tutorial-actions button {
+  padding: 0.45rem 0.8rem;
+  background: #238636;
+  border: 1px solid #2ea043;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+}
+

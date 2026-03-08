@@ -1,0 +1,41 @@
+.header-auth {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.header-auth-email {
+  font-size: 0.85rem;
+  color: #8b949e;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-auth-btn {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #e6edf3;
+  background: transparent;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.header-auth-btn:hover {
+  background: #21262d;
+  border-color: #8b949e;
+}
+
+.header-auth-btn--primary {
+  color: #fff;
+  background: #238636;
+  border-color: #238636;
+}
+
+.header-auth-btn--primary:hover {
+  background: #2ea043;
+  border-color: #2ea043;
+}

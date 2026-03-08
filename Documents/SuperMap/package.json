@@ -1,0 +1,13 @@
+{
+  "name": "supermap-monorepo",
+  "private": true,
+  "description": "SuperMap app and situational-awareness API",
+  "scripts": {
+    "install:all": "npm install && cd SuperMap && npm install && cd ../situational-awareness-api && npm install",
+    "dev": "cd SuperMap && npm run dev:all",
+    "dev:frontend": "cd SuperMap && npm run dev:frontend",
+    "dev:all": "cd SuperMap && npm run dev:all",
+    "build": "cd SuperMap && npm run build",
+    "api": "cd situational-awareness-api && node server.js"
+  }
+}

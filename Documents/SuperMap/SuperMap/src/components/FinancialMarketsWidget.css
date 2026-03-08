@@ -1,0 +1,118 @@
+.financial-markets-widget {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+}
+
+.financial-markets-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #e6edf3;
+}
+
+.financial-markets-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.financial-markets-chip {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.8rem;
+  color: #8b949e;
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.financial-markets-chip:hover {
+  color: #e6edf3;
+}
+
+.financial-markets-chip.active {
+  color: #fff;
+  background: #238636;
+  border-color: #238636;
+}
+
+.financial-markets-table-wrap {
+  overflow-x: auto;
+}
+
+.financial-markets-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.financial-markets-table th,
+.financial-markets-table td {
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  border-bottom: 1px solid #21262d;
+  color: #e6edf3;
+}
+
+.financial-markets-table th {
+  color: #8b949e;
+  font-weight: 600;
+}
+
+.financial-markets-symbol {
+  font-weight: 600;
+  color: #58a6ff;
+}
+
+.financial-markets-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.financial-markets-price {
+  font-variant-numeric: tabular-nums;
+}
+
+.financial-markets-change {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.financial-markets-change-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.financial-markets-arrow {
+  font-size: 0.95em;
+  line-height: 1;
+}
+
+.financial-markets-table .negative,
+.financial-markets-change.negative {
+  color: #f85149;
+}
+
+.financial-markets-table .positive,
+.financial-markets-change.positive {
+  color: #3fb950;
+}
+
+.financial-markets-loading,
+.financial-markets-error,
+.financial-markets-empty {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #8b949e;
+}
+
+.financial-markets-error {
+  color: #f85149;
+}

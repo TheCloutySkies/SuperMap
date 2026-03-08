@@ -1,0 +1,66 @@
+.draw-hud {
+  position: absolute;
+  width: 220px;
+  padding: 0.75rem 1rem;
+  background: rgba(22, 27, 34, 0.95);
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  z-index: 120;
+  cursor: move;
+}
+
+.draw-hud-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #e6edf3;
+}
+
+.draw-hud-buttons {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+
+.draw-hud-buttons button {
+  flex: 1;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.8rem;
+  color: #e6edf3;
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.draw-hud-buttons button:hover {
+  background: #30363d;
+}
+
+.draw-hud-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #8b949e;
+  line-height: 1.35;
+}
+
+.draw-hud-points {
+  margin: 0.5rem 0;
+}
+
+.draw-hud-points label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.75rem;
+  color: #8b949e;
+}
+
+.draw-hud-points select {
+  width: 100%;
+  margin-bottom: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  color: #e6edf3;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+}

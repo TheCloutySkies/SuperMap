@@ -1,0 +1,95 @@
+.stock-search-wrap {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: #0d1117;
+  border: 1px solid #422006;
+  border-radius: 6px;
+}
+
+.stock-search-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fbbf24;
+}
+
+.stock-search-bar {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.stock-search-input {
+  flex: 1;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+  color: #e6edf3;
+  background: #161b22;
+  border: 1px solid #422006;
+  border-radius: 6px;
+}
+
+.stock-search-input::placeholder {
+  color: #6b7280;
+}
+
+.stock-search-btn {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+  color: #fff;
+  background: #b45309;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.stock-search-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.stock-search-error {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #f85149;
+}
+
+.stock-search-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.stock-search-result {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid #21262d;
+  font-size: 0.8rem;
+  color: #e6edf3;
+}
+
+.stock-search-result:last-child {
+  border-bottom: none;
+}
+
+.stock-search-symbol {
+  font-weight: 600;
+  color: #fbbf24;
+  min-width: 4rem;
+}
+
+.stock-search-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #8b949e;
+}
+
+.stock-search-price {
+  color: #3fb950;
+}

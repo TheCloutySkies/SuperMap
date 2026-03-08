@@ -1,0 +1,202 @@
+.map-view-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 300px;
+  background: #0d1117;
+}
+
+.map-view,
+.map-container {
+  width: 100%;
+  height: 100%;
+  background: #0d1117;
+}
+/* Prevent Mapbox Draw default UI from covering the map when displayControlsDefault: false */
+.mapbox-gl-draw_ctrl-bottom-left,
+.mapbox-gl-draw_ctrl-top-left,
+.mapbox-gl-draw_ctrl-top-right,
+.mapbox-gl-draw_ctrl-bottom-right {
+  display: none !important;
+}
+
+/* Fix draw tool grey screen: ensure draw control and canvas don't add opaque overlay */
+.mapbox-gl-draw,
+.mapbox-gl-draw.mapbox-gl-draw-active,
+.mapbox-gl-draw .mapbox-gl-draw_group,
+.mapbox-gl-draw .mapbox-gl-draw_ctrl-group {
+  background: transparent !important;
+}
+
+.map-container .mapboxgl-map .mapboxgl-canvas-container.mapboxgl-touch-pan-blocker {
+  background: transparent !important;
+}
+
+.map-container .mapboxgl-canvas {
+  background: transparent !important;
+}
+
+.map-crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 24px;
+  height: 24px;
+  pointer-events: none;
+  z-index: 40;
+}
+
+.map-crosshair::before,
+.map-crosshair::after {
+  content: '';
+  position: absolute;
+  background: #00ff41;
+  box-shadow: 0 0 4px #00ff41, 0 0 8px #00ff41;
+}
+
+.map-crosshair::before {
+  left: 50%;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  transform: translateX(-50%);
+}
+
+.map-crosshair::after {
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  transform: translateY(-50%);
+}
+
+.map-view {
+  width: 100%;
+  height: 100%;
+}
+
+.map-view-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0d1117;
+}
+
+.map-placeholder-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  color: #8b949e;
+}
+
+.map-placeholder-message strong {
+  color: #e6edf3;
+}
+
+.map-zoom-warning {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.6rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #e6edf3;
+  background: rgba(161, 98, 7, 0.95);
+  border: 1px solid #a16207;
+  border-radius: 8px;
+  z-index: 50;
+  pointer-events: none;
+}
+
+.map-loading-spinner {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  z-index: 50;
+  pointer-events: none;
+}
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #30363d;
+  border-top-color: #58a6ff;
+  border-radius: 50%;
+  animation: spinner-rotate 0.8s linear infinite;
+}
+
+@keyframes spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.maplibregl-ctrl-scale {
+  background: rgba(22, 27, 34, 0.95) !important;
+  border: 1px solid #30363d !important;
+  border-radius: 6px !important;
+  padding: 4px 8px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #00ff41 !important;
+  box-shadow: 0 0 6px rgba(0, 255, 65, 0.4) !important;
+}
+
+.maplibre-popup-dark .maplibregl-popup-content {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.maplibre-popup-dark .maplibregl-popup-close-button {
+  color: #8b949e;
+  font-size: 20px;
+}
+
+.maplibre-popup-dark .maplibregl-popup-close-button:hover {
+  color: #e6edf3;
+}
+
+.map-popup-content {
+  font-size: 0.85rem;
+  color: #e6edf3;
+  max-width: 280px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.map-popup-content div {
+  margin-bottom: 0.35rem;
+}
+
+.map-popup-content strong {
+  color: #8b949e;
+  margin-right: 0.35rem;
+}
+
+.map-popup-title {
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+.map-popup-source {
+  font-size: 0.8rem;
+  color: #8b949e;
+  margin-bottom: 0.5rem;
+}
+
+.map-popup-read-more {
+  display: inline-block;
+  font-size: 0.85rem;
+  color: #58a6ff;
+  margin-top: 0.35rem;
+}
+
+.map-popup-read-more:hover {
+  text-decoration: underline;
+}

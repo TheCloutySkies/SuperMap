@@ -1,0 +1,73 @@
+.saved-articles-view {
+  padding: 1rem 1.5rem 2rem;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.saved-articles-title {
+  margin: 0 0 1rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #e6edf3;
+}
+
+.saved-articles-loading,
+.saved-articles-empty {
+  color: #8b949e;
+  font-size: 0.95rem;
+}
+
+.saved-articles-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.saved-articles-item {
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+}
+
+.saved-articles-link {
+  display: block;
+  font-weight: 500;
+  color: #58a6ff;
+  text-decoration: none;
+  margin-bottom: 0.35rem;
+}
+
+.saved-articles-link:hover {
+  text-decoration: underline;
+}
+
+.saved-articles-source {
+  font-size: 0.8rem;
+  color: #8b949e;
+  margin-right: 0.5rem;
+}
+
+.saved-articles-snippet {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: #8b949e;
+  line-height: 1.4;
+}
+
+.saved-articles-unsave {
+  margin-top: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+  color: #8b949e;
+  background: transparent;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.saved-articles-unsave:hover {
+  color: #e6edf3;
+  border-color: #8b949e;
+}

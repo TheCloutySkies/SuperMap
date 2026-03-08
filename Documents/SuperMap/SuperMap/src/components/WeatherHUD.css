@@ -1,0 +1,170 @@
+.weather-hud {
+  position: absolute;
+  bottom: 4rem;
+  left: 1rem;
+  width: 220px;
+  padding: 0.75rem 1rem;
+  background: rgba(22, 27, 34, 0.92);
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  z-index: 45;
+}
+
+.weather-hud-show-btn {
+  position: absolute;
+  bottom: 4rem;
+  left: 1rem;
+  z-index: 45;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.8rem;
+  color: #e6edf3;
+  background: rgba(22, 27, 34, 0.92);
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.weather-hud-show-btn:hover {
+  background: #21262d;
+}
+
+.weather-hud-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+}
+
+.weather-hud-head-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.weather-hud-head-btn {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  line-height: 1;
+  font-size: 0.85rem;
+  border-radius: 6px;
+  border: 1px solid #30363d;
+  background: #0d1117;
+  color: #8b949e;
+  cursor: pointer;
+}
+
+.weather-hud-head-btn:hover {
+  color: #e6edf3;
+  border-color: #8b949e;
+}
+
+.weather-hud-title {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #8b949e;
+  text-transform: uppercase;
+}
+
+.weather-hud-search {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+
+.weather-hud-search input {
+  flex: 1;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+  color: #e6edf3;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+}
+
+.weather-hud-search button {
+  padding: 0.35rem 0.6rem;
+  font-size: 0.85rem;
+  color: #e6edf3;
+  background: #238636;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.weather-hud-loading,
+.weather-hud-empty {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #8b949e;
+}
+
+.weather-hud-temp-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.weather-hud-temp {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #e6edf3;
+}
+
+.weather-hud-temp-toggle {
+  display: flex;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.weather-hud-temp-btn {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  color: #8b949e;
+  background: #0d1117;
+  border: none;
+  cursor: pointer;
+}
+
+.weather-hud-temp-btn:hover {
+  color: #e6edf3;
+  background: #21262d;
+}
+
+.weather-hud-temp-btn.active {
+  color: #e6edf3;
+  background: #238636;
+}
+
+.weather-hud-code {
+  font-size: 0.75rem;
+  color: #6e7681;
+}
+
+.weather-hud-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  color: #8b949e;
+}
+
+.weather-hud-wind-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.weather-hud-source {
+  font-size: 0.7rem;
+  color: #8b949e;
+}
+
+.weather-hud-default-hint {
+  font-size: 0.7rem;
+  color: #6e7681;
+}

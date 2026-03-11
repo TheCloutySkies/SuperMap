@@ -58,6 +58,12 @@
   color: #fff;
 }
 
+.my-account-actions .my-account-delete {
+  border-color: #f85149;
+  background: #b62324;
+  color: #fff;
+}
+
 .my-account-avatar {
   width: 64px;
   height: 64px;
@@ -65,4 +71,32 @@
   object-fit: cover;
   border: 1px solid #30363d;
   margin-bottom: 0.45rem;
+}
+
+.my-account-sublist {
+  margin-top: 0.6rem;
+}
+
+.my-account-sublist strong {
+  font-size: 0.9rem;
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.my-account-sublist ul {
+  margin: 0;
+  padding-left: 1rem;
+}
+
+.my-account-sublist li {
+  color: #c9d1d9;
+  font-size: 0.85rem;
+  margin-bottom: 0.2rem;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.my-account-sublist li small {
+  color: #8b949e;
+  text-transform: uppercase;
 }

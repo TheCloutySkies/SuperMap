@@ -17,6 +17,8 @@ import {
   fetchAdsbPlaceholder,
   fetchUtilityOutages,
 } from '../services/layerServices'
+import { buildTerminatorGeoJSON } from '../services/solarTerminator'
+import { fetchMilitaryAircraft, fetchUkraineFrontline, fetchInternetOutages } from '../services/newLayerFetchers'
 import MapControls from './MapControls'
 import DrawHUD from './DrawHUD'
 import { useAuth } from '../contexts/AuthContext'
@@ -41,6 +43,8 @@ const CLICKABLE_POINT_LAYERS = [
   'intel-acled-layer',
   'intel-outages-layer',
   'intel-comms-layer',
+  'intel-mil-aircraft-layer',
+  'intel-ioda-layer',
   'mapped-news-layer',
   'mapped-osint-layer',
   'mapped-conflict-events-layer',
@@ -702,6 +706,135 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     if (map.getSource('search-results')) map.removeSource('search-results')
   }
 
+  const addTerminator = (geoJson) => {
+    if (map.getSource('intel-terminator')) {
+      map.getSource('intel-terminator').setData(geoJson)
+      return
+    }
+    map.addSource('intel-terminator', { type: 'geojson', data: geoJson })
+    map.addLayer({
+      id: 'intel-terminator-fill',
+      type: 'fill',
+      source: 'intel-terminator',
+      paint: { 'fill-color': '#000000', 'fill-opacity': 0.25 },
+    })
+    map.addLayer({
+      id: 'intel-terminator-line',
+      type: 'line',
+      source: 'intel-terminator',
+      paint: { 'line-color': '#f59e0b', 'line-width': 1.5 },
+    })
+  }
+
+  const removeTerminator = () => {
+    if (map.getLayer('intel-terminator-line')) map.removeLayer('intel-terminator-line')
+    if (map.getLayer('intel-terminator-fill')) map.removeLayer('intel-terminator-fill')
+    if (map.getSource('intel-terminator')) map.removeSource('intel-terminator')
+  }
+
+  const addMilAircraft = (geoJson) => {
+    if (map.getSource('intel-mil-aircraft')) {
+      map.getSource('intel-mil-aircraft').setData(geoJson)
+      return
+    }
+    map.addSource('intel-mil-aircraft', { type: 'geojson', data: geoJson })
+    map.addLayer({
+      id: 'intel-mil-aircraft-layer',
+      type: 'circle',
+      source: 'intel-mil-aircraft',
+      paint: {
+        'circle-radius': 6,
+        'circle-color': '#ef4444',
+        'circle-opacity': 0.9,
+        'circle-stroke-width': 1.5,
+        'circle-stroke-color': '#fbbf24',
+      },
+    })
+    map.addLayer({
+      id: 'intel-mil-aircraft-labels',
+      type: 'symbol',
+      source: 'intel-mil-aircraft',
+      layout: {
+        'text-field': ['get', 'title'],
+        'text-size': 10,
+        'text-anchor': 'top',
+        'text-offset': [0, 0.7],
+      },
+      paint: { 'text-color': '#fbbf24', 'text-halo-color': '#0d1117', 'text-halo-width': 2 },
+    })
+  }
+
+  const removeMilAircraft = () => {
+    if (map.getLayer('intel-mil-aircraft-labels')) map.removeLayer('intel-mil-aircraft-labels')
+    if (map.getLayer('intel-mil-aircraft-layer')) map.removeLayer('intel-mil-aircraft-layer')
+    if (map.getSource('intel-mil-aircraft')) map.removeSource('intel-mil-aircraft')
+  }
+
+  const addFrontline = (geoJson) => {
+    if (map.getSource('intel-frontline')) {
+      map.getSource('intel-frontline').setData(geoJson)
+      return
+    }
+    map.addSource('intel-frontline', { type: 'geojson', data: geoJson })
+    map.addLayer({
+      id: 'intel-frontline-fill',
+      type: 'fill',
+      source: 'intel-frontline',
+      filter: ['==', ['geometry-type'], 'Polygon'],
+      paint: { 'fill-color': '#ef4444', 'fill-opacity': 0.18 },
+    })
+    map.addLayer({
+      id: 'intel-frontline-line',
+      type: 'line',
+      source: 'intel-frontline',
+      paint: { 'line-color': '#ef4444', 'line-width': 2.5 },
+    })
+  }
+
+  const removeFrontline = () => {
+    if (map.getLayer('intel-frontline-line')) map.removeLayer('intel-frontline-line')
+    if (map.getLayer('intel-frontline-fill')) map.removeLayer('intel-frontline-fill')
+    if (map.getSource('intel-frontline')) map.removeSource('intel-frontline')
+  }
+
+  const addIodaOutages = (geoJson) => {
+    if (map.getSource('intel-ioda')) {
+      map.getSource('intel-ioda').setData(geoJson)
+      return
+    }
+    map.addSource('intel-ioda', { type: 'geojson', data: geoJson })
+    map.addLayer({
+      id: 'intel-ioda-layer',
+      type: 'circle',
+      source: 'intel-ioda',
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['get', 'level'], 0, 6, 100, 18],
+        'circle-color': '#f43f5e',
+        'circle-opacity': 0.8,
+        'circle-stroke-width': 2,
+        'circle-stroke-color': '#fff',
+      },
+    })
+    map.addLayer({
+      id: 'intel-ioda-labels',
+      type: 'symbol',
+      source: 'intel-ioda',
+      layout: {
+        'text-field': ['get', 'title'],
+        'text-size': 10,
+        'text-anchor': 'top',
+        'text-offset': [0, 1],
+      },
+      paint: { 'text-color': '#fda4af', 'text-halo-color': '#0d1117', 'text-halo-width': 2 },
+    })
+  }
+
+  const removeIodaOutages = () => {
+    if (map.getLayer('intel-ioda-labels')) map.removeLayer('intel-ioda-labels')
+    if (map.getLayer('intel-ioda-layer')) map.removeLayer('intel-ioda-layer')
+    if (map.getSource('intel-ioda')) map.removeSource('intel-ioda')
+  }
+
   return {
     addRailway,
     removeRailway,
@@ -742,6 +875,14 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     removeMappedConflictEvents,
     addSearchResults,
     removeSearchResults,
+    addTerminator,
+    removeTerminator,
+    addMilAircraft,
+    removeMilAircraft,
+    addFrontline,
+    removeFrontline,
+    addIodaOutages,
+    removeIodaOutages,
   }
 }
 
@@ -1081,6 +1222,48 @@ export default function MapView({
           .finally(() => onLoading?.(false))
       } else helpers.removeUtilityOutages()
 
+      if (toggles.dayNightTerminator) {
+        helpers.addTerminator(buildTerminatorGeoJSON())
+      } else helpers.removeTerminator()
+
+      if (toggles.milAircraft) {
+        onLoading?.(true)
+        fetchMilitaryAircraft()
+          .then((geoJson) => {
+            helpers.addMilAircraft(geoJson)
+            pushSearchLayerRef.current('milAircraft', geoJson)
+          })
+          .catch(() => {
+            helpers.addMilAircraft({ type: 'FeatureCollection', features: [] })
+          })
+          .finally(() => onLoading?.(false))
+      } else helpers.removeMilAircraft()
+
+      if (toggles.ukraineFrontline) {
+        onLoading?.(true)
+        fetchUkraineFrontline()
+          .then((geoJson) => {
+            helpers.addFrontline(geoJson)
+          })
+          .catch(() => {
+            helpers.addFrontline({ type: 'FeatureCollection', features: [] })
+          })
+          .finally(() => onLoading?.(false))
+      } else helpers.removeFrontline()
+
+      if (toggles.iodaOutages) {
+        onLoading?.(true)
+        fetchInternetOutages()
+          .then((geoJson) => {
+            helpers.addIodaOutages(geoJson)
+            pushSearchLayerRef.current('ioda', geoJson)
+          })
+          .catch(() => {
+            helpers.addIodaOutages({ type: 'FeatureCollection', features: [] })
+          })
+          .finally(() => onLoading?.(false))
+      } else helpers.removeIodaOutages()
+
       if (toggles.aoiDraw) {
         const aoi = getAoiFeatures()
         helpers.addAoiSaved(aoi)
@@ -1270,6 +1453,8 @@ export default function MapView({
         toggles.usgsEarthquakes ||
         toggles.acled ||
         toggles.adsbAircraft ||
+        toggles.milAircraft ||
+        toggles.iodaOutages ||
         toggles.commsInfrastructure ||
         (toggles.powerGrid && map.getZoom() >= MIN_POWER_ZOOM)
       if (needsRefresh) doFetch(map, toggles, onLoadingChange)
@@ -1542,6 +1727,19 @@ export default function MapView({
     window.addEventListener('supermap-adsb-data', handler)
     return () => window.removeEventListener('supermap-adsb-data', handler)
   }, [])
+
+  useEffect(() => {
+    if (!layerToggles?.dayNightTerminator) return
+    const map = mapRef.current
+    if (!map || !mapReadyRef.current) return
+    const tick = () => {
+      if (map.getSource('intel-terminator')) {
+        map.getSource('intel-terminator').setData(buildTerminatorGeoJSON())
+      }
+    }
+    const id = setInterval(tick, 60000)
+    return () => clearInterval(id)
+  }, [layerToggles?.dayNightTerminator])
 
   const basemap = BASEMAPS.find((b) => b.id === basemapId)
   if (basemap?.type === 'placeholder') {

@@ -26,8 +26,8 @@ const TAB_LABELS = {
 export default function SettingsView({ apiBase, onVisualsChange }) {
   const { user, deleteAccount } = useAuth()
   const [activeSection, setActiveSection] = useState('visuals')
-  const [tabPrefs, setTabPrefs] = useState(() => getTabVisibility())
-  const [visuals, setVisuals] = useState(() => getVisualsPrefs())
+  const [tabPrefs, setTabPrefs] = useState(() => getTabVisibility(user?.id || null))
+  const [visuals, setVisuals] = useState(() => getVisualsPrefs(user?.id || null))
   const [osintXHandles, setOsintXHandles] = useState([])
   const [defaultOsintXHandles, setDefaultOsintXHandles] = useState([])
   const [subreddits, setSubreddits] = useState([])
@@ -37,11 +37,16 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
   const [newSubreddit, setNewSubreddit] = useState('')
   const [deletingAccount, setDeletingAccount] = useState(false)
 
-  useEffect(() => setTabVisibility(tabPrefs), [tabPrefs])
+  useEffect(() => setTabVisibility(tabPrefs, user?.id || null), [tabPrefs, user?.id])
   useEffect(() => {
-    setVisualsPrefs(visuals)
+    setVisualsPrefs(visuals, user?.id || null)
     onVisualsChange?.()
-  }, [visuals, onVisualsChange])
+  }, [visuals, onVisualsChange, user?.id])
+
+  useEffect(() => {
+    setTabPrefs(getTabVisibility(user?.id || null))
+    setVisuals(getVisualsPrefs(user?.id || null))
+  }, [user?.id])
 
   const fetchConfig = useCallback(() => {
     if (!apiBase) {
@@ -190,6 +195,14 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
                 <option value="desktop">Force desktop layout</option>
                 <option value="mobile">Force mobile layout</option>
               </select>
+              <p className="settings-hint">If the UI does not update instantly after forcing mobile/desktop, click apply below.</p>
+              <button
+                type="button"
+                className="settings-reset"
+                onClick={() => window.location.reload()}
+              >
+                Apply layout (refresh page)
+              </button>
             </div>
             <div className="settings-field">
               <a className="settings-link" href="https://github.com/TheCloutySkies/SuperMap.git" target="_blank" rel="noopener noreferrer">

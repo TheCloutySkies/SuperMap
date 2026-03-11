@@ -10,6 +10,11 @@ export const STORAGE_KEYS = {
   VISUALS_PREFS: 'supermap_visualsPrefs',
 }
 
+function scopedKey(baseKey, userId) {
+  const uid = String(userId || '').trim()
+  return uid ? `${baseKey}:${uid}` : baseKey
+}
+
 // Intelligence layer toggle keys (default all off)
 export const DEFAULT_LAYER_TOGGLES = {
   openRailwayMap: false,
@@ -20,12 +25,16 @@ export const DEFAULT_LAYER_TOGGLES = {
   usgsEarthquakes: false,
   acled: false,
   adsbAircraft: false,
+  milAircraft: false,
   aisShips: false,
   noaaRadar: false,
   aoiDraw: false,
   sentinel2BurnScars: false,
   utilityOutages: false,
   commsInfrastructure: false,
+  dayNightTerminator: false,
+  ukraineFrontline: false,
+  iodaOutages: false,
 }
 
 export function getAoiFeatures() {
@@ -73,10 +82,16 @@ export const DEFAULT_TAB_VISIBILITY = {
   updates: true,
 }
 
-export function getTabVisibility() {
+export function getTabVisibility(userId = null) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.TAB_VISIBILITY)
-    if (!raw) return { ...DEFAULT_TAB_VISIBILITY }
+    const raw = localStorage.getItem(scopedKey(STORAGE_KEYS.TAB_VISIBILITY, userId))
+    if (!raw) {
+      // Backward compatibility with older global key.
+      const legacy = localStorage.getItem(STORAGE_KEYS.TAB_VISIBILITY)
+      if (!legacy) return { ...DEFAULT_TAB_VISIBILITY }
+      const parsedLegacy = JSON.parse(legacy)
+      return { ...DEFAULT_TAB_VISIBILITY, ...parsedLegacy }
+    }
     const parsed = JSON.parse(raw)
     return { ...DEFAULT_TAB_VISIBILITY, ...parsed }
   } catch {
@@ -84,8 +99,8 @@ export function getTabVisibility() {
   }
 }
 
-export function setTabVisibility(prefs) {
-  localStorage.setItem(STORAGE_KEYS.TAB_VISIBILITY, JSON.stringify(prefs))
+export function setTabVisibility(prefs, userId = null) {
+  localStorage.setItem(scopedKey(STORAGE_KEYS.TAB_VISIBILITY, userId), JSON.stringify(prefs))
 }
 
 export function hasConfigured() {
@@ -124,18 +139,23 @@ export function setRapidApiKeys(keys) {
 
 const DEFAULT_VISUALS = { theme: 'dark', compact: false, fontSize: 'normal' }
 
-export function getVisualsPrefs() {
+export function getVisualsPrefs(userId = null) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.VISUALS_PREFS)
-    if (!raw) return { ...DEFAULT_VISUALS }
+    const raw = localStorage.getItem(scopedKey(STORAGE_KEYS.VISUALS_PREFS, userId))
+    if (!raw) {
+      // Backward compatibility with older global key.
+      const legacy = localStorage.getItem(STORAGE_KEYS.VISUALS_PREFS)
+      if (!legacy) return { ...DEFAULT_VISUALS }
+      return { ...DEFAULT_VISUALS, ...JSON.parse(legacy) }
+    }
     return { ...DEFAULT_VISUALS, ...JSON.parse(raw) }
   } catch {
     return { ...DEFAULT_VISUALS }
   }
 }
 
-export function setVisualsPrefs(prefs) {
-  localStorage.setItem(STORAGE_KEYS.VISUALS_PREFS, JSON.stringify(prefs || {}))
+export function setVisualsPrefs(prefs, userId = null) {
+  localStorage.setItem(scopedKey(STORAGE_KEYS.VISUALS_PREFS, userId), JSON.stringify(prefs || {}))
 }
 
 // Basemap definitions: id, label, style (URL or inline style object)

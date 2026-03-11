@@ -1,15 +1,5 @@
 [
   {
-    "id": "7a7eebd3cba822a872f1e795ff4e79c4ddfa05b8",
-    "name": "Windy Weather Cam",
-    "lat": 48.8566,
-    "lon": 2.3522,
-    "stream": "https://images-webcams.windy.com/88/1648892888/current/full/1648892888.jpg",
-    "type": "jpeg",
-    "source": "seed_cameras",
-    "lastSeen": 1772956300100
-  },
-  {
     "id": "dfc6063d656c4b50424b14e147ec56b2690d5b7c",
     "name": "Jerusalem Panorama (SkylineWebcams)",
     "lat": 31.7784,
@@ -17,28 +7,6 @@
     "stream": "https://embed.skylinewebcams.com/img/5528.jpg",
     "type": "jpeg",
     "source": "seed_cameras",
-    "lastSeen": 1772958098481
-  },
-  {
-    "id": "06b13af13151d7283ff519c26eacf6af3e62f29e",
-    "name": "California Traffic Cam",
-    "lat": 34.0522,
-    "lon": -118.2437,
-    "stream": "http://cwwp2.dot.ca.gov/data/datalake/cctv/video/705.jpg",
-    "type": "jpeg",
-    "source": "seed_cameras",
-    "lastSeen": 1772961698501
-  }
-]  {
-    "id": "18b8caacf6782c0138935a553ff84031dfdc6fa9",
-    "name": "Skyline Live Cam",
-    "lat": 43.7696,
-    "lon": 11.2558,
-    "stream": "https://hls.skylinewebcams.com/live.m3u8",
-    "type": "hls",
-    "source": "seed_cameras",
-    "lastSeen": 1772961698501
-  }
-]98501
+    "lastSeen": 1773202828226
   }
 ]

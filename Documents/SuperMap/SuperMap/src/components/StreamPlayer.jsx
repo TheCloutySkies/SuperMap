@@ -6,13 +6,13 @@ const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.
   ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
   : 'http://localhost:3001'
 
-export default function StreamPlayer({ streamUrl, referer = '', name = 'Live stream', onError }) {
+export default function StreamPlayer({ streamUrl, referer = '', name = 'Live stream', onError, reloadKey = 0 }) {
   const videoRef = useRef(null)
   const hlsRef = useRef(null)
 
   useEffect(() => {
     if (!streamUrl || !videoRef.current) return
-    const proxyUrl = `${API_BASE}/api/stream/proxy?url=${encodeURIComponent(streamUrl)}${referer ? '&referer=' + encodeURIComponent(referer) : ''}`
+    const proxyUrl = `${API_BASE}/api/stream/proxy?url=${encodeURIComponent(streamUrl)}${referer ? '&referer=' + encodeURIComponent(referer) : ''}&t=${Date.now()}-${reloadKey}`
 
     if (Hls.isSupported()) {
       const hls = new Hls({
@@ -40,7 +40,7 @@ export default function StreamPlayer({ streamUrl, referer = '', name = 'Live str
       }
     }
     onError?.('HLS not supported')
-  }, [streamUrl, referer, onError])
+  }, [streamUrl, referer, onError, reloadKey])
 
   return (
     <div className="stream-player">
@@ -50,7 +50,7 @@ export default function StreamPlayer({ streamUrl, referer = '', name = 'Live str
         controls
         autoPlay
         playsInline
-        muted={false}
+        muted
       />
       <span className="stream-player-label">{name}</span>
     </div>

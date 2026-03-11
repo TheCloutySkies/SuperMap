@@ -258,6 +258,29 @@
   max-height: 360px;
 }
 
+.osint-x-video-fallback {
+  width: 100%;
+  text-align: left;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.8rem;
+  color: #8b949e;
+  background: #0d1117;
+  border: 0;
+  border-top: 1px solid #30363d;
+  cursor: pointer;
+}
+
+.osint-x-video-fallback:hover {
+  color: #e6edf3;
+}
+
+.osint-x-video-fallback--standalone {
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  width: fit-content;
+  background: #161b22;
+}
+
 .osint-x-filter-label {
   display: flex;
   align-items: center;
@@ -306,4 +329,41 @@
 .osint-x-pin-btn:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+}
+
+.osint-x-video-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 1rem;
+}
+
+.osint-x-video-dialog {
+  width: min(520px, 100%);
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  padding: 1rem;
+  color: #e6edf3;
+}
+
+.osint-x-video-dialog h3 {
+  margin: 0 0 0.4rem;
+}
+
+.osint-x-video-dialog p {
+  margin: 0 0 0.8rem;
+  color: #8b949e;
+  font-size: 0.9rem;
+}
+
+.osint-x-video-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
 }

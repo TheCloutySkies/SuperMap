@@ -18,12 +18,14 @@ const OSINT_LAYER_SECTIONS = [
     layers: [
       { key: 'liveWildfires', label: 'Live Wildfires' },
       { key: 'usgsEarthquakes', label: 'USGS Earthquakes' },
+      { key: 'iodaOutages', label: 'Internet Outages (IODA)' },
     ],
   },
   {
     title: 'Transportation (Tactical)',
     layers: [
       { key: 'adsbAircraft', label: 'ADS-B Exchange (Aircraft)', statusKey: 'adsb' },
+      { key: 'milAircraft', label: 'Military Aircraft (adsb.lol)', hint: 'Free — no API key required' },
       { key: 'aisShips', label: 'AIS (Ships)', placeholder: true },
     ],
   },
@@ -31,7 +33,14 @@ const OSINT_LAYER_SECTIONS = [
     title: 'Environment & Weather',
     layers: [
       { key: 'noaaRadar', label: 'Weather radar' },
+      { key: 'dayNightTerminator', label: 'Day / Night Terminator' },
       { key: 'sentinel2BurnScars', label: 'Sentinel-2 Burn Scars', hasTimeFilter: true },
+    ],
+  },
+  {
+    title: 'Conflict Overlays',
+    layers: [
+      { key: 'ukraineFrontline', label: 'Ukraine Frontline (DeepState)' },
     ],
   },
   {

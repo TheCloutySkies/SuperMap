@@ -73,6 +73,7 @@ export default function CommunityView({ onSignInRequired }) {
   const [selectedCategory, setSelectedCategory] = useState('')
   const [communityName, setCommunityName] = useState('')
   const [communityDescription, setCommunityDescription] = useState('')
+  const [postCommunityId, setPostCommunityId] = useState('')
   const [postTitle, setPostTitle] = useState('')
   const [postHtml, setPostHtml] = useState('<p></p>')
   const [commentHtml, setCommentHtml] = useState('<p></p>')
@@ -166,18 +167,20 @@ export default function CommunityView({ onSignInRequired }) {
 
   const createPost = async () => {
     if (!user) return onSignInRequired?.()
-    if (!postTitle.trim()) return
+    const targetCommunityId = route.kind === 'community-detail' ? route.id : postCommunityId
+    if (!postTitle.trim() || !targetCommunityId) return
     try {
       setError('')
       const headers = await authHeaders()
       const res = await axios.post(`${API_BASE}/api/forum/post`, {
-        community_id: route.id,
+        community_id: targetCommunityId,
         title: postTitle.trim(),
         content: postHtml,
         linked_saved_post_ids: selectedSavedLinks,
       }, { headers, timeout: 15000 })
       setPostTitle('')
       setPostHtml('<p></p>')
+      setPostCommunityId('')
       setSelectedSavedLinks([])
       window.location.hash = `#/post/${res.data.id}`
     } catch (err) {
@@ -229,6 +232,20 @@ export default function CommunityView({ onSignInRequired }) {
         <h2>{community?.name || 'Community'}</h2>
         <p>{community?.description || ''}</p>
         {error && <p className="community-error">{error}</p>}
+        <div className="community-list">
+          {posts.length === 0 ? (
+            <div className="community-card">
+              <p>No posts yet. Be the first to post in this community.</p>
+            </div>
+          ) : (
+            posts.map((p) => (
+              <button key={p.id} type="button" className="community-row" onClick={() => { window.location.hash = `#/post/${p.id}` }}>
+                <strong>{p.title}</strong>
+                <span>{new Date(p.created_at).toLocaleString()}</span>
+              </button>
+            ))
+          )}
+        </div>
         <div className="community-card">
           <h3>Create Post</h3>
           <input value={postTitle} onChange={(e) => setPostTitle(e.target.value)} placeholder="Post title" />
@@ -246,14 +263,6 @@ export default function CommunityView({ onSignInRequired }) {
             {savedLinkOptions.map((opt) => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
           </select>
           <button type="button" onClick={createPost}>Publish post</button>
-        </div>
-        <div className="community-list">
-          {posts.map((p) => (
-            <button key={p.id} type="button" className="community-row" onClick={() => { window.location.hash = `#/post/${p.id}` }}>
-              <strong>{p.title}</strong>
-              <span>{new Date(p.created_at).toLocaleString()}</span>
-            </button>
-          ))}
         </div>
       </div>
     )
@@ -288,6 +297,40 @@ export default function CommunityView({ onSignInRequired }) {
     <div className="community-view">
       <h2>Community</h2>
       {error && <p className="community-error">{error}</p>}
+      {loading ? <p>Loading…</p> : (
+        <div className="community-list">
+          {communities.map((c) => (
+            <button key={c.id} type="button" className="community-row" onClick={() => { window.location.hash = `#/community/${c.id}` }}>
+              <strong>{c.name}</strong>
+              <span>{c.description || 'No description'}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="community-card">
+        <h3>Create post</h3>
+        <select value={postCommunityId} onChange={(e) => setPostCommunityId(e.target.value)}>
+          <option value="">Select community</option>
+          {communities.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <input value={postTitle} onChange={(e) => setPostTitle(e.target.value)} placeholder="Post title" />
+        <EditorToolbar editor={postEditor} />
+        <EditorContent editor={postEditor} className="community-editor" />
+        <label>Link saved posts</label>
+        <select
+          multiple
+          value={selectedSavedLinks}
+          onChange={(e) => {
+            const values = Array.from(e.target.selectedOptions).map((o) => o.value)
+            setSelectedSavedLinks(values)
+          }}
+        >
+          {savedLinkOptions.map((opt) => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
+        </select>
+        <button type="button" onClick={createPost} disabled={!postCommunityId || !postTitle.trim()}>
+          Publish post
+        </button>
+      </div>
       <div className="community-card">
         <h3>Create community</h3>
         <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
@@ -304,16 +347,6 @@ export default function CommunityView({ onSignInRequired }) {
         <textarea value={categoryRequestDescription} onChange={(e) => setCategoryRequestDescription(e.target.value)} placeholder="Why this category?" rows={3} />
         <button type="button" onClick={requestCategory}>Submit category request</button>
       </div>
-      {loading ? <p>Loading…</p> : (
-        <div className="community-list">
-          {communities.map((c) => (
-            <button key={c.id} type="button" className="community-row" onClick={() => { window.location.hash = `#/community/${c.id}` }}>
-              <strong>{c.name}</strong>
-              <span>{c.description || 'No description'}</span>
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   )
 }

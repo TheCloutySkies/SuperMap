@@ -1,23 +1,122 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { fetchSpaceWeather } from '../services/newLayerFetchers'
 import './MapControls.css'
+
+function haversineDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371
+  const dLat = ((lat2 - lat1) * Math.PI) / 180
+  const dLon = ((lon2 - lon1) * Math.PI) / 180
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+function bearing(lat1, lon1, lat2, lon2) {
+  const dLon = ((lon2 - lon1) * Math.PI) / 180
+  const y = Math.sin(dLon) * Math.cos((lat2 * Math.PI) / 180)
+  const x =
+    Math.cos((lat1 * Math.PI) / 180) * Math.sin((lat2 * Math.PI) / 180) -
+    Math.sin((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.cos(dLon)
+  return (((Math.atan2(y, x) * 180) / Math.PI) + 360) % 360
+}
 
 export default function MapControls({ map }) {
   const [zoom, setZoom] = useState(2)
-  const [bearing, setBearing] = useState(0)
+  const [mapBearing, setMapBearing] = useState(0)
   const [locating, setLocating] = useState(false)
   const [userLocation, setUserLocation] = useState(null)
   const [tapPinMode, setTapPinMode] = useState(false)
+
+  const [spaceWx, setSpaceWx] = useState(null)
+  const [measureMode, setMeasureMode] = useState(false)
+  const [measurePoints, setMeasurePoints] = useState([])
+  const [measureResult, setMeasureResult] = useState(null)
+  const measureModeRef = useRef(false)
+  const measurePointsRef = useRef([])
+
+  useEffect(() => {
+    fetchSpaceWeather().then(setSpaceWx).catch(() => {})
+    const interval = setInterval(() => {
+      fetchSpaceWeather().then(setSpaceWx).catch(() => {})
+    }, 5 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [])
 
   useEffect(() => {
     if (!map) return
     const onMove = () => {
       setZoom(map.getZoom())
-      setBearing(map.getBearing())
+      setMapBearing(map.getBearing())
     }
     map.on('move', onMove)
     onMove()
     return () => map.off('move', onMove)
   }, [map])
+
+  const handleMeasureClick = useCallback((e) => {
+    if (!measureModeRef.current) return
+    const { lng, lat } = e.lngLat
+    const pts = [...measurePointsRef.current, [lng, lat]]
+    measurePointsRef.current = pts
+    setMeasurePoints(pts)
+    if (pts.length === 2) {
+      const dist = haversineDistance(pts[0][1], pts[0][0], pts[1][1], pts[1][0])
+      const brng = bearing(pts[0][1], pts[0][0], pts[1][1], pts[1][0])
+      setMeasureResult({ distance: dist, bearing: brng })
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!map) return
+    map.on('click', handleMeasureClick)
+    return () => map.off('click', handleMeasureClick)
+  }, [map, handleMeasureClick])
+
+  useEffect(() => {
+    if (!map) return
+    if (measurePoints.length < 1) {
+      if (map.getLayer('measure-line')) map.removeLayer('measure-line')
+      if (map.getLayer('measure-pts')) map.removeLayer('measure-pts')
+      if (map.getSource('measure-src')) map.removeSource('measure-src')
+      return
+    }
+    const fc = {
+      type: 'FeatureCollection',
+      features: [
+        ...measurePoints.map((p) => ({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: p },
+          properties: {},
+        })),
+        ...(measurePoints.length === 2
+          ? [{
+              type: 'Feature',
+              geometry: { type: 'LineString', coordinates: measurePoints },
+              properties: {},
+            }]
+          : []),
+      ],
+    }
+    if (map.getSource('measure-src')) {
+      map.getSource('measure-src').setData(fc)
+    } else {
+      map.addSource('measure-src', { type: 'geojson', data: fc })
+      map.addLayer({
+        id: 'measure-line',
+        type: 'line',
+        source: 'measure-src',
+        paint: { 'line-color': '#22d3ee', 'line-width': 2, 'line-dasharray': [4, 2] },
+      })
+      map.addLayer({
+        id: 'measure-pts',
+        type: 'circle',
+        source: 'measure-src',
+        filter: ['==', ['geometry-type'], 'Point'],
+        paint: { 'circle-radius': 6, 'circle-color': '#22d3ee', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' },
+      })
+    }
+  }, [map, measurePoints])
 
   if (!map) return null
 
@@ -56,6 +155,34 @@ export default function MapControls({ map }) {
     window.dispatchEvent(new CustomEvent('supermap-toggle-tap-pin', { detail: { enabled: next } }))
   }
 
+  const toggleMeasure = () => {
+    const next = !measureMode
+    setMeasureMode(next)
+    measureModeRef.current = next
+    if (!next) {
+      measurePointsRef.current = []
+      setMeasurePoints([])
+      setMeasureResult(null)
+      if (map.getLayer('measure-line')) map.removeLayer('measure-line')
+      if (map.getLayer('measure-pts')) map.removeLayer('measure-pts')
+      if (map.getSource('measure-src')) map.removeSource('measure-src')
+    } else {
+      measurePointsRef.current = []
+      setMeasurePoints([])
+      setMeasureResult(null)
+    }
+  }
+
+  const resetMeasure = () => {
+    measurePointsRef.current = []
+    setMeasurePoints([])
+    setMeasureResult(null)
+  }
+
+  const kpColor = spaceWx
+    ? spaceWx.kp >= 5 ? '#ef4444' : spaceWx.kp >= 4 ? '#f59e0b' : spaceWx.kp >= 3 ? '#eab308' : '#22c55e'
+    : '#8b949e'
+
   return (
     <>
       <div className="map-controls">
@@ -84,14 +211,47 @@ export default function MapControls({ map }) {
           className="map-control-btn map-control-compass"
           onClick={resetNorth}
           aria-label="Reset to North"
-          style={{ transform: `rotate(${-bearing}deg)` }}
+          style={{ transform: `rotate(${-mapBearing}deg)` }}
         >
           <svg viewBox="0 0 24 24" width="20" height="20">
             <path fill="currentColor" d="M12 2l-4 8h3v10h2V10h3L12 2z" />
           </svg>
         </button>
       </div>
+
+      {spaceWx && (
+        <div className="space-wx-badge" title={`Kp ${spaceWx.kp.toFixed(1)} — ${spaceWx.label}`}>
+          <span className="space-wx-dot" style={{ background: kpColor }} />
+          <span className="space-wx-text">Kp {spaceWx.kp.toFixed(1)}</span>
+        </div>
+      )}
+
+      {measureMode && (
+        <div className="measure-hud">
+          {!measureResult && measurePoints.length === 0 && <span>Click first point on map</span>}
+          {!measureResult && measurePoints.length === 1 && <span>Click second point</span>}
+          {measureResult && (
+            <>
+              <span>{measureResult.distance < 1 ? `${(measureResult.distance * 1000).toFixed(0)} m` : `${measureResult.distance.toFixed(2)} km`}</span>
+              <span className="measure-bearing">{measureResult.bearing.toFixed(1)}°</span>
+              <button type="button" className="measure-reset-btn" onClick={resetMeasure}>Reset</button>
+            </>
+          )}
+        </div>
+      )}
+
       <div className="map-controls-locate-wrap">
+        <button
+          type="button"
+          className={`map-control-btn map-control-measure ${measureMode ? 'active' : ''}`}
+          onClick={toggleMeasure}
+          aria-label="Measure distance"
+          title="Measure distance & bearing"
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18">
+            <path fill="currentColor" d="M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zM3 16V8h2v3h2V8h2v3h2V8h2v3h2V8h2v3h2V8h1v8H3z"/>
+          </svg>
+        </button>
         <button
           type="button"
           className={`map-control-btn map-control-pin ${tapPinMode ? 'active' : ''}`}

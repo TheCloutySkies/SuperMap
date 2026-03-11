@@ -9,9 +9,10 @@ export default function HeaderAuth({ onOpenAuth, onNavigateAccount }) {
   if (!isConfigured) return null
 
   if (user) {
+    const username = user.email?.split('@')?.[0] || user.user_metadata?.name || 'account'
     return (
       <div className="header-auth">
-        <span className="header-auth-email" title={user.email}>{user.email?.split('@')[0]}</span>
+        <span className="header-auth-email" title={user.email || 'Signed in'}>{username}</span>
         <div className="header-auth-menu-wrap">
           <button type="button" className="header-auth-btn" onClick={() => setOpen((v) => !v)}>
             My account

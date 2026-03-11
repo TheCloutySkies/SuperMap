@@ -27,6 +27,24 @@
 
 .broadcasts-header-options {
   margin-top: 0.5rem;
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.broadcasts-refresh-btn {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+  color: #e6edf3;
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.broadcasts-refresh-btn:hover {
+  border-color: #58a6ff;
 }
 
 .broadcasts-embed-toggle {
@@ -157,6 +175,18 @@
 
 .broadcasts-card--expanded .broadcasts-card-embed-wrap {
   padding-bottom: 36%;
+}
+
+.broadcasts-embed-fallback {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.7rem 0.55rem;
+  font-size: 0.78rem;
+  color: #8b949e;
+  background: #0d1117;
+  border-top: 1px solid #30363d;
 }
 
 /* Link-only cards (no embed) */

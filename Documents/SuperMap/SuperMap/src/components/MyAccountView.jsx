@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useSavedPlaces } from '../contexts/SavedPlacesContext'
 import { useSavedReports } from '../contexts/SavedReportsContext'
+import { useSavedArticles } from '../contexts/SavedArticlesContext'
 import { getConfigProfile } from '../constants'
 import { supabase } from '../lib/supabase'
 import './MyAccountView.css'
@@ -19,15 +20,24 @@ function downloadJson(filename, data) {
 }
 
 export default function MyAccountView({ onNavigateSection, onSignInRequired }) {
-  const { user } = useAuth()
+  const { user, deleteAccount } = useAuth()
   const { places, lists, listMeta, refresh: refreshPlaces } = useSavedPlaces()
   const { reports, refresh: refreshReports } = useSavedReports()
+  const { saved: savedArticles, refresh: refreshSavedArticles } = useSavedArticles()
   const [comments, setComments] = useState([])
   const [commentsLoading, setCommentsLoading] = useState(false)
+  const [contribLoading, setContribLoading] = useState(false)
+  const [contributions, setContributions] = useState({
+    categoryRequests: [],
+    forumCommunities: [],
+    forumPosts: [],
+    forumComments: [],
+  })
   const [exporting, setExporting] = useState(false)
   const [profileLoading, setProfileLoading] = useState(false)
   const [profileSaving, setProfileSaving] = useState(false)
   const [avatarUploading, setAvatarUploading] = useState(false)
+  const [deletingAccount, setDeletingAccount] = useState(false)
   const [displayName, setDisplayName] = useState('')
   const [bio, setBio] = useState('')
   const [avatarUrl, setAvatarUrl] = useState('')
@@ -50,11 +60,59 @@ export default function MyAccountView({ onNavigateSection, onSignInRequired }) {
     setCommentsLoading(false)
   }, [user?.id])
 
+  const fetchContributions = useCallback(async () => {
+    if (!supabase || !user?.id) {
+      setContributions({
+        categoryRequests: [],
+        forumCommunities: [],
+        forumPosts: [],
+        forumComments: [],
+      })
+      return
+    }
+    setContribLoading(true)
+    const [reqRes, communitiesRes, postsRes, commentsRes] = await Promise.all([
+      supabase
+        .from('category_requests')
+        .select('id,category_name,status,created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(100),
+      supabase
+        .from('forum_communities')
+        .select('id,name,created_at')
+        .eq('creator_user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(100),
+      supabase
+        .from('forum_posts')
+        .select('id,title,created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(100),
+      supabase
+        .from('forum_comments')
+        .select('id,content,created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(100),
+    ])
+    setContributions({
+      categoryRequests: reqRes.data || [],
+      forumCommunities: communitiesRes.data || [],
+      forumPosts: postsRes.data || [],
+      forumComments: commentsRes.data || [],
+    })
+    setContribLoading(false)
+  }, [user?.id])
+
   useEffect(() => {
     refreshPlaces?.()
     refreshReports?.()
+    refreshSavedArticles?.()
     fetchComments()
-  }, [refreshPlaces, refreshReports, fetchComments])
+    fetchContributions()
+  }, [refreshPlaces, refreshReports, refreshSavedArticles, fetchComments, fetchContributions])
 
   useEffect(() => {
     if (!supabase || !user?.id) return
@@ -96,8 +154,10 @@ export default function MyAccountView({ onNavigateSection, onSignInRequired }) {
         },
         places: places || [],
         placeLists: listMeta || lists || [],
+        savedArticles: savedArticles || [],
         reports: reports || [],
         comments: comments || [],
+        contributions,
       }
       const stamp = new Date().toISOString().slice(0, 10)
       downloadJson(`supermap-account-export-${stamp}.json`, payload)
@@ -193,17 +253,60 @@ export default function MyAccountView({ onNavigateSection, onSignInRequired }) {
       <div className="my-account-card">
         <h3>Your Content</h3>
         <p>Places: {places.length}</p>
+        <p>Saved articles: {savedArticles.length}</p>
         <p>Reports: {reports.length}</p>
         <p>Comments: {commentsLoading ? 'Loading…' : comments.length}</p>
       </div>
 
+      <div className="my-account-card">
+        <h3>My Contributions</h3>
+        <p>Category requests: {contribLoading ? 'Loading…' : contributions.categoryRequests.length}</p>
+        <p>Communities created: {contribLoading ? 'Loading…' : contributions.forumCommunities.length}</p>
+        <p>Forum posts: {contribLoading ? 'Loading…' : contributions.forumPosts.length}</p>
+        <p>Forum comments: {contribLoading ? 'Loading…' : contributions.forumComments.length}</p>
+        {!!contributions.categoryRequests.length && (
+          <div className="my-account-sublist">
+            <strong>Recent category requests</strong>
+            <ul>
+              {contributions.categoryRequests.slice(0, 5).map((r) => (
+                <li key={r.id}>
+                  <span>{r.category_name}</span>
+                  <small>{r.status}</small>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
       <div className="my-account-actions">
         <button type="button" onClick={() => onNavigateSection?.('my-places')}>Open My Places</button>
+        <button type="button" onClick={() => onNavigateSection?.('saved')}>Open Saved Articles</button>
         <button type="button" onClick={() => onNavigateSection?.('my-reports')}>Open My Reports</button>
         <button type="button" onClick={() => onNavigateSection?.('my-comments')}>Open My Comments</button>
         <button type="button" onClick={() => onNavigateSection?.('community')}>Open Community</button>
         <button type="button" className="my-account-export" disabled={exporting} onClick={handleExportAll}>
-          {exporting ? 'Exporting…' : 'Export all places/reports/comments'}
+          {exporting ? 'Exporting…' : 'Export all account data'}
+        </button>
+        <button
+          type="button"
+          className="my-account-delete"
+          disabled={deletingAccount}
+          onClick={async () => {
+            const ok = window.confirm('Delete your account and wipe all your data from Supabase? This cannot be undone.')
+            if (!ok) return
+            setDeletingAccount(true)
+            try {
+              await deleteAccount()
+              window.location.reload()
+            } catch (err) {
+              window.alert(err?.message || 'Could not delete account')
+            } finally {
+              setDeletingAccount(false)
+            }
+          }}
+        >
+          {deletingAccount ? 'Deleting account…' : 'Delete account (wipe data)'}
         </button>
       </div>
     </div>

@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import './AuthModal.css'
 
 export default function AuthModal({ onClose }) {
-  const { signIn, signUp } = useAuth()
+  const { signIn, signUp, signInAnonymously } = useAuth()
   const [mode, setMode] = useState('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -74,6 +74,28 @@ export default function AuthModal({ onClose }) {
             {busy ? '…' : mode === 'signin' ? 'Sign in' : 'Sign up'}
           </button>
         </form>
+        {mode === 'signin' && (
+          <button
+            type="button"
+            className="auth-modal-anon"
+            disabled={busy}
+            onClick={async () => {
+              setError('')
+              setMessage('')
+              setBusy(true)
+              try {
+                await signInAnonymously()
+                onClose?.()
+              } catch (err) {
+                setError(err.message || 'Anonymous sign in failed')
+              } finally {
+                setBusy(false)
+              }
+            }}
+          >
+            Continue anonymously
+          </button>
+        )}
         <p className="auth-modal-switch">
           {mode === 'signin' ? (
             <>No account? <button type="button" className="auth-modal-link" onClick={() => { setMode('signup'); setError(''); setMessage('') }}>Sign up</button></>

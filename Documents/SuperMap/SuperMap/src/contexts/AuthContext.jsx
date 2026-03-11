@@ -7,6 +7,7 @@ const AuthContext = createContext({
   loading: true,
   signIn: async () => {},
   signUp: async () => {},
+  signInAnonymously: async () => {},
   signOut: async () => {},
   deleteAccount: async () => {},
   isConfigured: false,
@@ -47,6 +48,12 @@ export function AuthProvider({ children }) {
     if (error) throw error
   }
 
+  const signInAnonymously = async () => {
+    if (!supabase) throw new Error('Supabase not configured')
+    const { error } = await supabase.auth.signInAnonymously()
+    if (error) throw error
+  }
+
   const signOut = async () => {
     if (!supabase) return
     await supabase.auth.signOut()
@@ -61,7 +68,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut, deleteAccount, isConfigured }}>
+    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signInAnonymously, signOut, deleteAccount, isConfigured }}>
       {children}
     </AuthContext.Provider>
   )

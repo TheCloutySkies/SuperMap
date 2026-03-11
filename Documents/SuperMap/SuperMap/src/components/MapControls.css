@@ -131,3 +131,77 @@
     opacity: 0;
   }
 }
+
+/* Space weather badge */
+.space-wx-badge {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(22, 27, 34, 0.92);
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: default;
+  user-select: none;
+}
+
+.space-wx-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.space-wx-text {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #e6edf3;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Measure tool */
+.map-control-measure.active {
+  background: #1d4ed8;
+  border-color: #3b82f6;
+}
+
+.measure-hud {
+  position: absolute;
+  bottom: 4.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(22, 27, 34, 0.95);
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 0.82rem;
+  color: #e6edf3;
+  white-space: nowrap;
+}
+
+.measure-bearing {
+  color: #8b949e;
+}
+
+.measure-reset-btn {
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  color: #e6edf3;
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.measure-reset-btn:hover {
+  background: #30363d;
+}

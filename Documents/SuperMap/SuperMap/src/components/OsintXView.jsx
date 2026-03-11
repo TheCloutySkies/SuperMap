@@ -54,6 +54,7 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
   const [pinError, setPinError] = useState(null)
   const [savingId, setSavingId] = useState(null)
   const [saveError, setSaveError] = useState(null)
+  const [videoDialog, setVideoDialog] = useState(null)
 
   const fetchPosts = () => {
     if (!API_BASE) {
@@ -163,6 +164,14 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
     } catch {}
   }
 
+  const openVideoDialog = (post, src) => {
+    setVideoDialog({
+      src: String(src || '').trim(),
+      postUrl: String(post?.url || '').trim(),
+      account: post?.account || 'x',
+    })
+  }
+
   return (
     <div className="osint-x-view">
       <header className="osint-x-header">
@@ -258,14 +267,38 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
                     if (yt) {
                       return (
                         <div key={i} className="osint-x-video-wrap">
-                          <iframe title="YouTube" src={yt} className="osint-x-embed" allowFullScreen />
+                          <iframe
+                            title="YouTube"
+                            src={`${yt}?rel=0&modestbranding=1`}
+                            className="osint-x-embed"
+                            loading="lazy"
+                            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                            allowFullScreen
+                          />
+                          {post.url && (
+                            <button type="button" className="osint-x-video-fallback" onClick={() => openVideoDialog(post, src)}>
+                              Problems playing? Watch on X
+                            </button>
+                          )}
                         </div>
                       )
                     }
                     if (vimeo) {
                       return (
                         <div key={i} className="osint-x-video-wrap">
-                          <iframe title="Vimeo" src={vimeo} className="osint-x-embed" allowFullScreen />
+                          <iframe
+                            title="Vimeo"
+                            src={vimeo}
+                            className="osint-x-embed"
+                            loading="lazy"
+                            allow="autoplay; fullscreen; picture-in-picture"
+                            allowFullScreen
+                          />
+                          {post.url && (
+                            <button type="button" className="osint-x-video-fallback" onClick={() => openVideoDialog(post, src)}>
+                              Problems playing? Watch on X
+                            </button>
+                          )}
                         </div>
                       )
                     }
@@ -277,9 +310,14 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
                       )
                     }
                     return (
-                      <a key={i} href={src} target="_blank" rel="noopener noreferrer" className="osint-x-link">
-                        Watch video →
-                      </a>
+                      <button
+                        key={i}
+                        type="button"
+                        className="osint-x-video-fallback osint-x-video-fallback--standalone"
+                        onClick={() => openVideoDialog(post, src)}
+                      >
+                        Watch video on X
+                      </button>
                     )
                   })}
                 </div>
@@ -327,6 +365,27 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
             </li>
           ))}
         </ul>
+      )}
+      {videoDialog && (
+        <div className="osint-x-video-dialog-backdrop" role="dialog" aria-modal="true">
+          <div className="osint-x-video-dialog">
+            <h3>Video playback unavailable</h3>
+            <p>This video host blocks in-app playback. Open it on X to watch safely.</p>
+            <div className="osint-x-video-dialog-actions">
+              {videoDialog.postUrl && (
+                <a href={videoDialog.postUrl} target="_blank" rel="noopener noreferrer" className="osint-x-pin-btn">
+                  Watch on X
+                </a>
+              )}
+              <a href={videoDialog.src} target="_blank" rel="noopener noreferrer" className="osint-x-link">
+                Open raw video link
+              </a>
+              <button type="button" className="osint-x-clear-filter" onClick={() => setVideoDialog(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

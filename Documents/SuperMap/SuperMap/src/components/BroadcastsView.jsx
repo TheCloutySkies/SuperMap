@@ -23,6 +23,14 @@ export default function BroadcastsView() {
   const [useYtEmbed, setUseYtEmbed] = useState(true)
   const [playingOfficialId, setPlayingOfficialId] = useState(null)
   const [streamError, setStreamError] = useState(null)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  const refreshAll = () => {
+    setExpanded(null)
+    setPlayingOfficialId(null)
+    setStreamError(null)
+    setRefreshKey((k) => k + 1)
+  }
 
   return (
     <div className="broadcasts-view">
@@ -32,6 +40,9 @@ export default function BroadcastsView() {
           Use <strong>Play official stream</strong> to watch in-page (works on localhost when YouTube embeds don’t). Or open <strong>Official stream</strong> / <strong>YouTube</strong> in a new tab.
         </p>
         <div className="broadcasts-header-options">
+          <button type="button" className="broadcasts-refresh-btn" onClick={refreshAll}>
+            Refresh streams
+          </button>
           <label className="broadcasts-embed-toggle">
             <input
               type="checkbox"
@@ -83,10 +94,12 @@ export default function BroadcastsView() {
             </div>
             {playingOfficialId === b.id && b.hlsUrl && (
               <StreamPlayer
+                key={`${b.id}-${refreshKey}`}
                 streamUrl={b.hlsUrl}
                 referer={b.referer || ''}
                 name={b.name}
                 onError={(msg) => setStreamError(msg)}
+                reloadKey={refreshKey}
               />
             )}
             {streamError && playingOfficialId === b.id && (
@@ -95,12 +108,26 @@ export default function BroadcastsView() {
             {playingOfficialId !== b.id && (b.ytEmbed && useYtEmbed) ? (
               <div className="broadcasts-card-embed-wrap">
                 <iframe
+                  key={`${b.id}-${refreshKey}`}
                   title={b.name}
-                  src={b.ytEmbed}
+                  src={`${b.ytEmbed}${b.ytEmbed.includes('?') ? '&' : '?'}playsinline=1&rel=0`}
                   className="broadcasts-embed"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowFullScreen
                 />
+                <div className="broadcasts-embed-fallback">
+                  <span>If embed fails, watch directly:</span>
+                  {b.ytLink && (
+                    <a href={b.ytLink} target="_blank" rel="noopener noreferrer" className="broadcasts-card-link">
+                      Open on YouTube
+                    </a>
+                  )}
+                  {b.officialLink && (
+                    <a href={b.officialLink} target="_blank" rel="noopener noreferrer" className="broadcasts-card-link">
+                      Official site
+                    </a>
+                  )}
+                </div>
               </div>
             ) : playingOfficialId !== b.id ? (
               <div className="broadcasts-card-links-only">

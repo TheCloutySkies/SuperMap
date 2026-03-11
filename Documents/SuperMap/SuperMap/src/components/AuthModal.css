@@ -105,6 +105,23 @@
   cursor: not-allowed;
 }
 
+.auth-modal-anon {
+  margin-top: 0.65rem;
+  width: 100%;
+  padding: 0.6rem 1rem;
+  font-size: 0.92rem;
+  color: #e6edf3;
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.auth-modal-anon:hover:not(:disabled) {
+  border-color: #58a6ff;
+  background: #2b3139;
+}
+
 .auth-modal-switch {
   margin: 1rem 0 0;
   font-size: 0.9rem;

@@ -6,6 +6,9 @@ const QUICK_LINKS = [
   { id: 'news-feeds', label: 'News Feeds', desc: 'Wikipedia, Reddit, Google News, BBC', icon: '📰', path: 'news-feeds' },
   { id: 'osint-feeds', label: 'OSINT Feeds', desc: 'Bellingcat, CISA, DW, tactical intel', icon: '📡', path: 'osint-feeds' },
   { id: 'osint-x', label: 'OSINT (X)', desc: 'Posts from OSINT X/Twitter accounts via RSS', icon: '𝕏', path: 'osint-x' },
+  { id: 'community', label: 'Community Forum', desc: 'Browse communities and post in the forum', icon: '💬', path: 'community' },
+  { id: 'report-maker', label: 'Report Maker', desc: 'Build and save intelligence reports', icon: '📝', path: 'report-maker' },
+  { id: 'resources', label: 'Resources', desc: 'Open OSINT tools and reference resources', icon: '📚', path: 'resources' },
 ]
 
 export default function HomeScreen({ onNavigate }) {

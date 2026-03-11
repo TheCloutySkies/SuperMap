@@ -267,6 +267,27 @@
   transform: scale(0.98);
 }
 
+/* Mobile map layers toggle pill */
+.map-layers-toggle-btn {
+  position: absolute;
+  z-index: 70;
+  right: 1rem;
+  top: 0.9rem;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+  border: 1px solid #30363d;
+  background: rgba(13, 17, 23, 0.92);
+  color: #e6edf3;
+  cursor: pointer;
+}
+
+.map-layers-toggle-btn:hover {
+  background: #161b22;
+}
+
 /* MapLibre overrides for dark chrome */
 .maplibregl-ctrl-attrib,
 .maplibregl-ctrl-attrib a {

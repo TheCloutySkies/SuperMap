@@ -29,6 +29,7 @@ import HeaderAuth from './components/HeaderAuth'
 import AuthModal from './components/AuthModal'
 import ReportMakerView from './components/ReportMakerView'
 import QuickTutorialModal from './components/QuickTutorialModal'
+import { supabase } from './lib/supabase'
 import './App.css'
 
 const FOOTER_MODES = { HOME: 'HOME', MAPS: 'MAPS', FEEDS: 'FEEDS', COMMUNITY: 'COMMUNITY', RESOURCES: 'RESOURCES', REPORTS: 'REPORTS', SETTINGS: 'SETTINGS' }
@@ -87,16 +88,49 @@ function App() {
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [showTutorial, setShowTutorial] = useState(false)
   const [deviceType, setDeviceType] = useState('desktop')
+  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true)
+  const [settingsUserId, setSettingsUserId] = useState(null)
 
   useEffect(() => {
     const detectDevice = () => {
+      if (typeof window === 'undefined') {
+        setDeviceType('desktop')
+        return
+      }
       const isMobileViewport = window.matchMedia('(max-width: 900px)').matches
       const isTouchDevice = window.matchMedia('(pointer: coarse)').matches
-      setDeviceType(isMobileViewport || isTouchDevice ? 'mobile' : 'desktop')
+      const ua = window.navigator?.userAgent || ''
+      const isUaMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua)
+      setDeviceType(isMobileViewport || isTouchDevice || isUaMobile ? 'mobile' : 'desktop')
     }
     detectDevice()
     window.addEventListener('resize', detectDevice)
     return () => window.removeEventListener('resize', detectDevice)
+  }, [])
+
+  useEffect(() => {
+    // Keep sidebar behavior intuitive when switching between desktop and mobile layouts.
+    if (deviceType === 'mobile') {
+      setIsRightSidebarOpen(false)
+    } else {
+      setIsRightSidebarOpen(true)
+    }
+  }, [deviceType])
+
+  useEffect(() => {
+    if (!supabase) return
+    let mounted = true
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return
+      setSettingsUserId(data?.session?.user?.id || null)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSettingsUserId(session?.user?.id || null)
+    })
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
   }, [])
 
   useEffect(() => {
@@ -141,7 +175,7 @@ function App() {
   const isMapView = ['osint-map', 'conflict-map'].includes(activeView)
   const isFeedView = ['osint-feeds', 'news-feeds', 'osint-x', 'my-places', 'my-reports', 'my-comments', 'advanced-search', 'saved', 'updates', 'broadcasts'].includes(activeView)
   const isSettingsView = activeView === 'settings'
-  const tabVisibility = getTabVisibility()
+  const tabVisibility = getTabVisibility(settingsUserId)
 
   const handleFooterNav = useCallback((mode) => {
     setFooterMode(mode)
@@ -185,10 +219,12 @@ function App() {
     Promise.allSettled(warm)
   }, [configured, apiBase])
 
-  const visuals = getVisualsPrefs()
+  const visuals = getVisualsPrefs(settingsUserId)
   const activeLayoutMode = visuals.layoutMode || 'auto'
   const resolvedDeviceType = activeLayoutMode === 'auto' ? deviceType : activeLayoutMode
   const appClass = ['app', `app--theme-${visuals.theme || 'dark'}`, visuals.compact ? 'app--compact' : '', `app--font-${visuals.fontSize || 'normal'}`, `app--device-${resolvedDeviceType}`].filter(Boolean).join(' ')
+
+  const isMobileLayout = resolvedDeviceType === 'mobile'
 
   return (
     <AuthProvider>
@@ -210,7 +246,7 @@ function App() {
             onNavigateToFeeds={(q) => { setSearchQuery(q || ''); setActiveView('osint-feeds'); setFooterMode(FOOTER_MODES.FEEDS) }}
             placeholder="Search map, events, and feeds…"
           />
-          {isMapView && (
+          {isMapView && !isMobileLayout && (
             <PlaceSearch onFlyTo={handleFlyTo} />
           )}
           <HeaderAuth onOpenAuth={() => setShowAuthModal(true)} onNavigateAccount={setActiveViewWithMode} />
@@ -251,8 +287,17 @@ function App() {
 
       <main className="main">
         {activeView === 'home' && <HomeScreen onNavigate={setActiveViewWithMode} />}
-        {isMapView && (
+          {isMapView && (
           <>
+            {isMobileLayout && (
+              <button
+                type="button"
+                className="map-layers-toggle-btn"
+                onClick={() => setIsRightSidebarOpen((open) => !open)}
+              >
+                {isRightSidebarOpen ? 'Hide Layers' : 'Layers'}
+              </button>
+            )}
             <MapView
               basemapId={basemapId}
               layerToggles={layerToggles}
@@ -345,12 +390,16 @@ function App() {
           />
         )}
         {activeView === 'settings' && (
-          <SettingsView apiBase={apiBase} onVisualsChange={() => setVisualsKey((k) => k + 1)} />
+          <SettingsView
+            apiBase={apiBase}
+            settingsUserId={settingsUserId}
+            onVisualsChange={() => setVisualsKey((k) => k + 1)}
+          />
         )}
       </main>
 
         <RightSidebar
-        visible={isMapView}
+        visible={isMapView && (!isMobileLayout || isRightSidebarOpen)}
         isMapView={isMapView}
         activeView={activeView}
         basemapId={basemapId}

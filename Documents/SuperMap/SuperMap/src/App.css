@@ -77,6 +77,10 @@
   max-width: 480px;
 }
 
+.app-omnibar-auth-wrap {
+  flex-shrink: 0;
+}
+
 .app-body {
   display: flex;
   flex: 1;
@@ -349,7 +353,18 @@
   .app--device-mobile .app-omnibar-strip .omnibar-global-wrap {
     min-width: 0;
     max-width: none;
-    flex: 1 1 100%;
+    flex: 1 1 auto;
+  }
+
+  .app--device-mobile .app-omnibar-auth-wrap {
+    flex-shrink: 0;
+    min-width: 0;
+  }
+
+  .app--device-mobile .app-omnibar-auth-wrap .header-auth-btn {
+    white-space: nowrap;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.8rem;
   }
 
   .app--device-mobile .app-body {

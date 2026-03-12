@@ -12,13 +12,19 @@ const FALLBACK_ITEMS = [
 const SCROLL_DURATION_BASE_MS = 20000
 const MIN_DURATION_MS = 12000
 
-export default function OmnibarBanner({ headlines = [] }) {
+export default function OmnibarBanner({ headlines = [], xFeedItems = [] }) {
   const items = useMemo(() => {
-    const list = Array.isArray(headlines) && headlines.length > 0
-      ? headlines.filter(Boolean).slice(0, 30)
-      : FALLBACK_ITEMS
-    return list.length ? list : FALLBACK_ITEMS
-  }, [headlines])
+    const news = Array.isArray(headlines) ? headlines.filter(Boolean).slice(0, 15) : []
+    const x = Array.isArray(xFeedItems) ? xFeedItems.filter(Boolean).slice(0, 15) : []
+    if (news.length === 0 && x.length === 0) return FALLBACK_ITEMS
+    const interleaved = []
+    const max = Math.max(news.length, x.length)
+    for (let i = 0; i < max; i++) {
+      if (news[i]) interleaved.push(news[i])
+      if (x[i]) interleaved.push(x[i])
+    }
+    return interleaved.length ? interleaved : FALLBACK_ITEMS
+  }, [headlines, xFeedItems])
 
   const [index, setIndex] = useState(0)
   const current = items[index % items.length]

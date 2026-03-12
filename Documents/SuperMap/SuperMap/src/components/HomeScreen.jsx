@@ -25,8 +25,17 @@ function formatDate() {
   return `${month} ${day} | ${year}`
 }
 
+function stripHtml(html) {
+  if (!html || typeof html !== 'string') return ''
+  const div = document.createElement('div')
+  div.innerHTML = html
+  return (div.textContent || div.innerText || '').trim().slice(0, 100)
+}
+
 export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footerTabs }) {
   const [nitterImages, setNitterImages] = useState([])
+  const [forumPosts, setForumPosts] = useState([])
+  const [forumCommunities, setForumCommunities] = useState([])
 
   useEffect(() => {
     if (!API_BASE) return
@@ -45,8 +54,33 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
       .catch(() => setNitterImages([]))
   }, [])
 
+  useEffect(() => {
+    if (!API_BASE) return
+    Promise.all([
+      axios.get(`${API_BASE}/api/forum/posts`, { timeout: 12000 }),
+      axios.get(`${API_BASE}/api/forum/communities`, { timeout: 12000 }),
+    ])
+      .then(([postsRes, communitiesRes]) => {
+        const posts = Array.isArray(postsRes.data) ? postsRes.data.slice(0, 10) : []
+        const communities = Array.isArray(communitiesRes.data) ? communitiesRes.data : []
+        setForumPosts(posts)
+        setForumCommunities(communities)
+      })
+      .catch(() => { setForumPosts([]); setForumCommunities([]) })
+  }, [])
+
   const handleCardClick = (path) => {
     if (onNavigate && path) onNavigate(path)
+  }
+
+  const getCommunityName = (communityId) => {
+    const c = forumCommunities.find((x) => x.id === communityId)
+    return c?.name || 'Community'
+  }
+
+  const handleForumPostClick = (post) => {
+    window.location.hash = `#/post/${post.id}`
+    if (onNavigate) onNavigate('community')
   }
 
   return (
@@ -64,7 +98,7 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
                 <button
                   key={key}
                   type="button"
-                  className={`home-screen-nav-tab ${footerMode === key ? 'active' : ''}`}
+                  className={`home-screen-nav-tab metallicss ${footerMode === key ? 'active' : ''}`}
                   onClick={() => onFooterNav(key)}
                 >
                   {label}
@@ -101,12 +135,45 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
                 ))}
               </ul>
             </section>
+            <section className="home-screen-section home-screen-forum">
+              <h2 className="home-screen-section-title">Community posts</h2>
+              {forumPosts.length === 0 ? (
+                <p className="home-screen-forum-empty">No forum posts yet. Open Community to browse or post.</p>
+              ) : (
+                <ul className="home-screen-forum-list">
+                  {forumPosts.map((p) => (
+                    <li key={p.id}>
+                      <button
+                        type="button"
+                        className="home-screen-forum-item"
+                        onClick={() => handleForumPostClick(p)}
+                      >
+                        <span className="home-screen-forum-item-title">{p.title || 'Untitled'}</span>
+                        <span className="home-screen-forum-item-meta">
+                          {getCommunityName(p.community_id)} · {p.created_at ? new Date(p.created_at).toLocaleDateString(undefined, { dateStyle: 'short' }) : ''}
+                        </span>
+                        {p.content && (
+                          <span className="home-screen-forum-item-preview">{stripHtml(p.content)}</span>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <button
+                type="button"
+                className="home-screen-forum-link btn-y2k"
+                onClick={() => handleCardClick('community')}
+              >
+                Open Community →
+              </button>
+            </section>
           </div>
           <aside className="home-screen-sidebar">
             <div className="home-screen-sidebar-block card-y2k">
               <button
                 type="button"
-                className="home-screen-settings btn-y2k"
+                className="home-screen-settings btn-y2k metallicss"
                 onClick={() => onNavigate('settings')}
               >
                 ⚙️ Settings & API keys

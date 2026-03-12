@@ -23,6 +23,41 @@
   --y2k-font: "Segoe UI", system-ui, "Trebuchet MS", Arial, sans-serif;
 }
 
+/* MetalliCSS: dark chrome + readable text */
+.app .metallicss {
+  --metal: lead;
+  --convexity: 2;
+  color: var(--y2k-text) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.app .metallicss .metal {
+  pointer-events: none;
+  opacity: 0.45;
+}
+/* Slightly stronger chrome on primary/active, still dark */
+.app .footer-btn.metallicss.active,
+.app .nav-tab.metallicss.active,
+.app .header-auth-btn--primary.metallicss,
+.app .omnibar-search-btn--primary.metallicss {
+  --metal: neutral;
+}
+.app .footer-btn.metallicss.active .metal,
+.app .nav-tab.metallicss.active .metal,
+.app .header-auth-btn--primary.metallicss .metal,
+.app .omnibar-search-btn--primary.metallicss .metal {
+  opacity: 0.5;
+}
+/* Light theme: dark text on chrome for contrast */
+.app--theme-light .metallicss {
+  color: #1a1a1a !important;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+.app--theme-light .footer-btn.metallicss.active,
+.app--theme-light .nav-tab.metallicss.active {
+  color: #fff !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
 /* Base button style: 3D metallic tab look */
 .btn-y2k {
   font-family: var(--y2k-font);

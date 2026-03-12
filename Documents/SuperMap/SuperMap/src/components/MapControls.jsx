@@ -187,7 +187,7 @@ export default function MapControls({ map }) {
     <>
       <div className="map-controls">
         <div className="map-controls-zoom-group">
-          <button type="button" className="map-control-btn" onClick={zoomIn} aria-label="Zoom in">
+          <button type="button" className="map-control-btn metallicss" onClick={zoomIn} aria-label="Zoom in">
             +
           </button>
           <div className="map-controls-zoom-slider">
@@ -201,14 +201,14 @@ export default function MapControls({ map }) {
               className="zoom-slider"
             />
           </div>
-          <button type="button" className="map-control-btn" onClick={zoomOut} aria-label="Zoom out">
+          <button type="button" className="map-control-btn metallicss" onClick={zoomOut} aria-label="Zoom out">
             −
           </button>
         </div>
         <div className="map-controls-zoom-indicator">Z: {zoom.toFixed(1)}</div>
         <button
           type="button"
-          className="map-control-btn map-control-compass"
+          className="map-control-btn map-control-compass metallicss"
           onClick={resetNorth}
           aria-label="Reset to North"
           style={{ transform: `rotate(${-mapBearing}deg)` }}
@@ -240,7 +240,7 @@ export default function MapControls({ map }) {
             <>
               <span>{measureResult.distance < 1 ? `${(measureResult.distance * 1000).toFixed(0)} m` : `${measureResult.distance.toFixed(2)} km`}</span>
               <span className="measure-bearing">{measureResult.bearing.toFixed(1)}°</span>
-              <button type="button" className="measure-reset-btn" onClick={resetMeasure}>Reset</button>
+              <button type="button" className="measure-reset-btn metallicss" onClick={resetMeasure}>Reset</button>
             </>
           )}
         </div>
@@ -249,7 +249,7 @@ export default function MapControls({ map }) {
       <div className="map-controls-locate-wrap">
         <button
           type="button"
-          className={`map-control-btn map-control-measure ${measureMode ? 'active' : ''}`}
+          className={`map-control-btn map-control-measure metallicss ${measureMode ? 'active' : ''}`}
           onClick={toggleMeasure}
           aria-label="Measure distance"
           title="Measure distance & bearing between two points"
@@ -259,7 +259,7 @@ export default function MapControls({ map }) {
         </button>
         <button
           type="button"
-          className={`map-control-btn map-control-pin ${tapPinMode ? 'active' : ''}`}
+          className={`map-control-btn map-control-pin metallicss ${tapPinMode ? 'active' : ''}`}
           onClick={toggleTapPinMode}
           aria-label="Toggle tap-to-add pin mode"
           title="Tap map to add pin"
@@ -268,7 +268,7 @@ export default function MapControls({ map }) {
         </button>
         <button
           type="button"
-          className={`map-control-btn map-control-locate ${userLocation ? 'active' : ''} ${locating ? 'locating' : ''}`}
+          className={`map-control-btn map-control-locate metallicss ${userLocation ? 'active' : ''} ${locating ? 'locating' : ''}`}
           onClick={locateMe}
           aria-label="Locate me"
           title="Center map on your location"

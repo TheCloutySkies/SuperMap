@@ -35,13 +35,13 @@ export default function DrawHUD({
       <div ref={nodeRef} className="draw-hud">
         <div className="draw-hud-title">Drawing &amp; Targeting</div>
         <div className="draw-hud-buttons">
-          <button type="button" onClick={() => trigger('polygon')}>
+          <button type="button" className="metallicss" onClick={() => trigger('polygon')}>
             Polygon
           </button>
-          <button type="button" onClick={() => trigger('line')}>
+          <button type="button" className="metallicss" onClick={() => trigger('line')}>
             Line
           </button>
-          <button type="button" onClick={() => trigger('trash')}>
+          <button type="button" className="metallicss" onClick={() => trigger('trash')}>
             Trash
           </button>
         </div>
@@ -59,6 +59,7 @@ export default function DrawHUD({
           <div className="draw-hud-buttons">
             <button
               type="button"
+              className="metallicss"
               onClick={() => {
                 setDialogIcon(pointIcon)
                 setShowAddDialog(true)
@@ -66,7 +67,7 @@ export default function DrawHUD({
             >
               Add Point
             </button>
-            <button type="button" onClick={() => onClearPoints?.()}>
+            <button type="button" className="metallicss" onClick={() => onClearPoints?.()}>
               Clear Points
             </button>
           </div>
@@ -92,6 +93,7 @@ export default function DrawHUD({
             <div className="draw-hud-dialog-actions">
               <button
                 type="button"
+                className="metallicss"
                 onClick={() => {
                   onPointIconChange?.(dialogIcon)
                   onAddPoint?.({
@@ -106,7 +108,7 @@ export default function DrawHUD({
               >
                 Save
               </button>
-              <button type="button" onClick={() => setShowAddDialog(false)}>Cancel</button>
+              <button type="button" className="metallicss" onClick={() => setShowAddDialog(false)}>Cancel</button>
             </div>
           </div>
         )}

@@ -14,17 +14,17 @@ export default function HeaderAuth({ onOpenAuth, onNavigateAccount }) {
       <div className="header-auth">
         <span className="header-auth-email" title={user.email || 'Signed in'}>{username}</span>
         <div className="header-auth-menu-wrap">
-          <button type="button" className="header-auth-btn" onClick={() => setOpen((v) => !v)}>
+          <button type="button" className="header-auth-btn metallicss" onClick={() => setOpen((v) => !v)}>
             My account
           </button>
           {open && (
             <div className="header-auth-menu">
-              <button type="button" onClick={() => { onNavigateAccount?.('my-account'); setOpen(false) }}>My Account</button>
-              <button type="button" onClick={() => { onNavigateAccount?.('my-places'); setOpen(false) }}>My Places</button>
-              <button type="button" onClick={() => { onNavigateAccount?.('my-reports'); setOpen(false) }}>My Reports</button>
-              <button type="button" onClick={() => { onNavigateAccount?.('my-comments'); setOpen(false) }}>My Comments</button>
-              <button type="button" onClick={() => { onNavigateAccount?.('saved'); setOpen(false) }}>Saved</button>
-              <button type="button" className="danger" onClick={() => { setOpen(false); signOut() }}>Sign out</button>
+              <button type="button" className="metallicss" onClick={() => { onNavigateAccount?.('my-account'); setOpen(false) }}>My Account</button>
+              <button type="button" className="metallicss" onClick={() => { onNavigateAccount?.('my-places'); setOpen(false) }}>My Places</button>
+              <button type="button" className="metallicss" onClick={() => { onNavigateAccount?.('my-reports'); setOpen(false) }}>My Reports</button>
+              <button type="button" className="metallicss" onClick={() => { onNavigateAccount?.('my-comments'); setOpen(false) }}>My Comments</button>
+              <button type="button" className="metallicss" onClick={() => { onNavigateAccount?.('saved'); setOpen(false) }}>Saved</button>
+              <button type="button" className="danger metallicss" onClick={() => { setOpen(false); signOut() }}>Sign out</button>
             </div>
           )}
         </div>
@@ -33,7 +33,7 @@ export default function HeaderAuth({ onOpenAuth, onNavigateAccount }) {
   }
 
   return (
-    <button type="button" className="header-auth-btn header-auth-btn--primary" onClick={onOpenAuth}>
+    <button type="button" className="header-auth-btn header-auth-btn--primary metallicss" onClick={onOpenAuth}>
       Sign in
     </button>
   )

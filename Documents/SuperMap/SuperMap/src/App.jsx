@@ -32,8 +32,19 @@ import QuickTutorialModal from './components/QuickTutorialModal'
 import AmbientBackground from './components/AmbientBackground'
 import AmbientBgLight from './components/AmbientBgLight'
 import OmnibarBanner from './components/OmnibarBanner'
+import { metallicss } from 'metallicss'
 import { supabase } from './lib/supabase'
 import './App.css'
+
+function initMetallicss() {
+  document.querySelectorAll('.metallicss').forEach((el) => {
+    if (el.querySelector('.metal')) return
+    el.style.setProperty('box-shadow', '0 1px 2px rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.15)')
+    el.style.setProperty('overflow', 'hidden')
+    el.style.setProperty('transform', 'translateZ(0)')
+    try { metallicss(el) } catch (_) {}
+  })
+}
 
 const FOOTER_MODES = { HOME: 'HOME', MAPS: 'MAPS', FEEDS: 'FEEDS', COMMUNITY: 'COMMUNITY', RESOURCES: 'RESOURCES', REPORTS: 'REPORTS', SETTINGS: 'SETTINGS' }
 
@@ -85,6 +96,7 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResultsGeoJson, setSearchResultsGeoJson] = useState(null)
   const [prefetchedNews, setPrefetchedNews] = useState(null)
+  const [bannerXItems, setBannerXItems] = useState([])
   const [visualsKey, setVisualsKey] = useState(0)
   const [eventCountry, setEventCountry] = useState('')
   const [eventFilterByView, setEventFilterByView] = useState(false)
@@ -215,6 +227,15 @@ function App() {
     const timeout = (ms) => ({ signal: AbortSignal.timeout(ms) })
     const warm = [
       fetch(`${apiBase}/api/news`, timeout(20000)).then((r) => r.json()).then((data) => { if (data?.features?.length) setPrefetchedNews(data) }).catch(() => {}),
+      fetch(`${apiBase}/api/osint-x?limit=25`, timeout(12000)).then((r) => r.json()).then((data) => {
+        const posts = Array.isArray(data) ? data : []
+        const items = posts.map((p) => {
+          const account = p.account ? `@${p.account} ` : ''
+          const text = (p.title || p.content || '').trim().slice(0, 140)
+          return text ? `${account}${text}` : null
+        }).filter(Boolean)
+        setBannerXItems(items.slice(0, 15))
+      }).catch(() => {}),
       fetch(`${apiBase}/api/osint`, timeout(15000)).catch(() => {}),
       fetch(`${apiBase}/api/reddit-signals?limit=10`, timeout(12000)).catch(() => {}),
       fetch(`${apiBase}/api/config`, timeout(8000)).catch(() => {}),
@@ -230,6 +251,11 @@ function App() {
   const appClass = ['app', `app--theme-${visuals.theme || 'dark'}`, visuals.compact ? 'app--compact' : '', `app--font-${visuals.fontSize || 'normal'}`, `app--device-${resolvedDeviceType}`].filter(Boolean).join(' ')
 
   const isMobileLayout = resolvedDeviceType === 'mobile'
+
+  useEffect(() => {
+    const t = setTimeout(initMetallicss, 50)
+    return () => clearTimeout(t)
+  }, [visualsKey, activeView, footerMode])
 
   useEffect(() => {
     if (prevFooterModeRef.current !== null && prevFooterModeRef.current !== footerMode) {
@@ -253,14 +279,20 @@ function App() {
       <AmbientBgLight />
       <header className="app-omnibar-strip">
         <div className="app-omnibar-inner">
+          <a href="https://cloutyskies.org" className="app-omnibar-logo" target="_blank" rel="noopener noreferrer" aria-label="Clouty Skies">
+            <img src="/cloutyskies-logo.png" alt="" />
+          </a>
           <OmnibarBanner
             headlines={prefetchedNews?.features
               ?.filter((f) => {
                 const s = (f.properties?.source || '').toLowerCase()
                 return !s.includes('wikipedia')
               })
+              ?.sort((a, b) => (b.properties?.timestamp ?? 0) - (a.properties?.timestamp ?? 0))
+              ?.slice(0, 15)
               ?.map((f) => f.properties?.title || f.properties?.headline)
               ?.filter(Boolean) || []}
+            xFeedItems={bannerXItems}
           />
           <Omnibar
             query={searchQuery}
@@ -462,43 +494,43 @@ function App() {
       <footer className="footer">
         <div className="footer-switch">
           <button
-            className={`footer-btn ${footerMode === FOOTER_MODES.HOME ? 'active' : ''}`}
+            className={`footer-btn metallicss ${footerMode === FOOTER_MODES.HOME ? 'active' : ''}`}
             onClick={() => handleFooterNav(FOOTER_MODES.HOME)}
           >
             HOME
           </button>
           <button
-            className={`footer-btn ${footerMode === FOOTER_MODES.MAPS ? 'active' : ''}`}
+            className={`footer-btn metallicss ${footerMode === FOOTER_MODES.MAPS ? 'active' : ''}`}
             onClick={() => handleFooterNav(FOOTER_MODES.MAPS)}
           >
             MAPS
           </button>
           <button
-            className={`footer-btn ${footerMode === FOOTER_MODES.FEEDS ? 'active' : ''}`}
+            className={`footer-btn metallicss ${footerMode === FOOTER_MODES.FEEDS ? 'active' : ''}`}
             onClick={() => handleFooterNav(FOOTER_MODES.FEEDS)}
           >
             FEEDS
           </button>
           <button
-            className={`footer-btn ${footerMode === FOOTER_MODES.COMMUNITY ? 'active' : ''}`}
+            className={`footer-btn metallicss ${footerMode === FOOTER_MODES.COMMUNITY ? 'active' : ''}`}
             onClick={() => handleFooterNav(FOOTER_MODES.COMMUNITY)}
           >
             COMMUNITY
           </button>
           <button
-            className={`footer-btn ${footerMode === FOOTER_MODES.RESOURCES ? 'active' : ''}`}
+            className={`footer-btn metallicss ${footerMode === FOOTER_MODES.RESOURCES ? 'active' : ''}`}
             onClick={() => handleFooterNav(FOOTER_MODES.RESOURCES)}
           >
             RESOURCES
           </button>
           <button
-            className={`footer-btn ${footerMode === FOOTER_MODES.REPORTS ? 'active' : ''}`}
+            className={`footer-btn metallicss ${footerMode === FOOTER_MODES.REPORTS ? 'active' : ''}`}
             onClick={() => handleFooterNav(FOOTER_MODES.REPORTS)}
           >
             REPORT MAKER
           </button>
           <button
-            className={`footer-btn ${footerMode === FOOTER_MODES.SETTINGS ? 'active' : ''}`}
+            className={`footer-btn metallicss ${footerMode === FOOTER_MODES.SETTINGS ? 'active' : ''}`}
             onClick={() => handleFooterNav(FOOTER_MODES.SETTINGS)}
           >
             SETTINGS
@@ -532,7 +564,7 @@ function TabButton({ viewId, label, visible, activeView, setActiveView }) {
   if (visible === false) return null
   return (
     <button
-      className={`nav-tab ${activeView === viewId ? 'active' : ''}`}
+      className={`nav-tab metallicss ${activeView === viewId ? 'active' : ''}`}
       onClick={() => setActiveView(viewId)}
     >
       {label}

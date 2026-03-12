@@ -144,7 +144,7 @@ export default function Omnibar({
         />
         <button
           type="button"
-          className="omnibar-search-btn omnibar-search-btn--primary"
+          className="omnibar-search-btn omnibar-search-btn--primary metallicss"
           onClick={searchInApp}
           disabled={loading || !String(query).trim()}
           title="Search within the app (map & feeds)"

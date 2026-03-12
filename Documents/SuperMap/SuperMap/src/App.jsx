@@ -539,6 +539,9 @@ function App() {
           </button>
         </div>
       </footer>
+      <div className="app-mobile-auth-bar">
+        <HeaderAuth onOpenAuth={() => setShowAuthModal(true)} onNavigateAccount={setActiveViewWithMode} />
+      </div>
     </div>
     {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
     {showTutorial && (

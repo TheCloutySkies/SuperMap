@@ -31,7 +31,7 @@ export default function DrawHUD({
   }
 
   return (
-    <Draggable nodeRef={nodeRef} bounds="parent" defaultPosition={{ x: 20, y: 120 }}>
+    <Draggable nodeRef={nodeRef} bounds="parent" defaultPosition={{ x: 12, y: 12 }}>
       <div ref={nodeRef} className="draw-hud">
         <div className="draw-hud-title">Drawing &amp; Targeting</div>
         <div className="draw-hud-buttons">

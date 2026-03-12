@@ -1,14 +1,14 @@
 .map-controls {
   position: absolute;
   top: 1rem;
-  right: 1rem;
+  left: 1rem;
   z-index: 50;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  background: rgba(22, 27, 34, 0.9);
-  border: 1px solid #30363d;
+  background: var(--y2k-surface, rgba(22, 27, 34, 0.9));
+  border: 1px solid var(--y2k-border, #30363d);
   border-radius: 8px;
   padding: 0.5rem;
 }
@@ -20,21 +20,32 @@
   gap: 0.25rem;
 }
 
-.map-control-btn {
+.map-controls-zoom-group .map-control-btn,
+.map-control-compass {
   width: 32px;
-  height: 32px;
+  min-width: 32px;
+  padding: 6px;
+}
+
+.map-control-btn {
+  min-width: 32px;
+  min-height: 32px;
+  height: auto;
+  padding: 6px 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
+  gap: 4px;
+  font-size: 0.8rem;
   font-weight: 600;
   line-height: 1;
-  color: #e6edf3;
-  background: #21262d;
-  border: 1px solid #30363d;
+  color: var(--y2k-text, #e6edf3);
+  background: var(--y2k-surface-raised, #21262d);
+  border: 1px solid var(--y2k-border, #30363d);
   border-radius: 6px;
   cursor: pointer;
   transition: background 0.15s;
+  white-space: nowrap;
 }
 
 .map-control-btn:hover {
@@ -81,22 +92,27 @@
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+  align-items: flex-end;
 }
 
 .map-control-locate {
   position: relative;
-  width: 32px;
-  height: 32px;
+  min-width: 32px;
+  min-height: 36px;
+  padding: 6px 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
-  color: #e6edf3;
-  background: rgba(22, 27, 34, 0.9);
-  border: 1px solid #30363d;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--y2k-text, #e6edf3);
+  background: var(--y2k-surface, rgba(22, 27, 34, 0.9));
+  border: 1px solid var(--y2k-border, #30363d);
   border-radius: 6px;
   cursor: pointer;
   transition: background 0.15s;
+  white-space: nowrap;
 }
 
 .map-controls-locate-wrap .map-control-locate:hover {
@@ -104,8 +120,8 @@
 }
 
 .map-control-pin.active {
-  background: #238636;
-  border-color: #2ea043;
+  background: var(--y2k-accent, #29b6f6);
+  border-color: var(--y2k-accent-hover, #4fc3f7);
 }
 
 .map-control-locate.active .locate-pulse {
@@ -142,12 +158,25 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(22, 27, 34, 0.92);
-  border: 1px solid #30363d;
+  background: var(--y2k-surface, rgba(22, 27, 34, 0.92));
+  border: 1px solid var(--y2k-border, #30363d);
   border-radius: 6px;
-  padding: 4px 10px;
+  padding: 6px 10px;
   cursor: default;
   user-select: none;
+  max-width: 200px;
+}
+.space-wx-badge .space-wx-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+}
+.space-wx-badge .space-wx-info {
+  font-size: 0.65rem;
+  color: var(--y2k-text-muted, #8b949e);
+  margin-top: 1px;
+  line-height: 1.2;
 }
 
 .space-wx-dot {
@@ -165,9 +194,18 @@
 }
 
 /* Measure tool */
+.map-control-measure {
+  min-width: 32px;
+  min-height: 36px;
+  padding: 6px 8px;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
 .map-control-measure.active {
-  background: #1d4ed8;
-  border-color: #3b82f6;
+  background: var(--y2k-accent, #1d4ed8);
+  border-color: var(--y2k-accent-hover, #3b82f6);
 }
 
 .measure-hud {

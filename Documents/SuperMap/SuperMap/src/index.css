@@ -31,7 +31,7 @@ html, body, #root {
 }
 
 #root {
-  background-color: #0d1117;
+  background-color: var(--y2k-bg, #0a0e18);
   display: flex;
   flex-direction: column;
 }

@@ -1,0 +1,98 @@
+/* Hidden by default; only visible when .app--theme-light */
+.ambient-bg-light {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.app--theme-light .ambient-bg-light {
+  display: block;
+}
+
+/* Base grid */
+.ambient-bg-light-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(26, 115, 232, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(26, 115, 232, 0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* Diagonal mesh overlay */
+.ambient-bg-light-mesh {
+  position: absolute;
+  inset: -50%;
+  background-image:
+    linear-gradient(105deg, transparent 49.5%, rgba(26, 115, 232, 0.03) 50%, transparent 50.5%);
+  background-size: 48px 48px;
+  animation: ambient-light-mesh-drift 60s linear infinite;
+}
+
+@keyframes ambient-light-mesh-drift {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(48px, 0); }
+}
+
+/* Topographic contour-style lines */
+.ambient-bg-light-topo {
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(ellipse 80% 60% at 50% 50%, transparent 0%, transparent 45%),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0,
+      transparent 47px,
+      rgba(26, 115, 232, 0.035) 47px,
+      rgba(26, 115, 232, 0.035) 48px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent 47px,
+      rgba(26, 115, 232, 0.03) 47px,
+      rgba(26, 115, 232, 0.03) 48px
+    );
+  background-size: 100% 100%, 48px 48px, 48px 48px;
+  mask-image: radial-gradient(ellipse 100% 100% at 50% 50%, black 10%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 100% 100% at 50% 50%, black 10%, transparent 75%);
+}
+
+/* Flowing oil-like lines (soft animated bands) */
+.ambient-bg-light-flow {
+  position: absolute;
+  inset: -20%;
+  background:
+    linear-gradient(120deg, transparent 35%, rgba(26, 115, 232, 0.04) 50%, transparent 65%);
+  background-size: 200% 100%;
+  animation: ambient-light-flow 25s ease-in-out infinite;
+}
+
+@keyframes ambient-light-flow {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* Fake flight path lines (subtle diagonal strokes) */
+.ambient-bg-light-paths {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(75deg, transparent 48%, rgba(26, 115, 232, 0.05) 50%, transparent 52%),
+    linear-gradient(-60deg, transparent 48%, rgba(26, 115, 232, 0.04) 50%, transparent 52%),
+    linear-gradient(82deg, transparent 48%, rgba(26, 115, 232, 0.03) 50%, transparent 52%);
+  background-size: 120px 100%, 180px 80%, 90px 120%;
+  background-position: 0 0, 40px 20px, 80px 60px;
+  animation: ambient-light-paths 40s linear infinite;
+  mask-image: radial-gradient(ellipse 120% 120% at 50% 50%, black 0%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse 120% 120% at 50% 50%, black 0%, transparent 70%);
+}
+
+@keyframes ambient-light-paths {
+  0% { background-position: 0 0, 40px 20px, 80px 60px; }
+  100% { background-position: -120px 0, -140px 20px, -10px 60px; }
+}

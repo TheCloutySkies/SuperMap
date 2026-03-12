@@ -220,9 +220,15 @@ export default function MapControls({ map }) {
       </div>
 
       {spaceWx && (
-        <div className="space-wx-badge" title={`Kp ${spaceWx.kp.toFixed(1)} — ${spaceWx.label}`}>
-          <span className="space-wx-dot" style={{ background: kpColor }} />
-          <span className="space-wx-text">Kp {spaceWx.kp.toFixed(1)}</span>
+        <div
+          className="space-wx-badge"
+          title={`Kp ${spaceWx.kp.toFixed(1)} — ${spaceWx.label}. NOAA planetary K-index: geomagnetic activity (0–9). Affects radio & GPS.`}
+        >
+          <span className="space-wx-dot" style={{ background: kpColor }} aria-hidden />
+          <span className="space-wx-copy">
+            <span className="space-wx-text">Kp {spaceWx.kp.toFixed(1)}</span>
+            <span className="space-wx-info">Geomagnetic activity (0–9)</span>
+          </span>
         </div>
       )}
 
@@ -246,11 +252,10 @@ export default function MapControls({ map }) {
           className={`map-control-btn map-control-measure ${measureMode ? 'active' : ''}`}
           onClick={toggleMeasure}
           aria-label="Measure distance"
-          title="Measure distance & bearing"
+          title="Measure distance & bearing between two points"
         >
-          <svg viewBox="0 0 24 24" width="18" height="18">
-            <path fill="currentColor" d="M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zM3 16V8h2v3h2V8h2v3h2V8h2v3h2V8h2v3h2V8h1v8H3z"/>
-          </svg>
+          <span aria-hidden>📏</span>
+          <span>Measure</span>
         </button>
         <button
           type="button"
@@ -266,10 +271,12 @@ export default function MapControls({ map }) {
           className={`map-control-btn map-control-locate ${userLocation ? 'active' : ''} ${locating ? 'locating' : ''}`}
           onClick={locateMe}
           aria-label="Locate me"
+          title="Center map on your location"
         >
-          <svg viewBox="0 0 24 24" width="20" height="20">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
             <path fill="currentColor" d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm0 6c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm0-11.5C6.48 2.5 2.5 6.48 2.5 12S6.48 21.5 12 21.5 21.5 17.52 21.5 12 17.52 2.5 12 2.5zM12 20c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" />
           </svg>
+          <span>Locate</span>
           {userLocation && <span className="locate-pulse" />}
         </button>
       </div>

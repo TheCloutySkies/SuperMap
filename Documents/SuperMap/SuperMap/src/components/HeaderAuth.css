@@ -6,7 +6,7 @@
 
 .header-auth-email {
   font-size: 0.85rem;
-  color: #8b949e;
+  color: var(--y2k-text-muted);
   max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -16,28 +16,31 @@
 .header-auth-btn {
   padding: 0.4rem 0.75rem;
   font-size: 0.85rem;
-  font-weight: 500;
-  color: #e6edf3;
-  background: transparent;
-  border: 1px solid #30363d;
-  border-radius: 6px;
+  font-weight: 600;
+  color: var(--y2k-text);
+  background: linear-gradient(180deg, var(--y2k-metallic-top) 0%, var(--y2k-metallic-mid) 50%, var(--y2k-metallic-bottom) 100%);
+  border: 1px solid var(--y2k-border);
+  border-radius: 4px;
   cursor: pointer;
+  box-shadow: 0 1px 0 var(--y2k-bevel-light) inset, 0 1px 2px var(--y2k-bevel-dark);
+  transition: background 0.2s, border-color 0.2s;
 }
 
 .header-auth-btn:hover {
-  background: #21262d;
-  border-color: #8b949e;
+  background: linear-gradient(180deg, #323a45 0%, #252b33 50%, #1a1f26 100%);
+  border-color: var(--y2k-border-light);
 }
 
 .header-auth-btn--primary {
   color: #fff;
-  background: #238636;
-  border-color: #238636;
+  background: linear-gradient(180deg, #4fc3f7 0%, var(--y2k-accent) 50%, #1e88e5 100%);
+  border-color: var(--y2k-accent);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.12) inset, 0 1px 3px var(--y2k-bevel-dark);
 }
 
 .header-auth-btn--primary:hover {
-  background: #2ea043;
-  border-color: #2ea043;
+  background: linear-gradient(180deg, #4fc3f7 0%, var(--y2k-accent-hover) 50%, #1e88e5 100%);
+  border-color: var(--y2k-accent-hover);
 }
 
 .header-auth-menu-wrap {
@@ -49,27 +52,28 @@
   right: 0;
   top: calc(100% + 6px);
   min-width: 160px;
-  background: #161b22;
-  border: 1px solid #30363d;
-  border-radius: 8px;
+  background: var(--y2k-surface-raised);
+  border: 1px solid var(--y2k-border);
+  border-radius: 4px;
   padding: 0.3rem;
   display: grid;
   gap: 0.2rem;
   z-index: 210;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 .header-auth-menu button {
   text-align: left;
   background: transparent;
   border: none;
-  color: #e6edf3;
+  color: var(--y2k-text);
   padding: 0.4rem 0.5rem;
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
 }
 
 .header-auth-menu button:hover {
-  background: #21262d;
+  background: var(--y2k-surface);
 }
 
 .header-auth-menu button.danger {

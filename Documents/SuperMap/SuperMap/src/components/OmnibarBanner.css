@@ -1,0 +1,52 @@
+.omnibar-banner {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 320px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--y2k-border);
+  border-radius: 4px;
+  background: var(--y2k-surface-raised);
+  padding: 0 8px;
+}
+
+.omnibar-banner-scroll {
+  display: flex;
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.omnibar-banner-scroll .omnibar-banner-text {
+  display: inline-block;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  color: var(--y2k-text-muted);
+  padding-right: 3rem;
+}
+
+.omnibar-banner-scroll-inner {
+  display: flex;
+  animation: omnibar-banner-scroll linear forwards;
+  animation-iteration-count: 1;
+}
+
+.omnibar-banner:hover .omnibar-banner-scroll-inner {
+  animation-play-state: paused;
+}
+
+@keyframes omnibar-banner-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.app--theme-light .omnibar-banner {
+  background: var(--y2k-surface-raised);
+  border-color: var(--y2k-border);
+}
+
+.app--theme-light .omnibar-banner-text {
+  color: var(--y2k-text-muted);
+}

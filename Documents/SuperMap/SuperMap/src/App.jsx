@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { hasConfigured, setConfigured as persistConfigured, setConfigProfile, getTabVisibility, DEFAULT_LAYER_TOGGLES, getVisualsPrefs } from './constants'
 import { AuthProvider } from './contexts/AuthContext'
 import { SavedArticlesProvider } from './contexts/SavedArticlesContext'
@@ -29,6 +29,9 @@ import HeaderAuth from './components/HeaderAuth'
 import AuthModal from './components/AuthModal'
 import ReportMakerView from './components/ReportMakerView'
 import QuickTutorialModal from './components/QuickTutorialModal'
+import AmbientBackground from './components/AmbientBackground'
+import AmbientBgLight from './components/AmbientBgLight'
+import OmnibarBanner from './components/OmnibarBanner'
 import { supabase } from './lib/supabase'
 import './App.css'
 
@@ -90,6 +93,8 @@ function App() {
   const [deviceType, setDeviceType] = useState('desktop')
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true)
   const [settingsUserId, setSettingsUserId] = useState(null)
+  const [footerTransition, setFooterTransition] = useState(false)
+  const prevFooterModeRef = useRef(null)
 
   useEffect(() => {
     const detectDevice = () => {
@@ -226,6 +231,17 @@ function App() {
 
   const isMobileLayout = resolvedDeviceType === 'mobile'
 
+  useEffect(() => {
+    if (prevFooterModeRef.current !== null && prevFooterModeRef.current !== footerMode) {
+      setFooterTransition(true)
+      const t = setTimeout(() => {
+        setFooterTransition(false)
+      }, 500)
+      return () => clearTimeout(t)
+    }
+    prevFooterModeRef.current = footerMode
+  }, [footerMode])
+
   return (
     <AuthProvider>
       <SavedArticlesProvider>
@@ -233,8 +249,19 @@ function App() {
           <SavedPlacesProvider>
             <SavedReportsProvider>
     <div className={appClass}>
+      <AmbientBackground />
+      <AmbientBgLight />
       <header className="app-omnibar-strip">
         <div className="app-omnibar-inner">
+          <OmnibarBanner
+            headlines={prefetchedNews?.features
+              ?.filter((f) => {
+                const s = (f.properties?.source || '').toLowerCase()
+                return !s.includes('wikipedia')
+              })
+              ?.map((f) => f.properties?.title || f.properties?.headline)
+              ?.filter(Boolean) || []}
+          />
           <Omnibar
             query={searchQuery}
             onQueryChange={setSearchQuery}
@@ -285,8 +312,23 @@ function App() {
         </aside>
       )}
 
-      <main className="main">
-        {activeView === 'home' && <HomeScreen onNavigate={setActiveViewWithMode} />}
+      <main className={`main ${footerTransition ? 'main--y2k-transition' : ''}`}>
+        {activeView === 'home' && (
+              <HomeScreen
+                onNavigate={setActiveViewWithMode}
+                footerMode={footerMode}
+                onFooterNav={handleFooterNav}
+                footerTabs={[
+                  { key: FOOTER_MODES.HOME, label: 'HOME' },
+                  { key: FOOTER_MODES.MAPS, label: 'MAPS' },
+                  { key: FOOTER_MODES.FEEDS, label: 'FEEDS' },
+                  { key: FOOTER_MODES.COMMUNITY, label: 'COMMUNITY' },
+                  { key: FOOTER_MODES.RESOURCES, label: 'RESOURCES' },
+                  { key: FOOTER_MODES.REPORTS, label: 'REPORT MAKER' },
+                  { key: FOOTER_MODES.SETTINGS, label: 'SETTINGS' },
+                ]}
+              />
+            )}
           {isMapView && (
           <>
             {isMobileLayout && (

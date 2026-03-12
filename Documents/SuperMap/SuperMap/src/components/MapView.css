@@ -20,6 +20,11 @@
   display: none !important;
 }
 
+/* Keep top-right controls (e.g. Mapbox Draw) below the Layers button */
+.map-view-wrapper .maplibregl-ctrl-top-right {
+  top: 52px !important;
+}
+
 /* Fix draw tool grey screen: ensure draw control and canvas don't add opaque overlay */
 .mapbox-gl-draw,
 .mapbox-gl-draw.mapbox-gl-draw-active,

@@ -1,0 +1,159 @@
+/**
+ * Y2K dark blue theme – flowy gradients, light blue accents, metallic surfaces.
+ * Dark-only; used app-wide for layout and CSS styling only.
+ */
+:root {
+  --y2k-bg: #0a0e18;
+  --y2k-bg-deep: #060912;
+  --y2k-surface: #0f1420;
+  --y2k-surface-raised: #141c2a;
+  --y2k-border: #1e2a3c;
+  --y2k-border-light: #2a3a52;
+  --y2k-metallic-top: #1a2435;
+  --y2k-metallic-mid: #141c2a;
+  --y2k-metallic-bottom: #0e1320;
+  --y2k-accent: #29b6f6;
+  --y2k-accent-hover: #4fc3f7;
+  --y2k-accent-glow: rgba(41, 182, 246, 0.35);
+  --y2k-accent-soft: rgba(41, 182, 246, 0.15);
+  --y2k-text: #e8ecf4;
+  --y2k-text-muted: #8b9bb0;
+  --y2k-bevel-light: rgba(255, 255, 255, 0.05);
+  --y2k-bevel-dark: rgba(0, 0, 0, 0.35);
+  --y2k-font: "Segoe UI", system-ui, "Trebuchet MS", Arial, sans-serif;
+}
+
+/* Base button style: 3D metallic tab look */
+.btn-y2k {
+  font-family: var(--y2k-font);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--y2k-text-muted);
+  background: linear-gradient(180deg, var(--y2k-metallic-top) 0%, var(--y2k-metallic-mid) 50%, var(--y2k-metallic-bottom) 100%);
+  border: 1px solid var(--y2k-border);
+  border-radius: 4px;
+  box-shadow:
+    0 1px 0 var(--y2k-bevel-light) inset,
+    0 1px 2px var(--y2k-bevel-dark);
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+.btn-y2k:hover {
+  color: var(--y2k-text);
+  background: linear-gradient(180deg, #243048 0%, #1a2435 50%, #141c2a 100%);
+  border-color: var(--y2k-border-light);
+}
+/* Mesh grid on button hover (Y2K) */
+.btn-y2k,
+button.btn-y2k,
+.app .footer-btn,
+.app .nav-tab {
+  position: relative;
+}
+.btn-y2k::before,
+button.btn-y2k::before,
+.app .footer-btn::before,
+.app .nav-tab::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-image:
+    linear-gradient(rgba(41, 182, 246, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(41, 182, 246, 0.12) 1px, transparent 1px);
+  background-size: 8px 8px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.app--theme-light .footer-btn::before,
+.app--theme-light .nav-tab::before {
+  background-image:
+    linear-gradient(rgba(26, 115, 232, 0.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(26, 115, 232, 0.15) 1px, transparent 1px);
+}
+.btn-y2k:hover::before,
+button:hover.btn-y2k::before,
+.app .footer-btn:hover::before,
+.app .nav-tab:hover::before {
+  opacity: 1;
+}
+.btn-y2k.active,
+.btn-y2k--active {
+  color: #fff;
+  background: linear-gradient(180deg, #4fc3f7 0%, var(--y2k-accent) 50%, #1e88e5 100%);
+  border-color: #1e88e5;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.2) inset, 0 1px 3px var(--y2k-bevel-dark);
+}
+.btn-y2k:active {
+  transform: translateY(1px);
+  box-shadow: 0 0 0 1px var(--y2k-bevel-dark) inset;
+}
+
+/* Inputs and panels */
+.input-y2k {
+  font-family: var(--y2k-font);
+  color: var(--y2k-text);
+  background: var(--y2k-surface-raised);
+  border: 1px solid var(--y2k-border);
+  border-radius: 4px;
+  box-shadow: 0 1px 0 var(--y2k-bevel-dark) inset;
+}
+.input-y2k::placeholder {
+  color: var(--y2k-text-muted);
+}
+.card-y2k {
+  background: var(--y2k-surface-raised);
+  border: 1px solid var(--y2k-border);
+  border-radius: 4px;
+  box-shadow: 0 1px 0 var(--y2k-bevel-light) inset;
+}
+
+/* Light theme: white, black, chrome – no dark overrides */
+.app--theme-light {
+  --y2k-bg: #f5f6f8;
+  --y2k-surface: #ffffff;
+  --y2k-surface-raised: #f0f1f3;
+  --y2k-border: #d0d4dc;
+  --y2k-border-light: #b8bcc6;
+  --y2k-metallic-top: #e8eaef;
+  --y2k-metallic-mid: #dfe1e6;
+  --y2k-metallic-bottom: #d6d9e0;
+  --y2k-accent: #1a73e8;
+  --y2k-accent-hover: #1765cc;
+  --y2k-text: #1a1a1a;
+  --y2k-text-muted: #5f6368;
+  --y2k-bevel-light: rgba(255, 255, 255, 0.8);
+  --y2k-bevel-dark: rgba(0, 0, 0, 0.08);
+}
+.app--theme-light .ambient-bg {
+  opacity: 0;
+  pointer-events: none;
+}
+.app--theme-light .main {
+  background: #f5f6f8;
+}
+.app--theme-light .sidebar-left,
+.app--theme-light .app-omnibar-strip {
+  background: #ffffff;
+  border-color: #d0d4dc;
+}
+.app--theme-light .sidebar-title,
+.app--theme-light .nav-tab {
+  color: #1a1a1a;
+}
+.app--theme-light .nav-tab:hover {
+  color: #1a1a1a;
+  background: #e8eaef;
+}
+.app--theme-light .nav-tab.active {
+  color: #fff;
+  background: #1a73e8;
+}
+.app--theme-light .footer {
+  background: linear-gradient(0deg, #d6d9e0 0%, #dfe1e6 50%, #e8eaef 100%);
+  border-top-color: #d0d4dc;
+}
+.app--theme-light {
+  background: var(--y2k-bg);
+}

@@ -1,4 +1,10 @@
+import { useState, useEffect } from 'react'
+import axios from 'axios'
 import './HomeScreen.css'
+
+const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
+  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
+  : 'http://localhost:3001'
 
 const QUICK_LINKS = [
   { id: 'osint-map', label: 'OSINT Map', desc: 'View news, intel, and events on the map', icon: '🗺️', path: 'osint-map' },
@@ -11,7 +17,34 @@ const QUICK_LINKS = [
   { id: 'resources', label: 'Resources', desc: 'Open OSINT tools and reference resources', icon: '📚', path: 'resources' },
 ]
 
-export default function HomeScreen({ onNavigate }) {
+function formatDate() {
+  const d = new Date()
+  const month = d.toLocaleString('en-US', { month: 'long' })
+  const day = d.getDate()
+  const year = d.getFullYear()
+  return `${month} ${day} | ${year}`
+}
+
+export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footerTabs }) {
+  const [nitterImages, setNitterImages] = useState([])
+
+  useEffect(() => {
+    if (!API_BASE) return
+    axios
+      .get(`${API_BASE}/api/osint-x`, { params: { limit: 80 }, timeout: 12000 })
+      .then((res) => {
+        const posts = Array.isArray(res.data) ? res.data : []
+        const items = posts.flatMap((p) => {
+          const postUrl = p.url && typeof p.url === 'string' && p.url.startsWith('http') ? p.url : null
+          return (Array.isArray(p.images) ? p.images : [])
+            .filter((src) => typeof src === 'string' && src.startsWith('http'))
+            .map((src) => ({ src, postUrl: postUrl || src }))
+        })
+        setNitterImages(items.slice(0, 24))
+      })
+      .catch(() => setNitterImages([]))
+  }, [])
+
   const handleCardClick = (path) => {
     if (onNavigate && path) onNavigate(path)
   }
@@ -19,43 +52,113 @@ export default function HomeScreen({ onNavigate }) {
   return (
     <div className="home-screen">
       <div className="home-screen-map-bg" aria-hidden />
-      <div className="home-screen-hero">
-        <h1 className="home-screen-title">SuperMap</h1>
-        <p className="home-screen-tagline">Open-source OSINT & tactical dashboard</p>
-        <p className="home-screen-desc">This tool is like Palantir if it wasn't evil.</p>
-      </div>
+      <div className="home-screen-frame">
+        <header className="home-screen-header">
+          <div className="home-screen-header-brand">
+            <h1 className="home-screen-logo">SuperMap</h1>
+            <span className="home-screen-date">{formatDate()}</span>
+          </div>
+          {footerTabs && onFooterNav && (
+            <nav className="home-screen-nav">
+              {footerTabs.map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={`home-screen-nav-tab ${footerMode === key ? 'active' : ''}`}
+                  onClick={() => onFooterNav(key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </nav>
+          )}
+        </header>
 
-      <section className="home-screen-section">
-        <h2 className="home-screen-section-title">Quick access</h2>
-        <div className="home-screen-grid">
-          {QUICK_LINKS.map((link) => (
-            <button
-              key={link.id}
-              type="button"
-              className="home-screen-card"
-              onClick={() => handleCardClick(link.path)}
-            >
-              <span className="home-screen-card-icon" aria-hidden>{link.icon}</span>
-              <h3 className="home-screen-card-title">{link.label}</h3>
-              <p className="home-screen-card-desc">{link.desc}</p>
-              <span className="home-screen-card-arrow">→</span>
-            </button>
-          ))}
+        <div className="home-screen-main">
+          <div className="home-screen-main-left">
+            <div className="home-screen-featured">
+              <p className="home-screen-featured-title">Open-source OSINT & tactical dashboard</p>
+              <p className="home-screen-featured-sub">— This tool is like Palantir if it wasn&apos;t evil.</p>
+            </div>
+            <section className="home-screen-section">
+              <h2 className="home-screen-section-title">Quick access</h2>
+              <ul className="home-screen-list">
+                {QUICK_LINKS.map((link) => (
+                  <li key={link.id}>
+                    <button
+                      type="button"
+                      className="home-screen-card"
+                      onClick={() => handleCardClick(link.path)}
+                    >
+                      <span className="home-screen-card-icon" aria-hidden>{link.icon}</span>
+                      <div className="home-screen-card-text">
+                        <span className="home-screen-card-title">{link.label}</span>
+                        <span className="home-screen-card-desc">{link.desc}</span>
+                      </div>
+                      <span className="home-screen-card-arrow">→</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </div>
+          <aside className="home-screen-sidebar">
+            <div className="home-screen-sidebar-block card-y2k">
+              <button
+                type="button"
+                className="home-screen-settings btn-y2k"
+                onClick={() => onNavigate('settings')}
+              >
+                ⚙️ Settings & API keys
+              </button>
+            </div>
+            <div className="home-screen-sidebar-block card-y2k home-screen-sidebar-photos">
+              <h3 className="home-screen-sidebar-photos-title">From OSINT (X) feed</h3>
+              {nitterImages.length > 0 ? (
+                <div className="home-screen-sidebar-photos-grid">
+                  {nitterImages.map((item, i) => (
+                    <a
+                      key={`${item.src}-${i}`}
+                      href={item.postUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="home-screen-sidebar-photo"
+                      title="Open post"
+                    >
+                      <img src={item.src} alt="" loading="lazy" referrerPolicy="no-referrer" />
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                <p className="home-screen-hint">Connect to the API to show photos from the Nitter/OSINT X feed.</p>
+              )}
+            </div>
+          </aside>
         </div>
-      </section>
 
-      <section className="home-screen-section home-screen-actions">
-        <button
-          type="button"
-          className="home-screen-settings"
-          onClick={() => onNavigate('settings')}
-        >
-          ⚙️ Settings & API keys
-        </button>
-        <p className="home-screen-hint">
-          Use the footer to switch <strong>HOME</strong>, <strong>MAPS</strong>, <strong>FEEDS</strong>, and <strong>SETTINGS</strong>. On the map, use the top bar to search places or OSINT data.
-        </p>
-      </section>
+        <footer className="home-screen-footer-strip">
+          <div className="home-screen-footer-col">
+            <h3 className="home-screen-footer-head">Quick access</h3>
+            <ul className="home-screen-footer-list">
+              {QUICK_LINKS.slice(0, 4).map((link) => (
+                <li key={link.id}>
+                  <button type="button" className="home-screen-footer-link" onClick={() => handleCardClick(link.path)}>{link.label}</button>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="home-screen-footer-col">
+            <h3 className="home-screen-footer-head">Navigate</h3>
+            <ul className="home-screen-footer-list">
+              {footerTabs?.map(({ key, label }) => (
+                <li key={key}>
+                  <button type="button" className="home-screen-footer-link" onClick={() => onFooterNav?.(key)}>{label}</button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </footer>
+      </div>
     </div>
   )
 }

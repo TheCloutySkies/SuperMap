@@ -10,19 +10,20 @@
   align-items: center;
   gap: 0.75rem;
   padding: 0.65rem 1rem;
-  background: #21262d;
-  border: 1px solid #30363d;
-  border-radius: 10px;
+  background: var(--y2k-surface-raised);
+  border: 1px solid var(--y2k-border);
+  border-radius: 4px;
   min-height: 48px;
+  box-shadow: 0 1px 0 var(--y2k-bevel-dark) inset;
 }
 
 .omnibar:focus-within {
-  border-color: #58a6ff;
-  box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
+  border-color: var(--y2k-accent);
+  box-shadow: 0 0 0 2px var(--y2k-accent-glow);
 }
 
 .omnibar-icon {
-  color: #8b949e;
+  color: var(--y2k-text-muted);
   font-size: 1.25rem;
 }
 
@@ -31,44 +32,47 @@
   min-width: 0;
   padding: 0.4rem 0;
   font-size: 1.05rem;
-  color: #e6edf3;
+  color: var(--y2k-text);
   background: transparent;
   border: none;
   outline: none;
 }
 
 .omnibar-input::placeholder {
-  color: #6e7681;
+  color: var(--y2k-text-muted);
 }
 
 .omnibar-search-btn {
   padding: 0.5rem 0.85rem;
   font-size: 0.9rem;
   font-weight: 600;
-  border: none;
-  border-radius: 8px;
+  border: 1px solid var(--y2k-border);
+  border-radius: 4px;
   cursor: pointer;
   white-space: nowrap;
+  box-shadow: 0 1px 0 var(--y2k-bevel-light) inset, 0 1px 2px var(--y2k-bevel-dark);
+  transition: background 0.2s, border-color 0.2s;
 }
 
 .omnibar-search-btn--primary {
   color: #fff;
-  background: #238636;
+  background: linear-gradient(180deg, #4fc3f7 0%, var(--y2k-accent) 50%, #1e88e5 100%);
+  border-color: var(--y2k-accent);
 }
 
 .omnibar-search-btn--primary:hover {
-  filter: brightness(1.08);
+  background: linear-gradient(180deg, #4fc3f7 0%, var(--y2k-accent-hover) 50%, #1e88e5 100%);
+  border-color: var(--y2k-accent-hover);
 }
 
 .omnibar-search-btn--secondary {
-  color: #e6edf3;
-  background: #21262d;
-  border: 1px solid #30363d;
+  color: var(--y2k-text);
+  background: linear-gradient(180deg, var(--y2k-metallic-top) 0%, var(--y2k-metallic-mid) 50%, var(--y2k-metallic-bottom) 100%);
 }
 
 .omnibar-search-btn--secondary:hover:not(:disabled) {
-  background: #30363d;
-  border-color: #8b949e;
+  background: linear-gradient(180deg, #323a45 0%, #252b33 50%, #1a1f26 100%);
+  border-color: var(--y2k-border-light);
 }
 
 .omnibar-search-btn:disabled {
@@ -80,9 +84,9 @@
   padding: 0.5rem 0.75rem;
   font-size: 0.75rem;
   text-transform: uppercase;
-  color: #8b949e;
-  border-bottom: 1px solid #21262d;
-  background: #0d1117;
+  color: var(--y2k-text-muted);
+  border-bottom: 1px solid var(--y2k-border);
+  background: var(--y2k-surface);
 }
 
 .omnibar-results {
@@ -94,9 +98,9 @@
   max-height: 360px;
   overflow-y: auto;
   overflow-x: hidden;
-  background: #161b22;
-  border: 1px solid #30363d;
-  border-radius: 8px;
+  background: var(--y2k-surface-raised);
+  border: 1px solid var(--y2k-border);
+  border-radius: 4px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   z-index: 1000;
 }
@@ -110,10 +114,10 @@
   padding: 0.6rem 0.75rem;
   text-align: left;
   font-size: 0.9rem;
-  color: #e6edf3;
+  color: var(--y2k-text);
   background: transparent;
   border: none;
-  border-bottom: 1px solid #21262d;
+  border-bottom: 1px solid var(--y2k-border);
   cursor: pointer;
 }
 
@@ -122,13 +126,13 @@
 }
 
 .omnibar-result:hover {
-  background: #21262d;
+  background: var(--y2k-surface);
 }
 
 .omnibar-result-type {
   font-size: 0.7rem;
   text-transform: uppercase;
-  color: #8b949e;
+  color: var(--y2k-text-muted);
   min-width: 48px;
 }
 
@@ -141,17 +145,17 @@
 
 .omnibar-result-action {
   font-size: 0.75rem;
-  color: #58a6ff;
+  color: var(--y2k-accent);
 }
 
 .omnibar-results-actions {
-  border-top: 1px solid #30363d;
+  border-top: 1px solid var(--y2k-border);
   padding-top: 0.25rem;
 }
 
 .omnibar-results-actions--top {
   border-top: none;
-  border-bottom: 1px solid #30363d;
+  border-bottom: 1px solid var(--y2k-border);
   padding-top: 0;
   padding-bottom: 0.35rem;
   margin-bottom: 0.25rem;
@@ -159,20 +163,20 @@
 
 .omnibar-result--view-all {
   font-weight: 600;
-  color: #58a6ff;
+  color: var(--y2k-accent);
   justify-content: center;
-  background: rgba(88, 166, 255, 0.08);
+  background: var(--y2k-accent-glow);
 }
 
 .omnibar-result--view-all:hover {
-  background: rgba(88, 166, 255, 0.15);
+  background: rgba(16, 124, 16, 0.25);
 }
 
 .omnibar-result--see-all,
 .omnibar-result--feeds {
   border-top: none;
   font-weight: 500;
-  color: #58a6ff;
+  color: var(--y2k-accent);
   justify-content: center;
 }
 

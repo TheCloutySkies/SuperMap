@@ -308,7 +308,7 @@ function App() {
           {isMapView && !isMobileLayout && (
             <PlaceSearch onFlyTo={handleFlyTo} />
           )}
-          {(!isMobileLayout || activeView !== 'home') && (
+          {activeView !== 'home' && (
             <div className="app-omnibar-auth-wrap">
               <HeaderAuth onOpenAuth={() => setShowAuthModal(true)} onNavigateAccount={setActiveViewWithMode} />
             </div>

@@ -225,14 +225,12 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
               ))}
             </ul>
           </div>
-          {isMobileLayout && (
-            <div className="home-screen-footer-col home-screen-footer-col--account">
-              <h3 className="home-screen-footer-head">Account</h3>
-              <div className="home-screen-footer-auth">
-                <HeaderAuth onOpenAuth={onOpenAuth} onNavigateAccount={onNavigateAccount} />
-              </div>
+          <div className="home-screen-footer-col home-screen-footer-col--account">
+            <h3 className="home-screen-footer-head">Account</h3>
+            <div className="home-screen-footer-auth">
+              <HeaderAuth onOpenAuth={onOpenAuth} onNavigateAccount={onNavigateAccount} />
             </div>
-          )}
+          </div>
           <div className="home-screen-footer-col">
             <h3 className="home-screen-footer-head">Source</h3>
             <a href="https://github.com/TheCloutySkies/SuperMap" target="_blank" rel="noopener noreferrer" className="home-screen-footer-link home-screen-footer-link--anchor">

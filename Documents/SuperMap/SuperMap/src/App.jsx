@@ -552,7 +552,16 @@ function App() {
         </div>
       </footer>
     </div>
-    {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
+    {showAuthModal && (
+      <AuthModal
+        onClose={() => setShowAuthModal(false)}
+        onOpenSettings={() => {
+          setShowAuthModal(false)
+          setActiveView('settings')
+          setFooterMode(FOOTER_MODES.SETTINGS)
+        }}
+      />
+    )}
     {showTutorial && (
       <QuickTutorialModal
         onClose={(profileName) => {

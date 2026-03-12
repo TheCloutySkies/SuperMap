@@ -6,6 +6,10 @@
   align-items: center;
   justify-content: center;
   z-index: 2000;
+  padding: 1rem;
+  box-sizing: border-box;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .auth-modal {
@@ -14,8 +18,25 @@
   border-radius: 6px;
   width: 100%;
   max-width: 360px;
+  max-height: min(90vh, 560px);
   padding: 1.5rem;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: auto;
+}
+
+.auth-modal-not-configured {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.auth-modal-not-configured .auth-modal-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--y2k-text-muted);
+  line-height: 1.4;
 }
 
 .auth-modal-header {
@@ -40,6 +61,12 @@
   line-height: 1;
   cursor: pointer;
   padding: 0 0.25rem;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .auth-modal-close:hover {
@@ -145,4 +172,22 @@
 
 .auth-modal-link:hover {
   color: var(--y2k-accent-hover);
+}
+
+@media (max-width: 900px) {
+  .auth-modal-overlay {
+    padding: 0.75rem;
+    align-items: flex-start;
+    padding-top: max(1rem, env(safe-area-inset-top));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  .auth-modal {
+    max-height: 85vh;
+    padding: 1.25rem;
+  }
+  .auth-modal-submit,
+  .auth-modal-anon {
+    min-height: 44px;
+    -webkit-tap-highlight-color: transparent;
+  }
 }

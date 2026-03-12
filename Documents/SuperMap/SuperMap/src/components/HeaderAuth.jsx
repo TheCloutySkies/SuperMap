@@ -6,7 +6,13 @@ export default function HeaderAuth({ onOpenAuth, onNavigateAccount }) {
   const { user, signOut, isConfigured } = useAuth()
   const [open, setOpen] = useState(false)
 
-  if (!isConfigured) return null
+  if (!isConfigured) {
+    return (
+      <button type="button" className="header-auth-btn header-auth-btn--primary metallicss" onClick={onOpenAuth}>
+        Sign in
+      </button>
+    )
+  }
 
   if (user) {
     const username = user.email?.split('@')?.[0] || user.user_metadata?.name || 'account'

@@ -455,11 +455,16 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 0.5rem;
+  min-height: 44px;
 }
 
 .home-screen-footer-auth .header-auth-btn {
   padding: 0.5rem 0.85rem;
   font-size: 0.85rem;
+  min-height: 44px;
+  min-width: 120px;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: rgba(41, 182, 246, 0.2);
 }
 
 .home-screen-footer-auth .header-auth-menu {

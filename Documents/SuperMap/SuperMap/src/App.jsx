@@ -308,9 +308,11 @@ function App() {
           {isMapView && !isMobileLayout && (
             <PlaceSearch onFlyTo={handleFlyTo} />
           )}
-          <div className="app-omnibar-auth-wrap">
-            <HeaderAuth onOpenAuth={() => setShowAuthModal(true)} onNavigateAccount={setActiveViewWithMode} />
-          </div>
+          {(!isMobileLayout || activeView !== 'home') && (
+            <div className="app-omnibar-auth-wrap">
+              <HeaderAuth onOpenAuth={() => setShowAuthModal(true)} onNavigateAccount={setActiveViewWithMode} />
+            </div>
+          )}
         </div>
       </header>
       <div className="app-body">
@@ -361,6 +363,9 @@ function App() {
                   { key: FOOTER_MODES.REPORTS, label: 'REPORT MAKER' },
                   { key: FOOTER_MODES.SETTINGS, label: 'SETTINGS' },
                 ]}
+                isMobileLayout={isMobileLayout}
+                onOpenAuth={() => setShowAuthModal(true)}
+                onNavigateAccount={setActiveViewWithMode}
               />
             )}
           {isMapView && (
@@ -539,9 +544,6 @@ function App() {
           </button>
         </div>
       </footer>
-      <div className="app-mobile-auth-bar">
-        <HeaderAuth onOpenAuth={() => setShowAuthModal(true)} onNavigateAccount={setActiveViewWithMode} />
-      </div>
     </div>
     {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
     {showTutorial && (

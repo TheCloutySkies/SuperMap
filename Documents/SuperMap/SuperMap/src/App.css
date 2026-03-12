@@ -81,9 +81,6 @@
   flex-shrink: 0;
 }
 
-.app-mobile-auth-bar {
-  display: none;
-}
 
 .app-body {
   display: flex;
@@ -342,7 +339,7 @@
 /* Mobile-first dimension overrides without touching desktop defaults. */
 @media (max-width: 900px) {
   .app--device-mobile {
-    padding-bottom: 114px;
+    padding-bottom: 58px;
   }
 
   .app--device-mobile .app-omnibar-strip {
@@ -358,44 +355,6 @@
     min-width: 0;
     max-width: none;
     flex: 1 1 auto;
-  }
-
-  .app--device-mobile .app-omnibar-auth-wrap {
-    display: none;
-  }
-
-  .app-mobile-auth-bar {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: fixed;
-    bottom: 58px;
-    left: 0;
-    right: 0;
-    z-index: 99;
-    padding: 0.5rem 0.75rem;
-    background: linear-gradient(0deg, var(--y2k-metallic-bottom) 0%, var(--y2k-metallic-mid) 50%, var(--y2k-metallic-top) 100%);
-    border-top: 1px solid var(--y2k-border);
-    box-shadow: 0 -1px 0 var(--y2k-bevel-light) inset;
-  }
-
-  .app-mobile-auth-bar .header-auth,
-  .app-mobile-auth-bar .header-auth-btn {
-    width: 100%;
-    max-width: 280px;
-    justify-content: center;
-  }
-
-  .app-mobile-auth-bar .header-auth-btn {
-    padding: 0.55rem 1rem;
-    font-size: 0.9rem;
-  }
-
-  .app-mobile-auth-bar .header-auth-menu {
-    top: auto;
-    bottom: calc(100% + 6px);
-    right: 50%;
-    transform: translateX(50%);
   }
 
   .app--device-mobile .app-body {

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
+import HeaderAuth from './HeaderAuth'
 import './HomeScreen.css'
 
 const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
@@ -32,7 +33,7 @@ function stripHtml(html) {
   return (div.textContent || div.innerText || '').trim().slice(0, 100)
 }
 
-export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footerTabs }) {
+export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footerTabs, isMobileLayout, onOpenAuth, onNavigateAccount }) {
   const [nitterImages, setNitterImages] = useState([])
   const [forumPosts, setForumPosts] = useState([])
   const [forumCommunities, setForumCommunities] = useState([])
@@ -223,6 +224,20 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
                 </li>
               ))}
             </ul>
+          </div>
+          {isMobileLayout && (
+            <div className="home-screen-footer-col home-screen-footer-col--account">
+              <h3 className="home-screen-footer-head">Account</h3>
+              <div className="home-screen-footer-auth">
+                <HeaderAuth onOpenAuth={onOpenAuth} onNavigateAccount={onNavigateAccount} />
+              </div>
+            </div>
+          )}
+          <div className="home-screen-footer-col">
+            <h3 className="home-screen-footer-head">Source</h3>
+            <a href="https://github.com/TheCloutySkies/SuperMap" target="_blank" rel="noopener noreferrer" className="home-screen-footer-link home-screen-footer-link--anchor">
+              SuperMap on GitHub
+            </a>
           </div>
         </footer>
       </div>

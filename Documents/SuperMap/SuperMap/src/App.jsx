@@ -375,8 +375,10 @@ function App() {
                 type="button"
                 className="map-layers-toggle-btn"
                 onClick={() => setIsRightSidebarOpen((open) => !open)}
+                aria-label={isRightSidebarOpen ? 'Hide layers' : 'Show layers'}
+                title={isRightSidebarOpen ? 'Hide layers' : 'Layers'}
               >
-                {isRightSidebarOpen ? 'Hide Layers' : 'Layers'}
+                {isRightSidebarOpen ? '−' : '☰'}
               </button>
             )}
             <MapView
@@ -460,7 +462,11 @@ function App() {
           </div>
         )}
         {activeView === 'resources' && <ResourcesView />}
-        {activeView === 'report-maker' && <ReportMakerView />}
+        {activeView === 'report-maker' && (
+          <div className="main-content-scroll">
+            <ReportMakerView />
+          </div>
+        )}
         {activeView === 'search-results' && (
           <SearchResultsView
             query={searchQuery}
@@ -481,6 +487,7 @@ function App() {
 
         <RightSidebar
         visible={isMapView && (!isMobileLayout || isRightSidebarOpen)}
+        onClose={isMobileLayout ? () => setIsRightSidebarOpen(false) : undefined}
         isMapView={isMapView}
         activeView={activeView}
         basemapId={basemapId}

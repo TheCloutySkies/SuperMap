@@ -105,6 +105,7 @@ const EVENT_COUNTRY_OPTIONS = [
 
 export default function RightSidebar({
   visible,
+  onClose,
   isMapView,
   activeView,
   basemapId,
@@ -132,6 +133,12 @@ export default function RightSidebar({
 
   return (
     <aside className="sidebar sidebar-right">
+      {onClose && (
+        <div className="sidebar-right-mobile-header">
+          <span className="sidebar-right-mobile-title">Layers</span>
+          <button type="button" className="sidebar-right-close" onClick={onClose} aria-label="Close layers" title="Close">−</button>
+        </div>
+      )}
       {isMapView && (
         <section className="right-sidebar-section">
           <h3>Base layer</h3>

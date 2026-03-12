@@ -189,6 +189,15 @@
   background: var(--y2k-bg);
 }
 
+.main-content-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+}
+
 /* Y2K page transition when switching footer sections */
 .main--y2k-transition {
   animation: y2k-page-transition 0.5s ease-out;
@@ -300,22 +309,30 @@
   transform: scale(0.98);
 }
 
-/* Mobile map layers toggle pill */
+/* Mobile map layers toggle: compact icon */
 .map-layers-toggle-btn {
   position: absolute;
   z-index: 70;
-  right: 1rem;
-  top: 0.9rem;
-  padding: 0.35rem 0.8rem;
-  font-size: 0.75rem;
+  right: 0.5rem;
+  top: 0.5rem;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  border-radius: 4px;
+  line-height: 1;
+  border-radius: 8px;
   border: 1px solid var(--y2k-border);
   background: var(--y2k-surface);
   color: var(--y2k-text);
   cursor: pointer;
   box-shadow: 0 1px 0 var(--y2k-bevel-light) inset;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .map-layers-toggle-btn:hover {
@@ -406,9 +423,20 @@
   }
 
   .app--device-mobile .footer-btn {
-    padding: 0.45rem 0.75rem;
-    font-size: 0.72rem;
+    padding: 0.5rem 0.65rem;
+    font-size: 0.7rem;
     white-space: nowrap;
     flex: 0 0 auto;
+    min-height: 44px;
+  }
+
+  .app--device-mobile .main-content-scroll {
+    padding-bottom: 1rem;
+  }
+
+  .app--device-mobile .main-feed-view {
+    padding: 0.5rem 0.75rem;
+    font-size: clamp(0.875rem, 2.2vw, 1rem);
   }
 }
+

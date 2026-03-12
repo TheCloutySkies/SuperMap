@@ -10,7 +10,9 @@ const DEFAULT_LAT = 20
 const DEFAULT_LON = 0
 const OPENMETEO_URL = 'https://api.open-meteo.com/v1/forecast'
 
-export default function WeatherHUD({ lat, lon, onSearchCoords }) {
+let meteostatCooldownUntil = 0
+
+export default function WeatherHUD({ lat, lon, onSearchCoords, compact = false }) {
   const [weather, setWeather] = useState(null)
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -31,38 +33,42 @@ export default function WeatherHUD({ lat, lon, onSearchCoords }) {
   const today = new Date().toISOString().slice(0, 10)
 
   useEffect(() => {
-    setLoading(true)
-    setError(null)
-    setSource(null)
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York'
-    const tryMeteostat = () => {
-      if (!API_BASE) return Promise.reject(new Error('No API'))
-      return axios
-        .get(`${API_BASE}/api/weather/nearby`, { params: { lat: effectiveLat, lon: effectiveLon }, timeout: 8000 })
-        .then((nearbyRes) => {
-          const stations = nearbyRes.data?.data ?? (Array.isArray(nearbyRes.data) ? nearbyRes.data : [])
-          const stationId = stations?.[0]?.id ?? stations?.[0]?.station ?? '10637'
-          return axios.get(`${API_BASE}/api/weather/hourly`, {
-            params: { station: stationId, start: today, end: today, tz },
-            timeout: 8000,
-          })
-        })
-        .then((hourlyRes) => {
-          const data = hourlyRes.data?.data ?? (Array.isArray(hourlyRes.data) ? hourlyRes.data : [])
-          const arr = Array.isArray(data) ? data : []
-          const hour = arr.find((h) => Number(h.hour) === new Date().getHours()) ?? arr[0]
-          if (hour && (hour.temperature != null || hour.temp != null)) {
-            setSource('Meteostat')
-            setWeather({
-              temperature: hour.temperature ?? hour.temp,
-              windspeed: hour.windspeed ?? hour.wind_speed ?? null,
-              weathercode: null,
+    let cancelled = false
+    const timer = setTimeout(() => {
+      if (cancelled) return
+      setLoading(true)
+      setError(null)
+      setSource(null)
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York'
+      const tryMeteostat = () => {
+        if (Date.now() < meteostatCooldownUntil) return Promise.reject(new Error('Meteostat cooldown'))
+        if (!API_BASE) return Promise.reject(new Error('No API'))
+        return axios
+          .get(`${API_BASE}/api/weather/nearby`, { params: { lat: effectiveLat, lon: effectiveLon }, timeout: 8000 })
+          .then((nearbyRes) => {
+            const stations = nearbyRes.data?.data ?? (Array.isArray(nearbyRes.data) ? nearbyRes.data : [])
+            const stationId = stations?.[0]?.id ?? stations?.[0]?.station ?? '10637'
+            return axios.get(`${API_BASE}/api/weather/hourly`, {
+              params: { station: stationId, start: today, end: today, tz },
+              timeout: 8000,
             })
-            return true
-          }
-          return false
-        })
-    }
+          })
+          .then((hourlyRes) => {
+            const data = hourlyRes.data?.data ?? (Array.isArray(hourlyRes.data) ? hourlyRes.data : [])
+            const arr = Array.isArray(data) ? data : []
+            const hour = arr.find((h) => Number(h.hour) === new Date().getHours()) ?? arr[0]
+            if (hour && (hour.temperature != null || hour.temp != null)) {
+              setSource('Meteostat')
+              setWeather({
+                temperature: hour.temperature ?? hour.temp,
+                windspeed: hour.windspeed ?? hour.wind_speed ?? null,
+                weathercode: null,
+              })
+              return true
+            }
+            return false
+          })
+      }
     const setOpenMeteo = () =>
       axios.get(OPENMETEO_URL, {
         params: { latitude: effectiveLat, longitude: effectiveLon, current_weather: true },
@@ -73,17 +79,29 @@ export default function WeatherHUD({ lat, lon, onSearchCoords }) {
         setError(null)
       }).catch(() => setWeather(null))
 
-    if (!API_BASE) {
-      setOpenMeteo().finally(() => setLoading(false))
-      return
+      if (!API_BASE) {
+        setOpenMeteo().finally(() => setLoading(false))
+        return
+      }
+      tryMeteostat()
+        .then((ok) => {
+          if (ok) return
+          return setOpenMeteo()
+        })
+        .catch((err) => {
+          const msg = err?.response?.data?.error || err?.message || ''
+          if (/not subscribed|too many requests/i.test(String(msg))) {
+            meteostatCooldownUntil = Date.now() + 10 * 60 * 1000
+          }
+          return setOpenMeteo()
+        })
+        .finally(() => setLoading(false))
+    }, 650)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
     }
-    tryMeteostat()
-      .then((ok) => {
-        if (ok) return
-        return setOpenMeteo()
-      })
-      .catch(() => setOpenMeteo())
-      .finally(() => setLoading(false))
   }, [effectiveLat, effectiveLon])
 
   const handleSearch = () => {
@@ -112,6 +130,18 @@ export default function WeatherHUD({ lat, lon, onSearchCoords }) {
       ? `${(windKmh * 0.621371).toFixed(1)} mph`
       : `${windKmh.toFixed(1)} km/h`
   const code = w?.weathercode
+
+  if (compact) {
+    return (
+      <div className="weather-hud weather-hud--compact">
+        <div className="weather-hud-compact-temp">{loading ? '…' : tempDisplay}</div>
+        <div className="weather-hud-compact-units" role="group" aria-label="Temperature unit">
+          <button type="button" className={tempUnit === 'F' ? 'weather-hud-compact-btn active' : 'weather-hud-compact-btn'} onClick={() => setTempUnit('F')}>°F</button>
+          <button type="button" className={tempUnit === 'C' ? 'weather-hud-compact-btn active' : 'weather-hud-compact-btn'} onClick={() => setTempUnit('C')}>°C</button>
+        </div>
+      </div>
+    )
+  }
 
   const toggleCollapsed = () => {
     setCollapsed((prev) => {

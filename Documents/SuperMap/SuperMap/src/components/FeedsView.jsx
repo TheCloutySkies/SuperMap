@@ -9,7 +9,7 @@ const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.
   : 'http://localhost:3001'
 
 const FEED_MODE = { NEWS: 'GLOBAL_NEWS', OSINT: 'GENERAL_OSINT' }
-const OSINT_SUB = { INTEL: 'intel', REDDIT: 'reddit' }
+const OSINT_SUB = { INTEL: 'intel' }
 
 /** Display name for OSINT source (actual source, not alert type). */
 function osintSourceDisplayName(source) {
@@ -26,7 +26,10 @@ function osintSourceDisplayName(source) {
 }
 const SOURCE_SECTIONS_NEWS = [
   { key: 'all', label: 'All sources' },
-  { key: 'Wikipedia', label: 'Wikipedia' },
+  { key: 'Al Jazeera', label: 'Al Jazeera' },
+  { key: 'Foreign Affairs', label: 'Foreign Affairs' },
+  { key: 'POLITICO Defense', label: 'POLITICO Defense' },
+  { key: 'POLITICO Politics', label: 'POLITICO Politics' },
   { key: 'Reddit', label: 'Reddit RSS' },
   { key: 'Google News', label: 'Google RSS' },
 ]
@@ -49,13 +52,24 @@ const SORT_OPTIONS = [
   { value: 'source', label: 'Source (A–Z)' },
 ]
 
+function feedsDebugEnabled() {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem('supermap_debug_feeds') === '1'
+  } catch {
+    return false
+  }
+}
+
 function matchesSource(item, sourceFilter, feedMode) {
   if (!sourceFilter || sourceFilter === 'all') return true
   const s = (item.source || '').toLowerCase()
   if (feedMode === FEED_MODE.OSINT) {
     return s === sourceFilter.toLowerCase()
   }
-  if (sourceFilter === 'Wikipedia') return s.includes('wikipedia')
+  if (sourceFilter === 'Al Jazeera') return s.includes('al jazeera')
+  if (sourceFilter === 'Foreign Affairs') return s.includes('foreign affairs')
+  if (sourceFilter === 'POLITICO Defense') return s.includes('politico defense')
+  if (sourceFilter === 'POLITICO Politics') return s.includes('politico politics')
   if (sourceFilter === 'Reddit') return s.includes('reddit')
   if (sourceFilter === 'Google News') return s.includes('google')
   return s.includes(sourceFilter.toLowerCase())
@@ -63,23 +77,41 @@ function matchesSource(item, sourceFilter, feedMode) {
 
 
 function geoJsonToItems(data) {
-  if (Array.isArray(data)) return data
-  if (data?.features && Array.isArray(data.features)) {
-    return data.features.map((f) => ({
-      ...(f.properties || {}),
-      id: f.properties?.id ?? f.id,
-      title: f.properties?.title,
-      source: f.properties?.source,
-      link: f.properties?.link,
-      pubDate: f.properties?.timestamp != null ? new Date(f.properties.timestamp).toISOString() : null,
-      contentSnippet: f.properties?.description ?? f.properties?.contentSnippet,
-      coordinates: f.geometry?.type === 'Point' ? f.geometry.coordinates : null,
-    }))
+  const raw = Array.isArray(data)
+    ? data
+    : (data?.features && Array.isArray(data.features))
+        ? data.features.map((f) => ({
+            ...(f.properties || {}),
+            id: f.properties?.id ?? f.id,
+            title: f.properties?.title,
+            source: f.properties?.source,
+            link: f.properties?.link,
+            pubDate: f.properties?.timestamp != null ? new Date(f.properties.timestamp).toISOString() : null,
+            contentSnippet: f.properties?.description ?? f.properties?.contentSnippet,
+            coordinates: f.geometry?.type === 'Point' ? f.geometry.coordinates : null,
+          }))
+        : []
+
+  // Dedupe to avoid React key collisions (feeds sometimes contain duplicates across sources/retries).
+  const seen = new Set()
+  const out = []
+  for (let i = 0; i < raw.length; i++) {
+    const item = raw[i] || {}
+    const link = String(item.link || item.url || '').trim()
+    const id = String(item.id || '').trim()
+    const source = String(item.source || '').trim()
+    const pubDate = String(item.pubDate || '').trim()
+    const title = String(item.title || '').trim()
+    const primary = link || id || `${source}|${title}|${pubDate}`
+    if (!primary) continue
+    if (seen.has(primary)) continue
+    seen.add(primary)
+    out.push({ ...item, _key: primary })
   }
-  return []
+  return out
 }
 
-export default function FeedsView({ title, activeView, keywordFilter = '', onClearFilter, initialNews, onPinnedToMap }) {
+export default function FeedsView({ title, activeView, keywordFilter = '', onClearFilter, initialNews, onPinnedToMap, onSignInRequired }) {
   const initialItems = initialNews ? geoJsonToItems(initialNews) : []
   const isNewsOnly = activeView === 'news-feeds'
   const isOsintOnly = activeView === 'osint-feeds'
@@ -95,8 +127,6 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
   const [sourceFilter, setSourceFilter] = useState('all')
   const [sortBy, setSortBy] = useState('newest')
   const [osintSub, setOsintSub] = useState(OSINT_SUB.INTEL)
-  const [redditSignals, setRedditSignals] = useState([])
-  const [redditSignalsLoading, setRedditSignalsLoading] = useState(false)
   const [pinningId, setPinningId] = useState(null)
   const [pinError, setPinError] = useState(null)
 
@@ -115,10 +145,14 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
     if (!initialNews) setNewsLoading(true)
 
     function doFetch() {
+      const t0 = Date.now()
       axios.get(`${API_BASE}/api/news`, { timeout: 25000 })
         .then((res) => {
           if (cancelled) return
           const items = geoJsonToItems(res.data)
+          if (feedsDebugEnabled()) {
+            console.debug('[FEEDS news] OUTPUT', { count: items.length, ms: Date.now() - t0 })
+          }
           setNewsItems(items)
           if (Array.isArray(items) && items.length === 0) {
             retryId = setTimeout(() => {
@@ -128,8 +162,11 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
             }, 2500)
           }
         })
-        .catch(() => {
+        .catch((err) => {
           if (!cancelled) setNewsItems([])
+          if (feedsDebugEnabled()) {
+            console.debug('[FEEDS news] OUTPUT error', { message: err?.message || String(err), ms: Date.now() - t0 })
+          }
           retryId = setTimeout(() => {
             if (cancelled) return
             setNewsLoading(true)
@@ -140,6 +177,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
           if (!cancelled) setNewsLoading(false)
         })
     }
+    if (feedsDebugEnabled()) console.debug('[FEEDS news] INPUT', { url: `${API_BASE}/api/news` })
     doFetch()
     return () => {
       cancelled = true
@@ -154,29 +192,34 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
     }
     let cancelled = false
     setOsintLoading(true)
+    const t0 = Date.now()
+    if (feedsDebugEnabled()) console.debug('[FEEDS osint] INPUT', { url: `${API_BASE}/api/osint` })
     axios.get(`${API_BASE}/api/osint`, { timeout: 25000 })
-      .then((res) => { if (!cancelled) setOsintItems(geoJsonToItems(res.data)) })
-      .catch(() => { if (!cancelled) setOsintItems([]) })
+      .then((res) => {
+        const items = geoJsonToItems(res.data)
+        if (!cancelled) setOsintItems(items)
+        if (feedsDebugEnabled()) console.debug('[FEEDS osint] OUTPUT', { count: items.length, ms: Date.now() - t0 })
+      })
+      .catch((err) => {
+        if (!cancelled) setOsintItems([])
+        if (feedsDebugEnabled()) console.debug('[FEEDS osint] OUTPUT error', { message: err?.message || String(err), ms: Date.now() - t0 })
+      })
       .finally(() => { if (!cancelled) setOsintLoading(false) })
     return () => { cancelled = true }
   }, [])
-
-  useEffect(() => {
-    if (osintSub !== OSINT_SUB.REDDIT) return
-    let cancelled = false
-    setRedditSignalsLoading(true)
-    axios.get(`${API_BASE}/api/reddit-signals`, { params: { limit: 80 }, timeout: 15000 })
-      .then((res) => { if (!cancelled) setRedditSignals(Array.isArray(res.data) ? res.data : []) })
-      .catch(() => { if (!cancelled) setRedditSignals([]) })
-      .finally(() => { if (!cancelled) setRedditSignalsLoading(false) })
-    return () => { cancelled = true }
-  }, [osintSub])
 
   const handlePinToMap = (item) => {
     if (!API_BASE || !onPinnedToMap) return
     const id = item.id || item.link
     setPinError(null)
     setPinningId(id)
+    if (feedsDebugEnabled()) {
+      console.debug('[FEEDS pin-from-text] INPUT', {
+        title: item.title || 'Untitled',
+        source: item.source || 'osint',
+        url: item.link,
+      })
+    }
     axios
       .post(`${API_BASE}/api/events/pin-from-text`, {
         title: item.title || 'Untitled',
@@ -185,6 +228,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
         url: item.link,
       }, { timeout: 12000 })
       .then((res) => {
+        if (feedsDebugEnabled()) console.debug('[FEEDS pin-from-text] OUTPUT', { ok: !res.data?.error })
         if (res.data?.error) {
           setPinError(res.data.error)
           return
@@ -201,32 +245,23 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
     setRefreshing(true)
     setNewsLoading(true)
     setOsintLoading(true)
-    if (osintSub === OSINT_SUB.REDDIT) setRedditSignalsLoading(true)
     const requests = [
       axios.get(`${API_BASE}/api/news`, { timeout: 15000 }),
       axios.get(`${API_BASE}/api/osint`, { timeout: 15000 }),
     ]
-    if (osintSub === OSINT_SUB.REDDIT) {
-      requests.push(axios.get(`${API_BASE}/api/reddit-signals`, { params: { limit: 80 }, timeout: 15000 }))
-    }
     Promise.all(requests)
       .then((responses) => {
         setNewsItems(geoJsonToItems(responses[0].data))
         setOsintItems(geoJsonToItems(responses[1].data))
-        if (osintSub === OSINT_SUB.REDDIT && responses[2] && Array.isArray(responses[2].data)) {
-          setRedditSignals(responses[2].data)
-        }
       })
       .catch(() => {
         setNewsItems([])
         setOsintItems([])
-        if (osintSub === OSINT_SUB.REDDIT) setRedditSignals([])
       })
       .finally(() => {
         setNewsLoading(false)
         setOsintLoading(false)
         setRefreshing(false)
-        if (osintSub === OSINT_SUB.REDDIT) setRedditSignalsLoading(false)
       })
   }
 
@@ -344,6 +379,11 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
             <div className="feeds-empty">
               {isEmpty ? (
                 <p>Couldn’t load feeds. Run <code>npm run dev:all</code> from the SuperMap folder, then use <strong>Refresh</strong>.</p>
+              ) : sourceFilter === 'Reddit' ? (
+                <>
+                  <p>Reddit is currently rate-limiting requests from this network, so there may be no Reddit items available.</p>
+                  <p>Try again later, or switch to another source (Wikipedia / Google RSS / BBC).</p>
+                </>
               ) : (
                 <>
                   <p>No items match the current filters.</p>
@@ -374,20 +414,25 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
                   saveArticle(item).finally(() => setSavingId(null))
                 }
                 return (
-                  <div key={item.link || item.id || i} className="feeds-news-card-wrap">
+                  <div key={item._key || item.link || item.id || i} className="feeds-news-card-wrap">
                     <a
                       href={item.link}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="feeds-news-card"
                     >
-                      {item.thumbnail && (
+                      {item.thumbnail && !String(item.thumbnail).includes('google.com/s2/favicons') && (
                         <div className="feeds-news-card-img-wrap">
                           <img src={item.thumbnail} alt="" className="feeds-news-card-img" />
                         </div>
                       )}
                       <div className="feeds-news-card-body">
-                        <span className="feeds-news-card-source">{item.source}</span>
+                        <span className="feeds-news-card-source">
+                          {item.thumbnail && String(item.thumbnail).includes('google.com/s2/favicons') && (
+                            <img src={item.thumbnail} alt="" className="feeds-news-card-favicon" loading="lazy" />
+                          )}
+                          {item.source}
+                        </span>
                         <h3 className="feeds-news-card-title">{item.title || 'Untitled'}</h3>
                         <span className="feeds-news-card-date">
                           {item.pubDate ? new Date(item.pubDate).toLocaleDateString(undefined, { dateStyle: 'short' }) : ''}
@@ -423,14 +468,6 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
             >
               Intel Feed
             </button>
-            <button
-              type="button"
-              className={`feeds-osint-subnav-btn ${osintSub === OSINT_SUB.REDDIT ? 'active' : ''}`}
-              onClick={() => setOsintSub(OSINT_SUB.REDDIT)}
-            >
-              Live Reddit Discourse
-            </button>
-            <span className="feeds-osint-warning">(WARNING: Might include cringe.)</span>
           </div>
 
           {osintSub === OSINT_SUB.INTEL && (
@@ -487,7 +524,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
                         }
                         return (
                         <tr
-                          key={item.link || item.id || i}
+                          key={item._key || item.link || item.id || i}
                           className={`feeds-osint-row feeds-osint-alert-${item.alertLevel || 'medium'}`}
                         >
                           <td className="feeds-osint-time">
@@ -538,54 +575,6 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
             </>
           )}
 
-          {osintSub === OSINT_SUB.REDDIT && (
-            <div className="feeds-reddit-stream">
-              {redditSignalsLoading ? (
-                <p className="feeds-loading">Loading Reddit signals…</p>
-              ) : !redditSignals.length ? (
-                <div className="feeds-empty feeds-empty--osint">
-                  <p>No Reddit signals yet. The API ingests comments every 60s from conflict, OSINT, and news subreddits.</p>
-                  <p>Use <strong>Refresh</strong> after the backend has run at least one cycle.</p>
-                </div>
-              ) : (
-                <div className="feeds-reddit-list">
-                  {redditSignals.map((sig) => {
-                    const age = sig.timestamp ? (() => {
-                      const min = Math.floor((Date.now() - sig.timestamp) / 60000)
-                      if (min < 1) return '<1m'
-                      if (min < 60) return `${min}m`
-                      const h = Math.floor(min / 60)
-                      return `${h}h`
-                    })() : '—'
-                    return (
-                      <article key={sig.id} className="feeds-reddit-card">
-                        <div className="feeds-reddit-meta">
-                          {(sig.signals && sig.signals.length) ? (
-                            <span className="feeds-reddit-signal-tags">
-                              {sig.signals.map((s) => (
-                                <span key={s} className="feeds-reddit-signal-tag">{s}</span>
-                              ))}
-                            </span>
-                          ) : null}
-                          <span className="feeds-reddit-sub">r/{sig.subreddit}</span>
-                          <span className="feeds-reddit-score">Score: {sig.score ?? '—'}</span>
-                          <span className="feeds-reddit-age">Age: {age}</span>
-                        </div>
-                        <blockquote className="feeds-reddit-comment">
-                          "{((sig.description || sig.title || '').slice(0, 300))}{(sig.description && sig.description.length > 300) ? '…' : ''}"
-                        </blockquote>
-                        {sig.link && (
-                          <a href={sig.link} target="_blank" rel="noopener noreferrer" className="feeds-reddit-link">
-                            View Thread
-                          </a>
-                        )}
-                      </article>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )}
         </div>
       )}
     </div>

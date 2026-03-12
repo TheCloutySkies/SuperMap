@@ -164,6 +164,49 @@
   color: #8b949e;
 }
 
+.weather-hud--compact {
+  position: relative;
+  bottom: auto;
+  left: auto;
+  width: auto;
+  padding: 0.35rem 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.weather-hud-compact-temp {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--y2k-text, #e6edf3);
+  font-variant-numeric: tabular-nums;
+}
+
+.weather-hud-compact-units {
+  display: flex;
+  gap: 2px;
+}
+
+.weather-hud-compact-btn {
+  padding: 2px 5px;
+  font-size: 0.7rem;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  background: #0d1117;
+  color: #8b949e;
+  cursor: pointer;
+}
+
+.weather-hud-compact-btn:hover {
+  color: #e6edf3;
+}
+
+.weather-hud-compact-btn.active {
+  color: #58a6ff;
+  border-color: #58a6ff;
+}
+
 .weather-hud-default-hint {
   font-size: 0.7rem;
   color: #6e7681;

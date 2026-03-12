@@ -12,7 +12,6 @@ import RightSidebar from './components/RightSidebar'
 import Omnibar from './components/Omnibar'
 import PlaceSearch from './components/PlaceSearch'
 import WeatherHUD from './components/WeatherHUD'
-import AdvancedSearch from './components/AdvancedSearch'
 import OsintXView from './components/OsintXView'
 import UserUpdatesView from './components/UserUpdatesView'
 import MyPlacesView from './components/MyPlacesView'
@@ -22,7 +21,7 @@ import MyAccountView from './components/MyAccountView'
 import CommunityView from './components/CommunityView'
 import BroadcastsView from './components/BroadcastsView'
 import SettingsView from './components/SettingsView'
-import ResourcesView from './components/ResourcesView'
+import ResourcesView, { RESOURCE_SECTIONS } from './components/ResourcesView'
 import SearchResultsView from './components/SearchResultsView'
 import SavedArticlesView from './components/SavedArticlesView'
 import HeaderAuth from './components/HeaderAuth'
@@ -51,17 +50,20 @@ const FOOTER_MODES = { HOME: 'HOME', MAPS: 'MAPS', FEEDS: 'FEEDS', COMMUNITY: 'C
 const MAP_VIEWS = [
   { id: 'osint-map', label: 'OSINT Map', tabKey: 'osintMap' },
   { id: 'conflict-map', label: 'Conflict Map', tabKey: 'conflictMap' },
+  { id: 'explore-map', label: 'Explore', tabKey: 'exploreMap' },
 ]
 
 const FEED_VIEWS = [
+  // Feeds first (high-frequency, "main" content)
+  { id: 'news-feeds', label: 'News Feeds', tabKey: 'newsFeeds' },
   { id: 'osint-feeds', label: 'OSINT Feeds', tabKey: 'osintFeeds' },
   { id: 'osint-x', label: 'OSINT (X/Twitter)', tabKey: 'osintX' },
+  { id: 'broadcasts', label: 'Broadcasts', tabKey: 'broadcasts' },
+
+  // Personal / account-driven views last
   { id: 'my-places', label: 'My Places', tabKey: 'places' },
-  { id: 'advanced-search', label: 'Advanced Search', tabKey: 'advancedSearch' },
-  { id: 'news-feeds', label: 'News Feeds', tabKey: 'newsFeeds' },
   { id: 'saved', label: 'Saved', tabKey: 'saved' },
   { id: 'updates', label: 'Updates', tabKey: 'updates' },
-  { id: 'broadcasts', label: 'Broadcasts', tabKey: 'broadcasts' },
 ]
 
 function App() {
@@ -69,6 +71,7 @@ function App() {
   const [footerMode, setFooterMode] = useState(FOOTER_MODES.HOME)
   const [activeView, setActiveView] = useState('home')
   const [basemapId, setBasemapId] = useState('arcgis-topo')
+  const [overlayBasemapId, setOverlayBasemapId] = useState(null)
   const [layerToggles, setLayerToggles] = useState(() => ({ ...DEFAULT_LAYER_TOGGLES }))
   const [mapLoadingPending, setMapLoadingPending] = useState(0)
   const setIsMapLoading = useCallback((value) => {
@@ -93,6 +96,8 @@ function App() {
   const [mapPointEntries, setMapPointEntries] = useState([])
   const [userCoords, setUserCoords] = useState({ lat: null, lon: null })
   const [weatherCoords, setWeatherCoords] = useState({ lat: null, lon: null })
+  const [mapCenter, setMapCenter] = useState({ lat: null, lon: null })
+  const [overlayOpacity, setOverlayOpacity] = useState(0.6)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResultsGeoJson, setSearchResultsGeoJson] = useState(null)
   const [prefetchedNews, setPrefetchedNews] = useState(null)
@@ -107,6 +112,7 @@ function App() {
   const [settingsUserId, setSettingsUserId] = useState(null)
   const [footerTransition, setFooterTransition] = useState(false)
   const prevFooterModeRef = useRef(null)
+  const resourcesScrollRef = useRef({})
 
   useEffect(() => {
     const detectDevice = () => {
@@ -189,7 +195,7 @@ function App() {
     } catch {}
   }, [])
 
-  const isMapView = ['osint-map', 'conflict-map'].includes(activeView)
+  const isMapView = ['osint-map', 'conflict-map', 'explore-map'].includes(activeView)
   const isFeedView = ['osint-feeds', 'news-feeds', 'osint-x', 'my-places', 'my-reports', 'my-comments', 'advanced-search', 'saved', 'updates', 'broadcasts'].includes(activeView)
   const isSettingsView = activeView === 'settings'
   const tabVisibility = getTabVisibility(settingsUserId)
@@ -237,10 +243,8 @@ function App() {
         setBannerXItems(items.slice(0, 15))
       }).catch(() => {}),
       fetch(`${apiBase}/api/osint`, timeout(15000)).catch(() => {}),
-      fetch(`${apiBase}/api/reddit-signals?limit=10`, timeout(12000)).catch(() => {}),
       fetch(`${apiBase}/api/config`, timeout(8000)).catch(() => {}),
       fetch(`${apiBase}/api/geocode?q=London`, timeout(8000)).catch(() => {}),
-      fetch(`${apiBase}/api/weather/nearby?lat=0&lon=0`, timeout(8000)).catch(() => {}),
     ]
     Promise.allSettled(warm)
   }, [configured, apiBase])
@@ -320,7 +324,20 @@ function App() {
         <aside className="sidebar sidebar-left">
           <h1 className="sidebar-title">SuperMap</h1>
           <nav className="nav">
-            {footerMode === FOOTER_MODES.MAPS && (
+            {activeView === 'resources' ? (
+              <div className="sidebar-resources-nav">
+                {RESOURCE_SECTIONS.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className="sidebar-resources-link"
+                    onClick={() => resourcesScrollRef.current?.scrollToSection?.(s.id)}
+                  >
+                    {s.title}
+                  </button>
+                ))}
+              </div>
+            ) : footerMode === FOOTER_MODES.MAPS ? (
               MAP_VIEWS.map((v) => (
                 <TabButton
                   key={v.id}
@@ -331,8 +348,7 @@ function App() {
                   setActiveView={setActiveViewWithMode}
                 />
               ))
-            )}
-            {footerMode === FOOTER_MODES.FEEDS && (
+            ) : footerMode === FOOTER_MODES.FEEDS ? (
               FEED_VIEWS.map((v) => (
                 <TabButton
                   key={v.id}
@@ -343,7 +359,7 @@ function App() {
                   setActiveView={setActiveViewWithMode}
                 />
               ))
-            )}
+            ) : null}
           </nav>
         </aside>
       )}
@@ -383,6 +399,8 @@ function App() {
             )}
             <MapView
               basemapId={basemapId}
+              overlayBasemapId={overlayBasemapId}
+              overlayOpacity={overlayOpacity}
               layerToggles={layerToggles}
               isMapLoading={isMapLoading}
               onLoadingChange={setIsMapLoading}
@@ -396,15 +414,23 @@ function App() {
               activeView={activeView}
               eventCountry={eventCountry || null}
               eventFilterByView={eventFilterByView}
-            />
-            <WeatherHUD
-              lat={weatherCoords.lat ?? userCoords.lat}
-              lon={weatherCoords.lon ?? userCoords.lon}
-              onSearchCoords={(lng, lat) => {
-                setWeatherCoords({ lat, lon: lng })
-                handleFlyTo({ lng, lat, zoom: 10 })
+              weatherCoords={weatherCoords}
+              mapCenter={mapCenter}
+              onMapCenterChange={(coord) => {
+                setMapCenter(coord)
+                setWeatherCoords(coord)
               }}
             />
+            {activeView !== 'explore-map' && (
+              <WeatherHUD
+                lat={weatherCoords.lat ?? userCoords.lat}
+                lon={weatherCoords.lon ?? userCoords.lon}
+                onSearchCoords={(lng, lat) => {
+                  setWeatherCoords({ lat, lon: lng })
+                  handleFlyTo({ lng, lat, zoom: 10 })
+                }}
+              />
+            )}
           </>
         )}
         {activeView === 'osint-feeds' && (
@@ -438,11 +464,6 @@ function App() {
             <MyAccountView onNavigateSection={setActiveViewWithMode} onSignInRequired={() => setShowAuthModal(true)} />
           </div>
         )}
-        {activeView === 'advanced-search' && (
-          <div className="main-feed-view main-feed-view--advanced-search">
-            <AdvancedSearch />
-          </div>
-        )}
         {activeView === 'news-feeds' && (
           <FeedsView title="News Feeds" activeView="news-feeds" keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} initialNews={prefetchedNews} onSignInRequired={() => setShowAuthModal(true)} />
         )}
@@ -461,7 +482,7 @@ function App() {
             <BroadcastsView />
           </div>
         )}
-        {activeView === 'resources' && <ResourcesView />}
+        {activeView === 'resources' && <ResourcesView resourcesScrollRef={resourcesScrollRef} />}
         {activeView === 'report-maker' && (
           <div className="main-content-scroll">
             <ReportMakerView />
@@ -492,6 +513,10 @@ function App() {
         activeView={activeView}
         basemapId={basemapId}
         onBasemapChange={setBasemapId}
+        overlayBasemapId={overlayBasemapId}
+        onOverlayBasemapChange={setOverlayBasemapId}
+        overlayOpacity={overlayOpacity}
+        onOverlayOpacityChange={setOverlayOpacity}
         layerToggles={layerToggles}
         onLayerTogglesChange={setLayerToggles}
         onOverpassResults={(geojson) => setOverpassResults(geojson)}
@@ -549,6 +574,9 @@ function App() {
           >
             SETTINGS
           </button>
+        </div>
+        <div className="footer-copyright">
+          © {new Date().getFullYear()} TheCloutySkies
         </div>
       </footer>
     </div>

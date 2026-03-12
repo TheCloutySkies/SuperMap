@@ -1,0 +1,35 @@
+.coordinates-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.7rem;
+  color: var(--y2k-text-muted, #8b949e);
+  background: var(--y2k-surface, rgba(22, 27, 34, 0.92));
+  border: 1px solid var(--y2k-border, #30363d);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.coordinates-display:hover {
+  color: var(--y2k-text, #e6edf3);
+  background: rgba(33, 38, 45, 0.95);
+}
+
+.coordinates-display-text {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.coordinates-display-copy-hint {
+  font-size: 0.6rem;
+  opacity: 0.85;
+}
+
+.coordinates-display:active .coordinates-display-copy-hint {
+  color: #58a6ff;
+}

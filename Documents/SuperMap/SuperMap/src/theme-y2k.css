@@ -168,6 +168,12 @@ button:hover.btn-y2k::before,
 .app--theme-light .main {
   background: #f5f6f8;
 }
+/* Keep map area dark in light theme so it never flashes white */
+.app--theme-light .map-view-wrapper,
+.app--theme-light .map-view,
+.app--theme-light .map-container {
+  background: #0d1117 !important;
+}
 .app--theme-light .sidebar-left,
 .app--theme-light .app-omnibar-strip {
   background: #ffffff;

@@ -155,12 +155,17 @@ export default function ReportMakerView() {
   return (
     <div className="report-maker">
       <div className="report-maker-header">
-        <input
-          className="report-maker-title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Report title"
-        />
+        <div className="report-maker-title-wrap">
+          <input
+            className="report-maker-title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Report title"
+          />
+          <p className="report-maker-subtitle">
+            Draft a structured intelligence report and attach your key evidence in one place.
+          </p>
+        </div>
         <div className="report-maker-export">
           <button type="button" onClick={() => downloadFile(`${report.title}.md`, markdown, 'text/markdown;charset=utf-8')}>Export .md</button>
           <button type="button" onClick={() => downloadFile(`${report.title}.txt`, markdown, 'text/plain;charset=utf-8')}>Export .txt</button>
@@ -188,7 +193,10 @@ export default function ReportMakerView() {
 
       <div className="report-maker-grid">
         <section className="report-maker-card">
-          <h3>Report Editor</h3>
+          <h3>Report narrative</h3>
+          <p className="report-maker-card-hint">
+            Summarize what is happening, why it matters, and your assessment. Treat this as the single source of truth for the situation.
+          </p>
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
@@ -198,41 +206,62 @@ export default function ReportMakerView() {
         </section>
 
         <section className="report-maker-card">
-          <h3>Evidence Builder</h3>
+          <h3>Evidence builder</h3>
+          <p className="report-maker-card-hint">
+            Attach links, locations, and screenshots that support the narrative. Keep each item high-signal.
+          </p>
 
           <div className="report-maker-row">
-            <input value={articleInput} onChange={(e) => setArticleInput(e.target.value)} placeholder="Article URL" />
+            <label className="report-maker-label">
+              Article URL
+              <input value={articleInput} onChange={(e) => setArticleInput(e.target.value)} placeholder="Paste article link and click Add" />
+            </label>
             <button type="button" onClick={addArticle}>Add Article</button>
           </div>
 
           <div className="report-maker-row">
-            <input value={xInput} onChange={(e) => setXInput(e.target.value)} placeholder="X/Twitter post URL" />
-            <button type="button" onClick={addX}>Add X Link</button>
-            <button type="button" onClick={importPinnedXPosts}>Import pinned X posts</button>
+            <label className="report-maker-label">
+              X / Twitter
+              <input value={xInput} onChange={(e) => setXInput(e.target.value)} placeholder="Post URL (or use Import pinned below)" />
+            </label>
+            <button type="button" onClick={addX}>Add X link</button>
+            <button type="button" className="report-maker-btn-secondary" onClick={importPinnedXPosts}>Import pinned X posts</button>
           </div>
 
           <div className="report-maker-row report-maker-row-3">
-            <input value={locationName} onChange={(e) => setLocationName(e.target.value)} placeholder="Location name" />
-            <input value={locationLat} onChange={(e) => setLocationLat(e.target.value)} placeholder="Lat" />
-            <input value={locationLon} onChange={(e) => setLocationLon(e.target.value)} placeholder="Lon" />
+            <label className="report-maker-label">
+              Name
+              <input value={locationName} onChange={(e) => setLocationName(e.target.value)} placeholder="e.g. Kharkiv industrial district" />
+            </label>
+            <label className="report-maker-label">
+              Lat
+              <input value={locationLat} onChange={(e) => setLocationLat(e.target.value)} placeholder="Lat" />
+            </label>
+            <label className="report-maker-label">
+              Lon
+              <input value={locationLon} onChange={(e) => setLocationLon(e.target.value)} placeholder="Lon" />
+            </label>
             <button type="button" onClick={addLocation}>Add Location</button>
           </div>
 
           <div className="report-maker-row">
-            <input type="file" accept="image/*" multiple onChange={(e) => onScreenshotFiles(e.target.files)} />
+            <label className="report-maker-label">
+              Screenshots
+              <input type="file" accept="image/*" multiple onChange={(e) => onScreenshotFiles(e.target.files)} />
+            </label>
           </div>
 
           <div className="report-maker-lists">
             <div>
-              <strong>Articles ({articles.length})</strong>
+              <h4>Articles ({articles.length})</h4>
               <ul>{articles.map((u, i) => <li key={`${u}-${i}`}>{u}</li>)}</ul>
             </div>
             <div>
-              <strong>Locations ({locations.length})</strong>
+              <h4>Locations ({locations.length})</h4>
               <ul>{locations.map((l, i) => <li key={`${l.name}-${i}`}>{l.name} ({l.lat}, {l.lon})</li>)}</ul>
             </div>
             <div>
-              <strong>X Embeds ({xPosts.length})</strong>
+              <h4>X embeds ({xPosts.length})</h4>
               <ul>
                 {xPosts.map((p, i) => (
                   <li key={`${p.url}-${i}`}>
@@ -244,7 +273,7 @@ export default function ReportMakerView() {
               </ul>
             </div>
             <div>
-              <strong>Screenshots ({screenshots.length})</strong>
+              <h4>Screenshots ({screenshots.length})</h4>
               <ul>{screenshots.map((s, i) => <li key={`${s.name}-${i}`}>{s.name}</li>)}</ul>
             </div>
           </div>

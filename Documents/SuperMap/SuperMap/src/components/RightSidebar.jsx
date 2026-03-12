@@ -9,7 +9,7 @@ const OSINT_LAYER_SECTIONS = [
     title: 'Infrastructure',
     layers: [
       { key: 'openRailwayMap', label: 'Open Railway Map' },
-      { key: 'powerGrid', label: 'Power Grid' },
+      { key: 'powerGrid', label: 'Power Grid (Worldwide)', hint: 'Overpass: lines & substations' },
       { key: 'commsInfrastructure', label: 'Comms Infrastructure' },
     ],
   },
@@ -46,7 +46,17 @@ const OSINT_LAYER_SECTIONS = [
   {
     title: 'Surveillance & Utilities',
     layers: [
-      { key: 'utilityOutages', label: 'Utility Outages' },
+      { key: 'flockCameras', label: 'FLOCK Cameras', hint: 'ringmast4r/FLOCK 336K+ surveillance cameras' },
+      { key: 'dataCenters', label: 'Data Centers (ATLAS)', hint: '6,266+ locations worldwide' },
+      { key: 'utilityOutages', label: 'Utility Outages (US)', hint: 'US only; use Power Grid for worldwide' },
+    ],
+  },
+  {
+    title: 'FCC & Towers',
+    layers: [
+      { key: 'fccTowers', label: 'FCC / Towers', hint: 'Backend or Overpass cell towers' },
+      { key: 'odintRegions', label: 'ODINT Recon Regions', hint: 'Digital infrastructure recon (ringmast4r/ODINT)' },
+      { key: 'surveillanceCapabilities', label: 'Surveillance Capabilities (US)', hint: 'EFF Atlas + contracts (ringmast4r)' },
     ],
   },
   {
@@ -110,6 +120,10 @@ export default function RightSidebar({
   activeView,
   basemapId,
   onBasemapChange,
+  overlayBasemapId = null,
+  onOverlayBasemapChange,
+  overlayOpacity = 0.6,
+  onOverlayOpacityChange,
   layerToggles = {},
   onLayerTogglesChange,
   onOverpassResults,
@@ -129,6 +143,7 @@ export default function RightSidebar({
   if (!visible) return null
 
   const isConflictMap = activeView === 'conflict-map'
+  const isExploreMap = activeView === 'explore-map'
   const sections = isConflictMap ? CONFLICT_LAYER_SECTIONS : OSINT_LAYER_SECTIONS
 
   return (
@@ -163,10 +178,116 @@ export default function RightSidebar({
               </label>
             ))}
           </div>
+          {onOverlayBasemapChange && (
+            <>
+              <h3 className="right-sidebar-overlay-heading">Overlay (stack on base)</h3>
+              <div className="basemap-list overlay-list">
+                <label className={`basemap-option ${!overlayBasemapId ? 'active' : ''}`}>
+                  <input
+                    type="radio"
+                    name="overlay"
+                    checked={!overlayBasemapId}
+                    onChange={() => onOverlayBasemapChange(null)}
+                  />
+                  <span className="basemap-label">None</span>
+                </label>
+                {BASEMAPS.filter((b) => b.type === 'raster' && b.id !== basemapId).map((b) => (
+                  <label key={b.id} className={`basemap-option ${overlayBasemapId === b.id ? 'active' : ''}`}>
+                    <input
+                      type="radio"
+                      name="overlay"
+                      value={b.id}
+                      checked={overlayBasemapId === b.id}
+                      onChange={() => onOverlayBasemapChange(b.id)}
+                    />
+                    <span className="basemap-label">{b.label}</span>
+                  </label>
+                ))}
+              </div>
+              {overlayBasemapId && onOverlayOpacityChange && (
+                <div className="overlay-opacity-row">
+                  <label className="overlay-opacity-label">
+                    Overlay opacity
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={overlayOpacity}
+                      onChange={(e) => onOverlayOpacityChange(Number(e.target.value))}
+                      className="overlay-opacity-slider"
+                    />
+                    <span className="overlay-opacity-value">{Math.round(overlayOpacity * 100)}%</span>
+                  </label>
+                </div>
+              )}
+            </>
+          )}
         </section>
       )}
 
-      {isMapView && !isConflictMap && (
+      {isMapView && isExploreMap && (
+        <>
+          <section className="right-sidebar-section">
+            <h3>Explore mode</h3>
+            <p className="layers-hint">Draw, measure, minimap. Weather and coordinates follow map center.</p>
+          </section>
+          <section className="right-sidebar-section intelligence-layer-manager">
+            <h3>Layers</h3>
+            {sections.map((section) => (
+              <div key={section.title} className="layer-subsection">
+                <h4>{section.title}</h4>
+                <div className="toggle-list">
+                  {section.layers.map(({ key, label, placeholder, statusKey, hasTimeFilter, hint }) => (
+                    <div key={key} className="toggle-option-wrapper">
+                      <label className={`toggle-option ${placeholder ? 'placeholder' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={!!layerToggles[key]}
+                          onChange={(e) => handleLayerToggle(key, e.target.checked)}
+                          disabled={placeholder}
+                        />
+                        <span>{label}</span>
+                        {placeholder && <span className="layer-placeholder-tag">Placeholder</span>}
+                      </label>
+                      {hint && layerToggles[key] && (
+                        <span className="layer-hint">{hint}</span>
+                      )}
+                      {key === 'powerGrid' && layerToggles[key] && (
+                        <span className="layer-hint">Zoom 14+ to load</span>
+                      )}
+                      {key === 'sentinel2BurnScars' && layerToggles[key] && (
+                        <span className="layer-hint">Sentinel Hub instance active</span>
+                      )}
+                      {statusKey === 'adsb' && layerToggles[key] && (
+                        <span className="layer-status-pending">Data Connection Pending</span>
+                      )}
+                      {hasTimeFilter && layerToggles[key] && (
+                        <div className="sentinel-time-filter">
+                          <span className="sentinel-time-label">Historical:</span>
+                          <div className="sentinel-time-btns">
+                            {SENTINEL_TIME_OPTIONS.map(({ value, label: l }) => (
+                              <button
+                                key={value}
+                                type="button"
+                                className={`sentinel-time-btn ${sentinelTime === value ? 'active' : ''}`}
+                                onClick={() => onSentinelTimeChange?.(value)}
+                              >
+                                {l}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </section>
+        </>
+      )}
+      {isMapView && !isConflictMap && !isExploreMap && (
         <>
           <section className="right-sidebar-section">
             <button

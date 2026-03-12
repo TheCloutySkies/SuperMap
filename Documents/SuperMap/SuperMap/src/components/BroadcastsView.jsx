@@ -112,7 +112,7 @@ export default function BroadcastsView() {
                   title={b.name}
                   src={`${b.ytEmbed}${b.ytEmbed.includes('?') ? '&' : '?'}playsinline=1&rel=0`}
                   className="broadcasts-embed"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
                 />
                 <div className="broadcasts-embed-fallback">

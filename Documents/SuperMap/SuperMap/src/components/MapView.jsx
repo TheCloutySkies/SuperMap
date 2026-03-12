@@ -5,6 +5,7 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css'
 import { BASEMAPS, STORAGE_KEYS } from '../constants'
 import { getAoiFeatures, setAoiFeatures, getSavedPoints, setSavedPoints } from '../constants'
+import { MAPLIBRE_DRAW_STYLES } from '../lib/mapboxDrawStyles'
 import {
   fetchOverpassPower,
   fetchOverpassCellTowers,
@@ -16,13 +17,25 @@ import {
   fetchAdsbRapidApi,
   fetchAdsbPlaceholder,
   fetchUtilityOutages,
+  fetchFccTowers,
+  fetchCamerasFromApi,
+  fetchFlockTiles,
+  fetchDatacenters,
+  fetchOdintRegions,
+  fetchSurveillanceCapabilities,
 } from '../services/layerServices'
 import { buildTerminatorGeoJSON } from '../services/solarTerminator'
 import { fetchMilitaryAircraft, fetchUkraineFrontline, fetchInternetOutages } from '../services/newLayerFetchers'
 import MapControls from './MapControls'
 import DrawHUD from './DrawHUD'
+import PinEditorDialog from './PinEditorDialog'
+import WeatherHUD from './WeatherHUD'
+import CoordinatesDisplay from './CoordinatesDisplay'
 import { useAuth } from '../contexts/AuthContext'
 import { useSavedPlaces } from '../contexts/SavedPlacesContext'
+import LegendControl from 'mapboxgl-legend'
+import 'mapboxgl-legend/dist/style.css'
+import GlobeMinimap from 'mapbox-gl-globe-minimap'
 import './MapView.css'
 
 // Improve @mapbox/mapbox-gl-draw compatibility on MapLibre.
@@ -43,6 +56,11 @@ const CLICKABLE_POINT_LAYERS = [
   'intel-acled-layer',
   'intel-outages-layer',
   'intel-comms-layer',
+  'intel-fcc-towers-layer',
+  'intel-flock-layer',
+  'intel-datacenters-layer',
+  'intel-odint-layer',
+  'intel-surveillance-capabilities-layer',
   'intel-mil-aircraft-layer',
   'intel-ioda-layer',
   'mapped-news-layer',
@@ -224,7 +242,7 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
       type: 'circle',
       source: 'intel-usgs',
       paint: {
-        'circle-radius': ['interpolate', ['linear'], ['get', 'mag'], 0, 4, 7, 16],
+        'circle-radius': ['interpolate', ['linear'], ['coalesce', ['to-number', ['get', 'mag']], 0], 0, 4, 7, 16],
         'circle-color': '#a855f7',
         'circle-opacity': 0.9,
       },
@@ -339,11 +357,13 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
       type: 'raster',
       tiles: [url],
       tileSize: 256,
+      maxzoom: 9,
     })
     map.addLayer({
       id: 'intel-sentinel2-layer',
       type: 'raster',
       source: 'intel-sentinel2',
+      maxzoom: 9.5,
       paint: { 'raster-opacity': 0.8 },
     })
   }
@@ -352,11 +372,12 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     const url = sentinelDailyWmsUrl(timeIso)
     if (!map.getSource('intel-sentinel2')) return
     removeSentinel2BurnScars()
-    map.addSource('intel-sentinel2', { type: 'raster', tiles: [url], tileSize: 256 })
+    map.addSource('intel-sentinel2', { type: 'raster', tiles: [url], tileSize: 256, maxzoom: 9 })
     map.addLayer({
       id: 'intel-sentinel2-layer',
       type: 'raster',
       source: 'intel-sentinel2',
+      maxzoom: 9.5,
       paint: { 'raster-opacity': 0.8 },
     })
   }
@@ -408,6 +429,45 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     if (map.getLayer('intel-comms-labels')) map.removeLayer('intel-comms-labels')
     if (map.getLayer('intel-comms-layer')) map.removeLayer('intel-comms-layer')
     if (map.getSource('intel-comms')) map.removeSource('intel-comms')
+  }
+
+  const addFccTowers = (geoJson) => {
+    const fc = geoJson || { type: 'FeatureCollection', features: [] }
+    if (map.getSource('intel-fcc-towers')) {
+      map.getSource('intel-fcc-towers').setData(fc)
+      return
+    }
+    map.addSource('intel-fcc-towers', { type: 'geojson', data: fc })
+    map.addLayer({
+      id: 'intel-fcc-towers-layer',
+      type: 'circle',
+      source: 'intel-fcc-towers',
+      paint: {
+        'circle-radius': 6,
+        'circle-color': '#84cc16',
+        'circle-opacity': 0.9,
+        'circle-stroke-width': 1,
+        'circle-stroke-color': '#65a30d',
+      },
+    })
+    map.addLayer({
+      id: 'intel-fcc-towers-labels',
+      type: 'symbol',
+      source: 'intel-fcc-towers',
+      layout: {
+        'text-field': ['coalesce', ['get', 'registrationNumber'], ['get', 'asrNumber'], 'FCC'],
+        'text-size': 9,
+        'text-anchor': 'top',
+        'text-offset': [0, 0.5],
+      },
+      paint: { 'text-color': '#e6edf3', 'text-halo-color': '#0d1117', 'text-halo-width': 1 },
+    })
+  }
+
+  const removeFccTowers = () => {
+    if (map.getLayer('intel-fcc-towers-labels')) map.removeLayer('intel-fcc-towers-labels')
+    if (map.getLayer('intel-fcc-towers-layer')) map.removeLayer('intel-fcc-towers-layer')
+    if (map.getSource('intel-fcc-towers')) map.removeSource('intel-fcc-towers')
   }
 
   const addFlockCameras = (geoJson) => {
@@ -474,6 +534,87 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     if (map.getLayer('intel-flock-icons')) map.removeLayer('intel-flock-icons')
     if (map.getLayer('intel-flock-layer')) map.removeLayer('intel-flock-layer')
     if (map.getSource('intel-flock')) map.removeSource('intel-flock')
+  }
+
+  const addDatacenters = (geoJson) => {
+    if (map.getSource('intel-datacenters')) {
+      map.getSource('intel-datacenters').setData(geoJson)
+      return
+    }
+    map.addSource('intel-datacenters', { type: 'geojson', data: geoJson })
+    map.addLayer({
+      id: 'intel-datacenters-layer',
+      type: 'circle',
+      source: 'intel-datacenters',
+      paint: {
+        'circle-radius': 6,
+        'circle-color': '#8b5cf6',
+        'circle-opacity': 0.9,
+        'circle-stroke-width': 1,
+        'circle-stroke-color': '#fff',
+      },
+    })
+  }
+
+  const removeDatacenters = () => {
+    if (map.getLayer('intel-datacenters-layer')) map.removeLayer('intel-datacenters-layer')
+    if (map.getSource('intel-datacenters')) map.removeSource('intel-datacenters')
+  }
+
+  const addOdintRegions = (geoJson) => {
+    if (map.getSource('intel-odint')) {
+      map.getSource('intel-odint').setData(geoJson)
+      return
+    }
+    map.addSource('intel-odint', { type: 'geojson', data: geoJson })
+    map.addLayer({
+      id: 'intel-odint-layer',
+      type: 'circle',
+      source: 'intel-odint',
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 2, 6, 5, 12, 8, 18, 10, 22],
+        'circle-color': '#06b6d4',
+        'circle-opacity': 0.9,
+        'circle-stroke-width': 1.5,
+        'circle-stroke-color': '#fff',
+      },
+    })
+    map.addLayer({
+      id: 'intel-odint-labels',
+      type: 'symbol',
+      source: 'intel-odint',
+      layout: { 'text-field': ['get', 'name'], 'text-size': 11, 'text-offset': [0, 1.2] },
+      paint: { 'text-color': '#e6edf3' },
+    })
+  }
+
+  const removeOdintRegions = () => {
+    if (map.getLayer('intel-odint-labels')) map.removeLayer('intel-odint-labels')
+    if (map.getLayer('intel-odint-layer')) map.removeLayer('intel-odint-layer')
+    if (map.getSource('intel-odint')) map.removeSource('intel-odint')
+  }
+
+  const addSurveillanceCapabilities = (geoJson) => {
+    if (map.getSource('intel-surveillance-capabilities')) {
+      map.getSource('intel-surveillance-capabilities').setData(geoJson)
+      return
+    }
+    map.addSource('intel-surveillance-capabilities', { type: 'geojson', data: geoJson })
+    map.addLayer({
+      id: 'intel-surveillance-capabilities-layer',
+      type: 'circle',
+      source: 'intel-surveillance-capabilities',
+      paint: {
+        'circle-radius': 5,
+        'circle-color': '#f59e0b',
+        'circle-opacity': 0.85,
+      },
+    })
+  }
+
+  const removeSurveillanceCapabilities = () => {
+    if (map.getLayer('intel-surveillance-capabilities-layer')) map.removeLayer('intel-surveillance-capabilities-layer')
+    if (map.getSource('intel-surveillance-capabilities')) map.removeSource('intel-surveillance-capabilities')
   }
 
   const addUtilityOutages = (geoJson) => {
@@ -808,7 +949,7 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
       type: 'circle',
       source: 'intel-ioda',
       paint: {
-        'circle-radius': ['interpolate', ['linear'], ['get', 'level'], 0, 6, 100, 18],
+        'circle-radius': ['interpolate', ['linear'], ['coalesce', ['to-number', ['get', 'level']], 0], 0, 6, 100, 18],
         'circle-color': '#f43f5e',
         'circle-opacity': 0.8,
         'circle-stroke-width': 2,
@@ -859,8 +1000,16 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     updateSentinel2Time,
     addComms,
     removeComms,
+    addFccTowers,
+    removeFccTowers,
     addFlockCameras,
     removeFlockCameras,
+    addDatacenters,
+    removeDatacenters,
+    addOdintRegions,
+    removeOdintRegions,
+    addSurveillanceCapabilities,
+    removeSurveillanceCapabilities,
     addUtilityOutages,
     removeUtilityOutages,
     addAoiSaved,
@@ -900,6 +1049,7 @@ const API_BASE = (import.meta.env?.VITE_API_URL !== undefined && import.meta.env
 
 export default function MapView({
   basemapId,
+  overlayBasemapId = null,
   layerToggles,
   isMapLoading,
   onLoadingChange,
@@ -914,19 +1064,29 @@ export default function MapView({
   activeView = 'osint-map',
   eventCountry = null,
   eventFilterByView = false,
+  weatherCoords = null,
+  mapCenter = null,
+  onMapCenterChange = null,
+  overlayOpacity = 0.6,
 }) {
   const { user } = useAuth()
-  const { places, addPlace, clearPlaces } = useSavedPlaces()
+  const { places, lists: listNames, addPlace, updatePlace, removePlace, clearPlaces, createList } = useSavedPlaces()
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const drawRef = useRef(null)
   const drawHandlerRef = useRef(null)
+  const exploreDrawRef = useRef(null)
+  const exploreAdditionalToolsRef = useRef(null)
+  const legendControlRef = useRef(null)
+  const globeMinimapRef = useRef(null)
   const mapReadyRef = useRef(false)
   const layerTogglesRef = useRef(layerToggles)
   const sentinelTimeRef = useRef(sentinelTime)
   const activeViewRef = useRef(activeView)
   const eventFilterByViewRef = useRef(eventFilterByView)
   const moveendPendingRef = useRef(null)
+  const onMapCenterChangeRef = useRef(onMapCenterChange)
+  onMapCenterChangeRef.current = onMapCenterChange
   const tapPinModeRef = useRef(false)
   const lastCenterRef = useRef([0, 20])
   const lastZoomRef = useRef(2)
@@ -939,8 +1099,13 @@ export default function MapView({
 
   const [powerZoomWarning, setPowerZoomWarning] = useState(false)
   const [mapInstance, setMapInstance] = useState(null)
+  const [pinEditorOpen, setPinEditorOpen] = useState(false)
+  const [pinEditorPin, setPinEditorPin] = useState(null)
+  const [pinEditorIsNew, setPinEditorIsNew] = useState(false)
   const searchDataByLayerRef = useRef({})
   const onSearchDataUpdateRef = useRef(onSearchDataUpdate)
+  const placesRef = useRef(places)
+  placesRef.current = places
   onSearchDataUpdateRef.current = onSearchDataUpdate
 
   const buildSearchEntries = useCallback(() => {
@@ -990,6 +1155,7 @@ export default function MapView({
       id: 'intel-saved-points-base',
       type: 'circle',
       source: 'intel-saved-points',
+      filter: ['==', ['geometry-type'], 'Point'],
       paint: {
         'circle-radius': 9,
         'circle-color': '#0d1117',
@@ -1001,6 +1167,7 @@ export default function MapView({
       id: 'intel-saved-points-layer',
       type: 'symbol',
       source: 'intel-saved-points',
+      filter: ['==', ['geometry-type'], 'Point'],
       layout: {
         'text-field': ['coalesce', ['get', 'icon'], '📍'],
         'text-size': 14,
@@ -1008,16 +1175,42 @@ export default function MapView({
       },
       paint: { 'text-color': '#e6edf3' },
     })
+    map.addLayer({
+      id: 'intel-saved-points-line',
+      type: 'line',
+      source: 'intel-saved-points',
+      filter: ['==', ['geometry-type'], 'LineString'],
+      paint: {
+        'line-color': '#58a6ff',
+        'line-width': 2,
+      },
+    })
+    map.addLayer({
+      id: 'intel-saved-points-fill',
+      type: 'fill',
+      source: 'intel-saved-points',
+      filter: ['==', ['geometry-type'], 'Polygon'],
+      paint: {
+        'fill-color': '#58a6ff',
+        'fill-opacity': 0.25,
+        'fill-outline-color': '#58a6ff',
+      },
+    })
   }, [])
 
   const refreshSavedPointsLayer = useCallback(() => {
     if (user?.id) {
-      const features = (places || []).map((p) => ({
+      const fromPlaces = (places || []).map((p) => ({
         type: 'Feature',
         id: p.id,
         properties: { title: p.title || 'Saved point', icon: p.icon || '📍', source: p.list_name || 'My Places' },
         geometry: { type: 'Point', coordinates: [Number(p.lon), Number(p.lat)] },
       }))
+      const local = getSavedPoints()
+      const localLinesPolygons = (local.features || []).filter(
+        (f) => f.geometry && (f.geometry.type === 'LineString' || f.geometry.type === 'Polygon')
+      )
+      const features = [...fromPlaces, ...localLinesPolygons]
       upsertSavedPointsLayer({ type: 'FeatureCollection', features })
       return
     }
@@ -1067,9 +1260,47 @@ export default function MapView({
     upsertSavedPointsLayer(empty)
   }, [upsertSavedPointsLayer, user?.id, clearPlaces])
 
+  const handlePinEditorSave = useCallback(async (pinId, updates) => {
+    if (user?.id) {
+      await updatePlace(pinId, updates)
+      return
+    }
+    const current = getSavedPoints()
+    const features = (current.features || []).map((f) => {
+      if (f.id !== pinId) return f
+      const [lon, lat] = f.geometry?.coordinates || []
+      return {
+        ...f,
+        properties: {
+          ...f.properties,
+          title: updates.title ?? f.properties?.title,
+          icon: updates.icon ?? f.properties?.icon,
+          source: updates.listName ?? f.properties?.source,
+          notes: updates.notes !== undefined ? updates.notes : f.properties?.notes,
+        },
+      }
+    })
+    const next = { type: 'FeatureCollection', features }
+    setSavedPoints(next)
+    upsertSavedPointsLayer(next)
+  }, [user?.id, updatePlace, upsertSavedPointsLayer])
+
+  const handlePinEditorDelete = useCallback(async (pinId) => {
+    if (user?.id) {
+      await removePlace(pinId)
+      return
+    }
+    const current = getSavedPoints()
+    const features = (current.features || []).filter((f) => f.id !== pinId)
+    const next = { type: 'FeatureCollection', features }
+    setSavedPoints(next)
+    upsertSavedPointsLayer(next)
+  }, [user?.id, removePlace, upsertSavedPointsLayer])
+
   const doFetch = useCallback(
     (map, toggles, onLoading) => {
       if (!map || !map.getStyle) return
+      if (activeViewRef.current === 'explore-map') return
       const getRadarWanted = () => layerTogglesRef.current?.noaaRadar === true
       const helpers = addOrUpdateLayer(map, toggles, onLoading, getRadarWanted)
       const bbox = () => {
@@ -1264,6 +1495,75 @@ export default function MapView({
           .finally(() => onLoading?.(false))
       } else helpers.removeIodaOutages()
 
+      if (toggles.fccTowers) {
+        onLoading?.(true)
+        fetchFccTowers(bbox())
+          .then((geoJson) => {
+            if (geoJson.features?.length === 0) return fetchOverpassCellTowers(bbox())
+            return geoJson
+          })
+          .then((geoJson) => {
+            helpers.addFccTowers(geoJson)
+            pushSearchLayerRef.current('fcc', geoJson)
+          })
+          .catch(() => {
+            return fetchOverpassCellTowers(bbox()).then((g) => {
+              helpers.addFccTowers(g)
+              pushSearchLayerRef.current('fcc', g)
+            })
+          })
+          .catch(() => {
+            helpers.addFccTowers({ type: 'FeatureCollection', features: [] })
+            pushSearchLayerRef.current('fcc', { type: 'FeatureCollection', features: [] })
+          })
+          .finally(() => onLoading?.(false))
+      } else helpers.removeFccTowers()
+
+      if (toggles.flockCameras) {
+        onLoading?.(true)
+        const center = map.getCenter()
+        fetchFlockTiles(bbox())
+          .then((geoJson) => {
+            if (geoJson.features?.length === 0) {
+              return fetchCamerasFromApi(center.lat, center.lng, bbox())
+            }
+            return geoJson
+          })
+          .then((geoJson) => {
+            helpers.addFlockCameras(geoJson)
+            pushSearchLayerRef.current('flock', geoJson)
+          })
+          .catch(() => {
+            helpers.addFlockCameras({ type: 'FeatureCollection', features: [] })
+            pushSearchLayerRef.current('flock', { type: 'FeatureCollection', features: [] })
+          })
+          .finally(() => onLoading?.(false))
+      } else helpers.removeFlockCameras()
+
+      if (toggles.dataCenters) {
+        onLoading?.(true)
+        fetchDatacenters(bbox())
+          .then((geoJson) => {
+            helpers.addDatacenters(geoJson)
+          })
+          .catch(() => {
+            helpers.addDatacenters({ type: 'FeatureCollection', features: [] })
+          })
+          .finally(() => onLoading?.(false))
+      } else helpers.removeDatacenters()
+
+      if (toggles.odintRegions) {
+        fetchOdintRegions().then((geoJson) => helpers.addOdintRegions(geoJson)).catch(() => helpers.addOdintRegions({ type: 'FeatureCollection', features: [] }))
+      } else helpers.removeOdintRegions()
+
+      if (toggles.surveillanceCapabilities) {
+        onLoading?.(true)
+        fetchSurveillanceCapabilities(bbox())
+          .then((geoJson) => helpers.addSurveillanceCapabilities(geoJson))
+          .catch(() => helpers.addSurveillanceCapabilities({ type: 'FeatureCollection', features: [] }))
+          .finally(() => onLoading?.(false))
+      } else helpers.removeSurveillanceCapabilities()
+
       if (toggles.aoiDraw) {
         const aoi = getAoiFeatures()
         helpers.addAoiSaved(aoi)
@@ -1271,6 +1571,7 @@ export default function MapView({
           const draw = new MapboxDraw({
             displayControlsDefault: false,
             controls: { polygon: true, trash: true, line_string: true, point: false },
+            styles: MAPLIBRE_DRAW_STYLES,
           })
           map.addControl(draw)
           drawRef.current = draw
@@ -1343,41 +1644,86 @@ export default function MapView({
       className: 'maplibre-popup-dark',
     })
 
+    const existingClickableLayers = () => CLICKABLE_POINT_LAYERS.filter((id) => !!map.getLayer(id))
+
     const handleMapClick = (e) => {
       if (tapPinModeRef.current) {
         const lng = Number(e?.lngLat?.lng)
         const lat = Number(e?.lngLat?.lat)
         if (Number.isFinite(lng) && Number.isFinite(lat)) {
-          const name = window.prompt('Pin title (optional):', '') || ''
-          const listName = window.prompt('List name:', 'General') || 'General'
           if (user?.id) {
             addPlace({
-              title: name.trim() || 'Pinned place',
+              title: 'Pinned place',
               lat,
               lon: lng,
               icon: pointIcon || '📍',
-              listName: listName.trim() || 'General',
+              listName: 'General',
+            }).then((created) => {
+              if (created) {
+                setPinEditorPin(created)
+                setPinEditorIsNew(true)
+                setPinEditorOpen(true)
+              }
             }).catch(() => {})
           } else {
             const current = getSavedPoints()
             const feature = {
               type: 'Feature',
               id: `pt-${Date.now()}`,
-              properties: { title: name.trim() || 'Saved point', icon: pointIcon || '📍', source: listName.trim() || 'General' },
+              properties: { title: 'Saved point', icon: pointIcon || '📍', source: 'General' },
               geometry: { type: 'Point', coordinates: [lng, lat] },
             }
             const next = { type: 'FeatureCollection', features: [...(current.features || []), feature] }
             setSavedPoints(next)
             upsertSavedPointsLayer(next)
+            setPinEditorPin({
+              id: feature.id,
+              title: feature.properties.title,
+              icon: feature.properties.icon,
+              list_name: feature.properties.source,
+              lat: lat,
+              lon: lng,
+            })
+            setPinEditorIsNew(true)
+            setPinEditorOpen(true)
           }
         }
         return
       }
-      const features = map.queryRenderedFeatures(e.point, { layers: CLICKABLE_POINT_LAYERS })
+      const layers = existingClickableLayers()
+      const features = layers.length ? map.queryRenderedFeatures(e.point, { layers }) : []
       const feat = features[0]
       if (!feat) return
       const coords = feat.geometry?.type === 'Point' ? feat.geometry.coordinates.slice() : null
       if (!coords) return
+      if (feat.layer.id === 'intel-saved-points-layer') {
+        const pid = feat.id
+        if (user?.id) {
+          const place = (placesRef.current || []).find((p) => p.id === pid)
+          if (place) {
+            setPinEditorPin(place)
+            setPinEditorIsNew(false)
+            setPinEditorOpen(true)
+          }
+        } else {
+          const fc = getSavedPoints()
+          const f = (fc.features || []).find((f) => f.id === pid)
+          if (f) {
+            const [lon, lat] = f.geometry?.coordinates || []
+            setPinEditorPin({
+              id: f.id,
+              title: f.properties?.title,
+              icon: f.properties?.icon,
+              list_name: f.properties?.source,
+              lat,
+              lon,
+            })
+            setPinEditorIsNew(false)
+            setPinEditorOpen(true)
+          }
+        }
+        return
+      }
       const props = feat.properties || {}
       let html
       if (feat.layer.id === 'search-results-layer' || feat.layer.id === 'mapped-news-layer' || feat.layer.id === 'mapped-osint-layer' || feat.layer.id === 'mapped-conflict-events-layer' || feat.layer.id === 'intel-geoconfirmed-layer') {
@@ -1394,7 +1740,8 @@ export default function MapView({
     }
 
     const handleMapMousemove = (e) => {
-      const features = map.queryRenderedFeatures(e.point, { layers: CLICKABLE_POINT_LAYERS })
+      const layers = existingClickableLayers()
+      const features = layers.length ? map.queryRenderedFeatures(e.point, { layers }) : []
       map.getCanvas().style.cursor = features.length ? 'pointer' : ''
     }
 
@@ -1412,7 +1759,8 @@ export default function MapView({
       refreshSavedPointsLayer()
       map.on('click', handleMapClick)
       map.on('mousemove', handleMapMousemove)
-
+      const c0 = map.getCenter()
+      if (onMapCenterChangeRef.current) onMapCenterChangeRef.current({ lat: c0.lat, lon: c0.lng })
       if (!locationRequested) {
         localStorage.setItem(STORAGE_KEYS.LOCATION_REQUESTED, 'true')
         if (navigator.geolocation) {
@@ -1437,6 +1785,9 @@ export default function MapView({
         const c = map.getCenter()
         lastCenterRef.current = [c.lng, c.lat]
         lastZoomRef.current = map.getZoom()
+        if (onMapCenterChangeRef.current) {
+          onMapCenterChangeRef.current({ lat: c.lat, lon: c.lng })
+        }
       } catch (_) {}
       if (activeViewRef.current === 'conflict-map' && eventFilterByViewRef.current) {
         setMapBoundsKey((k) => k + 1)
@@ -1456,6 +1807,10 @@ export default function MapView({
         toggles.milAircraft ||
         toggles.iodaOutages ||
         toggles.commsInfrastructure ||
+        toggles.fccTowers ||
+        toggles.flockCameras ||
+        toggles.dataCenters ||
+        toggles.surveillanceCapabilities ||
         (toggles.powerGrid && map.getZoom() >= MIN_POWER_ZOOM)
       if (needsRefresh) doFetch(map, toggles, onLoadingChange)
     }
@@ -1479,6 +1834,18 @@ export default function MapView({
       map.off('click', handleMapClick)
       map.off('mousemove', handleMapMousemove)
       popup.remove()
+      if (exploreAdditionalToolsRef.current) {
+        try { map.removeControl(exploreAdditionalToolsRef.current) } catch (_) {}
+        exploreAdditionalToolsRef.current = null
+      }
+      if (exploreDrawRef.current) {
+        try { map.removeControl(exploreDrawRef.current) } catch (_) {}
+        exploreDrawRef.current = null
+      }
+      if (legendControlRef.current) {
+        try { map.removeControl(legendControlRef.current) } catch (_) {}
+        legendControlRef.current = null
+      }
       if (drawRef.current) {
         const h = drawHandlerRef.current
         if (h) {
@@ -1490,6 +1857,8 @@ export default function MapView({
         drawRef.current = null
       }
       if (map.getLayer('intel-saved-points-layer')) map.removeLayer('intel-saved-points-layer')
+      if (map.getLayer('intel-saved-points-line')) map.removeLayer('intel-saved-points-line')
+      if (map.getLayer('intel-saved-points-fill')) map.removeLayer('intel-saved-points-fill')
       if (map.getLayer('intel-saved-points-base')) map.removeLayer('intel-saved-points-base')
       if (map.getSource('intel-saved-points')) map.removeSource('intel-saved-points')
       map.off('moveend', onMoveend)
@@ -1500,6 +1869,41 @@ export default function MapView({
       setMapInstance(null)
     }
   }, [basemapId, doFetch, onLoadingChange, refreshSavedPointsLayer, user?.id, addPlace, pointIcon, upsertSavedPointsLayer])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReadyRef.current || !map.getStyle?.()) return
+    if (map.getLayer('overlay-raster-layer')) {
+      map.removeLayer('overlay-raster-layer')
+    }
+    if (map.getSource('overlay-raster')) {
+      map.removeSource('overlay-raster')
+    }
+    if (overlayBasemapId) {
+      const overlay = BASEMAPS.find((b) => b.id === overlayBasemapId)
+      if (overlay && overlay.type === 'raster') {
+        map.addSource('overlay-raster', {
+          type: 'raster',
+          tiles: overlay.tiles,
+          tileSize: overlay.tileSize || 256,
+        })
+        map.addLayer({
+          id: 'overlay-raster-layer',
+          type: 'raster',
+          source: 'overlay-raster',
+          minzoom: 0,
+          maxzoom: 22,
+          paint: { 'raster-opacity': Number(overlayOpacity) },
+        })
+      }
+    }
+  }, [overlayBasemapId, mapInstance])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !map.getLayer?.('overlay-raster-layer')) return
+    map.setPaintProperty('overlay-raster-layer', 'raster-opacity', Number(overlayOpacity))
+  }, [overlayOpacity, mapInstance])
 
   useEffect(() => {
     const map = mapRef.current
@@ -1515,6 +1919,125 @@ export default function MapView({
     map.on('styledata', onStyleData)
     return () => map.off('styledata', onStyleData)
   }, [layerToggles, doFetch, onLoadingChange])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReadyRef.current || activeView !== 'explore-map') {
+      if (map && activeView !== 'explore-map') {
+        if (globeMinimapRef.current) {
+          try { map.removeControl(globeMinimapRef.current) } catch (_) {}
+          globeMinimapRef.current = null
+        }
+        if (exploreAdditionalToolsRef.current) {
+          try { map.removeControl(exploreAdditionalToolsRef.current) } catch (_) {}
+          exploreAdditionalToolsRef.current = null
+        }
+        if (exploreDrawRef.current) {
+          try { map.removeControl(exploreDrawRef.current) } catch (_) {}
+          exploreDrawRef.current = null
+        }
+        if (legendControlRef.current) {
+          try { map.removeControl(legendControlRef.current) } catch (_) {}
+          legendControlRef.current = null
+        }
+      }
+      return
+    }
+    let cancelled = false
+    let draw
+    let syncDrawToSaved
+    let setDrawCursor
+    try {
+      draw = new MapboxDraw({
+        displayControlsDefault: true,
+        controls: { point: true, line_string: true, polygon: true, trash: true },
+        styles: MAPLIBRE_DRAW_STYLES,
+      })
+      map.addControl(draw, 'top-left')
+      exploreDrawRef.current = draw
+      const saved = getSavedPoints()
+      const linesAndPolygons = (saved.features || []).filter(
+        (f) => f.geometry && ['LineString', 'Polygon'].includes(f.geometry.type)
+      )
+      if (linesAndPolygons.length) draw.set({ type: 'FeatureCollection', features: linesAndPolygons })
+      syncDrawToSaved = () => {
+        const data = draw.getAll()
+        const drawnFeatures = (data.features || []).map((f) => ({
+          ...f,
+          id: f.id || `draw-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+          properties: { ...(f.properties || {}), title: f.properties?.title || 'Shape', source: f.properties?.source || 'General' },
+        }))
+        const current = getSavedPoints()
+        const pointsOnly = (current.features || []).filter((f) => f.geometry && f.geometry.type === 'Point')
+        const next = { type: 'FeatureCollection', features: [...pointsOnly, ...drawnFeatures] }
+        setSavedPoints(next)
+        upsertSavedPointsLayer(next)
+      }
+      setDrawCursor = () => {
+        const mode = draw.getMode()
+        map.getCanvas().style.cursor = ['draw_point', 'draw_line_string', 'draw_polygon'].includes(mode) ? 'crosshair' : ''
+      }
+      map.on('draw.create', syncDrawToSaved)
+      map.on('draw.update', syncDrawToSaved)
+      map.on('draw.delete', syncDrawToSaved)
+      map.on('draw.modechange', setDrawCursor)
+      map.on('draw.selectionchange', setDrawCursor)
+      setDrawCursor()
+      const c = map.getCenter()
+      if (onMapCenterChangeRef.current) onMapCenterChangeRef.current({ lat: c.lat, lon: c.lng })
+      if (globeMinimapRef.current) {
+        try { map.removeControl(globeMinimapRef.current) } catch (_) {}
+        globeMinimapRef.current = null
+      }
+      let globeMinimap = null
+      try {
+        globeMinimap = new GlobeMinimap({
+          globeSize: 82,
+          landColor: '#2d333b',
+          waterColor: '#0d1117',
+          markerColor: '#58a6ff',
+        })
+        if (typeof globeMinimap.onRemove !== 'function') {
+          globeMinimap.onRemove = function () {
+            try {
+              const el = this._container
+              if (el && el.parentNode) el.parentNode.removeChild(el)
+            } catch (_) {}
+          }
+        }
+        map.addControl(globeMinimap, 'bottom-left')
+        globeMinimapRef.current = globeMinimap
+      } catch (_) {}
+    } catch (_) {
+      return
+    }
+    return () => {
+      cancelled = true
+      if (syncDrawToSaved && setDrawCursor && map) {
+        map.off('draw.create', syncDrawToSaved)
+        map.off('draw.update', syncDrawToSaved)
+        map.off('draw.delete', syncDrawToSaved)
+        map.off('draw.modechange', setDrawCursor)
+        map.off('draw.selectionchange', setDrawCursor)
+      }
+      if (globeMinimapRef.current && map) {
+        try { map.removeControl(globeMinimapRef.current) } catch (_) {}
+        globeMinimapRef.current = null
+      }
+      if (exploreAdditionalToolsRef.current) {
+        try { map.removeControl(exploreAdditionalToolsRef.current) } catch (_) {}
+        exploreAdditionalToolsRef.current = null
+      }
+      if (exploreDrawRef.current) {
+        try { map.removeControl(exploreDrawRef.current) } catch (_) {}
+        exploreDrawRef.current = null
+      }
+      if (legendControlRef.current) {
+        try { map.removeControl(legendControlRef.current) } catch (_) {}
+        legendControlRef.current = null
+      }
+    }
+  }, [activeView, mapInstance, upsertSavedPointsLayer])
 
   useEffect(() => {
     const map = mapRef.current
@@ -1761,7 +2284,28 @@ export default function MapView({
         style={{ width: '100%', height: '100%', minHeight: 'calc(100vh - 140px)' }}
       />
       <div className="map-crosshair" aria-hidden="true" />
-      <MapControls map={mapInstance} />
+      <MapControls map={mapInstance} activeView={activeView} />
+      {activeView === 'explore-map' && weatherCoords && (
+        <div className="explore-top-stack">
+          <div className="weather-compact-wrap">
+            <WeatherHUD
+              compact
+              lat={weatherCoords.lat}
+              lon={weatherCoords.lon}
+            />
+          </div>
+          {mapCenter && (
+            <div className="coordinates-display-wrap coordinates-display-wrap--under-weather">
+              <CoordinatesDisplay lat={mapCenter.lat} lon={mapCenter.lon} />
+            </div>
+          )}
+        </div>
+      )}
+      {mapCenter && activeView !== 'explore-map' && (
+        <div className="coordinates-display-wrap">
+          <CoordinatesDisplay lat={mapCenter.lat} lon={mapCenter.lon} />
+        </div>
+      )}
       <DrawHUD
         drawRef={drawRef}
         visible={!!layerToggles.aoiDraw}
@@ -1780,6 +2324,16 @@ export default function MapView({
           <div className="spinner" />
         </div>
       )}
+      <PinEditorDialog
+        open={pinEditorOpen}
+        onClose={() => { setPinEditorOpen(false); setPinEditorPin(null) }}
+        pin={pinEditorPin}
+        isNew={pinEditorIsNew}
+        listNames={user?.id ? (listNames || []) : (pinEditorOpen ? Array.from(new Set([...(getSavedPoints().features || []).map((f) => f.properties?.source).filter(Boolean), 'General'])).sort() : [])}
+        onSave={pinEditorPin ? (updates) => handlePinEditorSave(pinEditorPin.id, updates) : undefined}
+        onDelete={pinEditorPin ? () => handlePinEditorDelete(pinEditorPin.id) : undefined}
+        onCreateList={user?.id ? createList : undefined}
+      />
     </div>
   )
 }

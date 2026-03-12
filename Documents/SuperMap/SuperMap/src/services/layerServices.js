@@ -10,7 +10,28 @@ const API_BASE = typeof import.meta !== 'undefined' && import.meta.env?.VITE_API
 
 const FIRMS_MAP_KEY = '09415b5df0304c3802335984b511c111'
 const OVERPASS_ENDPOINT = 'https://overpass-api.de/api/interpreter'
+const OVERPASS_HEADERS = {
+  'Content-Type': 'application/x-www-form-urlencoded',
+  'User-Agent': 'SuperMap/1.0 (https://github.com/TheCloutySkies/SuperMap)',
+}
 const ACLED_API_KEY = import.meta.env.VITE_ACLED_API_KEY || ''
+
+const OVERPASS_CACHE_TTL_MS = 20_000
+const overpassCache = new Map()
+function bboxCacheKey(prefix, bbox) {
+  const [w, s, e, n] = bbox || []
+  const round = (x) => (Number.isFinite(x) ? Number(x).toFixed(2) : 'na')
+  return `${prefix}:${round(w)},${round(s)},${round(e)},${round(n)}`
+}
+function getCachedOverpass(key) {
+  const hit = overpassCache.get(key)
+  if (!hit) return null
+  if (Date.now() - hit.t > OVERPASS_CACHE_TTL_MS) return null
+  return hit.v
+}
+function setCachedOverpass(key, value) {
+  overpassCache.set(key, { t: Date.now(), v: value })
+}
 
 function getRapidApiKey() {
   try {
@@ -23,6 +44,9 @@ function getRapidApiKey() {
 }
 
 export async function fetchOverpassPower(bbox) {
+  const cacheKey = bboxCacheKey('power', bbox)
+  const cached = getCachedOverpass(cacheKey)
+  if (cached) return cached
   const [w, s, e, n] = bbox
   const query = `
     [out:json][timeout:30];
@@ -35,9 +59,13 @@ export async function fetchOverpassPower(bbox) {
   const res = await fetch(OVERPASS_ENDPOINT, {
     method: 'POST',
     body: `data=${encodeURIComponent(query)}`,
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: OVERPASS_HEADERS,
   })
-  if (!res.ok) throw new Error('Overpass request failed')
+  if (!res.ok) {
+    const fallback = getCachedOverpass(cacheKey)
+    if (fallback) return fallback
+    throw new Error('Overpass request failed')
+  }
   const json = await res.json()
   const features = []
   const nodeCoords = {}
@@ -66,7 +94,9 @@ export async function fetchOverpassPower(bbox) {
       })
     }
   })
-  return { type: 'FeatureCollection', features }
+  const fc = { type: 'FeatureCollection', features }
+  setCachedOverpass(cacheKey, fc)
+  return fc
 }
 
 export async function fetchAdsbRapidApi(lat, lon) {
@@ -123,7 +153,7 @@ export async function runOverpassQuery(query) {
   const res = await fetch(OVERPASS_ENDPOINT, {
     method: 'POST',
     body: `data=${encodeURIComponent(query)}`,
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: OVERPASS_HEADERS,
   })
   if (!res.ok) throw new Error('Overpass request failed')
   const json = await res.json()
@@ -157,6 +187,9 @@ export async function runOverpassQuery(query) {
 }
 
 export async function fetchOverpassCellTowers(bbox) {
+  const cacheKey = bboxCacheKey('cell', bbox)
+  const cached = getCachedOverpass(cacheKey)
+  if (cached) return cached
   const [w, s, e, n] = bbox
   const query = `
     [out:json][timeout:30];
@@ -166,9 +199,13 @@ export async function fetchOverpassCellTowers(bbox) {
   const res = await fetch(OVERPASS_ENDPOINT, {
     method: 'POST',
     body: `data=${encodeURIComponent(query)}`,
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: OVERPASS_HEADERS,
   })
-  if (!res.ok) throw new Error('Overpass request failed')
+  if (!res.ok) {
+    const fallback = getCachedOverpass(cacheKey)
+    if (fallback) return fallback
+    throw new Error('Overpass request failed')
+  }
   const json = await res.json()
   const features = (json.elements || [])
     .filter((el) => el.type === 'node' && el.lat != null && el.lon != null)
@@ -177,7 +214,9 @@ export async function fetchOverpassCellTowers(bbox) {
       properties: { ...el.tags, towerId: el.id },
       geometry: { type: 'Point', coordinates: [el.lon, el.lat] },
     }))
-  return { type: 'FeatureCollection', features }
+  const fc = { type: 'FeatureCollection', features }
+  setCachedOverpass(cacheKey, fc)
+  return fc
 }
 
 export async function fetchNasaFirmsArea(bbox) {
@@ -265,23 +304,38 @@ export async function fetchGeoconfirmed(bbox) {
 }
 
 export async function fetchGdacsEvents(bbox) {
-  const url = 'https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH'
-  const res = await fetch(url)
-  if (!res.ok) return { type: 'FeatureCollection', features: [] }
-  const data = await res.json()
-  if (data.type !== 'FeatureCollection' || !Array.isArray(data.features)) {
+  try {
+    const url = 'https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH'
+    const res = await fetch(url, { mode: 'cors' })
+    if (!res.ok) return { type: 'FeatureCollection', features: [] }
+    const contentType = (res.headers.get('content-type') || '').toLowerCase()
+    if (!contentType.includes('application/json')) {
+      console.warn('[SuperMap GDACS] Non-JSON response')
+      return { type: 'FeatureCollection', features: [] }
+    }
+    let data
+    try {
+      data = await res.json()
+    } catch (_) {
+      return { type: 'FeatureCollection', features: [] }
+    }
+    if (data?.type !== 'FeatureCollection' || !Array.isArray(data.features)) {
+      return { type: 'FeatureCollection', features: [] }
+    }
+    if (!bbox) return data
+    const [w, s, e, n] = bbox
+    const filtered = data.features.filter((f) => {
+      const coords = f.geometry?.coordinates
+      if (!coords || coords.length < 2) return false
+      const lon = coords[0]
+      const lat = coords[1]
+      return lon >= w && lon <= e && lat >= s && lat <= n
+    })
+    return { type: 'FeatureCollection', features: filtered }
+  } catch (err) {
+    console.warn('[SuperMap GDACS]', err?.message || err)
     return { type: 'FeatureCollection', features: [] }
   }
-  if (!bbox) return data
-  const [w, s, e, n] = bbox
-  const filtered = data.features.filter((f) => {
-    const coords = f.geometry?.coordinates
-    if (!coords || coords.length < 2) return false
-    const lon = coords[0]
-    const lat = coords[1]
-    return lon >= w && lon <= e && lat >= s && lat <= n
-  })
-  return { type: 'FeatureCollection', features: filtered }
 }
 
 export async function fetchUsgsEarthquakes(bbox) {
@@ -351,6 +405,144 @@ export async function fetchFlockCameras(city = 'SanDiego') {
   return { type: 'FeatureCollection', features: [] }
 }
 
+const FLOCK_TILES_BASE = 'https://ringmast4r.github.io/FLOCK/data/tiles'
+const FLOCK_ZOOM = 6
+
+function lonToTileX(lon, zoom) {
+  const n = 2 ** zoom
+  return Math.floor(((lon + 180) / 360) * n)
+}
+function latToTileY(lat, zoom) {
+  const latRad = (lat * Math.PI) / 180
+  const n = 2 ** zoom
+  return Math.floor(((1 - Math.asinh(Math.tan(latRad)) / Math.PI) / 2) * n)
+}
+
+/** FLOCK surveillance cameras from ringmast4r/FLOCK tile data (zoom 6). See https://github.com/ringmast4r/FLOCK */
+export async function fetchFlockTiles(bbox) {
+  if (!bbox || bbox.length < 4) return { type: 'FeatureCollection', features: [] }
+  const [w, s, e, n] = bbox
+  const xMin = Math.max(0, lonToTileX(w, FLOCK_ZOOM))
+  const xMax = Math.min(2 ** FLOCK_ZOOM - 1, lonToTileX(e, FLOCK_ZOOM))
+  const yMin = Math.max(0, latToTileY(n, FLOCK_ZOOM))
+  const yMax = Math.min(2 ** FLOCK_ZOOM - 1, latToTileY(s, FLOCK_ZOOM))
+  const allFeatures = []
+  const seen = new Set()
+  for (let x = xMin; x <= xMax; x++) {
+    for (let y = yMin; y <= yMax; y++) {
+      try {
+        const url = `${FLOCK_TILES_BASE}/${FLOCK_ZOOM}/${x}/${y}.json`
+        const res = await fetch(url)
+        if (!res.ok) continue
+        const tile = await res.json()
+        const features = tile?.features || []
+        for (const f of features) {
+          if (f.type !== 'Feature' || !f.geometry?.coordinates) continue
+          const key = f.geometry.coordinates.join(',')
+          if (seen.has(key)) continue
+          seen.add(key)
+          allFeatures.push(f)
+        }
+      } catch (_) {
+        // skip failed tiles
+      }
+    }
+  }
+  return { type: 'FeatureCollection', features: allFeatures }
+}
+
+/** ATLAS data centers from ringmast4r/Data-Center-Map---Global (6,266+ locations). See https://github.com/ringmast4r/Data-Center-Map---Global */
+const DATACENTERS_API_URL = 'https://data-center-map.com/api/all'
+const DATACENTERS_JSON_URL = 'https://raw.githubusercontent.com/ringmast4r/Data-Center-Map---Global/main/datacenters_cleaned.json'
+
+let datacentersCache = null
+/** Minimal fallback when API and GitHub both fail (e.g. CORS, 404) so the layer still shows something */
+const DATACENTERS_FALLBACK = [
+  { name: 'Equinix SV5', company: 'Equinix', city: 'San Jose', state: 'CA', country: 'United States', lon: -121.9, lat: 37.34 },
+  { name: 'Digital Realty SJC', company: 'Digital Realty', city: 'San Jose', state: 'CA', country: 'United States', lon: -121.89, lat: 37.33 },
+  { name: 'AWS us-east-1', company: 'Amazon', city: 'Ashburn', state: 'VA', country: 'United States', lon: -77.45, lat: 39.0 },
+  { name: 'Microsoft North Virginia', company: 'Microsoft', city: 'Boydton', state: 'VA', country: 'United States', lon: -78.39, lat: 36.67 },
+  { name: 'Google Council Bluffs', company: 'Google', city: 'Council Bluffs', state: 'IA', country: 'United States', lon: -95.86, lat: 41.26 },
+  { name: 'Equinix LD5', company: 'Equinix', city: 'London', state: '', country: 'United Kingdom', lon: -0.11, lat: 51.51 },
+  { name: 'AMS1', company: 'DigitalOcean', city: 'Amsterdam', state: '', country: 'Netherlands', lon: 4.9, lat: 52.37 },
+  { name: 'Equinix TY2', company: 'Equinix', city: 'Tokyo', state: '', country: 'Japan', lon: 139.69, lat: 35.69 },
+  { name: 'AWS ap-southeast-1', company: 'Amazon', city: 'Singapore', state: '', country: 'Singapore', lon: 103.85, lat: 1.29 },
+  { name: 'SYD1', company: 'AWS', city: 'Sydney', state: 'NSW', country: 'Australia', lon: 151.21, lat: -33.87 },
+]
+function datacentersFallbackInBbox(w, s, e, n) {
+  return {
+    type: 'FeatureCollection',
+    features: DATACENTERS_FALLBACK.filter((dc) => dc.lon >= w && dc.lon <= e && dc.lat >= s && dc.lat <= n).map((dc) => ({
+      type: 'Feature',
+      properties: { name: dc.name, company: dc.company, city: dc.city, state: dc.state, country: dc.country },
+      geometry: { type: 'Point', coordinates: [dc.lon, dc.lat] },
+    })),
+  }
+}
+
+export async function fetchDatacenters(bbox) {
+  if (!bbox || bbox.length < 4) return { type: 'FeatureCollection', features: [] }
+  const [w, s, e, n] = bbox
+  try {
+    if (!datacentersCache) {
+      let raw = null
+      try {
+        const apiRes = await fetch(DATACENTERS_API_URL, { mode: 'cors' })
+        if (apiRes.ok) {
+          const contentType = (apiRes.headers.get('content-type') || '').toLowerCase()
+          if (contentType.includes('application/json')) {
+            try {
+              const json = await apiRes.json()
+              raw = Array.isArray(json) ? json : json?.data ?? json?.features ?? null
+            } catch (_) {}
+          }
+        }
+      } catch (_) {}
+      if (!raw) {
+        try {
+          const ghRes = await fetch(DATACENTERS_JSON_URL)
+          if (ghRes.ok) {
+            try {
+              const json = await ghRes.json()
+              raw = Array.isArray(json) ? json : json?.data ?? json?.features ?? null
+            } catch (_) {}
+          }
+        } catch (_) {}
+      }
+      if (!raw || !Array.isArray(raw)) {
+        datacentersCache = []
+      } else {
+        datacentersCache = raw
+      }
+    }
+    if (datacentersCache.length === 0) return datacentersFallbackInBbox(w, s, e, n)
+    const features = []
+    for (const dc of datacentersCache) {
+      const lon = dc.lon ?? dc.longitude ?? dc.city_coords?.[0]
+      const lat = dc.lat ?? dc.latitude ?? dc.city_coords?.[1]
+      if (lat == null || lon == null) continue
+      const latN = Number(lat)
+      const lonN = Number(lon)
+      if (lonN < w || lonN > e || latN < s || latN > n) continue
+      features.push({
+        type: 'Feature',
+        properties: {
+          name: dc.name,
+          company: dc.company,
+          city: dc.city,
+          state: dc.state ?? dc.administrative_area,
+          country: dc.country,
+        },
+        geometry: { type: 'Point', coordinates: [lonN, latN] },
+      })
+    }
+    return { type: 'FeatureCollection', features }
+  } catch (err) {
+    console.warn('[SuperMap Datacenters]', err.message)
+    return { type: 'FeatureCollection', features: [] }
+  }
+}
+
 /** Fallback: backend /api/cameras (e.g. Windy webcams) when Flock has no key or returns empty */
 export async function fetchCamerasFromApi(lat, lon, bbox = null) {
   if (!API_BASE) return { type: 'FeatureCollection', features: [] }
@@ -392,6 +584,7 @@ export async function fetchCamerasFromApi(lat, lon, bbox = null) {
   return { type: 'FeatureCollection', features: [] }
 }
 
+/** US power outages (ArcGIS). For worldwide power infrastructure use Power Grid layer (Overpass). */
 export async function fetchUtilityOutages() {
   const url =
     'https://services.arcgis.com/BLN4oKB0N1YSgvY8/arcgis/rest/services/Power_Outages_(View)/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=geojson'
@@ -444,3 +637,145 @@ export async function fetchAcled(bbox) {
   }))
   return { type: 'FeatureCollection', features }
 }
+
+/** ODINT — Observatory for Digital Infrastructure & Network Transparency. 14 recon regions (ringmast4r/ODINT). */
+const ODINT_REGIONS_GEOJSON = {
+  type: 'FeatureCollection',
+  features: [
+    { type: 'Feature', properties: { name: 'North America', region: 'North America' }, geometry: { type: 'Point', coordinates: [-98, 39] } },
+    { type: 'Feature', properties: { name: 'Caribbean', region: 'Caribbean' }, geometry: { type: 'Point', coordinates: [-72, 18] } },
+    { type: 'Feature', properties: { name: 'Central America', region: 'Central America' }, geometry: { type: 'Point', coordinates: [-90, 15] } },
+    { type: 'Feature', properties: { name: 'South America', region: 'South America' }, geometry: { type: 'Point', coordinates: [-60, -15] } },
+    { type: 'Feature', properties: { name: 'Europe', region: 'Europe' }, geometry: { type: 'Point', coordinates: [10, 50] } },
+    { type: 'Feature', properties: { name: 'Caucasus', region: 'Caucasus' }, geometry: { type: 'Point', coordinates: [45, 42] } },
+    { type: 'Feature', properties: { name: 'Middle East', region: 'Middle East' }, geometry: { type: 'Point', coordinates: [44, 31] } },
+    { type: 'Feature', properties: { name: 'Central Asia', region: 'Central Asia' }, geometry: { type: 'Point', coordinates: [65, 45] } },
+    { type: 'Feature', properties: { name: 'South Asia', region: 'South Asia' }, geometry: { type: 'Point', coordinates: [78, 22] } },
+    { type: 'Feature', properties: { name: 'East Asia', region: 'East Asia' }, geometry: { type: 'Point', coordinates: [105, 35] } },
+    { type: 'Feature', properties: { name: 'Southeast Asia', region: 'Southeast Asia' }, geometry: { type: 'Point', coordinates: [105, 10] } },
+    { type: 'Feature', properties: { name: 'Africa', region: 'Africa' }, geometry: { type: 'Point', coordinates: [20, 0] } },
+    { type: 'Feature', properties: { name: 'Oceania', region: 'Oceania' }, geometry: { type: 'Point', coordinates: [135, -25] } },
+    { type: 'Feature', properties: { name: 'Antarctica', region: 'Antarctica' }, geometry: { type: 'Point', coordinates: [0, -80] } },
+  ],
+}
+export async function fetchOdintRegions() {
+  return Promise.resolve(ODINT_REGIONS_GEOJSON)
+}
+
+const SURVEILLANCE_CSV_URL = 'https://raw.githubusercontent.com/ringmast4r/surveillance-capabilities-map/main/atlas-of-surveillance.csv'
+const CITY_COORDS_URL = 'https://raw.githubusercontent.com/ringmast4r/surveillance-capabilities-map/main/city_coords.json'
+let surveillanceCache = null
+/** EFF Atlas of Surveillance (ringmast4r/surveillance-capabilities-map). US only. */
+export async function fetchSurveillanceCapabilities(bbox) {
+  if (!bbox || bbox.length < 4) return { type: 'FeatureCollection', features: [] }
+  const [w, s, e, n] = bbox
+  try {
+    if (!surveillanceCache) {
+      const csvRes = await fetch(SURVEILLANCE_CSV_URL)
+      if (!csvRes.ok) return { type: 'FeatureCollection', features: [] }
+      const csvText = await csvRes.text()
+      const lines = csvText.split('\n').filter((l) => l.trim())
+      const rows = lines.slice(1)
+      let coordsLookup = new Map()
+      try {
+        const coordsRes = await fetch(CITY_COORDS_URL)
+        if (coordsRes.ok) {
+          let coordsData = null
+          try {
+            coordsData = await coordsRes.json()
+          } catch (_) {}
+          if (Array.isArray(coordsData)) {
+            coordsData.forEach((c) => {
+              const key = `${(c.city || c.City || '').trim()}|${(c.state || c.State || '').trim().toUpperCase().slice(0, 2)}`
+              if (key === '|') return
+              const lon = c.lon ?? c.longitude
+              const lat = c.lat ?? c.latitude
+              if (lat != null && lon != null) coordsLookup.set(key, [Number(lon), Number(lat)])
+            })
+          } else if (coordsData && typeof coordsData === 'object') {
+            Object.entries(coordsData).forEach(([k, v]) => {
+              const key = k.replace(/, /g, '|').toUpperCase()
+              if (Array.isArray(v) && v.length >= 2) {
+                coordsLookup.set(key, [Number(v[0]), Number(v[1])])
+              } else if (v && typeof v === 'object' && (v.lat != null || v.latitude != null) && (v.lon != null || v.longitude != null)) {
+                const lon = v.lon ?? v.longitude
+                const lat = v.lat ?? v.latitude
+                coordsLookup.set(key, [Number(lon), Number(lat)])
+              }
+            })
+          }
+        }
+      } catch (_) {}
+      const features = []
+      const seen = new Set()
+      for (const line of rows.slice(0, 3000)) {
+        const parts = []
+        let rest = line
+        for (let i = 0; i < 5 && rest; i++) {
+          const m = rest.match(/^"([^"]*(?:""[^"]*)*)"\s*,?\s*(.*)$/s) || rest.match(/^([^,]*),?\s*(.*)$/s)
+          if (m) {
+            parts.push((m[1] || '').replace(/""/g, '"').trim())
+            rest = (m[2] || '').trim()
+          }
+        }
+        const city = (parts[1] || '').trim()
+        const state = (parts[3] || '').trim().toUpperCase().slice(0, 2)
+        if (!city || !state) continue
+        const key = `${city}|${state}`
+        const coord = coordsLookup.get(key)
+        if (!coord || seen.has(key)) continue
+        seen.add(key)
+        const agency = (parts[4] || '').trim()
+        features.push({
+          type: 'Feature',
+          properties: { city, state, agency },
+          geometry: { type: 'Point', coordinates: coord },
+        })
+      }
+      surveillanceCache = { type: 'FeatureCollection', features }
+    }
+    const inBbox = surveillanceCache.features.filter((f) => {
+      const [lon, lat] = f.geometry.coordinates
+      return lon >= w && lon <= e && lat >= s && lat <= n
+    })
+    return { type: 'FeatureCollection', features: inBbox }
+  } catch (err) {
+    console.warn('[SuperMap Surveillance]', err.message)
+    return { type: 'FeatureCollection', features: [] }
+  }
+}
+
+/**
+ * FCC Antenna Structure Registration / tower data.
+ * Uses backend proxy at /api/fcc/towers when API_BASE is set; backend can use
+ * FCC Open Data (https://opendata.fcc.gov) or ASR bulk files.
+ */
+export async function fetchFccTowers(bbox) {
+  if (!bbox || bbox.length < 4) return { type: 'FeatureCollection', features: [] }
+  const [w, s, e, n] = bbox
+  if (API_BASE) {
+    try {
+      const res = await fetch(`${API_BASE}/api/fcc/towers?bbox=${[w, s, e, n].join(',')}`)
+      if (!res.ok) return { type: 'FeatureCollection', features: [] }
+      const data = await res.json()
+      if (data?.type === 'FeatureCollection' && Array.isArray(data.features)) return data
+      if (Array.isArray(data)) {
+        const features = data
+          .filter((r) => r.latitude != null && r.longitude != null)
+          .map((r) => ({
+            type: 'Feature',
+            properties: r,
+            geometry: {
+              type: 'Point',
+              coordinates: [parseFloat(r.longitude), parseFloat(r.latitude)],
+            },
+          }))
+        return { type: 'FeatureCollection', features }
+      }
+    } catch (err) {
+      console.warn('[SuperMap FCC towers]', err.message)
+    }
+  }
+  return { type: 'FeatureCollection', features: [] }
+}
+

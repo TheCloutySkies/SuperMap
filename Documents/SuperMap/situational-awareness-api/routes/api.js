@@ -8,12 +8,12 @@ const osintService = require('../services/osint')
 const safetyService = require('../services/safety')
 const infrastructureService = require('../services/infrastructure')
 const { searchAll } = require('../services/searchIndex')
-const { getEventsForSearch, getEvents, getSignalEvents, getEventTagNames } = require('../database')
+const { getEventsForSearch, getEvents, getEventTagNames } = require('../database')
 const { PRIORITY_ORDER } = require('../services/osintXFeedService')
 const { correlate } = require('../services/correlation')
 const rapidApi = require('../services/rapidApi')
 const userConfig = require('../config/userConfig')
-const { extractPlaces, geocodePlace } = require('../services/geotagger')
+const { extractPlaces, geocodePlace, geotagArticle } = require('../services/geotagger')
 const { normalizeToEvent, ingestEvent, eventToFeature } = require('../services/ingest')
 const crypto = require('crypto')
 const nodemailer = require('nodemailer')
@@ -23,9 +23,21 @@ const { loadSeedCameras } = require('../camera-discovery/storage/cameraSeeds')
 
 const searchCache = new NodeCache({ stdTTL: 15 })
 const geocodeCache = new NodeCache({ stdTTL: 24 * 60 * 60, checkperiod: 120 })
+const weatherNearbyCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 })
+const weatherHourlyCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 })
 const MAPBOX_TOKEN = process.env.MAPBOX_TOKEN || ''
 const GEOAPIFY_KEY = process.env.GEOAPIFY_KEY || ''
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || ''
+
+function feedsDebugEnabled() {
+  const v = String(process.env.DEBUG_FEEDS || '').trim().toLowerCase()
+  return v === '1' || v === 'true' || v === 'yes'
+}
+
+function communityDebugEnabled() {
+  const v = String(process.env.DEBUG_COMMUNITY || '').trim().toLowerCase()
+  return v === '1' || v === 'true' || v === 'yes'
+}
 
 const supabaseAdmin = (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY)
   ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY)
@@ -130,12 +142,20 @@ function filterByRadius(features, centerLat, centerLon, radiusKm) {
 }
 
 router.get('/news', async (req, res) => {
+  const t0 = Date.now()
   try {
-    const cached = newsService.getNewsCached()
+    const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
+    const cached = !forceRefresh ? newsService.getNewsCached() : null
     if (cached && Array.isArray(cached.features) && cached.features.length > 0) {
+      if (feedsDebugEnabled()) {
+        console.log('[FEEDS API /news] OUTPUT', { cached: true, features: cached.features.length, ms: Date.now() - t0 })
+      }
       return res.json(cached)
     }
     const items = await newsService.getNews()
+    if (feedsDebugEnabled()) {
+      console.log('[FEEDS API /news] OUTPUT', { cached: false, features: items?.features?.length || 0, ms: Date.now() - t0 })
+    }
     return res.json(items)
   } catch (err) {
     console.error('[API /news]', err.message)
@@ -144,9 +164,13 @@ router.get('/news', async (req, res) => {
 })
 
 router.get('/osint', (req, res) => {
+  const t0 = Date.now()
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 100, 200)
     const data = osintService.getOsintFromDb(limit)
+    if (feedsDebugEnabled()) {
+      console.log('[FEEDS API /osint] OUTPUT', { limit, features: data?.features?.length || 0, ms: Date.now() - t0 })
+    }
     res.json(data)
   } catch (err) {
     console.error('[API /osint]', err.message)
@@ -172,6 +196,7 @@ router.get('/osint-x/feeds', (req, res) => {
 
 /** OSINT X (Twitter RSS) feed: GET /api/osint-x?limit=100 */
 router.get('/osint-x', (req, res) => {
+  const t0 = Date.now()
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 100, 200)
     const rows = getEvents(limit, null, null, null, null, ['x'])
@@ -202,44 +227,13 @@ router.get('/osint-x', (req, res) => {
       if (pa !== pb) return pa - pb
       return (b.timestamp || 0) - (a.timestamp || 0)
     })
+    if (feedsDebugEnabled()) {
+      console.log('[FEEDS API /osint-x] OUTPUT', { limit, posts: posts.length, ms: Date.now() - t0 })
+    }
     res.json(posts)
   } catch (err) {
     console.error('[API /osint-x]', err.message)
     res.status(500).json({ error: 'Failed to fetch OSINT X' })
-  }
-})
-
-/** Live Reddit comment signals: GET /api/reddit-signals?limit=50 */
-router.get('/reddit-signals', (req, res) => {
-  try {
-    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200)
-    const rows = getSignalEvents(limit)
-    const signals = rows.map((r) => {
-      let raw = {}
-      try {
-        raw = r.raw_data ? JSON.parse(r.raw_data) : {}
-      } catch (_) {}
-      const tags = (r.tagsStr || '').split(/\s+/).filter(Boolean)
-      return {
-        id: r.id,
-        title: r.title,
-        description: r.description,
-        subreddit: raw.subreddit || 'reddit',
-        author: raw.author,
-        score: raw.score,
-        signals: raw.signals || tags,
-        signalScore: raw.signalScore,
-        confidence: raw.confidence || 'low',
-        link: raw.link,
-        timestamp: r.timestamp,
-        lat: r.lat,
-        lon: r.lon,
-      }
-    })
-    res.json(signals)
-  } catch (err) {
-    console.error('[API /reddit-signals]', err.message)
-    res.status(500).json({ error: 'Failed to fetch Reddit signals' })
   }
 })
 
@@ -342,6 +336,23 @@ router.get('/towers', async (req, res) => {
   }
 })
 
+/** FCC / tower data for map (FCC ASR or OpenCellID when configured). GET /api/fcc/towers?bbox=minLon,minLat,maxLon,maxLat */
+router.get('/fcc/towers', async (req, res) => {
+  try {
+    const bboxStr = (req.query.bbox || '').trim()
+    if (!bboxStr) return res.json({ type: 'FeatureCollection', features: [] })
+    const data = await infrastructureService.getTowers({ bbox: bboxStr, limit: 500 })
+    if (data && data.type === 'FeatureCollection' && Array.isArray(data.features)) {
+      return res.json(data)
+    }
+    res.json({ type: 'FeatureCollection', features: [] })
+  } catch (err) {
+    console.warn('[API /fcc/towers]', err.message)
+    res.json({ type: 'FeatureCollection', features: [] })
+  }
+})
+
+
 /** Pin from text: extract place, geocode, ingest as high-confidence event. POST /api/events/pin-from-text body: { title, description?, source?, url? } */
 router.post('/events/pin-from-text', async (req, res) => {
   const title = (req.body?.title || '').trim()
@@ -371,6 +382,29 @@ router.post('/events/pin-from-text', async (req, res) => {
       ingestEvent(event, { extraTags: ['pinned', 'osint'] })
       break
     }
+  }
+  // Fallback: use the same geotag pipeline we use for news/osint ingestion
+  // (NLP place extraction + geocode) in case extractPlaces(text) misses.
+  if (!event) {
+    try {
+      const tagged = await geotagArticle({ title, contentSnippet: description, content: description })
+      if (tagged?.coordinates?.length >= 2) {
+        const raw = {
+          title,
+          description,
+          link: url,
+          coordinates: tagged.coordinates,
+          lat: tagged.coordinates[1],
+          lon: tagged.coordinates[0],
+          country: tagged.country || null,
+          confidence: tagged.confidence || 'medium',
+          source,
+        }
+        event = normalizeToEvent(raw, 'conflict', source)
+        event.raw_data = JSON.stringify({ ...raw, link: url, country: raw.country, confidence: raw.confidence })
+        ingestEvent(event, { extraTags: ['pinned', 'osint'] })
+      }
+    } catch (_) {}
   }
   if (!event || event.lat == null || event.lon == null) {
     return res.status(200).json({ error: 'No location found in text. Try adding a place name (e.g. city or country).' })
@@ -514,8 +548,14 @@ router.post('/search/advanced', async (req, res) => {
 
 /** Meteostat hourly weather. GET /api/weather/hourly?station=10637&start=2020-01-01&end=2020-01-01&tz=America/New_York */
 router.get('/weather/hourly', async (req, res) => {
-  if (!rapidApi.requireKey(res)) return
+  // Weather is optional; avoid noisy 5xx responses when RapidAPI isn't configured/subscribed.
+  if (!process.env.RAPIDAPI_KEY || !String(process.env.RAPIDAPI_KEY).trim()) {
+    return res.status(200).json({ error: 'RAPIDAPI_KEY not configured. Set in API .env to enable Meteostat.', body: null, _failed: true })
+  }
   const { station, start, end, tz } = req.query
+  const cacheKey = `${String(station || '10637')}::${String(start || '')}::${String(end || '')}::${String(tz || '')}`
+  const cached = weatherHourlyCache.get(cacheKey)
+  if (cached) return res.json({ ...cached, _cached: true })
   try {
     const { body, error } = await rapidApi.fetchMeteostatHourly({
       station: station || '10637',
@@ -523,26 +563,45 @@ router.get('/weather/hourly', async (req, res) => {
       end: end || new Date().toISOString().slice(0, 10),
       tz: tz || 'America/New_York',
     })
-    if (error) return res.status(502).json({ error, body: null })
-    res.json(body || {})
+    if (error) {
+      // Prefer returning last known payload when RapidAPI rate-limits.
+      const stale = weatherHourlyCache.get(cacheKey)
+      if (stale) return res.json({ ...stale, _cached: true, _staleOnError: true, _error: error })
+      return res.status(200).json({ error, body: null, _failed: true })
+    }
+    const payload = body || {}
+    weatherHourlyCache.set(cacheKey, payload)
+    res.json(payload)
   } catch (err) {
     console.error('[API /weather/hourly]', err.message)
-    res.status(500).json({ error: err.message })
+    res.status(200).json({ error: err.message, body: null, _failed: true })
   }
 })
 
 /** Meteostat nearby station (for weather by lat/lon). GET /api/weather/nearby?lat=40&lon=-74 */
 router.get('/weather/nearby', async (req, res) => {
-  if (!rapidApi.requireKey(res)) return
+  // Weather is optional; avoid noisy 5xx responses when RapidAPI isn't configured/subscribed.
+  if (!process.env.RAPIDAPI_KEY || !String(process.env.RAPIDAPI_KEY).trim()) {
+    return res.status(200).json({ error: 'RAPIDAPI_KEY not configured. Set in API .env to enable Meteostat.', body: null, _failed: true })
+  }
   const lat = req.query.lat != null ? parseFloat(req.query.lat) : null
   const lon = req.query.lon != null ? parseFloat(req.query.lon) : null
+  const cacheKey = `${Number.isFinite(lat) ? lat.toFixed(2) : 'na'},${Number.isFinite(lon) ? lon.toFixed(2) : 'na'}`
+  const cached = weatherNearbyCache.get(cacheKey)
+  if (cached) return res.json({ ...cached, _cached: true })
   try {
     const { body, error } = await rapidApi.fetchMeteostatNearest(lat, lon)
-    if (error) return res.status(502).json({ error, body: null })
-    res.json(body || {})
+    if (error) {
+      const stale = weatherNearbyCache.get(cacheKey)
+      if (stale) return res.json({ ...stale, _cached: true, _staleOnError: true, _error: error })
+      return res.status(200).json({ error, body: null, _failed: true })
+    }
+    const payload = body || {}
+    weatherNearbyCache.set(cacheKey, payload)
+    res.json(payload)
   } catch (err) {
     console.error('[API /weather/nearby]', err.message)
-    res.status(500).json({ error: err.message })
+    res.status(200).json({ error: err.message, body: null, _failed: true })
   }
 })
 
@@ -559,6 +618,18 @@ router.get('/adsb', async (req, res) => {
   } catch (err) {
     console.error('[API /adsb]', err.message)
     res.status(500).json({ error: err.message })
+  }
+})
+
+/** adsb.lol mil feed proxy (avoids browser CORS). GET /api/adsb/mil */
+router.get('/adsb/mil', async (_req, res) => {
+  try {
+    const { data } = await axios.get('https://api.adsb.lol/v2/mil', { timeout: 15000, validateStatus: (s) => s >= 200 && s < 500 })
+    // adsb.lol returns JSON; pass-through (frontend normalizes to FeatureCollection).
+    res.json(data || {})
+  } catch (err) {
+    console.warn('[API /adsb/mil]', err.message)
+    res.status(502).json({ error: 'Failed to fetch mil aircraft feed' })
   }
 })
 
@@ -702,22 +773,51 @@ router.get('/geocode', async (req, res) => {
   }
 })
 
-/** SearXNG search (set SEARXNG_URL in .env to your instance, or uses default public). */
-const SEARXNG_URL = (process.env.SEARXNG_URL || 'https://search.bus-hit.me').replace(/\/$/, '')
+/** Web search: Brave Search (if BRAVE_SEARCH_API_KEY set) else rotating SearXNG instances. Same response shape. */
+const { performBraveSearch } = require('../services/search/braveSearch')
+const { performSearxSearch } = require('../services/search/searxRouter')
+
+const BRAVE_SEARCH_API_KEY = (process.env.BRAVE_SEARCH_API_KEY || '').trim()
+
 router.get('/search/searxng', async (req, res) => {
   const q = (req.query.q || '').trim()
   if (!q) return res.status(400).json({ error: 'q required' })
+
+  // 1) Try Brave Search first when key is set (reliable, same styling in-app)
+  if (BRAVE_SEARCH_API_KEY) {
+    try {
+      const brave = await performBraveSearch(q, BRAVE_SEARCH_API_KEY)
+      if (brave && Array.isArray(brave.results)) {
+        return res.json({ results: brave.results, query: brave.query || q })
+      }
+    } catch (err) {
+      console.warn('[API /search/searxng] Brave fallback', err.message)
+    }
+  }
+
+  // 2) Fallback: rotating SearXNG instances
   try {
-    const { data } = await axios.get(`${SEARXNG_URL}/search`, {
-      params: { q, format: 'json' },
-      headers: { 'Accept': 'application/json' },
-      timeout: 15000,
-    })
-    const results = data.results || []
-    res.json({ results, query: data.query || q })
+    const data = await performSearxSearch(q)
+    if (data.error) {
+      return res.status(502).json({
+        error: BRAVE_SEARCH_API_KEY
+          ? 'Search failed. Try again or use "Open DuckDuckGo in new tab" below.'
+          : 'Search failed. Set BRAVE_SEARCH_API_KEY in the API .env for reliable results, or use "Open DuckDuckGo in new tab" below.',
+      })
+    }
+    const results = (data.results || []).map((r) => ({
+      title: r.title,
+      url: r.url,
+      content: r.snippet || r.content || '',
+    }))
+    return res.json({ results, query: data.query || q })
   } catch (err) {
     console.warn('[API /search/searxng]', err.message)
-    res.status(502).json({ error: 'Search failed. Set SEARXNG_URL to your SearXNG instance if needed.' })
+    return res.status(502).json({
+      error: BRAVE_SEARCH_API_KEY
+        ? 'Search failed. Try again or use "Open DuckDuckGo in new tab" below.'
+        : 'Search failed. Set BRAVE_SEARCH_API_KEY in the API .env for reliable results, or use "Open DuckDuckGo in new tab" below.',
+    })
   }
 })
 
@@ -853,16 +953,19 @@ router.get('/clusters', (req, res) => {
 
 router.get('/forum/categories', async (_req, res) => {
   if (!requireForumBackend(res)) return
+  const t0 = Date.now()
   const { data, error } = await supabaseAdmin
     .from('forum_categories')
     .select('*')
     .order('name', { ascending: true })
   if (error) return res.status(500).json({ error: error.message })
+  if (communityDebugEnabled()) console.log('[COMMUNITY API /forum/categories] OUTPUT', { count: data?.length || 0, ms: Date.now() - t0 })
   res.json(data || [])
 })
 
 router.get('/forum/communities', async (req, res) => {
   if (!requireForumBackend(res)) return
+  const t0 = Date.now()
   const categoryId = String(req.query.category_id || '').trim()
   let query = supabaseAdmin
     .from('forum_communities')
@@ -871,6 +974,7 @@ router.get('/forum/communities', async (req, res) => {
   if (categoryId) query = query.eq('category_id', categoryId)
   const { data, error } = await query
   if (error) return res.status(500).json({ error: error.message })
+  if (communityDebugEnabled()) console.log('[COMMUNITY API /forum/communities] OUTPUT', { categoryId: categoryId || null, count: data?.length || 0, ms: Date.now() - t0 })
   res.json(data || [])
 })
 
@@ -893,19 +997,24 @@ router.post('/forum/community', async (req, res) => {
 
 router.get('/forum/posts', async (req, res) => {
   if (!requireForumBackend(res)) return
+  const t0 = Date.now()
   const communityId = String(req.query.community_id || '').trim()
+  const category = String(req.query.category || '').trim()
   let query = supabaseAdmin
     .from('forum_posts')
-    .select('id,user_id,community_id,title,content,created_at,upvotes,latitude,longitude')
+    .select('id,user_id,community_id,category,title,content,created_at,upvotes,latitude,longitude')
     .order('created_at', { ascending: false })
   if (communityId) query = query.eq('community_id', communityId)
+  if (category) query = query.eq('category', category)
   const { data, error } = await query
   if (error) return res.status(500).json({ error: error.message })
+  if (communityDebugEnabled()) console.log('[COMMUNITY API /forum/posts] OUTPUT', { communityId: communityId || null, category: category || null, count: data?.length || 0, ms: Date.now() - t0 })
   res.json(data || [])
 })
 
 router.get('/forum/post/:id', async (req, res) => {
   if (!requireForumBackend(res)) return
+  const t0 = Date.now()
   const id = String(req.params.id || '').trim()
   if (!id) return res.status(400).json({ error: 'post id required' })
   const { data: postData, error: postError } = await supabaseAdmin
@@ -926,6 +1035,7 @@ router.get('/forum/post/:id', async (req, res) => {
     .from('post_saved_links')
     .select('*')
     .eq('post_id', id)
+  if (communityDebugEnabled()) console.log('[COMMUNITY API /forum/post/:id] OUTPUT', { found: !!post, comments: comments?.length || 0, links: links?.length || 0, ms: Date.now() - t0 })
   res.json({ post, comments: comments || [], links: links || [] })
 })
 
@@ -936,6 +1046,7 @@ router.post('/forum/post', async (req, res) => {
   const title = String(req.body?.title || '').trim().slice(0, 240)
   const content = String(req.body?.content || '').trim()
   const communityId = String(req.body?.community_id || '').trim() || null
+  const category = String(req.body?.category || '').trim() || null
   const latitude = req.body?.latitude != null ? Number(req.body.latitude) : null
   const longitude = req.body?.longitude != null ? Number(req.body.longitude) : null
   const linkedSaved = Array.isArray(req.body?.linked_saved_post_ids) ? req.body.linked_saved_post_ids : []
@@ -945,6 +1056,7 @@ router.post('/forum/post', async (req, res) => {
     title,
     content,
     community_id: communityId,
+    category,
     latitude: Number.isFinite(latitude) ? latitude : null,
     longitude: Number.isFinite(longitude) ? longitude : null,
   }

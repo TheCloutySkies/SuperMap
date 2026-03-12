@@ -13,6 +13,11 @@
   padding: 0.5rem;
 }
 
+.map-controls--explore {
+  left: auto;
+  right: calc(1rem + 44px);
+}
+
 .map-controls-zoom-group {
   display: flex;
   flex-direction: column;
@@ -228,6 +233,26 @@
 
 .measure-bearing {
   color: #8b949e;
+}
+
+.measure-value {
+  min-width: 4em;
+}
+
+.measure-unit-btn {
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  color: #8b949e;
+  font-size: 0.72rem;
+  padding: 2px 6px;
+  cursor: pointer;
+  min-width: 28px;
+}
+
+.measure-unit-btn:hover {
+  color: #e6edf3;
+  background: #30363d;
 }
 
 .measure-reset-btn {

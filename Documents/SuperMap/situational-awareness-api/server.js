@@ -5,7 +5,6 @@ const apiRouter = require('./routes/api')
 const newsService = require('./services/news')
 const osintService = require('./services/osint')
 const osintXFeedService = require('./services/osintXFeedService')
-const redditCommentsIngestor = require('./services/redditCommentsIngestor')
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -26,7 +25,6 @@ app.get('/', (req, res) => {
       events: '/api/events?tag=&type=&startTime=&endTime=&bbox=&limit=',
       search: '/api/search?q=&tag=&entity=&startTime=&endTime=&lat=&lon=&radius=',
       clusters: '/api/clusters?lat=&lon=&radius=&radiusKm=50&days=1',
-      redditSignals: '/api/reddit-signals?limit=50',
       flockCameras: '/api/flock/cameras?city=SanDiego',
       financeScreener: '/api/finance/screener?list=day_gainers',
       financeSearch: '/api/finance/search?search=AA',
@@ -52,7 +50,6 @@ app.get('/health', (req, res) => {
 })
 
 const INGEST_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
-const REDDIT_COMMENTS_INTERVAL_MS = 60 * 1000 // 60 seconds
 // OSINT per-source intervals (DW 10min, CISA 15min, Bellingcat 30min)
 const DW_INTERVAL_MS = 10 * 60 * 1000
 const CISA_INTERVAL_MS = 15 * 60 * 1000
@@ -69,14 +66,6 @@ function runOsintWarmup() {
   osintService.fetchAllOsint()
     .then((counts) => console.log('[osint] Warmup:', counts))
     .catch((e) => console.warn('[osint] Warmup:', e.message))
-}
-
-function runRedditCommentsIngest() {
-  redditCommentsIngestor.runRedditCommentsIngest()
-    .then(({ fetched, ingested }) => {
-      if (ingested > 0) console.log(`[reddit-comments] fetched=${fetched} ingested=${ingested}`)
-    })
-    .catch((e) => console.warn('[reddit-comments]', e.message))
 }
 
 function runOsintXIngest() {
@@ -102,6 +91,4 @@ app.listen(PORT, () => {
   setInterval(() => osintService.fetchTheWarZone().catch((e) => console.warn('[osint] The War Zone:', e.message)), CISA_INTERVAL_MS)
   setTimeout(runOsintXIngest, 10000)
   setInterval(runOsintXIngest, OSINT_X_INTERVAL_MS)
-  setTimeout(() => runRedditCommentsIngest(), 8000)
-  setInterval(runRedditCommentsIngest, REDDIT_COMMENTS_INTERVAL_MS)
 })

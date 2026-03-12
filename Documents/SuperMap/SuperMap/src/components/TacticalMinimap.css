@@ -1,0 +1,93 @@
+.tactical-minimap {
+  position: absolute;
+  bottom: 1rem;
+  left: calc(1rem + 115px); /* next to map scale (maplibregl-ctrl-bottom-left) */
+  right: auto;
+  z-index: 40;
+  width: 140px;
+  height: 100px;
+  background: rgba(13, 17, 23, 0.95);
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.tactical-minimap--minimized {
+  height: 32px;
+}
+
+.tactical-minimap--minimized .tactical-minimap-map {
+  display: none;
+}
+
+.tactical-minimap--hidden {
+  width: auto;
+  height: auto;
+  padding: 0.25rem;
+}
+
+.tactical-minimap-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px;
+  background: rgba(22, 27, 34, 0.98);
+  border-bottom: 1px solid #30363d;
+  font-size: 0.7rem;
+  color: #8b949e;
+}
+
+.tactical-minimap-title {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tactical-minimap-btn {
+  background: none;
+  border: none;
+  color: #8b949e;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.tactical-minimap-btn:hover {
+  color: #e6edf3;
+}
+
+.tactical-minimap-map {
+  width: 100%;
+  height: calc(100% - 24px);
+  min-height: 60px;
+}
+
+.tactical-minimap-toggle {
+  background: rgba(13, 17, 23, 0.95);
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  color: #8b949e;
+  padding: 4px 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.tactical-minimap-toggle:hover {
+  color: #e6edf3;
+  border-color: #484f58;
+}
+
+@media (max-width: 900px) {
+  .tactical-minimap {
+    width: 100px;
+    height: 72px;
+    bottom: 0.75rem;
+    left: calc(0.75rem + 90px);
+    right: auto;
+  }
+  .tactical-minimap-map {
+    min-height: 44px;
+  }
+}

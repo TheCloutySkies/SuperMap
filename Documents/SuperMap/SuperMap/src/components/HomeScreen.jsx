@@ -112,8 +112,8 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
         <div className="home-screen-main">
           <div className="home-screen-main-left">
             <div className="home-screen-featured">
-              <p className="home-screen-featured-title">Open-source OSINT & tactical dashboard</p>
-              <p className="home-screen-featured-sub">— This tool is like Palantir if it wasn&apos;t evil.</p>
+              <p className="home-screen-featured-title">Welcome to SuperMap</p>
+              <p className="home-screen-featured-sub">See current events, use the maps to see what&apos;s going on around you, and a huge library of OSINT resources — all at your fingertips. It&apos;s kind of like a personal Palantir if Palantir wasn&apos;t evil and ushering in a surveillance state.</p>
             </div>
             <section className="home-screen-section">
               <h2 className="home-screen-section-title">Quick access</h2>

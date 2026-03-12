@@ -356,6 +356,19 @@
   color: #58a6ff;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.feeds-news-card-favicon {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  object-fit: cover;
+  flex: 0 0 auto;
 }
 
 .feeds-news-card-date {

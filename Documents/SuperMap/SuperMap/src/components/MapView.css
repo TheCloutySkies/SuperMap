@@ -6,11 +6,55 @@
   background: #0d1117;
 }
 
+.coordinates-display-wrap {
+  position: absolute;
+  bottom: 2.5rem;
+  left: 1rem;
+  z-index: 50;
+}
+
+/* Explore: weather + coordinates stacked top-center */
+.explore-top-stack {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.explore-top-stack .weather-compact-wrap {
+  position: static;
+  transform: none;
+}
+
+.coordinates-display-wrap--under-weather {
+  position: static;
+  bottom: auto;
+  left: auto;
+}
+
+.weather-compact-wrap {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+}
+
 .map-view,
 .map-container {
   width: 100%;
   height: 100%;
-  background: #0d1117;
+  background: #0d1117 !important; /* avoid white flash while tiles load; keep dark in light theme */
+}
+/* MapLibre canvas: dark so no white before style loads */
+.map-view-wrapper .maplibregl-canvas-container,
+.map-view-wrapper .maplibregl-canvas {
+  background: #0d1117 !important;
 }
 /* Prevent Mapbox Draw default UI from covering the map when displayControlsDefault: false */
 .mapbox-gl-draw_ctrl-bottom-left,
@@ -205,3 +249,4 @@
 .map-popup-read-more:hover {
   text-decoration: underline;
 }
+

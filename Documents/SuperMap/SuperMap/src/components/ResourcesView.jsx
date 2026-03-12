@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import './ResourcesView.css'
 
-const RESOURCE_SECTIONS = [
+export const RESOURCE_SECTIONS = [
   {
     id: 'search',
     title: '🌍 Search & Recon',
@@ -103,11 +103,22 @@ const RESOURCE_SECTIONS = [
       { name: 'Cloudflare Radar', url: 'https://radar.cloudflare.com', desc: 'Internet traffic', embed: true },
     ],
   },
+  {
+    id: 'registries',
+    title: '📋 Official registries & radio',
+    items: [
+      { name: 'NSOPW (Sex Offender Registry)', url: 'https://www.nsopw.gov', desc: 'Official US national sex offender public website — search by location. Use only for lawful purposes.' },
+      { name: 'FCC ASR Search', url: 'https://wireless2.fcc.gov/UlsApp/AsrSearch/asrRegistrationSearch.jsp', desc: 'FCC Antenna Structure Registration search' },
+      { name: 'FCC Open Data', url: 'https://opendata.fcc.gov', desc: 'FCC open data catalog (towers, licenses, etc.)' },
+      { name: 'RadioReference', url: 'https://www.radioreference.com', desc: 'Radio frequency database and trunked systems' },
+      { name: 'FLOCK Surveillance Map', url: 'https://ringmast4r.github.io/FLOCK/', desc: 'Flock Safety ALPR camera network map (336k+ cameras)' },
+    ],
+  },
 ]
 
 const ALL_CATEGORIES = [{ id: '', label: 'All categories' }, ...RESOURCE_SECTIONS.map((s) => ({ id: s.id, label: s.title }))]
 
-export default function ResourcesView() {
+export default function ResourcesView({ resourcesScrollRef }) {
   const [embedUrl, setEmbedUrl] = useState(null)
   const [embedTitle, setEmbedTitle] = useState('')
   const [filterText, setFilterText] = useState('')
@@ -122,6 +133,17 @@ export default function ResourcesView() {
     setEmbedUrl(null)
     setEmbedTitle('')
   }
+
+  useEffect(() => {
+    if (!resourcesScrollRef) return
+    resourcesScrollRef.current = {
+      scrollToSection: (id) => {
+        const el = document.getElementById('section-' + id)
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      },
+    }
+    return () => { if (resourcesScrollRef?.current) resourcesScrollRef.current.scrollToSection = null }
+  }, [resourcesScrollRef, filterText, categoryId])
 
   const q = (filterText || '').trim().toLowerCase()
   const filteredSections = useMemo(() => {
@@ -193,7 +215,7 @@ export default function ResourcesView() {
             <p className="resources-no-results">No resources match the filter.</p>
           ) : (
             filteredSections.map((section) => (
-              <section key={section.id} className="resources-section">
+              <section key={section.id} id={'section-' + section.id} className="resources-section">
                 <h2 className="resources-section-title">{section.title}</h2>
                 <ul className="resources-list">
                   {section.items.map((item) => (

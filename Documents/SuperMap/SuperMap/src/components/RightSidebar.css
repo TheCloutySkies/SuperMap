@@ -76,6 +76,28 @@
   margin-left: 1.5rem;
 }
 
+.overlay-opacity-row {
+  margin-top: 0.5rem;
+}
+
+.overlay-opacity-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--y2k-text-muted);
+}
+
+.overlay-opacity-slider {
+  flex: 1;
+  accent-color: #58a6ff;
+}
+
+.overlay-opacity-value {
+  min-width: 2.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .toggle-list {
   display: flex;
   flex-direction: column;

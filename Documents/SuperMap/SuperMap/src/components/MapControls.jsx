@@ -21,7 +21,7 @@ function bearing(lat1, lon1, lat2, lon2) {
   return (((Math.atan2(y, x) * 180) / Math.PI) + 360) % 360
 }
 
-export default function MapControls({ map }) {
+export default function MapControls({ map, activeView }) {
   const [zoom, setZoom] = useState(2)
   const [mapBearing, setMapBearing] = useState(0)
   const [locating, setLocating] = useState(false)
@@ -32,6 +32,7 @@ export default function MapControls({ map }) {
   const [measureMode, setMeasureMode] = useState(false)
   const [measurePoints, setMeasurePoints] = useState([])
   const [measureResult, setMeasureResult] = useState(null)
+  const [measureUnit, setMeasureUnit] = useState('km') // 'km' | 'mi'
   const measureModeRef = useRef(false)
   const measurePointsRef = useRef([])
 
@@ -61,9 +62,9 @@ export default function MapControls({ map }) {
     measurePointsRef.current = pts
     setMeasurePoints(pts)
     if (pts.length === 2) {
-      const dist = haversineDistance(pts[0][1], pts[0][0], pts[1][1], pts[1][0])
+      const distKm = haversineDistance(pts[0][1], pts[0][0], pts[1][1], pts[1][0])
       const brng = bearing(pts[0][1], pts[0][0], pts[1][1], pts[1][0])
-      setMeasureResult({ distance: dist, bearing: brng })
+      setMeasureResult({ distanceKm: distKm, bearing: brng })
     }
   }, [])
 
@@ -183,9 +184,11 @@ export default function MapControls({ map }) {
     ? spaceWx.kp >= 5 ? '#ef4444' : spaceWx.kp >= 4 ? '#f59e0b' : spaceWx.kp >= 3 ? '#eab308' : '#22c55e'
     : '#8b949e'
 
+  const isExplore = activeView === 'explore-map'
+
   return (
     <>
-      <div className="map-controls">
+      <div className={`map-controls${isExplore ? ' map-controls--explore' : ''}`}>
         <div className="map-controls-zoom-group">
           <button type="button" className="map-control-btn metallicss" onClick={zoomIn} aria-label="Zoom in">
             +
@@ -219,7 +222,7 @@ export default function MapControls({ map }) {
         </button>
       </div>
 
-      {spaceWx && (
+      {!isExplore && spaceWx && (
         <div
           className="space-wx-badge"
           title={`Kp ${spaceWx.kp.toFixed(1)} — ${spaceWx.label}. NOAA planetary K-index: geomagnetic activity (0–9). Affects radio & GPS.`}
@@ -238,8 +241,17 @@ export default function MapControls({ map }) {
           {!measureResult && measurePoints.length === 1 && <span>Click second point</span>}
           {measureResult && (
             <>
-              <span>{measureResult.distance < 1 ? `${(measureResult.distance * 1000).toFixed(0)} m` : `${measureResult.distance.toFixed(2)} km`}</span>
+              <span className="measure-value">
+                {measureUnit === 'mi'
+                  ? (measureResult.distanceKm < 0.001609344
+                    ? `${(measureResult.distanceKm * 1000 * 3.28084).toFixed(0)} ft`
+                    : `${(measureResult.distanceKm / 1.609344).toFixed(2)} mi`)
+                  : (measureResult.distanceKm < 1 ? `${(measureResult.distanceKm * 1000).toFixed(0)} m` : `${measureResult.distanceKm.toFixed(2)} km`)}
+              </span>
               <span className="measure-bearing">{measureResult.bearing.toFixed(1)}°</span>
+              <button type="button" className="measure-unit-btn metallicss" onClick={() => setMeasureUnit((u) => (u === 'km' ? 'mi' : 'km'))} title="Switch km / miles">
+                {measureUnit === 'km' ? 'km' : 'mi'}
+              </button>
               <button type="button" className="measure-reset-btn metallicss" onClick={resetMeasure}>Reset</button>
             </>
           )}

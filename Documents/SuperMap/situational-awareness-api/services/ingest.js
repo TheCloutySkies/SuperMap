@@ -90,6 +90,7 @@ function eventToFeature(event) {
     timestamp: event.timestamp,
     link: raw.link || raw.url,
     description: event.description,
+    thumbnail: raw.thumbnail || raw.image || raw.thumbnailUrl || null,
   }
   if (event.lat != null && event.lon != null) {
     return {

@@ -8,6 +8,7 @@ const SavedPlacesContext = createContext({
   listMeta: [],
   loading: false,
   addPlace: async () => {},
+  updatePlace: async () => {},
   removePlace: async () => {},
   clearPlaces: async () => {},
   createList: async () => {},
@@ -86,7 +87,32 @@ export function SavedPlacesProvider({ children }) {
       notes: String(place?.notes || '').slice(0, 1000),
     }
     if (!Number.isFinite(row.lat) || !Number.isFinite(row.lon)) throw new Error('Invalid coordinates')
-    const { error } = await supabase.from('saved_places').insert(row)
+    const { data: created, error } = await supabase.from('saved_places').insert(row).select('id, title, lat, lon, icon, list_name, list_id, notes, created_at').single()
+    if (error) throw error
+    await fetchPlaces()
+    return created
+  }, [user?.id, fetchPlaces])
+
+  const updatePlace = useCallback(async (id, updates) => {
+    if (!supabase || !user?.id) throw new Error('Sign in required')
+    const payload = {}
+    if (updates.title !== undefined) payload.title = String(updates.title).slice(0, 120)
+    if (updates.icon !== undefined) payload.icon = String(updates.icon).slice(0, 8)
+    if (updates.notes !== undefined) payload.notes = String(updates.notes).slice(0, 1000)
+    if (updates.listName !== undefined) {
+      const listName = String(updates.listName).trim().slice(0, 80)
+      let listId = null
+      const { data: existing } = await supabase.from('saved_place_lists').select('id').eq('user_id', user.id).eq('name', listName).limit(1)
+      if (existing?.[0]?.id) listId = existing[0].id
+      else {
+        const { data: created } = await supabase.from('saved_place_lists').insert({ user_id: user.id, name: listName }).select('id').limit(1)
+        listId = created?.[0]?.id || null
+      }
+      payload.list_name = listName || 'General'
+      payload.list_id = listId
+    }
+    if (Object.keys(payload).length === 0) return
+    const { error } = await supabase.from('saved_places').update(payload).eq('user_id', user.id).eq('id', id)
     if (error) throw error
     await fetchPlaces()
   }, [user?.id, fetchPlaces])
@@ -216,7 +242,7 @@ export function SavedPlacesProvider({ children }) {
   }, [places, listMeta])
 
   return (
-    <SavedPlacesContext.Provider value={{ places, lists: listNames, listMeta, loading, addPlace, removePlace, clearPlaces, createList, renameList, deleteList, movePlacesToList, refresh: fetchPlaces }}>
+    <SavedPlacesContext.Provider value={{ places, lists: listNames, listMeta, loading, addPlace, updatePlace, removePlace, clearPlaces, createList, renameList, deleteList, movePlacesToList, refresh: fetchPlaces }}>
       {children}
     </SavedPlacesContext.Provider>
   )

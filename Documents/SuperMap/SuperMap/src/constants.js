@@ -35,6 +35,11 @@ export const DEFAULT_LAYER_TOGGLES = {
   dayNightTerminator: false,
   ukraineFrontline: false,
   iodaOutages: false,
+  fccTowers: false,
+  flockCameras: false,
+  dataCenters: false,
+  odintRegions: false,
+  surveillanceCapabilities: false,
 }
 
 export function getAoiFeatures() {
@@ -72,11 +77,11 @@ export function setSavedPoints(fc) {
 export const DEFAULT_TAB_VISIBILITY = {
   osintMap: true,
   conflictMap: true,
+  exploreMap: true,
   osintFeeds: true,
   newsFeeds: true,
   osintX: true,
   places: true,
-  advancedSearch: true,
   broadcasts: true,
   saved: true,
   updates: true,
@@ -210,6 +215,56 @@ export const BASEMAPS = [
     ],
     labels: [
       'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+    ],
+    tileSize: 256,
+  },
+  {
+    id: 'osm-standard',
+    label: 'OpenStreetMap (POIs & places)',
+    type: 'raster',
+    attribution: '© OpenStreetMap',
+    tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+    tileSize: 256,
+  },
+  {
+    id: 'carto-voyager',
+    label: 'Carto Voyager',
+    type: 'raster',
+    attribution: '© CARTO',
+    tiles: [
+      'https://a.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}.png',
+      'https://b.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}.png',
+      'https://c.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}.png',
+    ],
+    tileSize: 256,
+  },
+  {
+    id: 'nasa-black-marble',
+    label: 'NASA Black Marble (night lights)',
+    type: 'raster',
+    attribution: 'NASA, Esri',
+    tiles: [
+      'https://tiles.arcgis.com/tiles/P3ePLMYs2RVChkJx/arcgis/rest/services/Earth_at_Night_WM/MapServer/tile/{z}/{y}/{x}',
+    ],
+    tileSize: 256,
+  },
+  {
+    id: 'esri-hillshade',
+    label: 'ESRI Hillshade',
+    type: 'raster',
+    attribution: 'Esri',
+    tiles: [
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}',
+    ],
+    tileSize: 256,
+  },
+  {
+    id: 'usgs-national-map',
+    label: 'USGS National Map (USA)',
+    type: 'raster',
+    attribution: 'USGS',
+    tiles: [
+      'https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}',
     ],
     tileSize: 256,
   },

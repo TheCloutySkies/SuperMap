@@ -15,7 +15,11 @@ const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.
 
 function useRichEditor(content, onChange) {
   return useEditor({
-    extensions: [StarterKit, Link.configure({ openOnClick: false })],
+    // StarterKit already bundles a Link extension; disable it there and add our configured Link once.
+    extensions: [
+      StarterKit.configure({ link: false }),
+      Link.configure({ openOnClick: false }),
+    ],
     content,
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
   })
@@ -53,6 +57,14 @@ function parseHashRoute() {
   return { kind: 'community-list', id: null }
 }
 
+function communityDebugEnabled() {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem('supermap_debug_community') === '1'
+  } catch {
+    return false
+  }
+}
+
 async function authHeaders() {
   if (!supabase) return {}
   const { data } = await supabase.auth.getSession()
@@ -67,7 +79,6 @@ export default function CommunityView({ onSignInRequired }) {
   const { savedPosts } = useSavedXPosts()
   const [route, setRoute] = useState(() => parseHashRoute())
   const [categories, setCategories] = useState([])
-  const [communities, setCommunities] = useState([])
   const [posts, setPosts] = useState([])
   const [thread, setThread] = useState({ post: null, comments: [], links: [] })
   const [selectedCategory, setSelectedCategory] = useState('')
@@ -108,12 +119,16 @@ export default function CommunityView({ onSignInRequired }) {
     setLoading(true)
     setError('')
     try {
-      const [catRes, commRes] = await Promise.all([
-        axios.get(`${API_BASE}/api/forum/categories`, { timeout: 12000 }),
-        axios.get(`${API_BASE}/api/forum/communities`, { timeout: 12000 }),
-      ])
+      const t0 = Date.now()
+      if (communityDebugEnabled()) console.debug('[COMMUNITY base] INPUT', { api: API_BASE })
+      const catRes = await axios.get(`${API_BASE}/api/forum/categories`, { timeout: 12000 })
+      if (communityDebugEnabled()) {
+        console.debug('[COMMUNITY base] OUTPUT', {
+          categories: Array.isArray(catRes.data) ? catRes.data.length : 0,
+          ms: Date.now() - t0,
+        })
+      }
       setCategories(Array.isArray(catRes.data) ? catRes.data : [])
-      setCommunities(Array.isArray(commRes.data) ? commRes.data : [])
     } catch (err) {
       setError(err?.response?.data?.error || err?.message || 'Could not load forum')
     } finally {
@@ -127,21 +142,41 @@ export default function CommunityView({ onSignInRequired }) {
 
   useEffect(() => {
     if (route.kind !== 'community-detail') return
+    const category = categories.find((c) => c.id === route.id)
+    if (!category) return
     setLoading(true)
+    const t0 = Date.now()
+    if (communityDebugEnabled()) console.debug('[COMMUNITY posts] INPUT', { category: category.name })
     axios.get(`${API_BASE}/api/forum/posts`, {
-      params: { community_id: route.id },
+      params: { category: category.name },
       timeout: 12000,
     })
-      .then((res) => setPosts(Array.isArray(res.data) ? res.data : []))
+      .then((res) => {
+        const list = Array.isArray(res.data) ? res.data : []
+        setPosts(list)
+        if (communityDebugEnabled()) console.debug('[COMMUNITY posts] OUTPUT', { count: list.length, ms: Date.now() - t0 })
+      })
       .catch((err) => setError(err?.response?.data?.error || err?.message || 'Could not load posts'))
       .finally(() => setLoading(false))
-  }, [route.kind, route.id])
+  }, [route.kind, route.id, categories])
 
   useEffect(() => {
     if (route.kind !== 'post-thread') return
     setLoading(true)
+    const t0 = Date.now()
+    if (communityDebugEnabled()) console.debug('[COMMUNITY thread] INPUT', { post_id: route.id })
     axios.get(`${API_BASE}/api/forum/post/${route.id}`, { timeout: 12000 })
-      .then((res) => setThread(res.data || { post: null, comments: [], links: [] }))
+      .then((res) => {
+        setThread(res.data || { post: null, comments: [], links: [] })
+        if (communityDebugEnabled()) {
+          console.debug('[COMMUNITY thread] OUTPUT', {
+            hasPost: !!res.data?.post,
+            comments: Array.isArray(res.data?.comments) ? res.data.comments.length : 0,
+            links: Array.isArray(res.data?.links) ? res.data.links.length : 0,
+            ms: Date.now() - t0,
+          })
+        }
+      })
       .catch((err) => setError(err?.response?.data?.error || err?.message || 'Could not load thread'))
       .finally(() => setLoading(false))
   }, [route.kind, route.id])
@@ -152,6 +187,7 @@ export default function CommunityView({ onSignInRequired }) {
     try {
       setError('')
       const headers = await authHeaders()
+      if (communityDebugEnabled()) console.debug('[COMMUNITY create-community] INPUT', { category_id: selectedCategory, name: communityName.trim() })
       await axios.post(`${API_BASE}/api/forum/community`, {
         name: communityName.trim(),
         description: communityDescription.trim(),
@@ -167,13 +203,16 @@ export default function CommunityView({ onSignInRequired }) {
 
   const createPost = async () => {
     if (!user) return onSignInRequired?.()
-    const targetCommunityId = route.kind === 'community-detail' ? route.id : postCommunityId
-    if (!postTitle.trim() || !targetCommunityId) return
+    const targetCategoryId = route.kind === 'community-detail' ? route.id : postCommunityId
+    if (!postTitle.trim() || !targetCategoryId) return
+    const category = categories.find((c) => c.id === targetCategoryId)
+    if (!category) return
     try {
       setError('')
       const headers = await authHeaders()
+      if (communityDebugEnabled()) console.debug('[COMMUNITY create-post] INPUT', { category: category.name, title: postTitle.trim(), linked: selectedSavedLinks.length })
       const res = await axios.post(`${API_BASE}/api/forum/post`, {
-        community_id: targetCommunityId,
+        category: category.name,
         title: postTitle.trim(),
         content: postHtml,
         linked_saved_post_ids: selectedSavedLinks,
@@ -193,6 +232,7 @@ export default function CommunityView({ onSignInRequired }) {
     try {
       setError('')
       const headers = await authHeaders()
+      if (communityDebugEnabled()) console.debug('[COMMUNITY create-comment] INPUT', { post_id: route.id, parent_id: parentId })
       await axios.post(`${API_BASE}/api/forum/comment`, {
         post_id: route.id,
         content: commentHtml,
@@ -225,7 +265,7 @@ export default function CommunityView({ onSignInRequired }) {
   }
 
   if (route.kind === 'community-detail') {
-    const community = communities.find((c) => c.id === route.id)
+    const community = categories.find((c) => c.id === route.id)
     return (
       <div className="community-view">
         <button type="button" onClick={() => { window.location.hash = '#/community' }}>← Back to Communities</button>
@@ -299,10 +339,10 @@ export default function CommunityView({ onSignInRequired }) {
       {error && <p className="community-error">{error}</p>}
       {loading ? <p>Loading…</p> : (
         <div className="community-list">
-          {communities.map((c) => (
+          {categories.map((c) => (
             <button key={c.id} type="button" className="community-row" onClick={() => { window.location.hash = `#/community/${c.id}` }}>
               <strong>{c.name}</strong>
-              <span>{c.description || 'No description'}</span>
+              <span>{c.description || 'Category'}</span>
             </button>
           ))}
         </div>
@@ -311,7 +351,7 @@ export default function CommunityView({ onSignInRequired }) {
         <h3>Create post</h3>
         <select value={postCommunityId} onChange={(e) => setPostCommunityId(e.target.value)}>
           <option value="">Select community</option>
-          {communities.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <input value={postTitle} onChange={(e) => setPostTitle(e.target.value)} placeholder="Post title" />
         <EditorToolbar editor={postEditor} />
@@ -330,16 +370,6 @@ export default function CommunityView({ onSignInRequired }) {
         <button type="button" onClick={createPost} disabled={!postCommunityId || !postTitle.trim()}>
           Publish post
         </button>
-      </div>
-      <div className="community-card">
-        <h3>Create community</h3>
-        <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
-          <option value="">Select category</option>
-          {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <input value={communityName} onChange={(e) => setCommunityName(e.target.value)} placeholder="Community name" />
-        <textarea value={communityDescription} onChange={(e) => setCommunityDescription(e.target.value)} placeholder="Description" rows={3} />
-        <button type="button" onClick={createCommunity}>Create community</button>
       </div>
       <div className="community-card">
         <h3>Request new category</h3>

@@ -155,6 +155,7 @@ const FEEDS = [
   { url: 'https://rss.politico.com/defense.xml', name: 'POLITICO Defense' },
   { url: 'https://rss.politico.com/politics-news.xml', name: 'POLITICO Politics' },
   { url: 'https://www.foreignaffairs.com/rss.xml', name: 'Foreign Affairs' },
+  { url: 'https://www.crisisgroup.org/rss', name: 'International Crisis Group' },
 ]
 
 async function fetchFeed(feed) {

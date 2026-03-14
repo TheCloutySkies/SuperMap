@@ -28,6 +28,7 @@ const SOURCE_SECTIONS_NEWS = [
   { key: 'all', label: 'All sources' },
   { key: 'Al Jazeera', label: 'Al Jazeera' },
   { key: 'Foreign Affairs', label: 'Foreign Affairs' },
+  { key: 'International Crisis Group', label: 'International Crisis Group' },
   { key: 'POLITICO Defense', label: 'POLITICO Defense' },
   { key: 'POLITICO Politics', label: 'POLITICO Politics' },
   { key: 'Reddit', label: 'Reddit RSS' },

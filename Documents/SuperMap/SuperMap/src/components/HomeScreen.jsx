@@ -350,6 +350,11 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
                       <span className="home-screen-gas-prices-unit">{gasPrices.unit}</span>
                       <span className="home-screen-gas-prices-updated">Updated {gasPrices.updatedAt}</span>
                     </div>
+                  ) : gasPrices.gasUnavailable ? (
+                    <p className="home-screen-gas-prices-no-data">
+                      Unable to load gas prices. For reliable data, add <code>EIA_API_KEY</code> to your backend <code>.env</code> (free at{' '}
+                      <a href="https://www.eia.gov/opendata/register.php" target="_blank" rel="noopener noreferrer">eia.gov/opendata</a>), or try again later.
+                    </p>
                   ) : gasPrices.requiresEiaKey ? (
                     <p className="home-screen-gas-prices-no-data">
                       Real-time data requires an EIA API key. Add <code>EIA_API_KEY</code> to your backend <code>.env</code>. Free key at{' '}

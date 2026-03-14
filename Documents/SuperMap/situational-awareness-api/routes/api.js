@@ -1762,6 +1762,64 @@ router.get('/space', async (req, res) => {
   res.json(out)
 })
 
+/** NIFC WFIGS: enrich wildfire with acres, containment %, discovery date. GET /api/wildfire-detail?name=Yellow&state=Texas */
+const NIFC_WFIGS_QUERY = 'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query'
+const STATE_NAME_TO_ABBR = {
+  Alabama: 'AL', Alaska: 'AK', Arizona: 'AZ', Arkansas: 'AR', California: 'CA', Colorado: 'CO', Connecticut: 'CT',
+  Delaware: 'DE', 'District of Columbia': 'DC', Florida: 'FL', Georgia: 'GA', Hawaii: 'HI', Idaho: 'ID',
+  Illinois: 'IL', Indiana: 'IN', Iowa: 'IA', Kansas: 'KS', Kentucky: 'KY', Louisiana: 'LA', Maine: 'ME',
+  Maryland: 'MD', Massachusetts: 'MA', Michigan: 'MI', Minnesota: 'MN', Mississippi: 'MS', Missouri: 'MO',
+  Montana: 'MT', Nebraska: 'NE', Nevada: 'NV', 'New Hampshire': 'NH', 'New Jersey': 'NJ', 'New Mexico': 'NM',
+  'New York': 'NY', 'North Carolina': 'NC', 'North Dakota': 'ND', Ohio: 'OH', Oklahoma: 'OK', Oregon: 'OR',
+  Pennsylvania: 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC', 'South Dakota': 'SD', Tennessee: 'TN',
+  Texas: 'TX', Utah: 'UT', Vermont: 'VT', Virginia: 'VA', Washington: 'WA', 'West Virginia': 'WV', Wisconsin: 'WI', Wyoming: 'WY',
+}
+router.get('/wildfire-detail', async (req, res) => {
+  const name = (req.query.name || req.query.q || '').trim().replace(/,.*$/, '').slice(0, 40)
+  const stateRaw = (req.query.state || '').trim()
+  const stateAbbr = stateRaw.length === 2 ? stateRaw.toUpperCase() : (STATE_NAME_TO_ABBR[stateRaw] || stateRaw.slice(0, 2).toUpperCase())
+  if (!name) return res.json({ ok: false, nifc: null })
+
+  try {
+    let where = "poly_FeatureAccess = 'Public' AND poly_FeatureStatus = 'Approved' AND poly_IsVisible = 'Yes' AND poly_DeleteThis = 'No'"
+    const esc = (s) => String(s).replace(/'/g, "''").slice(0, 50)
+    if (name) where += ` AND (poly_IncidentName LIKE '%${esc(name)}%' OR attr_IncidentName LIKE '%${esc(name)}%')`
+    if (stateAbbr && stateAbbr.length === 2) where += ` AND (attr_POOState = '${esc(stateAbbr)}' OR attr_POOState = ' ${esc(stateAbbr)}')`
+
+    const resp = await axios.get(NIFC_WFIGS_QUERY, {
+      timeout: 12000,
+      params: {
+        where,
+        outFields: 'poly_IncidentName,attr_IncidentName,poly_GISAcres,attr_IncidentSize,attr_CalculatedAcres,attr_FinalAcres,attr_PercentContained,attr_FireDiscoveryDateTime,attr_POOState,attr_IncidentShortDescription',
+        returnGeometry: false,
+        resultRecordCount: 5,
+        orderByFields: 'attr_IncidentSize DESC',
+        f: 'json',
+      },
+    })
+    const features = resp.data?.features || []
+    const attrs = features[0]?.attributes
+    if (!attrs) return res.json({ ok: true, nifc: null })
+
+    const acres = attrs.poly_GISAcres ?? attrs.attr_IncidentSize ?? attrs.attr_CalculatedAcres ?? attrs.attr_FinalAcres
+    const discovery = attrs.attr_FireDiscoveryDateTime ? new Date(attrs.attr_FireDiscoveryDateTime).toISOString() : null
+    res.json({
+      ok: true,
+      nifc: {
+        incidentName: attrs.poly_IncidentName || attrs.attr_IncidentName,
+        acres: acres != null ? Math.round(Number(acres)) : null,
+        percentContained: attrs.attr_PercentContained != null ? Math.round(Number(attrs.attr_PercentContained)) : null,
+        discoveryDate: discovery,
+        state: attrs.attr_POOState ? String(attrs.attr_POOState).trim() : null,
+        description: attrs.attr_IncidentShortDescription ? String(attrs.attr_IncidentShortDescription).slice(0, 300) : null,
+      },
+    })
+  } catch (e) {
+    console.warn('[API /wildfire-detail] NIFC error:', e.message)
+    res.json({ ok: false, nifc: null })
+  }
+})
+
 /** US states + DC for gas price lookup. Order: name for dropdown. */
 const US_GAS_STATES = [
   { code: 'AL', name: 'Alabama' }, { code: 'AK', name: 'Alaska' }, { code: 'AZ', name: 'Arizona' }, { code: 'AR', name: 'Arkansas' },
@@ -1794,41 +1852,60 @@ const GASBUDDY_STATE_ZIPS = {
   WV: '25301', WI: '53201', WY: '82001',
 }
 
+const GASBUDDY_GRAPHQL_URLS = [
+  'https://www.gasbuddy.com/graphql',
+  'https://gasbuddy.com/graphql',
+]
+
+function parseGasBuddyTrends(data) {
+  const loc = data?.data?.locationBySearchTerm
+  const trends = loc?.trends ?? loc?.trend
+  const arr = Array.isArray(trends) ? trends : (trends ? [trends] : [])
+  const first = arr[0]
+  if (!first) return null
+  const price = first.today != null ? Number(first.today) : (first.todayLow != null ? Number(first.todayLow) : null)
+  if (price == null || Number.isNaN(price)) return null
+  return { price: Number(price.toFixed(2)), areaName: first.areaName || '' }
+}
+
 /** GasBuddy GraphQL: fetch price for a zip. Returns { price, areaName } or null. */
 async function fetchGasBuddyPrice(searchTerm) {
-  const query = `query LocationBySearchTerm($search: String, $fuel: Int, $maxAge: Int) {
-    locationBySearchTerm(search: $search, fuel: $fuel, maxAge: $maxAge) {
-      trends { areaName country today todayLow }
-    }
-  }`
-  try {
-    const res = await axios.post(
-      'https://www.gasbuddy.com/graphql',
-      {
-        operationName: 'LocationBySearchTerm',
-        variables: { fuel: 1, maxAge: 0, search: searchTerm },
-        query,
-      },
-      {
-        timeout: 10000,
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        },
-        validateStatus: () => true,
-      }
-    )
-    const data = res.data?.data?.locationBySearchTerm
-    const trends = data?.trends
-    const first = Array.isArray(trends) && trends.length ? trends[0] : null
-    if (!first) return null
-    const price = first.today != null ? Number(first.today) : (first.todayLow != null ? Number(first.todayLow) : null)
-    if (price == null || Number.isNaN(price)) return null
-    return { price: Number(price.toFixed(2)), areaName: first.areaName || searchTerm }
-  } catch (err) {
-    console.warn('[API /gas-prices] GasBuddy error:', err.message)
-    return null
+  const body = {
+    operationName: 'LocationBySearchTerm',
+    variables: { fuel: 1, maxAge: 0, search: String(searchTerm || '') },
+    query: `query LocationBySearchTerm($search: String, $fuel: Int, $maxAge: Int) {
+  locationBySearchTerm(search: $search, fuel: $fuel, maxAge: $maxAge) {
+    trends { areaName country today todayLow }
   }
+}`,
+  }
+  const opts = {
+    timeout: 10000,
+    headers: {
+      'Content-Type': 'application/json',
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'application/json',
+    },
+    validateStatus: () => true,
+  }
+  for (const url of GASBUDDY_GRAPHQL_URLS) {
+    try {
+      const res = await axios.post(url, body, opts)
+      if (res.data?.errors?.length) {
+        console.warn('[API /gas-prices] GasBuddy GraphQL errors:', res.data.errors[0]?.message || res.data.errors)
+        continue
+      }
+      const parsed = parseGasBuddyTrends(res.data)
+      if (parsed) return { ...parsed, areaName: parsed.areaName || searchTerm }
+      if (res.status === 403 || res.status === 429) {
+        console.warn('[API /gas-prices] GasBuddy', res.status, url)
+        continue
+      }
+    } catch (err) {
+      console.warn('[API /gas-prices] GasBuddy', url, err.message)
+    }
+  }
+  return null
 }
 
 /** US gas prices: EIA when key set; else GasBuddy (no key). Real data only. */
@@ -1843,13 +1920,15 @@ router.get('/gas-prices', async (req, res) => {
   const unit = 'USD/gal'
   const updatedAt = new Date().toLocaleTimeString(undefined, { timeStyle: 'short' })
 
-  const emptyPayload = (requiresEiaKey = false) => {
+  const emptyPayload = (opts = {}) => {
+    const { requiresEiaKey = false, gasUnavailable = false } = opts
     const payload = {
       national: null,
       unit,
       regions: [],
       states: [],
       requiresEiaKey,
+      gasUnavailable,
       updatedAt,
     }
     gasPricesCache.set(cacheKey, payload)
@@ -1874,7 +1953,7 @@ router.get('/gas-prices', async (req, res) => {
       gasPricesCache.set(cacheKey, payload)
       return res.json(payload)
     }
-    return emptyPayload(true)
+    return emptyPayload({ gasUnavailable: true })
   }
 
   let nationalVal = null

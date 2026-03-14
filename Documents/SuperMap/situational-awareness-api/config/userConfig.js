@@ -19,6 +19,13 @@ const DEFAULT_SUBREDDITS = [
   'drones', 'technology',
 ]
 
+const DEFAULT_STOCK_TICKERS = [
+  { symbol: 'SPY', name: 'S&P 500' },
+  { symbol: 'CL=F', name: 'Oil (WTI)' },
+  { symbol: 'GC=F', name: 'Gold' },
+  { symbol: 'BINANCE:BTCUSDT', name: 'Bitcoin' },
+]
+
 function readConfig() {
   try {
     const raw = fs.readFileSync(CONFIG_PATH, 'utf8')
@@ -44,6 +51,9 @@ function getConfig() {
   return {
     osintXHandles: Array.isArray(user.osintXHandles) ? user.osintXHandles : DEFAULT_OSINT_X,
     subreddits: Array.isArray(user.subreddits) ? user.subreddits : DEFAULT_SUBREDDITS,
+    stockTickers: Array.isArray(user.stockTickers) && user.stockTickers.length > 0
+      ? user.stockTickers
+      : DEFAULT_STOCK_TICKERS,
     defaultOsintXHandles: DEFAULT_OSINT_X,
   }
 }
@@ -52,6 +62,7 @@ function setConfig(updates) {
   const current = readConfig()
   if (updates.osintXHandles !== undefined) current.osintXHandles = updates.osintXHandles
   if (updates.subreddits !== undefined) current.subreddits = updates.subreddits
+  if (updates.stockTickers !== undefined) current.stockTickers = updates.stockTickers
   writeConfig(current)
   return getConfig()
 }
@@ -103,4 +114,9 @@ function getSubreddits() {
   return subreddits
 }
 
-module.exports = { getConfig, setConfig, getOsintXFeeds, getNitterMirrors, getSubreddits }
+function getStockTickers() {
+  const { stockTickers } = getConfig()
+  return Array.isArray(stockTickers) && stockTickers.length > 0 ? stockTickers : DEFAULT_STOCK_TICKERS
+}
+
+module.exports = { getConfig, setConfig, getOsintXFeeds, getNitterMirrors, getSubreddits, getStockTickers }

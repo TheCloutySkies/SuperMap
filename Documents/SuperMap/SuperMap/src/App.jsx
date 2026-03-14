@@ -22,7 +22,10 @@ import CommunityView from './components/CommunityView'
 import BroadcastsView from './components/BroadcastsView'
 import SettingsView from './components/SettingsView'
 import ResourcesView, { RESOURCE_SECTIONS } from './components/ResourcesView'
+import ToolsView from './components/ToolsView'
+import { TOOLS_LIST } from './components/toolsList'
 import SearchResultsView from './components/SearchResultsView'
+import { getWidgetMatches } from './components/widgetSearchIndex'
 import SavedArticlesView from './components/SavedArticlesView'
 import HeaderAuth from './components/HeaderAuth'
 import AuthModal from './components/AuthModal'
@@ -45,12 +48,13 @@ function initMetallicss() {
   })
 }
 
-const FOOTER_MODES = { HOME: 'HOME', MAPS: 'MAPS', FEEDS: 'FEEDS', COMMUNITY: 'COMMUNITY', RESOURCES: 'RESOURCES', REPORTS: 'REPORTS', SETTINGS: 'SETTINGS' }
+const FOOTER_MODES = { HOME: 'HOME', MAPS: 'MAPS', FEEDS: 'FEEDS', COMMUNITY: 'COMMUNITY', TOOLS: 'TOOLS', RESOURCES: 'RESOURCES', REPORTS: 'REPORTS', SETTINGS: 'SETTINGS' }
 
 const MAP_VIEWS = [
   { id: 'osint-map', label: 'OSINT Map', tabKey: 'osintMap' },
   { id: 'conflict-map', label: 'Conflict Map', tabKey: 'conflictMap' },
   { id: 'explore-map', label: 'Explore', tabKey: 'exploreMap' },
+  { id: 'geolocate-map', label: 'Geolocate', tabKey: 'geolocateMap' },
 ]
 
 const FEED_VIEWS = [
@@ -103,12 +107,15 @@ function App() {
   const [prefetchedNews, setPrefetchedNews] = useState(null)
   const [bannerXItems, setBannerXItems] = useState([])
   const [visualsKey, setVisualsKey] = useState(0)
+  const handleVisualsChange = useCallback(() => setVisualsKey((k) => k + 1), [])
   const [eventCountry, setEventCountry] = useState('')
   const [eventFilterByView, setEventFilterByView] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [showTutorial, setShowTutorial] = useState(false)
   const [deviceType, setDeviceType] = useState('desktop')
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true)
+  const [activeToolId, setActiveToolId] = useState(TOOLS_LIST[0]?.id ?? null)
+  const [isLeftSidebarMinimized, setIsLeftSidebarMinimized] = useState(false)
   const [settingsUserId, setSettingsUserId] = useState(null)
   const [footerTransition, setFooterTransition] = useState(false)
   const prevFooterModeRef = useRef(null)
@@ -195,7 +202,7 @@ function App() {
     } catch {}
   }, [])
 
-  const isMapView = ['osint-map', 'conflict-map', 'explore-map'].includes(activeView)
+  const isMapView = ['osint-map', 'conflict-map', 'explore-map', 'geolocate-map'].includes(activeView)
   const isFeedView = ['osint-feeds', 'news-feeds', 'osint-x', 'my-places', 'my-reports', 'my-comments', 'advanced-search', 'saved', 'updates', 'broadcasts'].includes(activeView)
   const isSettingsView = activeView === 'settings'
   const tabVisibility = getTabVisibility(settingsUserId)
@@ -206,6 +213,7 @@ function App() {
     else if (mode === FOOTER_MODES.MAPS) setActiveView('osint-map')
     else if (mode === FOOTER_MODES.FEEDS) setActiveView('news-feeds')
     else if (mode === FOOTER_MODES.COMMUNITY) setActiveView('community')
+    else if (mode === FOOTER_MODES.TOOLS) setActiveView('tools')
     else if (mode === FOOTER_MODES.RESOURCES) setActiveView('resources')
     else if (mode === FOOTER_MODES.REPORTS) setActiveView('report-maker')
     else if (mode === FOOTER_MODES.SETTINGS) setActiveView('settings')
@@ -218,6 +226,7 @@ function App() {
     else if (viewId === 'community') setFooterMode(FOOTER_MODES.COMMUNITY)
     else if (viewId === 'my-account') setFooterMode(FOOTER_MODES.SETTINGS)
     else if (viewId === 'home') setFooterMode(FOOTER_MODES.HOME)
+    else if (viewId === 'tools') setFooterMode(FOOTER_MODES.TOOLS)
     else if (viewId === 'resources') setFooterMode(FOOTER_MODES.RESOURCES)
     else if (viewId === 'report-maker') setFooterMode(FOOTER_MODES.REPORTS)
     else if (viewId === 'settings') setFooterMode(FOOTER_MODES.SETTINGS)
@@ -321,46 +330,72 @@ function App() {
       </header>
       <div className="app-body">
       {activeView !== 'home' && activeView !== 'settings' && activeView !== 'search-results' && activeView !== 'report-maker' && activeView !== 'my-account' && activeView !== 'community' && (
-        <aside className="sidebar sidebar-left">
-          <h1 className="sidebar-title">SuperMap</h1>
-          <nav className="nav">
-            {activeView === 'resources' ? (
-              <div className="sidebar-resources-nav">
-                {RESOURCE_SECTIONS.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    className="sidebar-resources-link"
-                    onClick={() => resourcesScrollRef.current?.scrollToSection?.(s.id)}
-                  >
-                    {s.title}
-                  </button>
-                ))}
-              </div>
-            ) : footerMode === FOOTER_MODES.MAPS ? (
-              MAP_VIEWS.map((v) => (
-                <TabButton
-                  key={v.id}
-                  viewId={v.id}
-                  label={v.label}
-                  visible={tabVisibility[v.tabKey]}
-                  activeView={activeView}
-                  setActiveView={setActiveViewWithMode}
-                />
-              ))
-            ) : footerMode === FOOTER_MODES.FEEDS ? (
-              FEED_VIEWS.map((v) => (
-                <TabButton
-                  key={v.id}
-                  viewId={v.id}
-                  label={v.label}
-                  visible={v.id === 'osint-x' ? true : tabVisibility[v.tabKey]}
-                  activeView={activeView}
-                  setActiveView={setActiveViewWithMode}
-                />
-              ))
-            ) : null}
-          </nav>
+        <aside className={`sidebar sidebar-left ${isLeftSidebarMinimized ? 'sidebar-left--minimized' : ''}`}>
+          <div className="sidebar-head">
+            <h1 className="sidebar-title">SuperMap</h1>
+            <button
+              type="button"
+              className="sidebar-minimize-btn"
+              onClick={() => setIsLeftSidebarMinimized((m) => !m)}
+              aria-label={isLeftSidebarMinimized ? 'Expand sidebar' : 'Minimize sidebar'}
+              title={isLeftSidebarMinimized ? 'Expand sidebar' : 'Minimize sidebar'}
+            >
+              {isLeftSidebarMinimized ? '→' : '←'}
+            </button>
+          </div>
+          {!isLeftSidebarMinimized && (
+            <nav className="nav">
+              {activeView === 'resources' ? (
+                <div className="sidebar-resources-nav">
+                  {RESOURCE_SECTIONS.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className="sidebar-resources-link"
+                      onClick={() => resourcesScrollRef.current?.scrollToSection?.(s.id)}
+                    >
+                      {s.title}
+                    </button>
+                  ))}
+                </div>
+              ) : activeView === 'tools' ? (
+                <div className="sidebar-tools-nav">
+                  {TOOLS_LIST.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className={`sidebar-tools-link ${activeToolId === t.id ? 'active' : ''}`}
+                      onClick={() => setActiveToolId(t.id)}
+                    >
+                      {t.title}
+                    </button>
+                  ))}
+                </div>
+              ) : footerMode === FOOTER_MODES.MAPS ? (
+                MAP_VIEWS.map((v) => (
+                  <TabButton
+                    key={v.id}
+                    viewId={v.id}
+                    label={v.label}
+                    visible={tabVisibility[v.tabKey]}
+                    activeView={activeView}
+                    setActiveView={setActiveViewWithMode}
+                  />
+                ))
+              ) : footerMode === FOOTER_MODES.FEEDS ? (
+                FEED_VIEWS.map((v) => (
+                  <TabButton
+                    key={v.id}
+                    viewId={v.id}
+                    label={v.label}
+                    visible={v.id === 'osint-x' ? true : tabVisibility[v.tabKey]}
+                    activeView={activeView}
+                    setActiveView={setActiveViewWithMode}
+                  />
+                ))
+              ) : null}
+            </nav>
+          )}
         </aside>
       )}
 
@@ -375,6 +410,7 @@ function App() {
                   { key: FOOTER_MODES.MAPS, label: 'MAPS' },
                   { key: FOOTER_MODES.FEEDS, label: 'FEEDS' },
                   { key: FOOTER_MODES.COMMUNITY, label: 'COMMUNITY' },
+                  { key: FOOTER_MODES.TOOLS, label: 'TOOLS' },
                   { key: FOOTER_MODES.RESOURCES, label: 'RESOURCES' },
                   { key: FOOTER_MODES.REPORTS, label: 'REPORT MAKER' },
                   { key: FOOTER_MODES.SETTINGS, label: 'SETTINGS' },
@@ -398,7 +434,7 @@ function App() {
               </button>
             )}
             <MapView
-              basemapId={basemapId}
+              basemapId={activeView === 'geolocate-map' ? 'osm-standard' : basemapId}
               overlayBasemapId={overlayBasemapId}
               overlayOpacity={overlayOpacity}
               layerToggles={layerToggles}
@@ -483,6 +519,7 @@ function App() {
           </div>
         )}
         {activeView === 'resources' && <ResourcesView resourcesScrollRef={resourcesScrollRef} />}
+        {activeView === 'tools' && <ToolsView activeToolId={activeToolId} onToolChange={setActiveToolId} />}
         {activeView === 'report-maker' && (
           <div className="main-content-scroll">
             <ReportMakerView />
@@ -492,16 +529,24 @@ function App() {
           <SearchResultsView
             query={searchQuery}
             features={searchResultsGeoJson?.features || []}
+            widgetMatches={getWidgetMatches(searchQuery)}
             onFlyTo={handleFlyTo}
             onShowOnMap={() => { setActiveView('osint-map'); setFooterMode(FOOTER_MODES.MAPS) }}
             onBack={() => setActiveView('home')}
+            onNavigateToWidget={(sectionId) => {
+              setActiveView('home')
+              setFooterMode(FOOTER_MODES.HOME)
+              setTimeout(() => {
+                document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }, 150)
+            }}
           />
         )}
         {activeView === 'settings' && (
           <SettingsView
             apiBase={apiBase}
             settingsUserId={settingsUserId}
-            onVisualsChange={() => setVisualsKey((k) => k + 1)}
+            onVisualsChange={handleVisualsChange}
           />
         )}
       </main>
@@ -531,7 +576,8 @@ function App() {
       </div>
 
       <footer className="footer">
-        <div className="footer-switch">
+        <div className="footer-nav-wrap">
+          <div className="footer-switch">
           <button
             className={`footer-btn metallicss ${footerMode === FOOTER_MODES.HOME ? 'active' : ''}`}
             onClick={() => handleFooterNav(FOOTER_MODES.HOME)}
@@ -557,6 +603,12 @@ function App() {
             COMMUNITY
           </button>
           <button
+            className={`footer-btn metallicss ${footerMode === FOOTER_MODES.TOOLS ? 'active' : ''}`}
+            onClick={() => handleFooterNav(FOOTER_MODES.TOOLS)}
+          >
+            TOOLS
+          </button>
+          <button
             className={`footer-btn metallicss ${footerMode === FOOTER_MODES.RESOURCES ? 'active' : ''}`}
             onClick={() => handleFooterNav(FOOTER_MODES.RESOURCES)}
           >
@@ -574,6 +626,7 @@ function App() {
           >
             SETTINGS
           </button>
+          </div>
         </div>
         <div className="footer-copyright">
           © {new Date().getFullYear()} TheCloutySkies

@@ -7,13 +7,13 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      // In dev, /api/* goes to the backend so feeds work without CORS or wrong port
+      // In dev, /api/* goes to the situational-awareness-api (port 3001)
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:3001',
         changeOrigin: true,
       },
       '/health': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:3001',
         changeOrigin: true,
       },
     },

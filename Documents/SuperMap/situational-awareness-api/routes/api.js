@@ -8,7 +8,7 @@ const osintService = require('../services/osint')
 const safetyService = require('../services/safety')
 const infrastructureService = require('../services/infrastructure')
 const { searchAll } = require('../services/searchIndex')
-const { getEventsForSearch, getEvents, getEventTagNames } = require('../database')
+const { getEventsForSearch, getEvents, getEventTagNames, getEventsWithAnyTagInTimeRange } = require('../database')
 const { PRIORITY_ORDER } = require('../services/osintXFeedService')
 const { correlate } = require('../services/correlation')
 const rapidApi = require('../services/rapidApi')
@@ -16,8 +16,11 @@ const userConfig = require('../config/userConfig')
 const { extractPlaces, geocodePlace, geotagArticle } = require('../services/geotagger')
 const { normalizeToEvent, ingestEvent, eventToFeature } = require('../services/ingest')
 const crypto = require('crypto')
+const path = require('path')
+const fs = require('fs')
 const nodemailer = require('nodemailer')
 const { createClient } = require('@supabase/supabase-js')
+const Parser = require('rss-parser')
 const { getAllCameras } = require('../camera-discovery/storage/saveCamera')
 const { loadSeedCameras } = require('../camera-discovery/storage/cameraSeeds')
 
@@ -25,6 +28,13 @@ const searchCache = new NodeCache({ stdTTL: 15 })
 const geocodeCache = new NodeCache({ stdTTL: 24 * 60 * 60, checkperiod: 120 })
 const weatherNearbyCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 })
 const weatherHourlyCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 })
+const threatSummaryCache = new NodeCache({ stdTTL: 60 * 60, checkperiod: 300 })
+const stocksCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 60 })
+const netblocksCache = new NodeCache({ stdTTL: 15 * 60, checkperiod: 120 })
+const earthquakesWidgetCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 60 })
+const spaceCache = new NodeCache({ stdTTL: 60 * 60, checkperiod: 300 })
+const conflictMetricsCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 })
+const gasPricesCache = new NodeCache({ stdTTL: 30 * 60, checkperiod: 300 })
 const MAPBOX_TOKEN = process.env.MAPBOX_TOKEN || ''
 const GEOAPIFY_KEY = process.env.GEOAPIFY_KEY || ''
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || ''
@@ -178,6 +188,68 @@ router.get('/osint', (req, res) => {
   }
 })
 
+const THREAT_SUMMARY_FILE = path.join(__dirname, '..', 'data', 'last-threat-summary.json')
+
+function readPersistedThreatSummary() {
+  try {
+    const raw = fs.readFileSync(THREAT_SUMMARY_FILE, 'utf8')
+    const data = JSON.parse(raw)
+    if (data && typeof data.summary === 'string') return { ...data, _persisted: true }
+  } catch (_) {}
+  return null
+}
+
+function writePersistedThreatSummary(payload) {
+  try {
+    const dir = path.dirname(THREAT_SUMMARY_FILE)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(THREAT_SUMMARY_FILE, JSON.stringify(payload, null, 0), 'utf8')
+  } catch (e) {
+    console.warn('[API /threat-summary] Could not persist:', e.message)
+  }
+}
+
+/** AI threat summary. Cached 60 min; persisted to file so we avoid extra requests. Use ?refresh=1 to regenerate. */
+router.get('/threat-summary', async (req, res) => {
+  const cacheKey = 'threat-summary'
+  const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
+  if (!forceRefresh) {
+    const cached = threatSummaryCache.get(cacheKey)
+    if (cached) return res.json(cached)
+    const persisted = readPersistedThreatSummary()
+    if (persisted) return res.json(persisted)
+  }
+  try {
+    const threatSummaryService = require('../services/threatSummary')
+    const result = await threatSummaryService.getThreatSummary()
+    const payload = {
+      summary: result.summary,
+      narrative: result.narrative,
+      threat_level: result.threat_level,
+      threat_score: result.threat_score,
+      sources: result.sources || [],
+      timestamp: result.timestamp || new Date().toISOString(),
+      bullets: result.bullets,
+      fallback: result.fallback,
+    }
+    threatSummaryCache.set(cacheKey, payload)
+    writePersistedThreatSummary(payload)
+    res.json(payload)
+  } catch (err) {
+    console.error('[API /threat-summary]', err.message)
+    const persisted = readPersistedThreatSummary()
+    if (persisted) return res.json(persisted)
+    res.status(500).json({
+      error: 'Failed to generate threat summary',
+      summary: '',
+      threat_level: 'GUARDED',
+      threat_score: 2,
+      sources: [],
+      timestamp: new Date().toISOString(),
+    })
+  }
+})
+
 /** OSINT X configured feeds and mirrors (for verification). GET /api/osint-x/feeds */
 router.get('/osint-x/feeds', (req, res) => {
   try {
@@ -194,33 +266,38 @@ router.get('/osint-x/feeds', (req, res) => {
   }
 })
 
-/** OSINT X (Twitter RSS) feed: GET /api/osint-x?limit=100 */
+const OSINT_X_MAX_AGE_MS = 12 * 60 * 60 * 1000 // 12 hours
+
+/** OSINT X (Twitter RSS) feed: GET /api/osint-x?limit=100. Only returns posts from the last 12 hours. */
 router.get('/osint-x', (req, res) => {
   const t0 = Date.now()
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 100, 200)
     const rows = getEvents(limit, null, null, null, null, ['x'])
-    const posts = rows.map((r) => {
-      let raw = {}
-      try {
-        raw = r.raw_data ? JSON.parse(r.raw_data) : {}
-      } catch (_) {}
-      const tags = getEventTagNames(r.id)
-      const priority = raw.priority || 'medium'
-      return {
-        id: r.id,
-        source: 'x',
-        account: raw.account || 'x',
-        title: r.title,
-        content: r.description,
-        timestamp: r.timestamp,
-        tags,
-        priority,
-        url: raw.link || raw.url,
-        images: Array.isArray(raw.images) ? raw.images : [],
-        videos: Array.isArray(raw.videos) ? raw.videos : [],
-      }
-    })
+    const cutoff = Date.now() - OSINT_X_MAX_AGE_MS
+    const posts = rows
+      .filter((r) => (r.timestamp != null ? Number(r.timestamp) : 0) >= cutoff)
+      .map((r) => {
+        let raw = {}
+        try {
+          raw = r.raw_data ? JSON.parse(r.raw_data) : {}
+        } catch (_) {}
+        const tags = getEventTagNames(r.id)
+        const priority = raw.priority || 'medium'
+        return {
+          id: r.id,
+          source: 'x',
+          account: raw.account || 'x',
+          title: r.title,
+          content: r.description,
+          timestamp: r.timestamp,
+          tags,
+          priority,
+          url: raw.link || raw.url,
+          images: Array.isArray(raw.images) ? raw.images : [],
+          videos: Array.isArray(raw.videos) ? raw.videos : [],
+        }
+      })
     posts.sort((a, b) => {
       const pa = PRIORITY_ORDER[a.priority] ?? 2
       const pb = PRIORITY_ORDER[b.priority] ?? 2
@@ -313,6 +390,38 @@ router.get('/earthquakes', async (req, res) => {
   } catch (err) {
     console.error('[API /earthquakes]', err.message)
     res.status(500).json({ error: 'Failed to fetch earthquakes' })
+  }
+})
+
+/** Widget: recent earthquakes (USGS 2.5+ week). Cache 5 min. */
+router.get('/earthquakes/widget', async (req, res) => {
+  const cacheKey = 'earthquakes-widget'
+  const cached = earthquakesWidgetCache.get(cacheKey)
+  if (cached) return res.json({ ...cached, _cached: true })
+  try {
+    const resUsgs = await axios.get('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson', { timeout: 10000 })
+    const features = resUsgs.data?.features || []
+    const events = features.slice(0, 12).map((f) => {
+      const p = f.properties || {}
+      return {
+        id: f.id,
+        mag: p.mag,
+        place: (p.place || '').replace(/^\d+\s+km\s+(?:[NESW]+\s+of\s+)?/i, '').trim().slice(0, 50) || '—',
+        time: p.time,
+      }
+    })
+    const payload = {
+      events,
+      updatedAt: new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }),
+    }
+    earthquakesWidgetCache.set(cacheKey, payload)
+    res.json(payload)
+  } catch (err) {
+    console.warn('[API /earthquakes/widget]', err.message)
+    res.json({
+      events: [],
+      updatedAt: new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }),
+    })
   }
 })
 
@@ -621,12 +730,36 @@ router.get('/adsb', async (req, res) => {
   }
 })
 
+/** adsb.lol API proxy (see https://api.adsb.lol/docs). GET /api/adsb-lol/airport/:icao */
+router.get('/adsb-lol/airport/:icao', async (req, res) => {
+  const icao = (req.params.icao || '').trim().toUpperCase()
+  if (!icao || icao.length !== 4) return res.status(400).json({ error: 'ICAO code required (4 characters)' })
+  try {
+    const { data, status } = await axios.get(`https://api.adsb.lol/api/0/airport/${encodeURIComponent(icao)}`, {
+      timeout: 10000,
+      validateStatus: (s) => s >= 200 && s < 500,
+      responseType: 'json',
+    })
+    if (status !== 200) return res.status(status).json(data || { error: 'adsb.lol airport lookup failed' })
+    res.json(data)
+  } catch (err) {
+    console.warn('[API /adsb-lol/airport]', err.message)
+    res.status(502).json({ error: err.message || 'adsb.lol unavailable' })
+  }
+})
+
 /** adsb.lol mil feed proxy (avoids browser CORS). GET /api/adsb/mil */
 router.get('/adsb/mil', async (_req, res) => {
   try {
-    const { data } = await axios.get('https://api.adsb.lol/v2/mil', { timeout: 15000, validateStatus: (s) => s >= 200 && s < 500 })
-    // adsb.lol returns JSON; pass-through (frontend normalizes to FeatureCollection).
-    res.json(data || {})
+    const { data, status } = await axios.get('https://api.adsb.lol/v2/mil', {
+      timeout: 15000,
+      validateStatus: () => true,
+      responseType: 'json',
+    })
+    if (status !== 200 || !data) {
+      return res.status(200).json(typeof data === 'object' ? data : {})
+    }
+    res.json(data)
   } catch (err) {
     console.warn('[API /adsb/mil]', err.message)
     res.status(502).json({ error: 'Failed to fetch mil aircraft feed' })
@@ -1178,6 +1311,605 @@ router.post('/category-approve', async (req, res) => {
     .eq('id', requestId)
   if (updateError) return res.status(500).json({ error: updateError.message })
   res.json({ approved: true, category: categoryRows?.[0] || null })
+})
+
+/** Homepage widgets: stocks. Uses Finnhub (candles), else Alpha Vantage (quotes), else demo. Cache 2 min (demo) / 5 min (live). */
+router.get('/stocks', async (req, res) => {
+  let symbols = userConfig.getStockTickers()
+  const querySymbols = (req.query.symbols || '').trim()
+  if (querySymbols) {
+    symbols = querySymbols.split(/[\s,]+/).filter(Boolean).map((s) => { const sym = s.trim(); return { symbol: sym, name: sym } })
+  }
+  if (!symbols.length) symbols = [{ symbol: 'SPY', name: 'S&P 500' }]
+  const cacheKey = 'stocks:' + symbols.map((s) => s.symbol).sort().join(',')
+  const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
+  const cached = !forceRefresh ? stocksCache.get(cacheKey) : null
+  if (cached) return res.json({ ...cached, _cached: true })
+
+  const FINNHUB_KEY = (process.env.FINNHUB_API_KEY || '').trim()
+  const ALPHA_KEY = (process.env.ALPHAVANTAGE_API_KEY || '').trim()
+  const now = Date.now()
+  const timestamps = []
+  for (let i = 23; i >= 0; i--) {
+    const d = new Date(now - i * 60 * 60 * 1000)
+    timestamps.push(d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }))
+  }
+
+  const pushPayload = (payload, ttlSec = 300) => {
+    stocksCache.set(cacheKey, payload, ttlSec)
+    return res.json(payload)
+  }
+
+  // Keyless first: Yahoo Finance chart API + CoinGecko. No API keys, accurate data.
+  const normalizeKeyless = (s) => {
+    const raw = (s.symbol || '').toUpperCase().replace(/=F$/, '').trim()
+    const name = (s.name || s.symbol || '').trim()
+    const nameLower = name.toLowerCase()
+    if (/^(CL|WTI|USO)$/.test(raw) || nameLower.includes('oil')) return { source: 'yahoo', symbol: 'USO', name: name || 'Oil (WTI)' }
+    if (/^(GC|GLD)$/.test(raw) || nameLower.includes('gold')) return { source: 'yahoo', symbol: 'GLD', name: name || 'Gold' }
+    if (/^(BTC|BTCUSD|BINANCE:BTCUSDT)$/.test(raw) || nameLower.includes('bitcoin')) return { source: 'coingecko', id: 'bitcoin', name: name || 'Bitcoin' }
+    return { source: 'yahoo', symbol: raw || s.symbol, name: name || raw || s.symbol }
+  }
+
+  try {
+    const keylessSymbols = symbols.slice(0, 5).map(normalizeKeyless)
+    const current = []
+    const series = []
+    for (const n of keylessSymbols) {
+      if (n.source === 'yahoo') {
+        const chartRes = await axios.get(
+          `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(n.symbol)}?interval=1d&range=5d`,
+          { timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' } }
+        )
+        const result = chartRes.data?.chart?.result?.[0]
+        const meta = result?.meta
+        const quote = result?.indicators?.quote?.[0]
+        const price = meta?.regularMarketPrice ?? meta?.chartPreviousClose ?? (Array.isArray(quote?.close) ? quote.close.filter((v) => v != null).pop() : null)
+        const numPrice = price != null ? Number(price) : null
+        const prevClose = meta?.previousClose ?? meta?.chartPreviousClose ?? null
+        const numPrev = prevClose != null ? Number(prevClose) : null
+        const closes = Array.isArray(quote?.close) ? quote.close.filter((v) => v != null) : []
+        const pct = (numPrice != null && numPrev != null && numPrev !== 0)
+          ? (((numPrice - numPrev) / numPrev) * 100).toFixed(2) + '%'
+          : (numPrice != null ? '0.00%' : '—')
+        current.push({ symbol: n.name, value: numPrice != null ? Number(numPrice).toFixed(2) : '—', change: pct })
+        series.push({
+          name: n.name,
+          values: closes.length ? closes : (numPrice != null ? [numPrice] : []),
+        })
+      } else if (n.source === 'coingecko') {
+        const cgRes = await axios.get(
+          `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(n.id)}&vs_currencies=usd&include_24hr_change=true`,
+          { timeout: 8000 }
+        )
+        const data = cgRes.data?.[n.id]
+        const price = data?.usd != null ? Number(data.usd) : null
+        const change24 = data?.usd_24h_change != null ? Number(data.usd_24h_change) : null
+        const pct = change24 != null ? (change24 >= 0 ? '+' : '') + change24.toFixed(2) + '%' : (price != null ? '0.00%' : '—')
+        current.push({ symbol: n.name, value: price != null ? Number(price).toFixed(2) : '—', change: pct })
+        let sparkline = []
+        try {
+          const mcRes = await axios.get(
+            `https://api.coingecko.com/api/v3/coins/${n.id}/market_chart?vs_currency=usd&days=1`,
+            { timeout: 6000 }
+          )
+          const prices = mcRes.data?.prices
+          if (Array.isArray(prices) && prices.length > 0) sparkline = prices.map((p) => p[1]).filter((v) => v != null)
+        } catch (_) { /* optional */ }
+        series.push({ name: n.name, values: sparkline.length ? sparkline : (price != null ? [price] : []) })
+      }
+    }
+    if (current.length > 0) {
+      const want = 24
+      const padSeries = series.map((s) => ({
+        ...s,
+        values: s.values.length >= want ? s.values.slice(-want) : [...Array(want - s.values.length).fill(null), ...s.values].slice(-want),
+      }))
+      const genTs = []
+      for (let i = 0; i < want; i++) {
+        const d = new Date(now - (want - 1 - i) * 60 * 60 * 1000)
+        genTs.push(d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }))
+      }
+      return pushPayload({
+        timestamps: genTs,
+        series: padSeries,
+        current,
+        updatedAt: new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }),
+      })
+    }
+  } catch (err) {
+    console.warn('[API /stocks] Keyless (Yahoo/CoinGecko) error:', err.message)
+  }
+
+  try {
+    if (FINNHUB_KEY) {
+      const series = []
+      const current = []
+      for (const s of symbols) {
+        const candleRes = await axios.get(
+          `https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(s.symbol)}&resolution=60&from=${Math.floor((now - 24 * 60 * 60 * 1000) / 1000)}&to=${Math.floor(now / 1000)}&token=${FINNHUB_KEY}`,
+          { timeout: 8000 }
+        )
+        const c = candleRes.data
+        const values = Array.isArray(c?.c) ? c.c : []
+        const v = values.length ? values[values.length - 1] : null
+        const prev = values.length > 1 ? values[values.length - 2] : v
+        const pct = (v != null && prev != null && prev !== 0) ? (((v - prev) / prev) * 100).toFixed(2) + '%' : (v != null ? '0.00%' : '—')
+        series.push({ name: s.name || s.symbol, values: values.length ? values : Array(24).fill(null) })
+        current.push({ symbol: s.name || s.symbol, value: v != null ? String(Number(v).toFixed(2)) : '—', change: pct })
+      }
+      return pushPayload({
+        timestamps: timestamps.slice(-(series[0]?.values?.length || 24)),
+        series,
+        current,
+        updatedAt: new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }),
+      })
+    }
+  } catch (err) {
+    console.warn('[API /stocks] Finnhub error:', err.message)
+  }
+
+  if (ALPHA_KEY) {
+    try {
+      // Map user tickers to Alpha Vantage–supported symbols. GLOBAL_QUOTE only supports equities;
+      // use ETF proxies for oil/gold and CRYPTO_INTRADAY for Bitcoin.
+      const normalizeTicker = (s) => {
+        const raw = (s.symbol || '').toUpperCase().replace(/=F$/, '').trim()
+        const name = (s.name || s.symbol || '').trim()
+        const nameLower = name.toLowerCase()
+        if (/^(CL|WTI|USO)$/.test(raw) || nameLower.includes('oil')) {
+          return { api: 'quote', symbol: 'USO', name: name || 'Oil (WTI)' }
+        }
+        if (/^(GC|GLD)$/.test(raw) || nameLower.includes('gold')) {
+          return { api: 'quote', symbol: 'GLD', name: name || 'Gold' }
+        }
+        if (/^(BTC|BTCUSD|BINANCE:BTCUSDT)$/.test(raw) || nameLower.includes('bitcoin')) {
+          return { api: 'crypto', symbol: 'BTC', name: name || 'Bitcoin' }
+        }
+        return { api: 'quote', symbol: raw || s.symbol, name: name || raw || s.symbol }
+      }
+
+      const current = []
+      const series = []
+      const normalized = symbols.slice(0, 5).map(normalizeTicker)
+
+      const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+      for (let i = 0; i < normalized.length; i++) {
+        if (i > 0) await delay(350)
+        const n = normalized[i]
+        const displayName = n.name
+
+        if (n.api === 'crypto') {
+          const cryptoRes = await axios.get(
+            `https://www.alphavantage.co/query?function=CRYPTO_INTRADAY&symbol=${n.symbol}&market=USD&interval=5min&apikey=${ALPHA_KEY}`,
+            { timeout: 10000 }
+          )
+          const tsKey = Object.keys(cryptoRes.data || {}).find((k) => k.toLowerCase().includes('time series'))
+          const timeSeries = tsKey ? cryptoRes.data[tsKey] : null
+          const entries = timeSeries && typeof timeSeries === 'object'
+            ? Object.entries(timeSeries)
+              .sort((a, b) => new Date(a[0]) - new Date(b[0]))
+              .slice(-24)
+            : []
+          const values = entries.map(([, v]) => (v && v['4. close'] != null) ? Number(v['4. close']) : null)
+          const last = values.length ? values[values.length - 1] : null
+          const prev = values.length > 1 ? values[values.length - 2] : last
+          const pct = (last != null && prev != null && prev !== 0)
+            ? (((last - prev) / prev) * 100).toFixed(2) + '%'
+            : (last != null ? '0.00%' : '—')
+          current.push({
+            symbol: displayName,
+            value: last != null ? Number(last).toFixed(2) : '—',
+            change: pct,
+          })
+          series.push({
+            name: displayName,
+            values: values.length ? values : Array(24).fill(null),
+          })
+          continue
+        }
+
+        const q = await axios.get(
+          `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(n.symbol)}&apikey=${ALPHA_KEY}`,
+          { timeout: 8000 }
+        )
+        const quote = q.data?.['Global Quote']
+        const price = quote?.['05. price'] != null ? Number(quote['05. price']) : null
+        const change = quote?.['09. change'] != null ? Number(quote['09. change']) : null
+        const pct = quote?.['10. change percent'] != null ? String(quote['10. change percent']).replace('%', '').trim() + '%' : (price != null ? '0.00%' : '—')
+        current.push({
+          symbol: displayName,
+          value: price != null ? price.toFixed(2) : '—',
+          change: pct,
+        })
+        const base = price != null ? price : 0
+        const vals = []
+        for (let j = 0; j < 24; j++) vals.push(base + (j - 12) * (change != null ? change / 12 : 0))
+        series.push({ name: displayName, values: vals })
+      }
+
+      if (current.length > 0) {
+        return pushPayload({
+          timestamps,
+          series,
+          current,
+          updatedAt: new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }),
+        })
+      }
+    } catch (err) {
+      console.warn('[API /stocks] Alpha Vantage error:', err.message)
+    }
+  }
+
+  const daySeed = Math.floor(now / (24 * 60 * 60 * 1000))
+  const seeded = (i, j) => {
+    const x = Math.sin(daySeed * 1000 + i * 7 + j * 13) * 10000
+    return x - Math.floor(x)
+  }
+  const demoValues = (base, drift, symbolIndex) => {
+    const out = []
+    let v = base
+    for (let j = 0; j < 24; j++) {
+      v = v + (seeded(symbolIndex, j) - 0.48) * drift
+      out.push(Number(v.toFixed(2)))
+    }
+    return out
+  }
+  const bases = [580, 72, 2650, 97500]
+  const drifts = [4, 0.8, 6, 800]
+  const series = symbols.slice(0, 8).map((s, i) => {
+    const b = bases[i % bases.length]
+    const d = drifts[i % drifts.length]
+    return { name: s.name || s.symbol, values: demoValues(b, d, i) }
+  })
+  const current = series.map((s) => {
+    const vals = s.values
+    const v = vals[vals.length - 1]
+    const prev = vals[vals.length - 2]
+    const pct = (v != null && prev != null && prev !== 0) ? (((v - prev) / prev) * 100).toFixed(2) + '%' : (v != null ? '0.00%' : '—')
+    return { symbol: s.name, value: v != null ? Number(v).toFixed(2) : '—', change: pct }
+  })
+  pushPayload({
+    timestamps,
+    series,
+    current,
+    updatedAt: new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }),
+  }, 120)
+})
+
+const NAV_JUNK = /^(posts\s*navigation|more|report|next|previous|menu|home|search)$/i
+function isOutageJunk(title) {
+  if (!title || title.length < 4) return true
+  const t = title.trim()
+  if (NAV_JUNK.test(t)) return true
+  if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(t)) return true
+  return false
+}
+
+/** Internet outage events. Cache 15 min. Tries NetBlocks; filters nav junk; fallback to DownDetector-style placeholder. */
+router.get('/netblocks', async (req, res) => {
+  const cacheKey = 'netblocks'
+  const cached = netblocksCache.get(cacheKey)
+  if (cached) return res.json({ ...cached, _cached: true })
+
+  const events = []
+  try {
+    const reportRes = await axios.get('https://netblocks.org/reports/', { timeout: 10000, headers: { 'User-Agent': 'SuperMap/1.0' } })
+    const html = reportRes.data && typeof reportRes.data === 'string' ? reportRes.data : ''
+    let idx = 0
+    for (const m of html.matchAll(/<article[\s\S]*?<h[23][^>]*>([\s\S]*?)<\/h[\d]>[\s\S]*?<time[^>]*>([^<]*)<\/time>/gi)) {
+      const title = (m[1] || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80)
+      const time = (m[2] || '').trim().slice(0, 30)
+      if (isOutageJunk(title)) continue
+      events.push({ id: `nb-${idx++}`, country: title || 'Outage report', status: 'Outage', time: time || new Date().toLocaleDateString() })
+    }
+    const fromH2 = html.match(/<h2[^>]*>([^<]+)<\/h2>/gi)
+    if (events.length === 0 && fromH2) {
+      fromH2.slice(0, 8).forEach((t, i) => {
+        const title = t.replace(/<[^>]+>/g, '').trim().slice(0, 60)
+        if (!isOutageJunk(title)) events.push({ id: `nb-h2-${i}`, country: title, status: 'Report', time: new Date().toLocaleDateString() })
+      })
+    }
+  } catch (err) {
+    console.warn('[API /netblocks] fetch error:', err.message)
+  }
+
+  if (events.length === 0) {
+    events.push(
+      { id: 'nb-1', country: 'No structured outages', status: '—', time: new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }) },
+      { id: 'nb-2', country: 'Check netblocks.org/reports', status: 'Source', time: '' },
+    )
+  }
+
+  const payload = {
+    events: events.slice(0, 10),
+    updatedAt: new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }),
+  }
+  netblocksCache.set(cacheKey, payload)
+  res.json(payload)
+})
+
+/** NASA space: EONET (global hazards), NASA News, optional APOD. Cache 1 hour. */
+router.get('/space', async (req, res) => {
+  const cacheKey = 'space'
+  const cached = spaceCache.get(cacheKey)
+  if (cached) return res.json({ ...cached, _cached: true })
+
+  const NASA_KEY = (process.env.NASA_API_KEY || '').trim() || 'DEMO_KEY'
+  const out = { updatedAt: new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }) }
+
+  const prescribedFire = /prescribed\s*fire|rx\s*pcs|controlled\s*burn/i
+  try {
+    const eonetRes = await axios.get('https://eonet.gsfc.nasa.gov/api/v3/events?limit=20&status=open', { timeout: 10000 })
+    const events = eonetRes.data?.events
+    if (Array.isArray(events) && events.length > 0) {
+      out.eonet = events
+        .filter((e) => !prescribedFire.test(e.title || '') && !prescribedFire.test((e.categories?.[0]?.title || '')))
+        .slice(0, 8)
+        .map((e) => ({
+          id: e.id,
+          title: e.title || 'Event',
+          category: e.categories?.[0]?.title || 'Natural',
+          date: e.geometry?.[0]?.date || e.lastDate,
+          closed: e.closed || null,
+        }))
+    }
+  } catch (e) {
+    console.warn('[API /space] EONET error:', e.message)
+  }
+
+  try {
+    const parser = new Parser({ timeout: 8000 })
+    const feed = await parser.parseURL('https://www.nasa.gov/rss/dyn/breaking_news.rss')
+    if (feed?.items?.length) {
+      out.nasaNews = feed.items.slice(0, 5).map((i) => ({
+        title: (i.title || '').trim().slice(0, 120),
+        link: i.link || i.guid || '',
+      })).filter((i) => i.title)
+    }
+  } catch (e) {
+    console.warn('[API /space] NASA News RSS error:', e.message)
+  }
+
+  try {
+    const apodRes = await axios.get(`https://api.nasa.gov/planetary/apod?api_key=${NASA_KEY}`, { timeout: 8000 })
+    if (apodRes.data && apodRes.data.url) {
+      out.apod = { url: apodRes.data.url, title: apodRes.data.title || 'Image of the Day' }
+    }
+  } catch (e) {
+    console.warn('[API /space] APOD error:', e.message)
+  }
+
+  spaceCache.set(cacheKey, out)
+  res.json(out)
+})
+
+/** US states + DC for gas price lookup. Order: name for dropdown. */
+const US_GAS_STATES = [
+  { code: 'AL', name: 'Alabama' }, { code: 'AK', name: 'Alaska' }, { code: 'AZ', name: 'Arizona' }, { code: 'AR', name: 'Arkansas' },
+  { code: 'CA', name: 'California' }, { code: 'CO', name: 'Colorado' }, { code: 'CT', name: 'Connecticut' }, { code: 'DE', name: 'Delaware' },
+  { code: 'DC', name: 'District of Columbia' }, { code: 'FL', name: 'Florida' }, { code: 'GA', name: 'Georgia' }, { code: 'HI', name: 'Hawaii' },
+  { code: 'ID', name: 'Idaho' }, { code: 'IL', name: 'Illinois' }, { code: 'IN', name: 'Indiana' }, { code: 'IA', name: 'Iowa' },
+  { code: 'KS', name: 'Kansas' }, { code: 'KY', name: 'Kentucky' }, { code: 'LA', name: 'Louisiana' }, { code: 'ME', name: 'Maine' },
+  { code: 'MD', name: 'Maryland' }, { code: 'MA', name: 'Massachusetts' }, { code: 'MI', name: 'Michigan' }, { code: 'MN', name: 'Minnesota' },
+  { code: 'MS', name: 'Mississippi' }, { code: 'MO', name: 'Missouri' }, { code: 'MT', name: 'Montana' }, { code: 'NE', name: 'Nebraska' },
+  { code: 'NV', name: 'Nevada' }, { code: 'NH', name: 'New Hampshire' }, { code: 'NJ', name: 'New Jersey' }, { code: 'NM', name: 'New Mexico' },
+  { code: 'NY', name: 'New York' }, { code: 'NC', name: 'North Carolina' }, { code: 'ND', name: 'North Dakota' }, { code: 'OH', name: 'Ohio' },
+  { code: 'OK', name: 'Oklahoma' }, { code: 'OR', name: 'Oregon' }, { code: 'PA', name: 'Pennsylvania' }, { code: 'RI', name: 'Rhode Island' },
+  { code: 'SC', name: 'South Carolina' }, { code: 'SD', name: 'South Dakota' }, { code: 'TN', name: 'Tennessee' }, { code: 'TX', name: 'Texas' },
+  { code: 'UT', name: 'Utah' }, { code: 'VT', name: 'Vermont' }, { code: 'VA', name: 'Virginia' }, { code: 'WA', name: 'Washington' },
+  { code: 'WV', name: 'West Virginia' }, { code: 'WI', name: 'Wisconsin' }, { code: 'WY', name: 'Wyoming' },
+]
+
+router.get('/gas-prices/states', (_req, res) => {
+  res.json(US_GAS_STATES)
+})
+
+/** US gas prices: real data only from EIA. No approximations. Set EIA_API_KEY for data. */
+router.get('/gas-prices', async (req, res) => {
+  const stateCode = (req.query.state || '').trim().toUpperCase().slice(0, 2)
+  const cacheKey = stateCode ? `gas-prices:${stateCode}` : 'gas-prices'
+  const cached = gasPricesCache.get(cacheKey)
+  if (cached) return res.json({ ...cached, _cached: true })
+
+  const EIA_KEY = (process.env.EIA_API_KEY || '').trim()
+  const unit = 'USD/gal'
+  const updatedAt = new Date().toLocaleTimeString(undefined, { timeStyle: 'short' })
+
+  if (!EIA_KEY) {
+    const payload = {
+      national: null,
+      unit,
+      regions: [],
+      states: [],
+      requiresEiaKey: true,
+      updatedAt,
+    }
+    gasPricesCache.set(cacheKey, payload)
+    return res.json(payload)
+  }
+
+  let nationalVal = null
+  let statePrice = null
+
+  // EIA API v2: daily petroleum retail price (EPMRU). Try v2 first for national.
+  const eiaV2Base = 'https://api.eia.gov/v2/petroleum/pri/spt/data/'
+  const eiaV2Params = new URLSearchParams({
+    frequency: 'daily',
+    'data[0]': 'value',
+    'facets[product][]': 'EPMRU',
+    'sort[0][column]': 'period',
+    'sort[0][direction]': 'desc',
+    offset: '0',
+    length: '5000',
+    api_key: EIA_KEY,
+  })
+  try {
+    const v2Res = await axios.get(`${eiaV2Base}?${eiaV2Params.toString()}`, {
+      timeout: 10000,
+      headers: {
+        'X-Api-Key': EIA_KEY,
+        Accept: 'application/json',
+      },
+    })
+    const v2Data = v2Res.data?.response?.data ?? v2Res.data?.data
+    const v2Rows = Array.isArray(v2Data) ? v2Data : []
+    const latestRow = v2Rows[0]
+    if (latestRow && (latestRow.value != null || latestRow.Value != null)) {
+      const val = latestRow.value ?? latestRow.Value
+      nationalVal = Number(val)
+    }
+    if (nationalVal != null && !Number.isNaN(nationalVal)) nationalVal = Number(nationalVal.toFixed(2))
+  } catch (err) {
+    console.warn('[API /gas-prices] EIA v2 error:', err.message)
+  }
+
+  // Fallback: EIA v1 series for national if v2 did not return a value
+  if (nationalVal == null || Number.isNaN(nationalVal)) {
+    try {
+      const eiaRes = await axios.get(
+        `https://api.eia.gov/series/?api_key=${EIA_KEY}&series_id=PET.EER_EPMRU_PF4_Y35US_DPG.W`,
+        { timeout: 10000 }
+      )
+      const series = eiaRes.data?.series?.[0]
+      const data = series?.data
+      const latest = Array.isArray(data) && data.length ? data[0] : null
+      if (latest != null && latest[1] != null) nationalVal = Number(Number(latest[1]).toFixed(2))
+    } catch (err) {
+      console.warn('[API /gas-prices] EIA v1 national error:', err.message)
+    }
+  }
+
+  // State: v2 may return multiple areas in same dataset; otherwise use v1 state series
+  if (stateCode && US_GAS_STATES.some((s) => s.code === stateCode)) {
+    try {
+      const v2StateParams = new URLSearchParams({
+        frequency: 'daily',
+        'data[0]': 'value',
+        'facets[product][]': 'EPMRU',
+        'sort[0][column]': 'period',
+        'sort[0][direction]': 'desc',
+        offset: '0',
+        length: '5000',
+        api_key: EIA_KEY,
+      })
+      const v2StateRes = await axios.get(`${eiaV2Base}?${v2StateParams.toString()}`, {
+        timeout: 10000,
+        headers: { 'X-Api-Key': EIA_KEY, Accept: 'application/json' },
+      })
+      const v2StateData = v2StateRes.data?.response?.data ?? v2StateRes.data?.data
+      const v2StateRows = Array.isArray(v2StateData) ? v2StateData : []
+      const stateRow = v2StateRows.find((r) => (r.area || r.Area || r.state || r.State) === stateCode) ?? v2StateRows[0]
+      if (stateRow && (stateRow.value != null || stateRow.Value != null)) {
+        const val = stateRow.value ?? stateRow.Value
+        statePrice = Number(val)
+      }
+      if (statePrice != null && !Number.isNaN(statePrice)) statePrice = Number(statePrice.toFixed(2))
+    } catch (err) {
+      console.warn('[API /gas-prices] EIA v2 state error:', err.message)
+    }
+    if (statePrice == null || Number.isNaN(statePrice)) {
+      try {
+        const stateRes = await axios.get(
+          `https://api.eia.gov/series/?api_key=${EIA_KEY}&series_id=PET.EER_EPMRU_PF4_Y35${stateCode}_DPG.W`,
+          { timeout: 10000 }
+        )
+        const stateSeries = stateRes.data?.series?.[0]
+        const stateData = stateSeries?.data
+        const stateLatest = Array.isArray(stateData) && stateData.length ? stateData[0] : null
+        if (stateLatest != null && stateLatest[1] != null) statePrice = Number(Number(stateLatest[1]).toFixed(2))
+      } catch (err) {
+        console.warn('[API /gas-prices] EIA v1 state error:', err.message)
+      }
+    }
+  }
+
+  const st = stateCode ? US_GAS_STATES.find((s) => s.code === stateCode) : null
+  const payload = {
+    national: nationalVal != null ? Number(nationalVal.toFixed(2)) : null,
+    unit,
+    regions: [],
+    updatedAt,
+  }
+  if (stateCode && st) {
+    payload.states = statePrice != null
+      ? [{ code: stateCode, name: st.name, price: Number(statePrice.toFixed(2)) }]
+      : []
+  } else {
+    payload.states = []
+  }
+
+  gasPricesCache.set(cacheKey, payload)
+  res.json(payload)
+})
+
+/** Conflict / intel metrics from ingested events (last 24h). Chart by event type (primary); optional by region. Cache 10 min. */
+router.get('/conflict-metrics', (req, res) => {
+  const cacheKey = 'conflict-metrics'
+  const cached = conflictMetricsCache.get(cacheKey)
+  if (cached) return res.json({ ...cached, _cached: true })
+
+  try {
+    const since = Date.now() - 24 * 60 * 60 * 1000
+    const rows = getEventsWithAnyTagInTimeRange(
+      ['geopolitics', 'war', 'conflict', 'military', 'osint', 'intelligence', 'security', 'cyber'],
+      since,
+      500
+    )
+    if (rows.length === 0) {
+      const any = getEvents(200, since, null, null, null)
+      rows.push(...any)
+    }
+
+    const byType = {}
+    const byCountry = {}
+    for (const r of rows) {
+      const type = (r.type || 'event').trim() || 'event'
+      byType[type] = (byType[type] || 0) + 1
+      let raw = {}
+      try {
+        raw = r.raw_data ? (typeof r.raw_data === 'string' ? JSON.parse(r.raw_data) : r.raw_data) : {}
+      } catch (_) {}
+      const country = (raw.countryCode || raw.country || 'Unspecified').toString().trim() || 'Unspecified'
+      byCountry[country] = (byCountry[country] || 0) + 1
+    }
+
+    const byTypeList = Object.entries(byType)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([type, count]) => ({ type, count }))
+
+    const byRegion = Object.entries(byCountry)
+      .filter(([name]) => name.toLowerCase() !== 'unknown' && name.toLowerCase() !== 'unspecified')
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([region, count]) => ({ region, count }))
+
+    const cyber = rows.filter((r) => (r.type || '').toLowerCase().includes('cyber') || (r.title || '').toLowerCase().includes('cyber')).length
+    const military = rows.filter((r) => (r.type || '').toLowerCase().includes('military') || (r.title || '').toLowerCase().includes('military')).length
+
+    const headlines = rows
+      .slice(0, 5)
+      .map((r) => (r.title || '').trim().slice(0, 80))
+      .filter(Boolean)
+
+    const payload = {
+      totals: { events: rows.length, cyber, military },
+      byType: byTypeList.length ? byTypeList : null,
+      byRegion: byRegion.length ? byRegion : null,
+      headlines: headlines.length ? headlines : null,
+      updatedAt: new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }),
+    }
+    conflictMetricsCache.set(cacheKey, payload)
+    res.json(payload)
+  } catch (err) {
+    console.error('[API /conflict-metrics]', err.message)
+    res.status(500).json({
+      error: err.message,
+      totals: { events: 0 },
+      updatedAt: new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }),
+    })
+  }
 })
 
 module.exports = router

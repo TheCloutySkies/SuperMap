@@ -1,0 +1,305 @@
+/* StockWidget */
+.widget-stock-tickers {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  font-size: 0.8rem;
+}
+.widget-stock-tickers li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.2rem 0;
+  border-bottom: 1px solid var(--y2k-border);
+}
+.widget-stock-tickers li:last-child {
+  border-bottom: none;
+}
+.widget-stock-symbol {
+  font-weight: 600;
+  color: var(--y2k-accent);
+  min-width: 3.5rem;
+}
+.widget-stock-value {
+  color: var(--y2k-text);
+}
+.widget-stock-change.positive { color: #81c784; }
+.widget-stock-change.negative { color: #e57373; }
+
+.widget-stock-settings-hint {
+  margin: 0 0 0.4rem;
+  font-size: 0.75rem;
+}
+.widget-stock-settings-btn {
+  background: none;
+  border: none;
+  color: var(--y2k-accent);
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: inherit;
+  padding: 0;
+}
+.widget-stock-settings-btn:hover {
+  color: var(--y2k-text);
+}
+
+/* OutageWidget */
+.widget-outage-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.8rem;
+}
+.widget-outage-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--y2k-border);
+  align-items: center;
+}
+.widget-outage-item:last-child {
+  border-bottom: none;
+}
+.widget-outage-country {
+  font-weight: 600;
+  color: var(--y2k-text);
+}
+.widget-outage-status {
+  color: var(--y2k-accent);
+  font-size: 0.75rem;
+}
+.widget-outage-time {
+  color: var(--y2k-text-muted);
+  font-size: 0.7rem;
+}
+.widget-outage-empty {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--y2k-text-muted);
+}
+
+/* WorldClock */
+.widget-clock-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.8rem;
+}
+.widget-clock-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--y2k-border);
+  align-items: center;
+}
+.widget-clock-row:last-child {
+  border-bottom: none;
+}
+.widget-clock-label {
+  color: var(--y2k-text-muted);
+}
+.widget-clock-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--y2k-accent);
+  font-weight: 600;
+}
+.widget-clock-date {
+  color: var(--y2k-text-muted);
+  font-size: 0.75rem;
+}
+
+/* SpaceWidget */
+.widget-space-apod {
+  margin-bottom: 0.75rem;
+}
+.widget-space-apod-link {
+  display: block;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--y2k-border);
+}
+.widget-space-apod-img {
+  width: 100%;
+  height: auto;
+  max-height: 120px;
+  object-fit: cover;
+  display: block;
+}
+.widget-space-apod-title {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  color: var(--y2k-text-muted);
+  line-height: 1.3;
+}
+.widget-space-asteroids {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+}
+.widget-space-asteroids-label {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--y2k-text-muted);
+  margin-bottom: 0.25rem;
+}
+.widget-space-asteroids-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.widget-space-asteroids-list li {
+  padding: 0.2rem 0;
+  border-bottom: 1px solid var(--y2k-border);
+  font-size: 0.75rem;
+  color: var(--y2k-text);
+}
+.widget-space-solar {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--y2k-text);
+}
+
+/* ConflictMetricsWidget */
+.widget-conflict-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--y2k-text-muted);
+}
+.widget-conflict-headlines {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  font-size: 0.75rem;
+  color: var(--y2k-text-muted);
+  line-height: 1.35;
+}
+.widget-conflict-headline {
+  padding: 0.2rem 0;
+  border-bottom: 1px solid var(--y2k-border);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.widget-conflict-headline:last-child {
+  border-bottom: none;
+}
+
+/* SpaceWidget EONET */
+.widget-space-eonet {
+  margin-bottom: 0.75rem;
+}
+.widget-space-eonet-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.8rem;
+}
+.widget-space-eonet-list li {
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--y2k-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.widget-space-eonet-title {
+  color: var(--y2k-text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.widget-space-eonet-meta {
+  font-size: 0.7rem;
+  color: var(--y2k-text-muted);
+}
+
+.widget-space-news {
+  margin-bottom: 0.5rem;
+}
+.widget-space-apod-compact {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+}
+.widget-space-apod-compact a {
+  color: var(--y2k-accent);
+  text-decoration: none;
+}
+.widget-space-apod-compact a:hover {
+  text-decoration: underline;
+}
+
+/* HeadlinesWidget */
+.widget-headlines-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.8rem;
+}
+.widget-headlines-item {
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--y2k-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.widget-headlines-item:last-child {
+  border-bottom: none;
+}
+.widget-headlines-link,
+.widget-headlines-title {
+  color: var(--y2k-accent);
+  text-decoration: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.widget-headlines-link:hover {
+  color: var(--y2k-text);
+  text-decoration: underline;
+}
+.widget-headlines-source {
+  font-size: 0.7rem;
+  color: var(--y2k-text-muted);
+}
+
+/* EarthquakesWidget */
+.widget-earthquakes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.8rem;
+}
+.widget-earthquakes-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.5rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--y2k-border);
+  align-items: center;
+}
+.widget-earthquakes-item:last-child {
+  border-bottom: none;
+}
+.widget-earthquakes-mag {
+  font-weight: 700;
+  color: var(--y2k-accent);
+  min-width: 2.5rem;
+}
+.widget-earthquakes-place {
+  color: var(--y2k-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.widget-earthquakes-time {
+  font-size: 0.7rem;
+  color: var(--y2k-text-muted);
+}

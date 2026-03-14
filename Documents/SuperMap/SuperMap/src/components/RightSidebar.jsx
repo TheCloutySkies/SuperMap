@@ -1,8 +1,27 @@
 import { useState } from 'react'
 import { BASEMAPS } from '../constants'
+import { runOverpassQuery } from '../services/layerServices'
 import OverpassConsole from './OverpassConsole'
 import LiveuamapRssWidget from './LiveuamapRssWidget'
 import './RightSidebar.css'
+
+const GEOLOCATE_PRESETS = [
+  { name: 'Fountains, tram, shops', query: `[out:json][timeout:30];( node["amenity"="fountain"]({{bbox}}); node["railway"="tram_stop"]({{bbox}}); node["shop"]({{bbox}}); way["amenity"="fountain"]({{bbox}}); way["shop"]({{bbox}}); );out body geom;` },
+  { name: 'Wind turbines + railway', query: `[out:json][timeout:30];( node["man_made"="wind_turbine"]({{bbox}}); way["railway"="rail"]({{bbox}}); way["man_made"="wind_turbine"]({{bbox}}); );out body geom;` },
+  { name: 'Emergency (fire, police, hospital)', query: `[out:json][timeout:30];( node["amenity"~"fire_station|police|hospital"]({{bbox}}); way["amenity"~"fire_station|police|hospital"]({{bbox}}); );out body geom;` },
+  { name: 'Cafes & restaurants', query: `[out:json][timeout:30];( node["amenity"~"cafe|restaurant"]({{bbox}}); way["amenity"~"cafe|restaurant"]({{bbox}}); );out body geom;` },
+  { name: 'Schools & universities', query: `[out:json][timeout:30];( node["amenity"~"school|university|college"]({{bbox}}); way["amenity"~"school|university|college"]({{bbox}}); );out body geom;` },
+  { name: 'Fuel stations', query: `[out:json][timeout:30];( node["amenity"="fuel"]({{bbox}}); way["amenity"="fuel"]({{bbox}}); );out body geom;` },
+  { name: 'Pharmacies', query: `[out:json][timeout:30];( node["amenity"="pharmacy"]({{bbox}}); way["amenity"="pharmacy"]({{bbox}}); );out body geom;` },
+  { name: 'Supermarkets & shops', query: `[out:json][timeout:30];( node["shop"~"supermarket|convenience|mall"]({{bbox}}); way["shop"~"supermarket|convenience"]({{bbox}}); );out body geom;` },
+  { name: 'Water (rivers, lakes)', query: `[out:json][timeout:30];( way["natural"="water"]({{bbox}}); way["waterway"~"river|stream|canal"]({{bbox}}); );out body geom;` },
+  { name: 'Major roads', query: `[out:json][timeout:30];( way["highway"~"motorway|trunk|primary"]({{bbox}}); );out body geom;` },
+  { name: 'Airports & runways', query: `[out:json][timeout:30];( node["aeroway"="aerodrome"]({{bbox}}); way["aeroway"~"aerodrome|runway|taxiway"]({{bbox}}); );out body geom;` },
+  { name: 'Power lines & towers', query: `[out:json][timeout:30];( way["power"~"line|tower"]({{bbox}}); node["power"~"tower|substation"]({{bbox}}); );out body geom;` },
+  { name: 'Cell towers / masts', query: `[out:json][timeout:30];( node["man_made"="tower"]["tower:type"~"communication|cell"]({{bbox}}); node["communication"~"mobile_phone|cell"]({{bbox}}); );out body geom;` },
+  { name: 'Stadiums & monuments', query: `[out:json][timeout:30];( node["leisure"="stadium"]({{bbox}}); node["historic"="monument"]({{bbox}}); way["leisure"="stadium"]({{bbox}}); way["historic"="monument"]({{bbox}}); );out body geom;` },
+  { name: 'Abandoned / disused rail', query: `[out:json][timeout:30];( way["railway"~"disused|abandoned"]({{bbox}}); way["railway"="rail"]["usage"~"disused|abandoned"]({{bbox}}); );out body geom;` },
+]
 
 const OSINT_LAYER_SECTIONS = [
   {
@@ -24,7 +43,6 @@ const OSINT_LAYER_SECTIONS = [
   {
     title: 'Transportation (Tactical)',
     layers: [
-      { key: 'adsbAircraft', label: 'ADS-B Exchange (Aircraft)', statusKey: 'adsb' },
       { key: 'milAircraft', label: 'Military Aircraft (adsb.lol)', hint: 'Free — no API key required' },
       { key: 'aisShips', label: 'AIS (Ships)', placeholder: true },
     ],
@@ -46,7 +64,6 @@ const OSINT_LAYER_SECTIONS = [
   {
     title: 'Surveillance & Utilities',
     layers: [
-      { key: 'flockCameras', label: 'FLOCK Cameras', hint: 'ringmast4r/FLOCK 336K+ surveillance cameras' },
       { key: 'dataCenters', label: 'Data Centers (ATLAS)', hint: '6,266+ locations worldwide' },
       { key: 'utilityOutages', label: 'Utility Outages (US)', hint: 'US only; use Power Grid for worldwide' },
     ],
@@ -136,6 +153,7 @@ export default function RightSidebar({
   onEventFilterByViewChange,
 }) {
   const [overpassOpen, setOverpassOpen] = useState(false)
+  const [geolocateRunning, setGeolocateRunning] = useState(null)
   const handleLayerToggle = (key, checked) => {
     onLayerTogglesChange?.((prev) => ({ ...prev, [key]: checked }))
   }
@@ -144,7 +162,29 @@ export default function RightSidebar({
 
   const isConflictMap = activeView === 'conflict-map'
   const isExploreMap = activeView === 'explore-map'
+  const isGeolocateMap = activeView === 'geolocate-map'
   const sections = isConflictMap ? CONFLICT_LAYER_SECTIONS : OSINT_LAYER_SECTIONS
+
+  const runGeolocatePreset = async (preset) => {
+    const bbox = window.__supermapOverpassBbox
+    const fallbackBbox = [-180, -90, 180, 90]
+    const [w, s, e, n] = (bbox && Array.isArray(bbox) && bbox.length === 4) ? bbox : fallbackBbox
+    let q = preset.query
+    if (q.includes('{{bbox}}')) {
+      q = q.replace(/\{\{bbox\}\}/g, `${s},${w},${n},${e}`)
+    }
+    setGeolocateRunning(preset.name)
+    onOverpassLoading?.(true)
+    try {
+      const geojson = await runOverpassQuery(q)
+      onOverpassResults?.(geojson)
+    } catch (err) {
+      console.warn('[Geolocate]', err?.message || err)
+    } finally {
+      setGeolocateRunning(null)
+      onOverpassLoading?.(false)
+    }
+  }
 
   return (
     <aside className="sidebar sidebar-right">
@@ -154,7 +194,7 @@ export default function RightSidebar({
           <button type="button" className="sidebar-right-close" onClick={onClose} aria-label="Close layers" title="Close">−</button>
         </div>
       )}
-      {isMapView && (
+      {isMapView && !isGeolocateMap && (
         <section className="right-sidebar-section">
           <h3>Base layer</h3>
           <div className="basemap-list">
@@ -259,9 +299,6 @@ export default function RightSidebar({
                       {key === 'sentinel2BurnScars' && layerToggles[key] && (
                         <span className="layer-hint">Sentinel Hub instance active</span>
                       )}
-                      {statusKey === 'adsb' && layerToggles[key] && (
-                        <span className="layer-status-pending">Data Connection Pending</span>
-                      )}
                       {hasTimeFilter && layerToggles[key] && (
                         <div className="sentinel-time-filter">
                           <span className="sentinel-time-label">Historical:</span>
@@ -287,7 +324,30 @@ export default function RightSidebar({
           </section>
         </>
       )}
-      {isMapView && !isConflictMap && !isExploreMap && (
+      {isMapView && isGeolocateMap && (
+        <>
+          <section className="right-sidebar-section">
+            <h3>Geolocate</h3>
+            <p className="layers-hint">OpenStreetMap base layer only. Run a preset Overpass query for the visible map area; results appear on the map.</p>
+            <div className="geolocate-presets">
+              {GEOLOCATE_PRESETS.map((preset) => (
+                <button
+                  key={preset.name}
+                  type="button"
+                  className="geolocate-preset-btn"
+                  onClick={() => runGeolocatePreset(preset)}
+                  disabled={!!geolocateRunning}
+                  title={preset.name}
+                >
+                  {geolocateRunning === preset.name ? '…' : preset.name}
+                </button>
+              ))}
+            </div>
+          </section>
+        </>
+      )}
+
+      {isMapView && !isConflictMap && !isExploreMap && !isGeolocateMap && (
         <>
           <section className="right-sidebar-section">
             <button
@@ -326,9 +386,6 @@ export default function RightSidebar({
                       )}
                       {key === 'sentinel2BurnScars' && layerToggles[key] && (
                         <span className="layer-hint">Sentinel Hub instance active</span>
-                      )}
-                      {statusKey === 'adsb' && layerToggles[key] && (
-                        <span className="layer-status-pending">Data Connection Pending</span>
                       )}
                       {hasTimeFilter && layerToggles[key] && (
                         <div className="sentinel-time-filter">

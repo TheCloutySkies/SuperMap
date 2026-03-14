@@ -874,38 +874,44 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
   }
 
   const addMilAircraft = (geoJson) => {
-    if (map.getSource('intel-mil-aircraft')) {
-      map.getSource('intel-mil-aircraft').setData(geoJson)
-      return
+    try {
+      if (!map || typeof map.getSource !== 'function') return
+      if (map.getSource('intel-mil-aircraft')) {
+        map.getSource('intel-mil-aircraft').setData(geoJson)
+        return
+      }
+      map.addSource('intel-mil-aircraft', { type: 'geojson', data: geoJson })
+      map.addLayer({
+        id: 'intel-mil-aircraft-layer',
+        type: 'circle',
+        source: 'intel-mil-aircraft',
+        paint: {
+          'circle-radius': 6,
+          'circle-color': '#ef4444',
+          'circle-opacity': 0.9,
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': '#fbbf24',
+        },
+      })
+      map.addLayer({
+        id: 'intel-mil-aircraft-labels',
+        type: 'symbol',
+        source: 'intel-mil-aircraft',
+        layout: {
+          'text-field': ['get', 'title'],
+          'text-size': 10,
+          'text-anchor': 'top',
+          'text-offset': [0, 0.7],
+        },
+        paint: { 'text-color': '#fbbf24', 'text-halo-color': '#0d1117', 'text-halo-width': 2 },
+      })
+    } catch (_) {
+      // Map may have been destroyed (e.g. tab switched) before async fetch completed
     }
-    map.addSource('intel-mil-aircraft', { type: 'geojson', data: geoJson })
-    map.addLayer({
-      id: 'intel-mil-aircraft-layer',
-      type: 'circle',
-      source: 'intel-mil-aircraft',
-      paint: {
-        'circle-radius': 6,
-        'circle-color': '#ef4444',
-        'circle-opacity': 0.9,
-        'circle-stroke-width': 1.5,
-        'circle-stroke-color': '#fbbf24',
-      },
-    })
-    map.addLayer({
-      id: 'intel-mil-aircraft-labels',
-      type: 'symbol',
-      source: 'intel-mil-aircraft',
-      layout: {
-        'text-field': ['get', 'title'],
-        'text-size': 10,
-        'text-anchor': 'top',
-        'text-offset': [0, 0.7],
-      },
-      paint: { 'text-color': '#fbbf24', 'text-halo-color': '#0d1117', 'text-halo-width': 2 },
-    })
   }
 
   const removeMilAircraft = () => {
+    if (!map || typeof map.getSource !== 'function') return
     if (map.getLayer('intel-mil-aircraft-labels')) map.removeLayer('intel-mil-aircraft-labels')
     if (map.getLayer('intel-mil-aircraft-layer')) map.removeLayer('intel-mil-aircraft-layer')
     if (map.getSource('intel-mil-aircraft')) map.removeSource('intel-mil-aircraft')
@@ -1300,7 +1306,7 @@ export default function MapView({
   const doFetch = useCallback(
     (map, toggles, onLoading) => {
       if (!map || !map.getStyle) return
-      if (activeViewRef.current === 'explore-map') return
+      if (activeViewRef.current === 'explore-map' || activeViewRef.current === 'geolocate-map') return
       const getRadarWanted = () => layerTogglesRef.current?.noaaRadar === true
       const helpers = addOrUpdateLayer(map, toggles, onLoading, getRadarWanted)
       const bbox = () => {
@@ -2038,6 +2044,15 @@ export default function MapView({
       }
     }
   }, [activeView, mapInstance, upsertSavedPointsLayer])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReadyRef.current || activeView !== 'geolocate-map') return
+    try {
+      const b = map.getBounds()
+      window.__supermapOverpassBbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]
+    } catch (_) {}
+  }, [activeView, mapInstance])
 
   useEffect(() => {
     const map = mapRef.current

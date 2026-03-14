@@ -242,6 +242,9 @@ export default function MyAccountView({ onNavigateSection, onSignInRequired }) {
             <label>Bio</label>
             <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3} placeholder="Bio (optional)" />
             <label>Avatar (max 200KB, jpg/png/webp)</label>
+            <p className="my-account-avatar-hint">
+              <a href="https://squoosh.app" target="_blank" rel="noopener noreferrer" className="my-account-resize-link">Squoosh</a> — free, open-source image resizer/compressor in the browser.
+            </p>
             <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => uploadAvatar(e.target.files?.[0])} />
             <button type="button" onClick={saveProfile} disabled={profileSaving || avatarUploading}>
               {profileSaving ? 'Saving…' : avatarUploading ? 'Uploading…' : 'Save profile'}

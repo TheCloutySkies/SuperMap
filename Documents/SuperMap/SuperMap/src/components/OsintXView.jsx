@@ -55,6 +55,38 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
   const [savingId, setSavingId] = useState(null)
   const [saveError, setSaveError] = useState(null)
   const [videoDialog, setVideoDialog] = useState(null)
+  const [imageDialog, setImageDialog] = useState(null)
+  const [imageDownloading, setImageDownloading] = useState(false)
+
+  const openImageDialog = (post, src) => {
+    setImageDialog({
+      src: String(src || '').trim(),
+      postUrl: String(post?.url || '').trim(),
+      caption: (post?.content || post?.title || '').trim().slice(0, 500),
+    })
+  }
+
+  const handleDownloadImage = async () => {
+    if (!imageDialog?.src || imageDownloading) return
+    setImageDownloading(true)
+    try {
+      const res = await fetch(imageDialog.src, { mode: 'cors', credentials: 'omit' })
+      if (!res.ok) throw new Error(res.statusText)
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `osint-image-${Date.now()}.${(blob.type || 'image').split('/')[1] || 'jpg'}`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch {
+      window.open(imageDialog.src, '_blank', 'noopener,noreferrer')
+    } finally {
+      setImageDownloading(false)
+    }
+  }
 
   const fetchPosts = () => {
     if (!API_BASE) {
@@ -251,11 +283,23 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
               </p>
               {Array.isArray(post.images) && post.images.length > 0 && (
                 <div className="osint-x-media osint-x-media--images">
-                  {post.images.map((src, i) => (
-                    <a key={i} href={src} target="_blank" rel="noopener noreferrer" className="osint-x-media-link">
-                      <img src={src} alt="" className="osint-x-img" loading="lazy" referrerPolicy="no-referrer" />
-                    </a>
-                  ))}
+                  {post.images.map((src, i) => {
+                    const isPossibleVideoThumb = /(?:pbs\.twimg\.com|twimg\.com)\/media\//i.test(src) && !(Array.isArray(post.videos) && post.videos.length > 0)
+                    return (
+                      <div key={i} className="osint-x-media-img-wrap">
+                        <button type="button" className="osint-x-media-link osint-x-media-link--expand" onClick={() => openImageDialog(post, src)} title="Expand">
+                          <img src={src} alt="" className="osint-x-img" loading="lazy" referrerPolicy="no-referrer" />
+                          <span className="osint-x-media-expand-label">Expand</span>
+                        </button>
+                        {isPossibleVideoThumb && post.url && (
+                          <a href={post.url} target="_blank" rel="noopener noreferrer" className="osint-x-media-open-post osint-x-media-watch-video">
+                            Watch video on X →
+                          </a>
+                        )}
+                        <a href={post.url || src} target="_blank" rel="noopener noreferrer" className="osint-x-media-open-post">Open post →</a>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
               {Array.isArray(post.videos) && post.videos.length > 0 && (
@@ -263,7 +307,7 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
                   {(post.videos || []).map((src, i) => {
                     const yt = youtubeEmbedUrl(src)
                     const vimeo = vimeoEmbedUrl(src)
-                    const isDirect = /\.(mp4|webm|ogg)(\?|$)/i.test(src)
+                    const isDirect = /\.(mp4|webm|ogg)(\?|$)/i.test(src) || /(?:video\.twimg\.com|v\.twimg\.com)/i.test(src)
                     if (yt) {
                       return (
                         <div key={i} className="osint-x-video-wrap">
@@ -275,10 +319,11 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
                             allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
                             allowFullScreen
                           />
+                          <button type="button" className="osint-x-video-expand" onClick={() => openVideoDialog(post, src)} title="Expand / watch on X">
+                            Expand
+                          </button>
                           {post.url && (
-                            <button type="button" className="osint-x-video-fallback" onClick={() => openVideoDialog(post, src)}>
-                              Problems playing? Watch on X
-                            </button>
+                            <a href={post.url} target="_blank" rel="noopener noreferrer" className="osint-x-video-open-post">Open on X →</a>
                           )}
                         </div>
                       )
@@ -294,10 +339,11 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
                             allow="autoplay; fullscreen; picture-in-picture"
                             allowFullScreen
                           />
+                          <button type="button" className="osint-x-video-expand" onClick={() => openVideoDialog(post, src)} title="Expand / watch on X">
+                            Expand
+                          </button>
                           {post.url && (
-                            <button type="button" className="osint-x-video-fallback" onClick={() => openVideoDialog(post, src)}>
-                              Problems playing? Watch on X
-                            </button>
+                            <a href={post.url} target="_blank" rel="noopener noreferrer" className="osint-x-video-open-post">Open on X →</a>
                           )}
                         </div>
                       )
@@ -305,19 +351,29 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
                     if (isDirect) {
                       return (
                         <div key={i} className="osint-x-video-wrap">
-                          <video src={src} controls className="osint-x-video" />
+                          <video src={src} controls className="osint-x-video" playsInline crossOrigin="anonymous" />
+                          <button type="button" className="osint-x-video-expand" onClick={() => openVideoDialog(post, src)} title="Expand">
+                            Expand
+                          </button>
+                          {post.url && (
+                            <a href={post.url} target="_blank" rel="noopener noreferrer" className="osint-x-video-open-post">Open on X →</a>
+                          )}
                         </div>
                       )
                     }
                     return (
-                      <button
-                        key={i}
-                        type="button"
-                        className="osint-x-video-fallback osint-x-video-fallback--standalone"
-                        onClick={() => openVideoDialog(post, src)}
-                      >
-                        Watch video on X
-                      </button>
+                      <div key={i} className="osint-x-video-wrap osint-x-video-wrap--fallback">
+                        <button
+                          type="button"
+                          className="osint-x-video-fallback osint-x-video-fallback--standalone"
+                          onClick={() => openVideoDialog(post, src)}
+                        >
+                          Watch video on X
+                        </button>
+                        {post.url && (
+                          <a href={post.url} target="_blank" rel="noopener noreferrer" className="osint-x-video-open-post">Open post →</a>
+                        )}
+                      </div>
                     )
                   })}
                 </div>
@@ -366,11 +422,40 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
           ))}
         </ul>
       )}
+      {imageDialog && (
+        <div className="osint-x-video-dialog-backdrop" role="dialog" aria-modal="true" onClick={() => setImageDialog(null)}>
+          <div className="osint-x-video-dialog osint-x-image-dialog" onClick={(e) => e.stopPropagation()}>
+            <h3>Image</h3>
+            <img src={imageDialog.src} alt="" className="osint-x-image-dialog-img" />
+            {/(?:pbs\.twimg\.com|twimg\.com)\/media\//i.test(imageDialog.src) && (
+              <p className="osint-x-image-dialog-hint">This may be a video thumbnail. Open the post on X to watch the video.</p>
+            )}
+            {imageDialog.caption && <p className="osint-x-image-dialog-caption">{imageDialog.caption}</p>}
+            <div className="osint-x-video-dialog-actions">
+              <button
+                type="button"
+                className="osint-x-pin-btn"
+                onClick={handleDownloadImage}
+                disabled={imageDownloading}
+              >
+                {imageDownloading ? 'Downloading…' : 'Download image'}
+              </button>
+              {imageDialog.postUrl && (
+                <a href={imageDialog.postUrl} target="_blank" rel="noopener noreferrer" className="osint-x-pin-btn">Open original post</a>
+              )}
+              <button type="button" className="osint-x-clear-filter" onClick={() => setImageDialog(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
       {videoDialog && (
         <div className="osint-x-video-dialog-backdrop" role="dialog" aria-modal="true">
           <div className="osint-x-video-dialog">
-            <h3>Video playback unavailable</h3>
-            <p>This video host blocks in-app playback. Open it on X to watch safely.</p>
+            <h3>Video</h3>
+            <div className="osint-x-video-dialog-player">
+              <video src={videoDialog.src} controls className="osint-x-video" playsInline crossOrigin="anonymous" />
+            </div>
+            <p className="osint-x-video-dialog-fallback-msg">If the video does not play above (blocked by host), open it on X.</p>
             <div className="osint-x-video-dialog-actions">
               {videoDialog.postUrl && (
                 <a href={videoDialog.postUrl} target="_blank" rel="noopener noreferrer" className="osint-x-pin-btn">

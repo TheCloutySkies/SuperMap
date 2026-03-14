@@ -2,10 +2,11 @@ import './SearchResultsView.css'
 
 /**
  * Full-page search results (hidden from main nav). Opened when user searches from the Omnibar.
- * Shows every result related to the search query.
+ * Shows widget/section matches first, then map/event features.
  */
-export default function SearchResultsView({ query, features = [], onFlyTo, onShowOnMap, onBack }) {
+export default function SearchResultsView({ query, features = [], widgetMatches = [], onFlyTo, onShowOnMap, onBack, onNavigateToWidget }) {
   const hasCoords = (f) => f?.geometry?.coordinates?.length >= 2
+  const totalCount = features.length + widgetMatches.length
 
   return (
     <div className="search-results-view">
@@ -16,16 +17,38 @@ export default function SearchResultsView({ query, features = [], onFlyTo, onSho
         <h1 className="search-results-title">Search results</h1>
         <p className="search-results-query">“{query || '—'}”</p>
         <p className="search-results-meta">
-          {features.length} result{features.length !== 1 ? 's' : ''}
+          {totalCount} result{totalCount !== 1 ? 's' : ''}
         </p>
       </header>
-      {features.length === 0 ? (
+      {totalCount === 0 ? (
         <div className="search-results-empty">
           <p>No results. Try a different search in the bar above.</p>
           <p className="search-results-empty-hint">Start both the app and the API with <strong>npm run dev</strong> from the project root (the folder that contains SuperMap and situational-awareness-api). The API runs on port 3001 so search and geocoding work.</p>
         </div>
       ) : (
         <ul className="search-results-list">
+          {widgetMatches.map((w) => (
+            <li key={w.id} className="search-results-item search-results-item--widget">
+              <div className="search-results-item-main">
+                <span className="search-results-item-type">Homepage</span>
+                <h3 className="search-results-item-title">{w.title}</h3>
+                {w.description && (
+                  <p className="search-results-item-desc">{w.description}</p>
+                )}
+              </div>
+              <div className="search-results-item-actions">
+                {onNavigateToWidget && (
+                  <button
+                    type="button"
+                    className="search-results-item-btn search-results-item-btn--primary"
+                    onClick={() => onNavigateToWidget(w.id)}
+                  >
+                    View
+                  </button>
+                )}
+              </div>
+            </li>
+          ))}
           {features.map((feature, i) => {
             const props = feature.properties || {}
             const title = props.title || props.name || 'Untitled'

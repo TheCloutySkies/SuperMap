@@ -1,0 +1,39 @@
+.widget-card {
+  padding: 1rem;
+  border: 1px solid var(--y2k-border);
+  border-radius: 4px;
+  box-shadow: 0 1px 0 var(--y2k-bevel-light, rgba(255, 255, 255, 0.06)) inset;
+  background: var(--y2k-surface-raised, rgba(255, 255, 255, 0.03));
+}
+
+.widget-card-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--y2k-text-muted);
+}
+
+.widget-card-content {
+  min-height: 2rem;
+  font-size: 0.9rem;
+  color: var(--y2k-text);
+}
+
+.widget-card-loading,
+.widget-card-error {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--y2k-text-muted);
+}
+
+.widget-card-error {
+  color: var(--y2k-error, #ef5350);
+}
+
+.widget-card-updated {
+  margin: 0.5rem 0 0;
+  font-size: 0.7rem;
+  color: var(--y2k-text-muted);
+}

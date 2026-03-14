@@ -78,6 +78,7 @@ export const DEFAULT_TAB_VISIBILITY = {
   osintMap: true,
   conflictMap: true,
   exploreMap: true,
+  geolocateMap: true,
   osintFeeds: true,
   newsFeeds: true,
   osintX: true,

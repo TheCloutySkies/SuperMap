@@ -211,12 +211,51 @@
   gap: 0.5rem;
 }
 
+.osint-x-media-img-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
 .osint-x-media-link {
   display: block;
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid #30363d;
   max-width: 100%;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  position: relative;
+}
+
+.osint-x-media-link--expand:hover .osint-x-media-expand-label,
+.osint-x-media-link--expand:focus .osint-x-media-expand-label {
+  opacity: 1;
+}
+
+.osint-x-media-expand-label {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.osint-x-media-open-post {
+  font-size: 0.8rem;
+  color: #58a6ff;
+  text-decoration: none;
+}
+.osint-x-media-open-post:hover {
+  text-decoration: underline;
 }
 
 .osint-x-img {
@@ -281,6 +320,52 @@
   background: #161b22;
 }
 
+.osint-x-video-expand {
+  margin-top: 0.25rem;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8rem;
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #c9d1d9;
+  cursor: pointer;
+}
+.osint-x-video-expand:hover {
+  background: #30363d;
+  color: #fff;
+}
+
+.osint-x-video-open-post {
+  display: inline-block;
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: #58a6ff;
+  text-decoration: none;
+}
+.osint-x-video-open-post:hover {
+  text-decoration: underline;
+}
+
+.osint-x-image-dialog-img {
+  max-width: 100%;
+  max-height: 70vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 6px;
+  display: block;
+  margin: 0.5rem 0;
+}
+
+.osint-x-image-dialog-caption {
+  margin: 0.35rem 0 0.5rem;
+  font-size: 0.85rem;
+  color: #8b949e;
+  line-height: 1.4;
+  max-height: 4em;
+  overflow-y: auto;
+}
+
 .osint-x-filter-label {
   display: flex;
   align-items: center;
@@ -343,7 +428,7 @@
 }
 
 .osint-x-video-dialog {
-  width: min(520px, 100%);
+  width: min(640px, 100%);
   background: #161b22;
   border: 1px solid #30363d;
   border-radius: 10px;
@@ -353,6 +438,25 @@
 
 .osint-x-video-dialog h3 {
   margin: 0 0 0.4rem;
+}
+
+.osint-x-video-dialog-player {
+  margin: 0.5rem 0;
+  background: #000;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.osint-x-video-dialog-player .osint-x-video {
+  width: 100%;
+  max-height: 50vh;
+  display: block;
+}
+
+.osint-x-video-dialog-fallback-msg {
+  margin: 0.35rem 0 0.5rem;
+  font-size: 0.8rem;
+  color: #8b949e;
 }
 
 .osint-x-video-dialog p {

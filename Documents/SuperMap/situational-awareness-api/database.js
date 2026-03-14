@@ -113,6 +113,25 @@ function getEventsWithTag(tagName, limit = 100) {
   return rows
 }
 
+/** Get events that have at least one of the given tags and timestamp >= sinceTimestamp (ms). Used for threat summary. */
+function getEventsWithAnyTagInTimeRange(tagNames, sinceTimestamp, limit = 200) {
+  if (!Array.isArray(tagNames) || tagNames.length === 0) return []
+  const since = sinceTimestamp != null ? Number(sinceTimestamp) : 0
+  const placeholders = tagNames.map(() => '?').join(',')
+  const params = tagNames.map((t) => String(t).trim().toLowerCase()).filter(Boolean)
+  if (params.length === 0) return []
+  params.push(since, limit)
+  const rows = db.prepare(`
+    SELECT DISTINCT e.id, e.type, e.title, e.description, e.lat, e.lon, e.timestamp, e.source, e.raw_data
+    FROM events e
+    JOIN event_tags et ON e.id = et.event_id
+    WHERE et.tag_name IN (${placeholders}) AND e.timestamp >= ?
+    ORDER BY e.timestamp DESC
+    LIMIT ?
+  `).all(...params)
+  return rows
+}
+
 function parseRawData(rawData) {
   if (!rawData) return {}
   try {
@@ -258,6 +277,7 @@ module.exports = {
   getEventTagNames,
   getEventEntityIds,
   getEventsWithTag,
+  getEventsWithAnyTagInTimeRange,
   getEvents,
   getSignalEvents,
   getEventsForSearch,

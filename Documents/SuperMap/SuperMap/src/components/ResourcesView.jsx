@@ -3,10 +3,19 @@ import './ResourcesView.css'
 
 export const RESOURCE_SECTIONS = [
   {
+    id: 'interactive',
+    title: '🖥 Interactive Web Apps',
+    items: [
+      { name: 'NUKEMAP', url: 'https://nuclearsecrecy.com/nukemap/', desc: 'Nuclear weapon effects map by Alex Wellerstein — blast, fallout, casualties. Drag marker, set yield, detonate.', embed: true },
+      { name: 'MISSILEMAP', url: 'https://nuclearsecrecy.com/missilemap/', desc: 'Missile range, accuracy, and warhead effects by Alex Wellerstein. Launch/target presets, CEP, SSPK.', embed: true },
+    ],
+  },
+  {
     id: 'search',
     title: '🌍 Search & Recon',
     items: [
       { name: 'SearXNG', url: 'https://searx.be', desc: 'Privacy search engine, Google-style dorks' },
+      { name: 'Dorksearch', url: 'https://dorksearch.com', desc: 'Google dork builder and search (embed may be blocked by site)', embed: true },
       { name: 'IntelX', url: 'https://intelx.io', desc: 'Searches leaks, domains, files, darknet indexes' },
       { name: 'Shodan', url: 'https://www.shodan.io', desc: 'Search engine for exposed servers, cameras, routers' },
       { name: 'Censys', url: 'https://search.censys.io', desc: 'Internet infrastructure search' },
@@ -18,8 +27,10 @@ export const RESOURCE_SECTIONS = [
     id: 'maps',
     title: '🛰 OSINT Maps (Live Global Monitoring)',
     items: [
+      { name: "Malfrat's OSINT Map", url: 'https://map.malfrats.industries', desc: 'Curated OSINT tool map (from osintframework.com)', embed: true },
       { name: 'Liveuamap', url: 'https://liveuamap.com', desc: 'Live global conflict events', embed: true },
       { name: 'ISW Maps', url: 'https://www.understandingwar.org/maps', desc: 'Institute for the Study of War maps', embed: true },
+      { name: 'ArcGIS Crisis & Conflict', url: 'https://experience.arcgis.com/experience/b6c12fd0a4774f38a303e3d034775854/', desc: 'Esri crisis and conflict situational awareness', embed: true },
       { name: 'Open Infrastructure Map', url: 'https://openinframap.org/', desc: 'Power, telecom, oil & gas', embed: true },
       { name: 'Flightradar24', url: 'https://www.flightradar24.com/', desc: 'Live flight tracking', embed: true },
       { name: 'ADS-B Exchange', url: 'https://globe.adsbexchange.com', desc: 'Military aircraft tracking', embed: true },
@@ -48,6 +59,9 @@ export const RESOURCE_SECTIONS = [
       { name: 'Bellingcat Toolkit', url: 'https://bellingcat.gitbook.io/toolkit', desc: 'From Bellingcat' },
       { name: 'Sherlock', url: 'https://github.com/sherlock-project/sherlock', desc: 'Username search across social networks' },
       { name: 'SpiderFoot', url: 'https://www.spiderfoot.net/', desc: 'Automated OSINT collection' },
+      { name: 'Camopedia', url: 'https://www.camopedia.org/index.php/Main_Page', desc: 'Military & paramilitary camouflage database by country and pattern' },
+      { name: 'Cartrology', url: 'http://www.cartrology.com', desc: 'Maps and cartography resources' },
+      { name: 'GIJN Military & Conflict Database', url: 'https://docs.google.com/spreadsheets/d/1wiIVKdvn8QSBQ1LGB9kiGrB28SYFblbZ7uM4uKSWFfU/edit?pli=1&gid=0#gid=0', desc: 'GIJN-curated databases: SIPRI, Small Arms Survey, iTRACE, PRIO, UN arms, crisis groups' },
     ],
   },
   {

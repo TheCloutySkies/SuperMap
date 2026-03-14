@@ -43,8 +43,9 @@ function requireGoogleSearchKey(res) {
   return true
 }
 
-/** GET Flock cameras by city */
+/** GET Flock cameras by city. RapidAPI disabled to avoid 403/429; use free alternatives. */
 async function fetchFlockCameras(city = 'SanDiego') {
+  return { type: 'FeatureCollection', features: [] }
   const h = headers('flock-camera-location.p.rapidapi.com')
   if (!h) return { type: 'FeatureCollection', features: [] }
   const citySlug = (city && String(city).trim()) || 'SanDiego'
@@ -90,8 +91,9 @@ function normalizeTicker(row) {
   }
 }
 
-/** GET Yahoo Finance v2 tickers (minimal: one request, long cache). List param ignored – same data for all tabs. */
+/** GET Yahoo Finance v2 tickers. RapidAPI disabled. */
 async function fetchFinanceScreener(list = 'day_gainers') {
+  return { body: null, error: 'RapidAPI disabled' }
   const h = headers('yahoo-finance15.p.rapidapi.com')
   if (!h) return { body: null, error: 'No key' }
   const now = Date.now()
@@ -118,8 +120,9 @@ async function fetchFinanceScreener(list = 'day_gainers') {
   }
 }
 
-/** GET Yahoo Finance search (uses same key; avoid heavy use to preserve 100/month) */
+/** GET Yahoo Finance search. RapidAPI disabled. */
 async function fetchFinanceSearch(search = '') {
+  return { body: null, error: 'RapidAPI disabled' }
   const h = headers('yahoo-finance15.p.rapidapi.com')
   if (!h) return { body: null, error: 'No key' }
   const q = String(search).trim() || 'AA'
@@ -139,8 +142,9 @@ async function fetchFinanceSearch(search = '') {
   }
 }
 
-/** GET Real-time news by topic/section */
+/** GET Real-time news by topic/section. RapidAPI disabled. */
 async function fetchTopicNews(params = {}) {
+  return { body: null, error: 'RapidAPI disabled' }
   const h = headers('real-time-news-data.p.rapidapi.com')
   if (!h) return { body: null, error: 'No key' }
   const {
@@ -168,8 +172,9 @@ async function fetchTopicNews(params = {}) {
   }
 }
 
-/** GET Google Search (unlimited-google-search1.p.rapidapi.com). Key: RAPIDAPI_GOOGLE_SEARCH_KEY or RAPIDAPI_KEY. */
+/** GET Google Search. RapidAPI disabled. */
 async function fetchGoogleSearch(query = '') {
+  return { body: null, error: 'RapidAPI disabled' }
   const key = RAPIDAPI_GOOGLE_SEARCH_KEY || RAPIDAPI_KEY
   const h = key && key.trim() ? { 'x-rapidapi-host': 'unlimited-google-search1.p.rapidapi.com', 'x-rapidapi-key': key.trim() } : null
   if (!h) return { body: null, error: 'No key' }
@@ -208,8 +213,9 @@ async function fetchGoogleSearch(query = '') {
   }
 }
 
-/** GET Meteostat hourly (station, start, end, tz) */
+/** GET Meteostat hourly. RapidAPI disabled. */
 async function fetchMeteostatHourly(params = {}) {
+  return { body: null, error: 'RapidAPI disabled' }
   const h = headers('meteostat.p.rapidapi.com')
   if (!h) return { body: null, error: 'No key' }
   const station = params.station || '10637'
@@ -231,8 +237,9 @@ async function fetchMeteostatHourly(params = {}) {
   }
 }
 
-/** Nearest Meteostat station by lat/lon (for weather widget) */
+/** Nearest Meteostat station. RapidAPI disabled. */
 async function fetchMeteostatNearest(lat, lon) {
+  return { body: null, error: 'RapidAPI disabled' }
   const h = headers('meteostat.p.rapidapi.com')
   if (!h) return { body: null, error: 'No key' }
   const latNum = lat != null ? Number(lat) : 40
@@ -252,8 +259,9 @@ async function fetchMeteostatNearest(lat, lon) {
   }
 }
 
-/** ADS-B aircraft around lat/lon using aircraftscatter RapidAPI. */
+/** ADS-B aircraft. RapidAPI disabled; use Military Aircraft (adsb.lol) layer instead. */
 async function fetchAdsbAircraft(lat, lon) {
+  return { body: { type: 'FeatureCollection', features: [] }, error: 'RapidAPI disabled' }
   const h = headers('aircraftscatter.p.rapidapi.com')
   if (!h) return { body: { type: 'FeatureCollection', features: [] }, error: 'No key' }
   const latNum = Number(lat)

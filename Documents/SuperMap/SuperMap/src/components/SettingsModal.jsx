@@ -1,11 +1,5 @@
 import { useState, useEffect } from 'react'
-import {
-  getTabVisibility,
-  setTabVisibility,
-  DEFAULT_TAB_VISIBILITY,
-  getRapidApiKeys,
-  setRapidApiKeys,
-} from '../constants'
+import { getTabVisibility, setTabVisibility, DEFAULT_TAB_VISIBILITY } from '../constants'
 import './SettingsModal.css'
 
 const TAB_LABELS = {
@@ -15,20 +9,13 @@ const TAB_LABELS = {
   newsFeeds: 'News Feeds',
 }
 
-const RAPIDAPI_SEARCH_URL = 'https://rapidapi.com/hub?q=Crime+Data+Police+Dispatch+Traffic'
-
 export default function SettingsModal({ onClose }) {
   const [prefs, setPrefs] = useState(() => getTabVisibility())
-  const [rapidApiKeys, setRapidApiKeysState] = useState(() => getRapidApiKeys())
   const [activeSection, setActiveSection] = useState('tabs')
 
   useEffect(() => {
     setTabVisibility(prefs)
   }, [prefs])
-
-  useEffect(() => {
-    setRapidApiKeys(rapidApiKeys)
-  }, [rapidApiKeys])
 
   const toggle = (key) => {
     setPrefs((p) => ({ ...p, [key]: !p[key] }))
@@ -36,10 +23,6 @@ export default function SettingsModal({ onClose }) {
 
   const reset = () => {
     setPrefs({ ...DEFAULT_TAB_VISIBILITY })
-  }
-
-  const updateRapidApiKey = (name, value) => {
-    setRapidApiKeysState((prev) => ({ ...prev, [name]: value }))
   }
 
   return (
@@ -94,40 +77,9 @@ export default function SettingsModal({ onClose }) {
 
           {activeSection === 'advanced' && (
             <section className="settings-section">
-              <h3>RapidAPI Keys</h3>
+              <h3>Advanced</h3>
               <p className="settings-hint">
-                Add API keys for ADS-B, Flock Cameras, and other RapidAPI integrations.
-              </p>
-              <div className="settings-rapidapi">
-                <label>
-                  <span>Default / Primary Key</span>
-                  <input
-                    type="password"
-                    value={rapidApiKeys.default || ''}
-                    onChange={(e) => updateRapidApiKey('default', e.target.value)}
-                    placeholder="x-rapidapi-key"
-                  />
-                </label>
-                <label>
-                  <span>RapidAPI Key (alt)</span>
-                  <input
-                    type="password"
-                    value={rapidApiKeys.rapidapi || ''}
-                    onChange={(e) => updateRapidApiKey('rapidapi', e.target.value)}
-                    placeholder="Optional second key"
-                  />
-                </label>
-              </div>
-              <a
-                href={RAPIDAPI_SEARCH_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="settings-rapidapi-search"
-              >
-                Search RapidAPI
-              </a>
-              <p className="settings-rapidapi-hint">
-                Search for Crime Data, Police Dispatch, or Traffic APIs to integrate later.
+                RapidAPI-based features (ADS-B, Flock Cameras, Yahoo Finance, Meteostat weather, etc.) have been removed. Use the Resources and Tools tabs for embedded alternatives (e.g. ADS-B Exchange, adsb.lol).
               </p>
             </section>
           )}

@@ -99,6 +99,82 @@
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  transition: width 0.2s ease, min-width 0.2s ease;
+}
+
+.sidebar-left--minimized {
+  width: 48px;
+  min-width: 48px;
+}
+
+.sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.75rem 0.5rem;
+  border-bottom: 1px solid var(--y2k-border);
+  flex-shrink: 0;
+}
+
+.sidebar-left--minimized .sidebar-head {
+  padding: 0.5rem;
+  justify-content: center;
+}
+
+.sidebar-left--minimized .sidebar-title {
+  display: none;
+}
+
+.sidebar-minimize-btn {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  color: var(--y2k-text);
+  background: transparent;
+  border: 1px solid var(--y2k-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.sidebar-minimize-btn:hover {
+  background: var(--y2k-surface-raised);
+  color: var(--y2k-text);
+}
+
+.sidebar-tools-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0.5rem 0;
+}
+
+.sidebar-tools-link {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 1rem;
+  text-align: left;
+  font-size: 0.9rem;
+  color: var(--y2k-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.sidebar-tools-link:hover {
+  color: var(--y2k-text);
+  background: var(--y2k-surface-raised);
+}
+
+.sidebar-tools-link.active {
+  color: var(--y2k-text);
+  font-weight: 600;
+  background: var(--y2k-surface-raised);
 }
 
 .main-feed-view {
@@ -133,11 +209,10 @@
 
 .sidebar-title {
   margin: 0;
-  padding: 1rem 1rem;
+  padding: 0;
   font-size: 1.15rem;
   font-weight: 600;
   color: var(--y2k-text);
-  border-bottom: 1px solid var(--y2k-border);
 }
 
 .nav {
@@ -298,19 +373,27 @@
   left: 0;
   right: 0;
   min-height: 52px;
-  padding: 4px 0 2px;
+  padding: 4px 12px 2px;
   background: linear-gradient(0deg, var(--y2k-metallic-bottom) 0%, var(--y2k-metallic-mid) 50%, var(--y2k-metallic-top) 100%);
   border-top: 1px solid var(--y2k-border);
   box-shadow: 0 -1px 0 var(--y2k-bevel-light);
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   z-index: 100;
-  gap: 2px;
+  gap: 8px;
+}
+
+.footer-nav-wrap {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
 }
 
 .footer-copyright {
+  flex-shrink: 0;
   font-size: 0.65rem;
   color: var(--y2k-text-muted);
 }

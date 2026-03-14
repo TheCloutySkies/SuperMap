@@ -14,27 +14,34 @@ async function fetchJsonWithTimeout(url, timeoutMs = 12000) {
   }
 }
 
+function normalizeMilAircraftList(data) {
+  if (!data || typeof data !== 'object') return []
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data.ac)) return data.ac
+  if (Array.isArray(data.aircraft)) return data.aircraft
+  return []
+}
+
 export async function fetchMilitaryAircraft() {
   try {
-    const data = API_BASE
-      ? await fetchJsonWithTimeout(`${API_BASE}/api/adsb/mil`, 15000)
-      : await fetchJsonWithTimeout('https://api.adsb.lol/v2/mil', 15000)
-    const aircraft = Array.isArray(data?.ac) ? data.ac : []
+    const url = API_BASE ? `${API_BASE}/api/adsb/mil` : 'https://api.adsb.lol/v2/mil'
+    const data = await fetchJsonWithTimeout(url, 15000)
+    const aircraft = normalizeMilAircraftList(data)
     return {
       type: 'FeatureCollection',
       features: aircraft
-        .filter((a) => a.lat != null && a.lon != null)
+        .filter((a) => a && (a.lat != null && a.lon != null))
         .map((a) => ({
           type: 'Feature',
           properties: {
-            title: a.flight?.trim() || a.r || 'MIL',
+            title: (a.flight || a.r || 'MIL')?.trim?.() || 'MIL',
             hex: a.hex || '',
             type: a.t || '',
-            alt: a.alt_baro || a.alt_geom || 0,
-            speed: a.gs || 0,
+            alt: a.alt_baro ?? a.alt_geom ?? 0,
+            speed: a.gs ?? 0,
             source: 'adsb.lol/mil',
           },
-          geometry: { type: 'Point', coordinates: [a.lon, a.lat] },
+          geometry: { type: 'Point', coordinates: [Number(a.lon), Number(a.lat)] },
         })),
     }
   } catch (err) {

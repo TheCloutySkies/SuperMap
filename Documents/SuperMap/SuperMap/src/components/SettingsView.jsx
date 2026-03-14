@@ -31,6 +31,7 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
   const [osintXHandles, setOsintXHandles] = useState([])
   const [defaultOsintXHandles, setDefaultOsintXHandles] = useState([])
   const [subreddits, setSubreddits] = useState([])
+  const [stockTickers, setStockTickers] = useState([])
   const [configLoading, setConfigLoading] = useState(true)
   const [configSaving, setConfigSaving] = useState(false)
   const [newHandle, setNewHandle] = useState('')
@@ -60,11 +61,13 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
         setOsintXHandles(res.data.osintXHandles || [])
         setDefaultOsintXHandles(res.data.defaultOsintXHandles || [])
         setSubreddits(res.data.subreddits || [])
+        setStockTickers(Array.isArray(res.data.stockTickers) ? res.data.stockTickers : [])
       })
       .catch(() => {
         setOsintXHandles([])
         setDefaultOsintXHandles([])
         setSubreddits([])
+        setStockTickers([])
       })
       .finally(() => setConfigLoading(false))
   }, [apiBase])
@@ -79,6 +82,7 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
       .then((res) => {
         setOsintXHandles(res.data.osintXHandles || [])
         setSubreddits(res.data.subreddits || [])
+        if (res.data.stockTickers !== undefined) setStockTickers(res.data.stockTickers || [])
       })
       .finally(() => setConfigSaving(false))
   }
@@ -119,11 +123,30 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
     saveConfig({ subreddits: next })
   }
 
+  const [newTickerSymbol, setNewTickerSymbol] = useState('')
+  const [newTickerName, setNewTickerName] = useState('')
+  const addStockTicker = () => {
+    const symbol = newTickerSymbol.trim()
+    if (!symbol) return
+    const name = newTickerName.trim() || symbol
+    const next = [...stockTickers, { symbol, name }]
+    setStockTickers(next)
+    setNewTickerSymbol('')
+    setNewTickerName('')
+    saveConfig({ stockTickers: next })
+  }
+  const removeStockTicker = (index) => {
+    const next = stockTickers.filter((_, i) => i !== index)
+    setStockTickers(next)
+    saveConfig({ stockTickers: next })
+  }
+
   const sections = [
     { id: 'visuals', label: 'Visuals' },
     { id: 'tabs', label: 'Tab visibility' },
     { id: 'xhandles', label: 'X (Twitter) handles' },
     { id: 'subreddits', label: 'Subreddits' },
+    { id: 'stocktickers', label: 'Stock tickers' },
     { id: 'account', label: 'Account' },
   ]
 
@@ -310,6 +333,51 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
                     <li key={sub} className="settings-list-item">
                       <span className="settings-list-label">r/{sub}</span>
                       <button type="button" className="settings-remove-btn" onClick={() => removeSubreddit(i)} aria-label="Remove">
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </section>
+        )}
+
+        {activeSection === 'stocktickers' && (
+          <section className="settings-view-section">
+            <h2>Stock tickers</h2>
+            <p className="settings-hint">Symbols shown in the homepage Stocks widget (e.g. SPY, AAPL, GC=F). Finnhub symbols; save to backend.</p>
+            {configLoading ? (
+              <p className="settings-loading">Loading…</p>
+            ) : (
+              <>
+                <div className="settings-list-add">
+                  <input
+                    type="text"
+                    value={newTickerSymbol}
+                    onChange={(e) => setNewTickerSymbol(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && addStockTicker()}
+                    placeholder="Symbol (e.g. SPY, AAPL)"
+                    className="settings-input"
+                  />
+                  <input
+                    type="text"
+                    value={newTickerName}
+                    onChange={(e) => setNewTickerName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && addStockTicker()}
+                    placeholder="Label (optional)"
+                    className="settings-input"
+                  />
+                  <button type="button" className="settings-add-btn" onClick={addStockTicker} disabled={configSaving}>
+                    Add
+                  </button>
+                </div>
+                <ul className="settings-list">
+                  {stockTickers.map((t, i) => (
+                    <li key={`${t.symbol}-${i}`} className="settings-list-item">
+                      <span className="settings-list-label">{t.symbol}</span>
+                      <span className="settings-list-meta">{t.name !== t.symbol ? t.name : ''}</span>
+                      <button type="button" className="settings-remove-btn" onClick={() => removeStockTicker(i)} aria-label="Remove">
                         ×
                       </button>
                     </li>

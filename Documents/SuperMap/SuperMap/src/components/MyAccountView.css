@@ -73,6 +73,20 @@
   margin-bottom: 0.45rem;
 }
 
+.my-account-avatar-hint {
+  margin: 0.2rem 0 0.4rem;
+  font-size: 0.8rem;
+  color: var(--y2k-text-muted, #8b949e);
+}
+
+.my-account-resize-link {
+  color: var(--y2k-accent, #58a6ff);
+  text-decoration: none;
+}
+.my-account-resize-link:hover {
+  text-decoration: underline;
+}
+
 .my-account-sublist {
   margin-top: 0.6rem;
 }

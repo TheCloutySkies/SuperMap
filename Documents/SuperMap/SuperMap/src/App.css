@@ -78,8 +78,28 @@
   max-width: 480px;
 }
 
+.app-omnibar-right {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: auto;
+}
+.app-omnibar-copyright {
+  font-size: 0.7rem;
+  color: var(--y2k-text-muted, #8b949e);
+  white-space: nowrap;
+}
 .app-omnibar-auth-wrap {
   flex-shrink: 0;
+}
+@media (max-width: 600px) {
+  .app-omnibar-copyright {
+    font-size: 0.65rem;
+    max-width: 6rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 
@@ -567,6 +587,18 @@
   .app--device-mobile .main-feed-view {
     padding: 0.5rem 0.75rem;
     font-size: clamp(0.875rem, 2.2vw, 1rem);
+  }
+
+  .app--device-mobile .main {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .app--device-mobile .main-content-scroll {
+    -webkit-overflow-scrolling: touch;
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
   }
 }
 

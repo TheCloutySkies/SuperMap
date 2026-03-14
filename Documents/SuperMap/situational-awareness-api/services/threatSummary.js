@@ -265,14 +265,45 @@ function fallbackSummaryFromTitles(articles) {
 
 const PROMPT_PREFIX = `You are writing the "news of the day" summary for a situational-awareness dashboard. Use the following articles from the last 24 hours.
 
-Your main job: Write a 1-3 paragraph narrative summary. Do NOT just list or regurgitate headlines. Synthesize what is actually happening: connect events, explain causes and consequences, and say why it matters to the reader. Write in clear, direct prose (like a brief editorial or intelligence brief), not bullet-point headlines.
+Your main job: Write a short dissertation-style brief. Do NOT just list or regurgitate headlines. Combine and synthesize headline information into an actual analytical summary: connect events across sources, explain causes and consequences, and state why it matters. Write in clear, direct prose (like an intelligence or policy brief), not as a list of headlines.
 
-Focus on: wars, military escalation, geopolitical tensions, intelligence developments, and major instability. Include implications (e.g. energy prices, supply chains, civil unrest) where relevant.
+Structure your Daily Summary into these sections (include only sections that have relevant content):
+
+Middle East: Developments in the Middle East (Israel, Iran, Gulf, Levant, Yemen, etc.).
+
+USA: Domestic and foreign-policy developments in the United States.
+
+Asia: Developments in East Asia, Southeast Asia, South Asia, and the Pacific.
+
+Economics: Markets, energy, supply chains, sanctions, and economic implications of geopolitical events.
+
+Russia/Ukraine: Russia, Ukraine, and related European security developments.
+
+General Developments: Other major geopolitical, military, or intelligence developments that do not fit the above.
+
+For each section write 1–3 sentences that synthesize the news (do not simply repeat headlines). If a section has no relevant content, omit it.
 
 Output format (use these exact section labels):
 
 Daily Summary:
-[Write 1 to 3 paragraphs here. Each paragraph should be 2-5 sentences. Synthesize and explain; do not simply repeat headline phrases.]
+
+Middle East:
+[1–3 sentences synthesizing relevant headlines.]
+
+USA:
+[1–3 sentences synthesizing relevant headlines.]
+
+Asia:
+[1–3 sentences synthesizing relevant headlines.]
+
+Economics:
+[1–3 sentences synthesizing relevant headlines.]
+
+Russia/Ukraine:
+[1–3 sentences synthesizing relevant headlines.]
+
+General Developments:
+[1–3 sentences synthesizing relevant headlines.]
 
 Threat Summary:
 - 3 to 5 short bullet points (optional; only the most critical follow-ups).

@@ -43,13 +43,14 @@ function stripHtml(html) {
   return (div.textContent || div.innerText || '').trim().slice(0, 100)
 }
 
-export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footerTabs, isMobileLayout, onOpenAuth, onNavigateAccount }) {
+export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footerTabs, isMobileLayout, onOpenAuth, onNavigateAccount, onShowLocationOnMap }) {
   const [nitterImages, setNitterImages] = useState([])
   const [forumPosts, setForumPosts] = useState([])
   const [forumCommunities, setForumCommunities] = useState([])
   const [threatSummary, setThreatSummary] = useState(null)
   const [threatSummaryLoading, setThreatSummaryLoading] = useState(true)
   const [threatSummaryError, setThreatSummaryError] = useState(null)
+  const [defcon, setDefcon] = useState(null)
   const [osintPhotoModal, setOsintPhotoModal] = useState(null)
   const [gasPrices, setGasPrices] = useState(null)
   const [gasPricesLoading, setGasPricesLoading] = useState(false)
@@ -82,6 +83,13 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
   useEffect(() => {
     if (!API_BASE) { setThreatSummaryLoading(false); return }
     fetchThreatSummary(false)
+  }, [])
+
+  useEffect(() => {
+    if (!API_BASE) return
+    axios.get(`${API_BASE}/api/defcon`, { timeout: 12000 })
+      .then((res) => { if (res.data && (res.data.level != null || res.data.label)) setDefcon(res.data) })
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -204,6 +212,25 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
                       {threatSummary.threat_level || 'GUARDED'}
                     </span>
                   </div>
+                  {defcon?.url && (
+                    <div className="home-screen-threat-defcon">
+                      <span className="home-screen-threat-defcon-label">DEFCON (defconlevel.com)</span>
+                      <div className="home-screen-threat-defcon-graphic" role="img" aria-label={`DEFCON level ${defcon.level ?? '—'}`}>
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <span
+                            key={n}
+                            className={`home-screen-threat-defcon-segment ${defcon.level != null && n === defcon.level ? 'home-screen-threat-defcon-segment--active' : ''}`}
+                            title={n === (defcon.level ?? 0) ? `Current: DEFCON ${n}` : `DEFCON ${n}`}
+                          >
+                            {n}
+                          </span>
+                        ))}
+                      </div>
+                      <a href={defcon.url} target="_blank" rel="noopener noreferrer" className="home-screen-threat-defcon-link">
+                        {defcon.label ?? 'Current level'} · defconlevel.com
+                      </a>
+                    </div>
+                  )}
                   <div className="home-screen-threat-clock">
                     <span className="home-screen-threat-clock-text">
                       <a href={DOOMSDAY_CLOCK_URL} target="_blank" rel="noopener noreferrer" className="home-screen-threat-clock-link">{DOOMSDAY_CLOCK_SECONDS} seconds to midnight</a>
@@ -277,39 +304,6 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
                 ))}
               </ul>
             </section>
-            <section className="home-screen-section home-screen-forum">
-              <h2 className="home-screen-section-title">Community posts</h2>
-              {forumPosts.length === 0 ? (
-                <p className="home-screen-forum-empty">No forum posts yet. Open Community to browse or post.</p>
-              ) : (
-                <ul className="home-screen-forum-list">
-                  {forumPosts.map((p) => (
-                    <li key={p.id}>
-                      <button
-                        type="button"
-                        className="home-screen-forum-item"
-                        onClick={() => handleForumPostClick(p)}
-                      >
-                        <span className="home-screen-forum-item-title">{p.title || 'Untitled'}</span>
-                        <span className="home-screen-forum-item-meta">
-                          {(p.category || getCommunityName(p.community_id))} · {p.created_at ? new Date(p.created_at).toLocaleDateString(undefined, { dateStyle: 'short' }) : ''}
-                        </span>
-                        {p.content && (
-                          <span className="home-screen-forum-item-preview">{stripHtml(p.content)}</span>
-                        )}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <button
-                type="button"
-                className="home-screen-forum-link btn-y2k"
-                onClick={() => handleCardClick('community')}
-              >
-                Open Community →
-              </button>
-            </section>
             <section className="home-screen-section home-screen-gas-prices card-y2k" id="gas-prices">
               <h2 className="home-screen-section-title">Gas Prices (US)</h2>
               {gasPricesStates.length > 0 && (
@@ -337,12 +331,7 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
               )}
               {!gasPricesLoading && gasPrices && (
                 <>
-                  {gasPrices.requiresEiaKey || (gasPrices.national == null && (!Array.isArray(gasPrices.states) || gasPrices.states.length === 0 || gasPrices.states[0].price == null)) ? (
-                    <p className="home-screen-gas-prices-no-data">
-                      Real-time data requires an EIA API key. Add <code>EIA_API_KEY</code> to your backend <code>.env</code>. Free key at{' '}
-                      <a href="https://www.eia.gov/opendata/register.php" target="_blank" rel="noopener noreferrer">eia.gov/opendata</a>.
-                    </p>
-                  ) : Array.isArray(gasPrices.states) && gasPrices.states.length > 0 && gasPrices.states[0].price != null ? (
+                  {Array.isArray(gasPrices.states) && gasPrices.states.length > 0 && gasPrices.states[0].price != null ? (
                     <>
                       <div className="home-screen-gas-prices-national">
                         <span className="home-screen-gas-prices-state-label">{gasPrices.states[0].name}</span>
@@ -361,6 +350,11 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
                       <span className="home-screen-gas-prices-unit">{gasPrices.unit}</span>
                       <span className="home-screen-gas-prices-updated">Updated {gasPrices.updatedAt}</span>
                     </div>
+                  ) : gasPrices.requiresEiaKey ? (
+                    <p className="home-screen-gas-prices-no-data">
+                      Real-time data requires an EIA API key. Add <code>EIA_API_KEY</code> to your backend <code>.env</code>. Free key at{' '}
+                      <a href="https://www.eia.gov/opendata/register.php" target="_blank" rel="noopener noreferrer">eia.gov/opendata</a>.
+                    </p>
                   ) : selectedGasState ? (
                     <p className="home-screen-gas-prices-no-data">Data unavailable for this state from EIA.</p>
                   ) : (
@@ -379,42 +373,42 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
                 </>
               )}
             </section>
-          </div>
-          <aside className="home-screen-sidebar">
-            <Suspense fallback={<div className="home-screen-sidebar-block card-y2k widget-card"><p className="widget-card-loading">Loading widgets…</p></div>}>
-              <div id="stocks"><StockWidget onOpenSettings={() => onNavigate?.('settings')} /></div>
-              <div id="headlines"><HeadlinesWidget /></div>
-              <div id="earthquakes"><EarthquakesWidget /></div>
-              <div id="world-clock"><WorldClock /></div>
-              <div id="space"><SpaceWidget /></div>
-            </Suspense>
-            <div className="home-screen-sidebar-block card-y2k home-screen-sidebar-photos">
-              <h3 className="home-screen-sidebar-photos-title">From OSINT (X) feed</h3>
+            <section className="home-screen-section home-screen-photos-main card-y2k">
+              <h2 className="home-screen-section-title">Latest Images from X</h2>
               {nitterImages.length > 0 ? (
-                <div className="home-screen-sidebar-photos-grid">
+                <div className="home-screen-photos-main-grid">
                   {nitterImages.map((item, i) => (
                     <div
                       key={`${item.src}-${i}`}
-                      className="home-screen-sidebar-photo-wrap"
+                      className="home-screen-photos-main-wrap"
                       onMouseEnter={(e) => e.currentTarget.classList.add('is-hover')}
                       onMouseLeave={(e) => e.currentTarget.classList.remove('is-hover')}
                     >
                       <button
                         type="button"
-                        className="home-screen-sidebar-photo"
+                        className="home-screen-photos-main-thumb"
                         onClick={() => setOsintPhotoModal(item)}
                         title="Expand"
                       >
                         <img src={item.src} alt="" loading="lazy" referrerPolicy="no-referrer" />
-                        <span className="home-screen-sidebar-photo-overlay">Expand</span>
+                        <span className="home-screen-photos-main-overlay">Expand</span>
                       </button>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="home-screen-hint">Connect to the API to show photos from the Nitter/OSINT X feed.</p>
+                <p className="home-screen-hint">Connect to the API to show photos from the OSINT X feed.</p>
               )}
-            </div>
+            </section>
+          </div>
+          <aside className="home-screen-sidebar">
+            <Suspense fallback={<div className="home-screen-sidebar-block card-y2k widget-card"><p className="widget-card-loading">Loading widgets…</p></div>}>
+              <div id="stocks"><StockWidget onOpenSettings={() => onNavigate?.('settings')} /></div>
+              <div id="headlines"><HeadlinesWidget /></div>
+              <div id="earthquakes"><EarthquakesWidget onShowOnMap={onShowLocationOnMap} /></div>
+              <div id="world-clock"><WorldClock /></div>
+              <div id="space"><SpaceWidget /></div>
+            </Suspense>
             {osintPhotoModal && (
               <div className="home-screen-photo-dialog-backdrop" role="dialog" aria-modal="true" aria-label="OSINT photo" onClick={() => setOsintPhotoModal(null)}>
                 <div className="home-screen-photo-dialog" onClick={(e) => e.stopPropagation()}>

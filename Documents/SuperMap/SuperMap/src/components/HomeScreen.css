@@ -103,7 +103,7 @@
   padding-bottom: calc(0.45rem + 1px);
 }
 
-/* Main: two columns */
+/* Main: two columns (desktop = old layout: quick access, community, footer left; widgets right) */
 .home-screen-main {
   display: grid;
   grid-template-columns: 1fr 280px;
@@ -115,6 +115,8 @@
   padding: 1rem 1.25rem;
   border-right: 1px solid var(--y2k-border);
 }
+
+/* Desktop: show Welcome, Threat, Gas in main left so the section is filled out */
 
 /* Featured dark block */
 .home-screen-featured {
@@ -212,6 +214,61 @@
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
+}
+
+.home-screen-threat-defcon {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--y2k-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.home-screen-threat-defcon-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--y2k-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.home-screen-threat-defcon-graphic {
+  display: flex;
+  gap: 0.25rem;
+  align-items: stretch;
+}
+.home-screen-threat-defcon-segment {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--y2k-text-muted);
+  background: var(--y2k-surface-raised);
+  border: 1px solid var(--y2k-border);
+  border-radius: 4px;
+  padding: 0.35rem 0.2rem;
+  transition: color 0.2s, background 0.2s, border-color 0.2s;
+}
+.home-screen-threat-defcon-segment--active {
+  color: #fff;
+  border-color: var(--y2k-accent);
+  background: var(--y2k-accent);
+}
+.home-screen-threat-defcon-segment:nth-child(1).home-screen-threat-defcon-segment--active { background: #c62828; border-color: #c62828; }
+.home-screen-threat-defcon-segment:nth-child(2).home-screen-threat-defcon-segment--active { background: #e65100; border-color: #e65100; }
+.home-screen-threat-defcon-segment:nth-child(3).home-screen-threat-defcon-segment--active { background: #f9a825; border-color: #f9a825; color: #1a1a1a; }
+.home-screen-threat-defcon-segment:nth-child(4).home-screen-threat-defcon-segment--active { background: #2e7d32; border-color: #2e7d32; }
+.home-screen-threat-defcon-segment:nth-child(5).home-screen-threat-defcon-segment--active { background: #1565c0; border-color: #1565c0; }
+.home-screen-threat-defcon-link {
+  font-size: 0.8rem;
+  color: var(--y2k-accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+.home-screen-threat-defcon-link:hover {
+  text-decoration: underline;
 }
 
 .home-screen-threat-level-label {
@@ -557,6 +614,65 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Latest Images from X — main grid, larger thumbnails */
+.home-screen-photos-main {
+  margin-top: 1.5rem;
+  margin-bottom: 1.25rem;
+}
+.home-screen-photos-main-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+}
+.home-screen-photos-main-wrap {
+  position: relative;
+  aspect-ratio: 1;
+}
+.home-screen-photos-main-thumb {
+  display: block;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--y2k-border);
+  background: var(--y2k-surface);
+  padding: 0;
+  cursor: pointer;
+  position: relative;
+  font: inherit;
+}
+.home-screen-photos-main-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.home-screen-photos-main-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.home-screen-photos-main-wrap.is-hover .home-screen-photos-main-overlay,
+.home-screen-photos-main-thumb:focus .home-screen-photos-main-overlay {
+  opacity: 1;
+}
+
+@media (max-width: 900px) {
+  .home-screen-photos-main-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+  }
+}
+
 .home-screen-list {
   list-style: none;
   margin: 0;
@@ -890,27 +1006,188 @@
   left: auto;
 }
 
+/* Mobile layout: single column, touch-friendly, sidebar below main. */
 @media (max-width: 900px) {
   .home-screen-main {
     grid-template-columns: 1fr;
   }
-
   .home-screen-main-left {
     border-right: none;
     border-bottom: 1px solid var(--y2k-border);
   }
-
   .home-screen-sidebar {
     border-top: 1px solid var(--y2k-border);
   }
-
   .home-screen-footer-col {
     min-width: 100%;
   }
-
   .home-screen-footer-col:not(:last-child) {
     border-bottom: 1px solid var(--y2k-border);
     padding-bottom: 0.75rem;
     margin-bottom: 0.25rem;
   }
+}
+
+/* Device-driven mobile: same layout when .app has .app--device-mobile (detect or Settings force). */
+.app--device-mobile .home-screen {
+  padding: 0 0.5rem 1.5rem;
+  padding-left: max(0.5rem, env(safe-area-inset-left));
+  padding-right: max(0.5rem, env(safe-area-inset-right));
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+}
+
+.app--device-mobile .home-screen-frame {
+  max-width: 100%;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+}
+
+.app--device-mobile .home-screen-header {
+  padding: 0.5rem 0.75rem 0;
+}
+
+.app--device-mobile .home-screen-header-brand {
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.app--device-mobile .home-screen-logo {
+  font-size: 1.35rem;
+}
+
+.app--device-mobile .home-screen-date {
+  font-size: 0.75rem;
+}
+
+.app--device-mobile .home-screen-nav {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -0.25rem;
+  padding-bottom: 2px;
+}
+
+.app--device-mobile .home-screen-nav-tab {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: 0.5rem 0.75rem;
+  min-height: 44px;
+  -webkit-tap-highlight-color: rgba(41, 182, 246, 0.2);
+}
+
+/* Homepage column layout: viewport-only. Wide = sidebar right; narrow = stacked. (No device class so touch laptops get sidebar.) */
+.app--device-mobile .home-screen-main {
+  min-height: 0;
+}
+.app--device-mobile .home-screen-main-left {
+  padding: 0.75rem 1rem;
+  border-right: none;
+  border-bottom: 1px solid var(--y2k-border);
+}
+
+.app--device-mobile .home-screen-featured {
+  padding: 1rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.app--device-mobile .home-screen-featured-title {
+  font-size: 1.15rem;
+}
+
+.app--device-mobile .home-screen-featured-sub {
+  font-size: 0.85rem;
+}
+
+.app--device-mobile .home-screen-section-title {
+  font-size: 0.95rem;
+}
+
+.app--device-mobile .home-screen-card {
+  min-height: 48px;
+  padding: 0.85rem 1rem;
+  -webkit-tap-highlight-color: rgba(41, 182, 246, 0.15);
+}
+
+.app--device-mobile .home-screen-forum-item {
+  min-height: 48px;
+  padding: 0.65rem 0.85rem;
+}
+
+.app--device-mobile .home-screen-forum-link,
+.app--device-mobile .btn-y2k {
+  min-height: 44px;
+  padding: 0.5rem 0.85rem;
+  -webkit-tap-highlight-color: rgba(41, 182, 246, 0.2);
+}
+
+.app--device-mobile .home-screen-gas-prices {
+  padding: 0.75rem 0.85rem;
+  margin-top: 1.25rem;
+}
+
+.app--device-mobile .home-screen-gas-prices-select {
+  max-width: none;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.5rem 0.65rem;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app--device-mobile .home-screen-gas-prices-value {
+  font-size: 1.25rem;
+}
+
+.app--device-mobile .home-screen-gas-prices-regions li {
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  align-items: center;
+}
+
+.app--device-mobile .home-screen-gas-prices-no-data {
+  word-break: break-word;
+}
+
+.app--device-mobile .home-screen-threat-refresh {
+  min-height: 44px;
+  padding: 0.5rem 0.85rem;
+}
+
+.app--device-mobile .home-screen-sidebar {
+  border-top: 1px solid var(--y2k-border);
+  padding: 0.75rem 1rem;
+}
+
+.app--device-mobile .home-screen-sidebar-block {
+  margin-bottom: 0.75rem;
+}
+
+.app--device-mobile .home-screen-sidebar-photos-grid {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.35rem;
+}
+
+.app--device-mobile .home-screen-footer-strip {
+  padding: 0.6rem 0.75rem;
+  gap: 0.5rem;
+}
+
+.app--device-mobile .home-screen-footer-link {
+  min-height: 44px;
+  padding: 0.5rem 0.65rem;
+  display: inline-flex;
+  align-items: center;
+  -webkit-tap-highlight-color: rgba(41, 182, 246, 0.2);
+}
+
+.app--device-mobile .home-screen-footer-col {
+  min-width: 100%;
+}
+
+.app--device-mobile .home-screen-footer-col:not(:last-child) {
+  border-bottom: 1px solid var(--y2k-border);
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.25rem;
 }

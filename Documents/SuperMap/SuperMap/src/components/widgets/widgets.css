@@ -26,6 +26,58 @@
 .widget-stock-change.positive { color: #81c784; }
 .widget-stock-change.negative { color: #e57373; }
 
+.widget-stock-period-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+.widget-stock-period-tab {
+  padding: 0.2rem 0.45rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: var(--y2k-surface-raised);
+  border: 1px solid var(--y2k-border);
+  border-radius: 4px;
+  color: var(--y2k-text-muted);
+  cursor: pointer;
+}
+.widget-stock-period-tab:hover {
+  color: var(--y2k-text);
+  border-color: var(--y2k-border);
+}
+.widget-stock-period-tab.active {
+  background: var(--y2k-accent);
+  border-color: var(--y2k-accent);
+  color: #fff;
+}
+
+.widget-stock-ticker-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+.widget-stock-ticker-tab {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--y2k-surface-raised);
+  border: 1px solid var(--y2k-border);
+  border-radius: 4px;
+  color: var(--y2k-text-muted);
+  cursor: pointer;
+}
+.widget-stock-ticker-tab:hover {
+  color: var(--y2k-text);
+  border-color: var(--y2k-border);
+}
+.widget-stock-ticker-tab.active {
+  background: var(--y2k-accent);
+  border-color: var(--y2k-accent);
+  color: #fff;
+}
+
 .widget-stock-settings-hint {
   margin: 0 0 0.4rem;
   font-size: 0.75rem;
@@ -243,14 +295,83 @@
   font-size: 0.8rem;
 }
 .widget-headlines-item {
-  padding: 0.35rem 0;
+  padding: 0;
   border-bottom: 1px solid var(--y2k-border);
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: 0;
 }
 .widget-headlines-item:last-child {
   border-bottom: none;
+}
+.widget-headlines-item {
+  position: relative;
+}
+.widget-headlines-item-btn {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 0.1rem 0.5rem;
+  align-items: start;
+  width: 100%;
+  padding: 0.35rem 0;
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: rgba(41, 182, 246, 0.15);
+}
+.widget-headlines-item-btn:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.widget-headlines-title-preview {
+  color: var(--y2k-accent);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.35;
+  grid-column: 1;
+}
+.widget-headlines-source {
+  font-size: 0.7rem;
+  color: var(--y2k-text-muted);
+  grid-column: 1;
+}
+.widget-headlines-expand-icon {
+  grid-column: 2;
+  grid-row: 1 / -1;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--y2k-text-muted);
+  align-self: center;
+}
+.widget-headlines-detail {
+  padding: 0 0 0.75rem;
+  border-top: 1px solid var(--y2k-border);
+  margin-top: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.widget-headlines-detail-title {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--y2k-text);
+  line-height: 1.4;
+}
+.widget-headlines-detail-synopsis {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--y2k-text-muted);
+  line-height: 1.45;
+}
+.widget-headlines-detail-link {
+  display: inline-block;
+  margin-top: 0.15rem;
 }
 .widget-headlines-link,
 .widget-headlines-title {
@@ -264,10 +385,6 @@
 .widget-headlines-link:hover {
   color: var(--y2k-text);
   text-decoration: underline;
-}
-.widget-headlines-source {
-  font-size: 0.7rem;
-  color: var(--y2k-text-muted);
 }
 
 /* EarthquakesWidget */
@@ -295,11 +412,136 @@
 }
 .widget-earthquakes-place {
   color: var(--y2k-text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-word;
+  line-height: 1.25;
 }
 .widget-earthquakes-time {
   font-size: 0.7rem;
   color: var(--y2k-text-muted);
+}
+
+.widget-earthquakes-item-btn {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.5rem;
+  align-items: center;
+  width: 100%;
+  margin: 0;
+  padding: 0.3rem 0;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--y2k-border);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: rgba(41, 182, 246, 0.15);
+}
+.widget-earthquakes-item:last-child .widget-earthquakes-item-btn {
+  border-bottom: none;
+}
+.widget-earthquakes-item-btn:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.widget-earthquakes-detail-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.widget-earthquakes-detail-card {
+  max-width: 360px;
+  width: 100%;
+  padding: 1.25rem;
+  border: 1px solid var(--y2k-border);
+  border-radius: 4px;
+  background: var(--y2k-surface);
+}
+.widget-earthquakes-detail-title {
+  margin: 0 0 1rem;
+  font-size: 1.1rem;
+  color: var(--y2k-text);
+}
+.widget-earthquakes-detail-dl {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+}
+.widget-earthquakes-detail-dl dt {
+  margin-top: 0.5rem;
+  color: var(--y2k-text-muted);
+  font-weight: 500;
+}
+.widget-earthquakes-detail-dl dt:first-of-type { margin-top: 0; }
+.widget-earthquakes-detail-dl dd {
+  margin: 0.15rem 0 0;
+  color: var(--y2k-text);
+}
+.widget-earthquakes-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+.widget-earthquakes-detail-link {
+  display: inline-block;
+  margin-right: 0;
+  margin-bottom: 0;
+}
+.widget-earthquakes-detail-close {
+  margin-top: 0;
+}
+
+/* Mobile: larger tap targets and readable rows */
+.app--device-mobile .widget-stock-tickers li {
+  min-height: 44px;
+  padding: 0.4rem 0;
+}
+
+.app--device-mobile .widget-outage-item {
+  min-height: 44px;
+  padding: 0.5rem 0;
+  grid-template-columns: 1fr auto;
+  gap: 0.35rem;
+}
+
+.app--device-mobile .widget-clock-row {
+  min-height: 44px;
+  padding: 0.4rem 0;
+}
+
+.app--device-mobile .widget-headlines-item {
+  min-height: 44px;
+}
+.app--device-mobile .widget-headlines-item-btn {
+  min-height: 44px;
+  padding: 0.5rem 0;
+}
+.app--device-mobile .widget-headlines-link,
+.app--device-mobile .widget-headlines-title,
+.app--device-mobile .widget-headlines-title-preview {
+  -webkit-tap-highlight-color: rgba(41, 182, 246, 0.15);
+}
+
+.app--device-mobile .widget-earthquakes-item {
+  min-height: 44px;
+  padding: 0.45rem 0;
+}
+
+.app--device-mobile .widget-space-eonet-list li {
+  min-height: 44px;
+  padding: 0.5rem 0;
+}
+
+.app--device-mobile .widget-space-apod-link {
+  -webkit-tap-highlight-color: transparent;
 }

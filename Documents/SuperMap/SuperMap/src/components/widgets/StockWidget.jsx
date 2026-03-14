@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import WidgetCard from './WidgetCard'
-import EChartWidget from './EChartWidget'
 
 const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
   ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
@@ -32,25 +31,6 @@ export default function StockWidget({ onOpenSettings }) {
     fetchStocks(false)
   }, [])
 
-  const option = data?.series?.length
-    ? {
-        tooltip: { trigger: 'axis' },
-        legend: { show: false },
-        grid: { left: 36, right: 12, top: 8, bottom: 24 },
-        xAxis: { type: 'category', data: data?.timestamps || [], boundaryGap: false },
-        yAxis: { type: 'value', scale: true, splitLine: { show: true } },
-        series: data.series.map((s) => ({
-          name: s.name,
-          type: 'line',
-          smooth: true,
-          symbol: 'none',
-          data: s.values,
-          lineStyle: { width: 1.5 },
-          areaStyle: { opacity: 0.2 },
-        })),
-      }
-    : null
-
   const tickers = (data?.current && data.current.length > 0)
     ? data.current.map((t, i) => {
         const vals = data.series?.[i]?.values
@@ -59,9 +39,9 @@ export default function StockWidget({ onOpenSettings }) {
           const v = vals[vals.length - 1]
           const prev = vals[vals.length - 2]
           const change = (v != null && prev != null && prev !== 0) ? (((v - prev) / prev) * 100).toFixed(2) + '%' : (v != null ? '0.00%' : '—')
-          return { symbol: t.symbol, value: v != null ? Number(v).toFixed(2) : '—', change }
+          return { symbol: t.symbol, name: data.series?.[i]?.name || t.symbol, value: v != null ? Number(v).toFixed(2) : '—', change }
         }
-        return { symbol: t.symbol, value: t.value ?? '—', change: t.change ?? '—' }
+        return { symbol: t.symbol, name: data.series?.[i]?.name || t.symbol, value: t.value ?? '—', change: t.change ?? '—' }
       })
     : []
 
@@ -81,7 +61,7 @@ export default function StockWidget({ onOpenSettings }) {
         <ul className="widget-stock-tickers">
           {tickers.map((t) => (
             <li key={t.symbol}>
-              <span className="widget-stock-symbol">{t.symbol}</span>
+              <span className="widget-stock-symbol">{t.name || t.symbol}</span>
               <span className="widget-stock-value">{t.value}</span>
               <span className={`widget-stock-change ${(t.change || '').startsWith('-') ? 'negative' : 'positive'}`}>
                 {t.change}
@@ -90,7 +70,6 @@ export default function StockWidget({ onOpenSettings }) {
           ))}
         </ul>
       )}
-      {option && <EChartWidget option={option} height="140px" />}
     </WidgetCard>
   )
 }

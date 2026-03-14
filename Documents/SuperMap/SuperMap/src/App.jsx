@@ -121,6 +121,8 @@ function App() {
   const prevFooterModeRef = useRef(null)
   const resourcesScrollRef = useRef({})
 
+  // Detect phone/small-screen: viewport ≤900px, or touch-primary device, or mobile UA.
+  // Layout switches via .app--device-mobile (and Settings can force mobile/desktop).
   useEffect(() => {
     const detectDevice = () => {
       if (typeof window === 'undefined') {
@@ -128,10 +130,10 @@ function App() {
         return
       }
       const isMobileViewport = window.matchMedia('(max-width: 900px)').matches
-      const isTouchDevice = window.matchMedia('(pointer: coarse)').matches
+      const isTouchPrimary = window.matchMedia('(pointer: coarse)').matches
       const ua = window.navigator?.userAgent || ''
-      const isUaMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua)
-      setDeviceType(isMobileViewport || isTouchDevice || isUaMobile ? 'mobile' : 'desktop')
+      const isUaMobile = /Android|iPhone|iPad|iPod|webOS|Mobile|BlackBerry|IEMobile|Opera Mini/i.test(ua)
+      setDeviceType(isMobileViewport || isTouchPrimary || isUaMobile ? 'mobile' : 'desktop')
     }
     detectDevice()
     window.addEventListener('resize', detectDevice)
@@ -184,6 +186,27 @@ function App() {
 
   const clearFlyToTarget = useCallback(() => setFlyToTarget(null), [])
 
+  const apiBase = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
+    ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
+    : 'http://localhost:3001'
+
+  const handleShowLocationOnMap = useCallback((place) => {
+    const q = typeof place === 'string' ? place.trim() : ''
+    if (!q) return
+    setSearchQuery(q)
+    setActiveView('osint-map')
+    setFooterMode(FOOTER_MODES.MAPS)
+    fetch(`${apiBase}/api/geocode?q=${encodeURIComponent(q)}&limit=1`, { signal: AbortSignal.timeout(10000) })
+      .then((r) => r.json())
+      .then((rows) => {
+        const first = Array.isArray(rows) ? rows[0] : null
+        const lat = first?.lat != null ? Number(first.lat) : null
+        const lng = first?.lon != null ? Number(first.lon) : null
+        if (lng != null && lat != null) setFlyToTarget({ lng, lat, zoom: 10 })
+      })
+      .catch(() => {})
+  }, [])
+
   const handlePinnedToMap = useCallback((feature) => {
     if (!feature?.geometry?.coordinates?.length) return
     setSearchResultsGeoJson((prev) => ({
@@ -231,10 +254,6 @@ function App() {
     else if (viewId === 'report-maker') setFooterMode(FOOTER_MODES.REPORTS)
     else if (viewId === 'settings') setFooterMode(FOOTER_MODES.SETTINGS)
   }, [])
-
-  const apiBase = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
-    ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
-    : 'http://localhost:3001'
 
   // Warm up all APIs and functions immediately on startup
   useEffect(() => {
@@ -321,11 +340,14 @@ function App() {
           {isMapView && !isMobileLayout && (
             <PlaceSearch onFlyTo={handleFlyTo} />
           )}
-          {activeView !== 'home' && (
-            <div className="app-omnibar-auth-wrap">
-              <HeaderAuth onOpenAuth={() => setShowAuthModal(true)} onNavigateAccount={setActiveViewWithMode} />
-            </div>
-          )}
+          <div className="app-omnibar-right">
+            <span className="app-omnibar-copyright" aria-hidden>© {new Date().getFullYear()} TheCloutySkies</span>
+            {activeView !== 'home' && (
+              <div className="app-omnibar-auth-wrap">
+                <HeaderAuth onOpenAuth={() => setShowAuthModal(true)} onNavigateAccount={setActiveViewWithMode} />
+              </div>
+            )}
+          </div>
         </div>
       </header>
       <div className="app-body">
@@ -418,6 +440,7 @@ function App() {
                 isMobileLayout={isMobileLayout}
                 onOpenAuth={() => setShowAuthModal(true)}
                 onNavigateAccount={setActiveViewWithMode}
+                onShowLocationOnMap={handleShowLocationOnMap}
               />
             )}
           {isMapView && (
@@ -627,9 +650,6 @@ function App() {
             SETTINGS
           </button>
           </div>
-        </div>
-        <div className="footer-copyright">
-          © {new Date().getFullYear()} TheCloutySkies
         </div>
       </footer>
     </div>

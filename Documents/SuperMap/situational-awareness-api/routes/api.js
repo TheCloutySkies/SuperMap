@@ -29,6 +29,7 @@ const geocodeCache = new NodeCache({ stdTTL: 24 * 60 * 60, checkperiod: 120 })
 const weatherNearbyCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 })
 const weatherHourlyCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 })
 const threatSummaryCache = new NodeCache({ stdTTL: 60 * 60, checkperiod: 300 })
+const defconCache = new NodeCache({ stdTTL: 30 * 60, checkperiod: 120 })
 const stocksCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 60 })
 const netblocksCache = new NodeCache({ stdTTL: 15 * 60, checkperiod: 120 })
 const earthquakesWidgetCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 60 })
@@ -250,6 +251,41 @@ router.get('/threat-summary', async (req, res) => {
   }
 })
 
+/** DEFCON level from defconlevel.com (OSINT estimate). Cached 30 min. */
+const DEFCONLEVEL_URL = 'https://www.defconlevel.com/current-level'
+router.get('/defcon', async (_req, res) => {
+  const cacheKey = 'defcon'
+  const cached = defconCache.get(cacheKey)
+  if (cached) return res.json({ ...cached, _cached: true })
+  try {
+    const { data } = await axios.get(DEFCONLEVEL_URL, {
+      timeout: 10000,
+      headers: { 'User-Agent': 'SuperMap/1.0 (https://github.com/TheCloutySkies/SuperMap)' },
+      validateStatus: () => true,
+    })
+    const html = typeof data === 'string' ? data : ''
+    const currentMatch = html.match(/Current Level DEFCON\s*([1-5])/i) || html.match(/DEFCON\s*([1-5])/i)
+    const level = currentMatch ? parseInt(currentMatch[1], 10) : null
+    const payload = {
+      level: level >= 1 && level <= 5 ? level : null,
+      label: level != null ? `DEFCON ${level}` : null,
+      url: DEFCONLEVEL_URL,
+      updatedAt: new Date().toISOString(),
+    }
+    defconCache.set(cacheKey, payload)
+    return res.json(payload)
+  } catch (err) {
+    console.warn('[API /defcon]', err.message)
+    return res.json({
+      level: null,
+      label: null,
+      url: DEFCONLEVEL_URL,
+      updatedAt: new Date().toISOString(),
+      error: err.message,
+    })
+  }
+})
+
 /** OSINT X configured feeds and mirrors (for verification). GET /api/osint-x/feeds */
 router.get('/osint-x/feeds', (req, res) => {
   try {
@@ -403,11 +439,14 @@ router.get('/earthquakes/widget', async (req, res) => {
     const features = resUsgs.data?.features || []
     const events = features.slice(0, 12).map((f) => {
       const p = f.properties || {}
+      const id = f.id
       return {
-        id: f.id,
+        id,
         mag: p.mag,
         place: (p.place || '').replace(/^\d+\s+km\s+(?:[NESW]+\s+of\s+)?/i, '').trim().slice(0, 50) || '—',
         time: p.time,
+        depth: f.geometry?.coordinates?.[2] ?? null,
+        url: id ? `https://earthquake.usgs.gov/earthquakes/eventpage/${id}` : null,
       }
     })
     const payload = {
@@ -1313,6 +1352,25 @@ router.post('/category-approve', async (req, res) => {
   res.json({ approved: true, category: categoryRows?.[0] || null })
 })
 
+/** Valid range/interval for Yahoo chart. interval chosen by range. */
+const STOCK_RANGES = { '1d': '1h', '5d': '1d', '1mo': '1d', '3mo': '1d', '6mo': '1d', '1y': '1d', '2y': '1d' }
+function normalizeStockRange(r) {
+  const s = (r || '5d').toLowerCase()
+  return STOCK_RANGES[s] ? s : '5d'
+}
+
+/** Format chart timestamps for display: time for 1d, short date for longer. */
+function formatChartTimestamps(unixtimes, range) {
+  if (!Array.isArray(unixtimes) || unixtimes.length === 0) return []
+  const isIntraday = (range || '5d').toLowerCase() === '1d'
+  return unixtimes.map((t) => {
+    const d = new Date(t * 1000)
+    return isIntraday
+      ? d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+      : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  })
+}
+
 /** Homepage widgets: stocks. Uses Finnhub (candles), else Alpha Vantage (quotes), else demo. Cache 2 min (demo) / 5 min (live). */
 router.get('/stocks', async (req, res) => {
   let symbols = userConfig.getStockTickers()
@@ -1321,7 +1379,9 @@ router.get('/stocks', async (req, res) => {
     symbols = querySymbols.split(/[\s,]+/).filter(Boolean).map((s) => { const sym = s.trim(); return { symbol: sym, name: sym } })
   }
   if (!symbols.length) symbols = [{ symbol: 'SPY', name: 'S&P 500' }]
-  const cacheKey = 'stocks:' + symbols.map((s) => s.symbol).sort().join(',')
+  const range = normalizeStockRange(req.query.range)
+  const interval = STOCK_RANGES[range] || '1d'
+  const cacheKey = 'stocks:' + range + ':' + symbols.map((s) => s.symbol).sort().join(',')
   const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
   const cached = !forceRefresh ? stocksCache.get(cacheKey) : null
   if (cached) return res.json({ ...cached, _cached: true })
@@ -1355,10 +1415,11 @@ router.get('/stocks', async (req, res) => {
     const keylessSymbols = symbols.slice(0, 5).map(normalizeKeyless)
     const current = []
     const series = []
+    let chartTimestamps = null
     for (const n of keylessSymbols) {
       if (n.source === 'yahoo') {
         const chartRes = await axios.get(
-          `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(n.symbol)}?interval=1d&range=5d`,
+          `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(n.symbol)}?interval=${interval}&range=${range}`,
           { timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' } }
         )
         const result = chartRes.data?.chart?.result?.[0]
@@ -1369,6 +1430,9 @@ router.get('/stocks', async (req, res) => {
         const prevClose = meta?.previousClose ?? meta?.chartPreviousClose ?? null
         const numPrev = prevClose != null ? Number(prevClose) : null
         const closes = Array.isArray(quote?.close) ? quote.close.filter((v) => v != null) : []
+        if (Array.isArray(result?.timestamp) && result.timestamp.length > 0 && !chartTimestamps) {
+          chartTimestamps = formatChartTimestamps(result.timestamp, range)
+        }
         const pct = (numPrice != null && numPrev != null && numPrev !== 0)
           ? (((numPrice - numPrev) / numPrev) * 100).toFixed(2) + '%'
           : (numPrice != null ? '0.00%' : '—')
@@ -1378,6 +1442,7 @@ router.get('/stocks', async (req, res) => {
           values: closes.length ? closes : (numPrice != null ? [numPrice] : []),
         })
       } else if (n.source === 'coingecko') {
+        const cgDays = { '1d': 1, '5d': 7, '1mo': 30, '3mo': 90, '6mo': 180, '1y': 365, '2y': 365 }[range] || 7
         const cgRes = await axios.get(
           `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(n.id)}&vs_currencies=usd&include_24hr_change=true`,
           { timeout: 8000 }
@@ -1390,28 +1455,41 @@ router.get('/stocks', async (req, res) => {
         let sparkline = []
         try {
           const mcRes = await axios.get(
-            `https://api.coingecko.com/api/v3/coins/${n.id}/market_chart?vs_currency=usd&days=1`,
+            `https://api.coingecko.com/api/v3/coins/${n.id}/market_chart?vs_currency=usd&days=${cgDays}`,
             { timeout: 6000 }
           )
           const prices = mcRes.data?.prices
-          if (Array.isArray(prices) && prices.length > 0) sparkline = prices.map((p) => p[1]).filter((v) => v != null)
+          if (Array.isArray(prices) && prices.length > 0) {
+            sparkline = prices.map((p) => p[1]).filter((v) => v != null)
+            if (!chartTimestamps && prices.length > 0) {
+              chartTimestamps = prices.map((p) => {
+                const d = new Date(p[0])
+                return range === '1d' ? d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+              })
+            }
+          }
         } catch (_) { /* optional */ }
         series.push({ name: n.name, values: sparkline.length ? sparkline : (price != null ? [price] : []) })
       }
     }
     if (current.length > 0) {
-      const want = 24
-      const padSeries = series.map((s) => ({
-        ...s,
-        values: s.values.length >= want ? s.values.slice(-want) : [...Array(want - s.values.length).fill(null), ...s.values].slice(-want),
-      }))
-      const genTs = []
-      for (let i = 0; i < want; i++) {
-        const d = new Date(now - (want - 1 - i) * 60 * 60 * 1000)
-        genTs.push(d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }))
-      }
+      const want = chartTimestamps ? chartTimestamps.length : (range === '1d' ? 24 : 31)
+      const padSeries = series.map((s) => {
+        const vals = s.values
+        if (vals.length >= want) return { ...s, values: vals.slice(-want) }
+        return { ...s, values: [...Array(want - vals.length).fill(null), ...vals] }
+      })
+      const n = padSeries[0]?.values?.length || want
+      const outTs = chartTimestamps && chartTimestamps.length >= n ? chartTimestamps.slice(-n) : (() => {
+        const arr = []
+        for (let i = 0; i < n; i++) {
+          const d = new Date(now - (n - 1 - i) * (range === '1d' ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000))
+          arr.push(range === '1d' ? d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))
+        }
+        return arr
+      })()
       return pushPayload({
-        timestamps: genTs,
+        timestamps: outTs,
         series: padSeries,
         current,
         updatedAt: new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }),
@@ -1705,10 +1783,59 @@ router.get('/gas-prices/states', (_req, res) => {
   res.json(US_GAS_STATES)
 })
 
-/** US gas prices: real data only from EIA. No approximations. Set EIA_API_KEY for data. */
+/** Representative ZIP per state for GasBuddy fallback (one per state). */
+const GASBUDDY_STATE_ZIPS = {
+  AL: '35203', AK: '99501', AZ: '85001', AR: '72201', CA: '90210', CO: '80202', CT: '06101', DE: '19901',
+  DC: '20001', FL: '33101', GA: '30301', HI: '96801', ID: '83701', IL: '60601', IN: '46201', IA: '50301',
+  KS: '66101', KY: '40201', LA: '70112', ME: '04101', MD: '21201', MA: '02101', MI: '48201', MN: '55401',
+  MS: '39101', MO: '63101', MT: '59101', NE: '68101', NV: '89101', NH: '03431', NJ: '07101', NM: '87101',
+  NY: '10001', NC: '28201', ND: '58102', OH: '43201', OK: '73101', OR: '97201', PA: '19101', RI: '02901',
+  SC: '29201', SD: '57101', TN: '37201', TX: '75201', UT: '84101', VT: '05401', VA: '23219', WA: '98101',
+  WV: '25301', WI: '53201', WY: '82001',
+}
+
+/** GasBuddy GraphQL: fetch price for a zip. Returns { price, areaName } or null. */
+async function fetchGasBuddyPrice(searchTerm) {
+  const query = `query LocationBySearchTerm($search: String, $fuel: Int, $maxAge: Int) {
+    locationBySearchTerm(search: $search, fuel: $fuel, maxAge: $maxAge) {
+      trends { areaName country today todayLow }
+    }
+  }`
+  try {
+    const res = await axios.post(
+      'https://www.gasbuddy.com/graphql',
+      {
+        operationName: 'LocationBySearchTerm',
+        variables: { fuel: 1, maxAge: 0, search: searchTerm },
+        query,
+      },
+      {
+        timeout: 10000,
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+        validateStatus: () => true,
+      }
+    )
+    const data = res.data?.data?.locationBySearchTerm
+    const trends = data?.trends
+    const first = Array.isArray(trends) && trends.length ? trends[0] : null
+    if (!first) return null
+    const price = first.today != null ? Number(first.today) : (first.todayLow != null ? Number(first.todayLow) : null)
+    if (price == null || Number.isNaN(price)) return null
+    return { price: Number(price.toFixed(2)), areaName: first.areaName || searchTerm }
+  } catch (err) {
+    console.warn('[API /gas-prices] GasBuddy error:', err.message)
+    return null
+  }
+}
+
+/** US gas prices: EIA when key set; else GasBuddy (no key). Real data only. */
 router.get('/gas-prices', async (req, res) => {
   const stateCode = (req.query.state || '').trim().toUpperCase().slice(0, 2)
-  const cacheKey = stateCode ? `gas-prices:${stateCode}` : 'gas-prices'
+  const zip = (req.query.zip || '').trim().slice(0, 10)
+  const cacheKey = stateCode ? `gas-prices:${stateCode}` : zip ? `gas-prices:zip:${zip}` : 'gas-prices'
   const cached = gasPricesCache.get(cacheKey)
   if (cached) return res.json({ ...cached, _cached: true })
 
@@ -1716,28 +1843,58 @@ router.get('/gas-prices', async (req, res) => {
   const unit = 'USD/gal'
   const updatedAt = new Date().toLocaleTimeString(undefined, { timeStyle: 'short' })
 
-  if (!EIA_KEY) {
+  const emptyPayload = (requiresEiaKey = false) => {
     const payload = {
       national: null,
       unit,
       regions: [],
       states: [],
-      requiresEiaKey: true,
+      requiresEiaKey,
       updatedAt,
     }
     gasPricesCache.set(cacheKey, payload)
     return res.json(payload)
   }
 
+  if (!EIA_KEY) {
+    const defaultZip = (process.env.GASBUDDY_DEFAULT_ZIP || '10001').trim()
+    const searchTerm = stateCode && GASBUDDY_STATE_ZIPS[stateCode]
+      ? GASBUDDY_STATE_ZIPS[stateCode]
+      : zip || defaultZip
+    const gasbuddy = await fetchGasBuddyPrice(searchTerm)
+    if (gasbuddy) {
+      const st = stateCode ? US_GAS_STATES.find((s) => s.code === stateCode) : null
+      const payload = {
+        national: gasbuddy.price,
+        unit,
+        regions: [],
+        states: stateCode && st ? [{ code: stateCode, name: st.name, price: gasbuddy.price }] : [],
+        updatedAt,
+      }
+      gasPricesCache.set(cacheKey, payload)
+      return res.json(payload)
+    }
+    return emptyPayload(true)
+  }
+
   let nationalVal = null
   let statePrice = null
 
-  // EIA API v2: daily petroleum retail price (EPMRU). Try v2 first for national.
-  const eiaV2Base = 'https://api.eia.gov/v2/petroleum/pri/spt/data/'
+  // EIA API v2: petroleum/pri/gnd weekly retail price. Revised endpoint with X-Params header.
+  const eiaV2Base = 'https://api.eia.gov/v2/petroleum/pri/gnd/data/'
+  const eiaV2XParams = JSON.stringify({
+    frequency: 'weekly',
+    data: ['value'],
+    facets: {},
+    start: null,
+    end: null,
+    sort: [{ column: 'period', direction: 'desc' }],
+    offset: 0,
+    length: 5000,
+  })
   const eiaV2Params = new URLSearchParams({
-    frequency: 'daily',
+    frequency: 'weekly',
     'data[0]': 'value',
-    'facets[product][]': 'EPMRU',
     'sort[0][column]': 'period',
     'sort[0][direction]': 'desc',
     offset: '0',
@@ -1749,6 +1906,7 @@ router.get('/gas-prices', async (req, res) => {
       timeout: 10000,
       headers: {
         'X-Api-Key': EIA_KEY,
+        'X-Params': eiaV2XParams,
         Accept: 'application/json',
       },
     })
@@ -1780,13 +1938,12 @@ router.get('/gas-prices', async (req, res) => {
     }
   }
 
-  // State: v2 may return multiple areas in same dataset; otherwise use v1 state series
+  // State: v2 gnd may return multiple areas in same dataset; otherwise use v1 state series
   if (stateCode && US_GAS_STATES.some((s) => s.code === stateCode)) {
     try {
       const v2StateParams = new URLSearchParams({
-        frequency: 'daily',
+        frequency: 'weekly',
         'data[0]': 'value',
-        'facets[product][]': 'EPMRU',
         'sort[0][column]': 'period',
         'sort[0][direction]': 'desc',
         offset: '0',
@@ -1795,7 +1952,7 @@ router.get('/gas-prices', async (req, res) => {
       })
       const v2StateRes = await axios.get(`${eiaV2Base}?${v2StateParams.toString()}`, {
         timeout: 10000,
-        headers: { 'X-Api-Key': EIA_KEY, Accept: 'application/json' },
+        headers: { 'X-Api-Key': EIA_KEY, 'X-Params': eiaV2XParams, Accept: 'application/json' },
       })
       const v2StateData = v2StateRes.data?.response?.data ?? v2StateRes.data?.data
       const v2StateRows = Array.isArray(v2StateData) ? v2StateData : []

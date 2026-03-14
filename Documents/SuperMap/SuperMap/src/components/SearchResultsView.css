@@ -146,3 +146,44 @@
 .search-results-item-btn--primary:hover {
   background: #2ea043;
 }
+
+/* Mobile: full-width content, touch-friendly buttons */
+.app--device-mobile .search-results-view {
+  padding: 0.75rem 1rem 1.5rem;
+  max-width: 100%;
+}
+
+.app--device-mobile .search-results-header {
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+}
+
+.app--device-mobile .search-results-back {
+  min-height: 44px;
+  padding: 0.5rem 0;
+  display: inline-flex;
+  align-items: center;
+  -webkit-tap-highlight-color: rgba(41, 182, 246, 0.2);
+}
+
+.app--device-mobile .search-results-title {
+  font-size: 1.2rem;
+}
+
+.app--device-mobile .search-results-item {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.app--device-mobile .search-results-item-actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.app--device-mobile .search-results-item-btn {
+  min-height: 44px;
+  padding: 0.5rem 0.85rem;
+  -webkit-tap-highlight-color: rgba(41, 182, 246, 0.2);
+}

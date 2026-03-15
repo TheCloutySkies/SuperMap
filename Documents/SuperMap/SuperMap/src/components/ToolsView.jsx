@@ -41,7 +41,8 @@ export default function ToolsView({ activeToolId, onToolChange }) {
                 title={tool.title}
                 src={tool.embedUrl}
                 className="tools-view-iframe"
-                sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+                sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
+                referrerPolicy="no-referrer-when-downgrade"
               />
             </div>
           </>

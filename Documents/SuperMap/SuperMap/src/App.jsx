@@ -61,6 +61,7 @@ const FEED_VIEWS = [
   // Feeds first (high-frequency, "main" content)
   { id: 'news-feeds', label: 'News Feeds', tabKey: 'newsFeeds' },
   { id: 'osint-feeds', label: 'OSINT Feeds', tabKey: 'osintFeeds' },
+  { id: 'recent-videos', label: 'Recent Videos', tabKey: 'recentVideos' },
   { id: 'osint-x', label: 'OSINT (X/Twitter)', tabKey: 'osintX' },
   { id: 'broadcasts', label: 'Broadcasts', tabKey: 'broadcasts' },
 
@@ -226,7 +227,7 @@ function App() {
   }, [])
 
   const isMapView = ['osint-map', 'conflict-map', 'explore-map', 'geolocate-map'].includes(activeView)
-  const isFeedView = ['osint-feeds', 'news-feeds', 'osint-x', 'my-places', 'my-reports', 'my-comments', 'advanced-search', 'saved', 'updates', 'broadcasts'].includes(activeView)
+  const isFeedView = ['osint-feeds', 'news-feeds', 'recent-videos', 'osint-x', 'my-places', 'my-reports', 'my-comments', 'advanced-search', 'saved', 'updates', 'broadcasts'].includes(activeView)
   const isSettingsView = activeView === 'settings'
   const tabVisibility = getTabVisibility(settingsUserId)
 
@@ -526,6 +527,9 @@ function App() {
         {activeView === 'news-feeds' && (
           <FeedsView title="News Feeds" activeView="news-feeds" keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} initialNews={prefetchedNews} onSignInRequired={() => setShowAuthModal(true)} />
         )}
+        {activeView === 'recent-videos' && (
+          <FeedsView title="Recent Videos" activeView="recent-videos" keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} onSignInRequired={() => setShowAuthModal(true)} />
+        )}
         {activeView === 'saved' && (
           <div className="main-feed-view">
             <SavedArticlesView />
@@ -542,7 +546,11 @@ function App() {
           </div>
         )}
         {activeView === 'resources' && <ResourcesView resourcesScrollRef={resourcesScrollRef} />}
-        {activeView === 'tools' && <ToolsView activeToolId={activeToolId} onToolChange={setActiveToolId} />}
+        {activeView === 'tools' && (
+          <div className="main-content-scroll main-content-scroll--tools">
+            <ToolsView activeToolId={activeToolId} onToolChange={setActiveToolId} />
+          </div>
+        )}
         {activeView === 'report-maker' && (
           <div className="main-content-scroll">
             <ReportMakerView />

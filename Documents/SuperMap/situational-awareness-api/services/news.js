@@ -142,6 +142,28 @@ function pickThumbnailFromItem(item) {
   return null
 }
 
+/** Pick video URL from item: enclosure (type video), media:content video, or link if youtube/vimeo. */
+function pickVideoUrlFromItem(item) {
+  if (!item || typeof item !== 'object') return null
+  const link = (item.link || item.guid || '').trim()
+  if (/youtube\.com|youtu\.be|vimeo\.com/i.test(link)) return link
+  const enc = item.enclosure || item.enclosures
+  if (enc) {
+    const list = Array.isArray(enc) ? enc : [enc]
+    for (const e of list) {
+      const url = e.url || (e.$ && e.$.url)
+      const type = (e.type || (e.$ && e.$.type) || '').toLowerCase()
+      if (type.startsWith('video/') || /video/.test(type)) return url
+      if (url && /\.(mp4|webm|ogg)(\?|$)/i.test(url)) return url
+    }
+  }
+  const mediaContent = item['media:content']
+  const mcUrl = mediaContent?.$?.url || mediaContent?.url
+  const mcType = (mediaContent?.$?.type || mediaContent?.type || '').toLowerCase()
+  if (mcUrl && (mcType.startsWith('video/') || /video/.test(mcType))) return mcUrl
+  return null
+}
+
 // RSS feeds (with parser)
 const FEEDS = [
   { url: 'https://feeds.bbci.co.uk/news/world/rss.xml', name: 'BBC World' },
@@ -152,23 +174,30 @@ const FEEDS = [
   { url: 'https://feeds.bbci.co.uk/news/rss.xml', name: 'BBC' },
   // Higher-signal geopolitics / security sources
   { url: 'https://www.aljazeera.com/xml/rss/all.xml', name: 'Al Jazeera' },
-  { url: 'https://rss.politico.com/defense.xml', name: 'POLITICO Defense' },
-  { url: 'https://rss.politico.com/politics-news.xml', name: 'POLITICO Politics' },
+  // POLITICO (rss.politico.com) removed: ENOTFOUND / DNS unreachable
   { url: 'https://www.foreignaffairs.com/rss.xml', name: 'Foreign Affairs' },
   { url: 'https://www.crisisgroup.org/rss', name: 'International Crisis Group' },
 ]
 
+/** Video feeds: Reddit only for now. Set to [] so getVideoFeedItems() uses only getRedditVideoItems(). */
+const VIDEO_FEEDS = []
+
 async function fetchFeed(feed) {
   try {
     const result = await parser.parseURL(feed.url)
-    const rows = (result.items || []).map((item) => ({
-      title: item.title || '',
-      link: item.link || item.guid || '',
-      pubDate: item.pubDate || '',
-      source: feed.name,
-      contentSnippet: (item.contentSnippet || item.content || '').replace(/<[^>]+>/g, ' ').slice(0, 500),
-      thumbnail: pickThumbnailFromItem(item) || domainFavicon(item.link || item.guid || ''),
-    }))
+    const rows = (result.items || []).map((item) => {
+      const link = item.link || item.guid || ''
+      const videoUrl = pickVideoUrlFromItem(item)
+      return {
+        title: item.title || '',
+        link,
+        pubDate: item.pubDate || '',
+        source: feed.name,
+        contentSnippet: (item.contentSnippet || item.content || '').replace(/<[^>]+>/g, ' ').slice(0, 500),
+        thumbnail: pickThumbnailFromItem(item) || domainFavicon(link || ''),
+        videoUrl: videoUrl || undefined,
+      }
+    })
     if (feed.name === 'Google News') {
       return rows.filter(isRelevantGoogleNewsItem)
     }
@@ -293,13 +322,17 @@ async function fetchRedditNews() {
       children.slice(0, 15).forEach((p) => {
         const d = p.data
         if (d && d.title && (d.url || d.permalink)) {
+          const link = d.url || `https://www.reddit.com${d.permalink || ''}`
+          const videoUrl = (d.is_video && d.secure_media?.reddit_video?.fallback_url) ? d.secure_media.reddit_video.fallback_url : null
+          const thumbnail = d.thumbnail && /^https?:\/\//i.test(d.thumbnail) ? d.thumbnail : (videoUrl ? null : domainFavicon(link))
           items.push({
             title: d.title,
-            link: d.url || `https://www.reddit.com${d.permalink || ''}`,
+            link,
             pubDate: d.created_utc ? new Date(d.created_utc * 1000).toISOString() : new Date().toISOString(),
             source: sub.name,
             contentSnippet: (d.selftext || '').slice(0, 500),
-            thumbnail: null,
+            thumbnail,
+            videoUrl: videoUrl || undefined,
           })
         }
       })
@@ -417,4 +450,101 @@ function getNewsCached() {
   return cachedNews
 }
 
-module.exports = { getNews, getNewsCached }
+/** Reddit video subreddits. raw_json=1 gives unescaped preview image URLs for video-frame thumbnails. */
+const REDDIT_VIDEO_SUBS = [
+  { url: 'https://www.reddit.com/r/CombatFootage.json?raw_json=1&limit=50', name: 'Reddit r/CombatFootage' },
+  { url: 'https://www.reddit.com/r/UkraineWarVideoReport.json?raw_json=1&limit=50', name: 'Reddit r/UkraineWarVideoReport' },
+  { url: 'https://www.reddit.com/r/MilitaryGfys.json?raw_json=1&limit=25', name: 'Reddit r/MilitaryGfys' },
+  { url: 'https://www.reddit.com/r/DestroyedTanks.json?raw_json=1&limit=25', name: 'Reddit r/DestroyedTanks' },
+]
+
+/** Pick best thumbnail for a Reddit video post: preview frame (preview.images[0]) then thumbnail URL. */
+function redditVideoThumbnail(d, link) {
+  const preview = d.preview
+  if (preview && Array.isArray(preview.images) && preview.images.length > 0) {
+    const img = preview.images[0]
+    const source = img.source || (img.resolutions && img.resolutions[img.resolutions.length - 1])
+    if (source && source.url) {
+      let url = source.url
+      if (typeof url === 'string' && (url.includes('&amp;') || url.includes('&quot;'))) {
+        url = url.replace(/&amp;/g, '&').replace(/&quot;/g, '"')
+      }
+      if (/^https?:\/\//i.test(url)) return url
+    }
+  }
+  if (d.thumbnail && /^https?:\/\//i.test(d.thumbnail)) return d.thumbnail
+  return domainFavicon(link)
+}
+
+async function getRedditVideoItems() {
+  const items = []
+  const seen = new Set()
+  for (const sub of REDDIT_VIDEO_SUBS) {
+    try {
+      const res = await axios.get(sub.url, {
+        timeout: 12000,
+        headers: REQUEST_HEADERS,
+        maxRedirects: 2,
+        validateStatus: (s) => s === 200,
+      })
+      const children = res.data?.data?.children || []
+      const limit = sub.limit || 25
+      children.slice(0, limit).forEach((p) => {
+        const d = p.data
+        if (!d || !d.title || !d.is_video) return
+        const fallback = d.secure_media?.reddit_video?.fallback_url
+        if (!fallback) return
+        const link = d.url || `https://www.reddit.com${d.permalink || ''}`
+        const key = `${d.id || link}`
+        if (seen.has(key)) return
+        seen.add(key)
+        items.push({
+          title: d.title,
+          link,
+          pubDate: d.created_utc ? new Date(d.created_utc * 1000).toISOString() : new Date().toISOString(),
+          source: sub.name,
+          contentSnippet: (d.selftext || '').slice(0, 300),
+          thumbnail: redditVideoThumbnail(d, link),
+          videoUrl: fallback,
+        })
+      })
+    } catch (err) {
+      console.warn('[news] Reddit video sub failed:', sub.name, err.message)
+    }
+  }
+  return items.slice(0, 80)
+}
+
+/** Theme keywords for video filter: conflict, OSINT, defense, geopolitics. Only include items that match. */
+const VIDEO_THEME_KEYWORDS = [
+  'war', 'conflict', 'invasion', 'strike', 'drone', 'missile', 'military', 'defense', 'nato', 'frontline',
+  'ukraine', 'russia', 'gaza', 'israel', 'iran', 'syria', 'yemen', 'taiwan', 'china', 'north korea',
+  'osint', 'intel', 'combat', 'footage', 'shelling', 'airstrike', 'ceasefire', 'sanction', 'crisis',
+  'geopolitic', 'analysis', 'investigation', 'bellingcat', 'refugee', 'humanitarian', 'weapon',
+]
+function isVideoThemeRelevant(title = '', source = '', description = '') {
+  const text = `${title} ${source} ${description}`.toLowerCase()
+  return VIDEO_THEME_KEYWORDS.some((kw) => text.includes(kw.toLowerCase()))
+}
+
+/** Fetch video-only feeds; returns flat array of items with videoUrl, theme-filtered. */
+async function getVideoFeedItems() {
+  const videoFeedNames = new Set(VIDEO_FEEDS.map((f) => f.name))
+  const [feedResults, redditVideos] = await Promise.all([
+    Promise.allSettled(VIDEO_FEEDS.map(fetchFeed)),
+    getRedditVideoItems(),
+  ])
+  const items = feedResults
+    .filter((r) => r.status === 'fulfilled')
+    .flatMap((r) => r.value)
+    .map((it) => {
+      if (!it.videoUrl && it.link && videoFeedNames.has(it.source)) it.videoUrl = it.link
+      return it
+    })
+    .filter((it) => it.videoUrl || /youtube\.com|youtu\.be|vimeo\.com/i.test(it.link || ''))
+    .filter((it) => isVideoThemeRelevant(it.title, it.source, it.contentSnippet))
+  items.push(...redditVideos)
+  return items.slice(0, 80)
+}
+
+module.exports = { getNews, getNewsCached, getVideoFeedItems, VIDEO_FEEDS, isVideoThemeRelevant }

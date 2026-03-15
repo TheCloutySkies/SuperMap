@@ -82,6 +82,7 @@ function eventToFeature(event) {
   try {
     raw = event.raw_data ? JSON.parse(event.raw_data) : {}
   } catch (_) {}
+  const videoUrl = raw.videoUrl || (Array.isArray(raw.videos) && raw.videos[0]) || null
   const props = {
     id: event.id,
     title: event.title,
@@ -91,6 +92,7 @@ function eventToFeature(event) {
     link: raw.link || raw.url,
     description: event.description,
     thumbnail: raw.thumbnail || raw.image || raw.thumbnailUrl || null,
+    videoUrl: videoUrl || undefined,
   }
   if (event.lat != null && event.lon != null) {
     return {

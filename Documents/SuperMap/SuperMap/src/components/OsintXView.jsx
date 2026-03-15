@@ -32,6 +32,18 @@ function vimeoEmbedUrl(url) {
   return m ? `https://player.vimeo.com/video/${m[1]}` : null
 }
 
+/** Hosts that serve video without CORS; use link instead of <video> to avoid CORS errors. */
+function isCrossOriginVideoNoCors(url) {
+  if (!url || typeof url !== 'string') return false
+  try {
+    const u = new URL(url)
+    const host = (u.hostname || '').toLowerCase()
+    return /nitter\.(net|poast|privacydev)/i.test(host) || /twimg\.com/i.test(host)
+  } catch {
+    return /nitter\.|twimg\.com/i.test(url)
+  }
+}
+
 const SORT_OPTIONS = [
   { value: 'time', label: 'Time (newest)' },
   { value: 'time-asc', label: 'Time (oldest)' },
@@ -348,7 +360,7 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
                         </div>
                       )
                     }
-                    if (isDirect) {
+                    if (isDirect && !isCrossOriginVideoNoCors(src)) {
                       return (
                         <div key={i} className="osint-x-video-wrap">
                           <video src={src} controls className="osint-x-video" playsInline crossOrigin="anonymous" />
@@ -357,6 +369,23 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
                           </button>
                           {post.url && (
                             <a href={post.url} target="_blank" rel="noopener noreferrer" className="osint-x-video-open-post">Open on X →</a>
+                          )}
+                        </div>
+                      )
+                    }
+                    if (isDirect && isCrossOriginVideoNoCors(src)) {
+                      return (
+                        <div key={i} className="osint-x-video-wrap osint-x-video-wrap--fallback">
+                          <a
+                            href={src}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="osint-x-video-fallback osint-x-video-fallback--standalone"
+                          >
+                            Watch video (opens in new tab)
+                          </a>
+                          {post.url && (
+                            <a href={post.url} target="_blank" rel="noopener noreferrer" className="osint-x-video-open-post">Open post on X →</a>
                           )}
                         </div>
                       )
@@ -452,10 +481,16 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
         <div className="osint-x-video-dialog-backdrop" role="dialog" aria-modal="true">
           <div className="osint-x-video-dialog">
             <h3>Video</h3>
-            <div className="osint-x-video-dialog-player">
-              <video src={videoDialog.src} controls className="osint-x-video" playsInline crossOrigin="anonymous" />
-            </div>
-            <p className="osint-x-video-dialog-fallback-msg">If the video does not play above (blocked by host), open it on X.</p>
+            {isCrossOriginVideoNoCors(videoDialog.src) ? (
+              <p className="osint-x-video-dialog-fallback-msg">This video is served from a host that blocks embedding. Use the links below to watch in a new tab or on X.</p>
+            ) : (
+              <>
+                <div className="osint-x-video-dialog-player">
+                  <video src={videoDialog.src} controls className="osint-x-video" playsInline crossOrigin="anonymous" />
+                </div>
+                <p className="osint-x-video-dialog-fallback-msg">If the video does not play above (blocked by host), open it on X.</p>
+              </>
+            )}
             <div className="osint-x-video-dialog-actions">
               {videoDialog.postUrl && (
                 <a href={videoDialog.postUrl} target="_blank" rel="noopener noreferrer" className="osint-x-pin-btn">

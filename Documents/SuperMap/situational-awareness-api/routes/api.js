@@ -35,7 +35,7 @@ const netblocksCache = new NodeCache({ stdTTL: 15 * 60, checkperiod: 120 })
 const earthquakesWidgetCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 60 })
 const spaceCache = new NodeCache({ stdTTL: 60 * 60, checkperiod: 300 })
 const conflictMetricsCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 })
-const gasPricesCache = new NodeCache({ stdTTL: 30 * 60, checkperiod: 300 })
+const gasPricesCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 60 })
 const MAPBOX_TOKEN = process.env.MAPBOX_TOKEN || ''
 const GEOAPIFY_KEY = process.env.GEOAPIFY_KEY || ''
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || ''
@@ -186,6 +186,168 @@ router.get('/osint', (req, res) => {
   } catch (err) {
     console.error('[API /osint]', err.message)
     res.status(500).json({ error: 'Failed to fetch OSINT' })
+  }
+})
+
+/** Recent videos: conflict/OSINT/geopolitics theme only. GET /api/feeds/videos. Sorted newest first. */
+const isVideoThemeRelevant = newsService.isVideoThemeRelevant
+router.get('/feeds/videos', async (req, res) => {
+  const t0 = Date.now()
+  try {
+    const videoItems = await newsService.getVideoFeedItems()
+    const newsCached = newsService.getNewsCached()
+    const newsFeatures = (newsCached?.features || []).filter((f) => {
+      const p = f.properties || {}
+      const link = p.link || ''
+      const hasVideo = p.videoUrl || /youtube\.com|youtu\.be|vimeo\.com|reddit\.com|v\.redd\.it/i.test(link)
+      if (!hasVideo) return false
+      return isVideoThemeRelevant(p.title, p.source, p.description)
+    })
+    const osintXRows = getEvents(120, null, null, null, null, ['x'])
+    const isXGifUrl = (url) => {
+      if (!url || typeof url !== 'string') return false
+      const u = url.toLowerCase()
+      return /tweet_gif|\.gif(\?|$)|gif\/|gif\.twimg/i.test(u)
+    }
+    const osintXWithVideos = osintXRows
+      .map((r) => {
+        let raw = {}
+        try {
+          raw = r.raw_data ? JSON.parse(r.raw_data) : {}
+        } catch (_) {}
+        const videos = Array.isArray(raw.videos) ? raw.videos : []
+        if (videos.length === 0) return null
+        const videoUrl = videos[0]
+        if (isXGifUrl(videoUrl)) return null
+        return {
+          type: 'Feature',
+          id: r.id,
+          properties: {
+            id: r.id,
+            title: r.title,
+            type: r.type,
+            source: 'x',
+            timestamp: r.timestamp,
+            link: raw.link || raw.url,
+            description: r.description,
+            thumbnail: (raw.images && raw.images[0]) || null,
+            videoUrl,
+            tags: ['OSINT', 'X (Twitter)'],
+          },
+          geometry: null,
+        }
+      })
+      .filter(Boolean)
+
+    const tagFromSource = (source) => {
+      const s = (source || '').toLowerCase()
+      if (s.includes('reddit')) return 'Reddit'
+      if (s.includes('al jazeera') || s.includes('bbc') || s.includes('dw')) return 'News clip'
+      if (s.includes('bellingcat') || s === 'x' || s.includes('osint')) return 'OSINT'
+      if (s.includes('war') || s.includes('defense') || s.includes('combat')) return 'Combat / military'
+      return 'News'
+    }
+    const tagFromTitle = (title) => {
+      const t = (title || '').toLowerCase()
+      if (/\b(combat|footage|strike|drone|missile|war|invasion|frontline)\b/.test(t)) return 'Combat / military'
+      if (/\b(osint|intel|investigation)\b/.test(t)) return 'OSINT'
+      return null
+    }
+
+    const fromVideoFeeds = videoItems.map((it, i) => ({
+      type: 'Feature',
+      id: `video-feed-${i}-${(it.link || '').slice(-12)}`,
+      properties: {
+        id: `video-feed-${i}`,
+        title: it.title || 'Untitled',
+        type: 'news',
+        source: it.source,
+        timestamp: it.pubDate ? new Date(it.pubDate).getTime() : null,
+        link: it.link,
+        description: it.contentSnippet,
+        thumbnail: it.thumbnail,
+        videoUrl: it.videoUrl || it.link,
+        tags: ['News clip', tagFromSource(it.source), tagFromTitle(it.title)].filter(Boolean),
+      },
+      geometry: null,
+    }))
+
+    const fromNews = newsFeatures.map((f) => {
+      const p = f.properties || {}
+      const tags = [...new Set(['News', tagFromSource(p.source), tagFromTitle(p.title)].filter(Boolean))]
+      return {
+        type: 'Feature',
+        id: f.id,
+        properties: {
+          ...p,
+          tags: tags.length ? tags : ['News'],
+        },
+        geometry: f.geometry,
+      }
+    })
+
+    const all = [...fromVideoFeeds, ...fromNews, ...osintXWithVideos]
+    const themeRelevant = all.filter((f) => {
+      const p = f.properties || {}
+      return isVideoThemeRelevant(p.title, p.source, p.description)
+    })
+    themeRelevant.sort((a, b) => (b.properties?.timestamp || 0) - (a.properties?.timestamp || 0))
+    const features = themeRelevant.slice(0, 100)
+
+    if (feedsDebugEnabled()) {
+      console.log('[FEEDS API /feeds/videos] OUTPUT', { features: features.length, ms: Date.now() - t0 })
+    }
+    res.json({ type: 'FeatureCollection', features })
+  } catch (err) {
+    console.error('[API /feeds/videos]', err.message)
+    res.status(500).json({ error: 'Failed to fetch video feeds' })
+  }
+})
+
+/** Proxy video URL so the browser can play it in-app (avoids CORS). GET /api/proxy-video?url=... */
+const PROXY_VIDEO_ALLOWED_HOSTS = [
+  'nitter.net', 'nitter.poast.org', 'nitter.privacydev.net',
+  'video.twimg.com', 'v.twimg.com', 'pbs.twimg.com', 'twimg.com',
+  'cdn.video.aljazeera.com', 'video.aljazeera.com',
+  'www.dw.com', 'dw.com',
+  'feeds.bbci.co.uk', 'www.bbc.co.uk', 'bbc.co.uk',
+  'i.ytimg.com', 'r2---sn-', 'googlevideo.com',
+  'v.redd.it', 'reddit.com', 'redd.it',
+]
+function isAllowedVideoProxyUrl(raw) {
+  try {
+    const u = new URL(raw)
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false
+    const host = (u.hostname || '').toLowerCase()
+    if (PROXY_VIDEO_ALLOWED_HOSTS.some((h) => host.includes(h))) return true
+    if (/\.(mp4|webm|ogg)(\?|$)/i.test(u.pathname || '')) return true
+    return false
+  } catch {
+    return false
+  }
+}
+router.get('/proxy-video', async (req, res) => {
+  const rawUrl = (req.query.url || '').trim()
+  if (!rawUrl || !isAllowedVideoProxyUrl(rawUrl)) {
+    return res.status(400).json({ error: 'Invalid or disallowed video URL' })
+  }
+  try {
+    const response = await axios.get(rawUrl, {
+      responseType: 'stream',
+      timeout: 45000,
+      maxRedirects: 5,
+      headers: { 'User-Agent': 'SuperMap/1.0 (Video proxy; in-app playback)' },
+      validateStatus: (s) => s >= 200 && s < 400,
+    })
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    const ct = response.headers['content-type']
+    if (ct) res.setHeader('Content-Type', ct)
+    const cl = response.headers['content-length']
+    if (cl) res.setHeader('Content-Length', cl)
+    response.data.pipe(res)
+  } catch (err) {
+    console.warn('[API /proxy-video]', err.message)
+    res.status(502).json({ error: 'Could not fetch video' })
   }
 })
 
@@ -1775,29 +1937,41 @@ const STATE_NAME_TO_ABBR = {
   Texas: 'TX', Utah: 'UT', Vermont: 'VT', Virginia: 'VA', Washington: 'WA', 'West Virginia': 'WV', Wisconsin: 'WI', Wyoming: 'WY',
 }
 router.get('/wildfire-detail', async (req, res) => {
-  const name = (req.query.name || req.query.q || '').trim().replace(/,.*$/, '').slice(0, 40)
+  const nameRaw = (req.query.name || req.query.q || '').trim().replace(/,.*$/, '').slice(0, 40)
   const stateRaw = (req.query.state || '').trim()
   const stateAbbr = stateRaw.length === 2 ? stateRaw.toUpperCase() : (STATE_NAME_TO_ABBR[stateRaw] || stateRaw.slice(0, 2).toUpperCase())
-  if (!name) return res.json({ ok: false, nifc: null })
+  if (!nameRaw) return res.json({ ok: false, nifc: null })
 
-  try {
+  const esc = (s) => String(s).replace(/'/g, "''").slice(0, 50)
+  const outFields = 'poly_IncidentName,attr_IncidentName,poly_GISAcres,attr_IncidentSize,attr_CalculatedAcres,attr_FinalAcres,attr_PercentContained,attr_FireDiscoveryDateTime,attr_POOState,attr_IncidentShortDescription'
+
+  async function queryNIFC(name, useState) {
     let where = "poly_FeatureAccess = 'Public' AND poly_FeatureStatus = 'Approved' AND poly_IsVisible = 'Yes' AND poly_DeleteThis = 'No'"
-    const esc = (s) => String(s).replace(/'/g, "''").slice(0, 50)
     if (name) where += ` AND (poly_IncidentName LIKE '%${esc(name)}%' OR attr_IncidentName LIKE '%${esc(name)}%')`
-    if (stateAbbr && stateAbbr.length === 2) where += ` AND (attr_POOState = '${esc(stateAbbr)}' OR attr_POOState = ' ${esc(stateAbbr)}')`
-
+    if (useState && stateAbbr && stateAbbr.length === 2) where += ` AND (attr_POOState = '${esc(stateAbbr)}' OR attr_POOState = ' ${esc(stateAbbr)}')`
     const resp = await axios.get(NIFC_WFIGS_QUERY, {
       timeout: 12000,
-      params: {
-        where,
-        outFields: 'poly_IncidentName,attr_IncidentName,poly_GISAcres,attr_IncidentSize,attr_CalculatedAcres,attr_FinalAcres,attr_PercentContained,attr_FireDiscoveryDateTime,attr_POOState,attr_IncidentShortDescription',
-        returnGeometry: false,
-        resultRecordCount: 5,
-        orderByFields: 'attr_IncidentSize DESC',
-        f: 'json',
-      },
+      params: { where, outFields, returnGeometry: false, resultRecordCount: 5, orderByFields: 'attr_IncidentSize DESC', f: 'json' },
     })
-    const features = resp.data?.features || []
+    return resp.data?.features || []
+  }
+
+  try {
+    const nameVariants = [nameRaw]
+    const firstWord = nameRaw.split(/\s+/)[0]
+    if (firstWord && firstWord !== nameRaw) nameVariants.push(firstWord)
+
+    let features = []
+    for (const name of nameVariants) {
+      if (!name) continue
+      features = await queryNIFC(name, true)
+      if (features.length > 0) break
+      if (stateAbbr) {
+        features = await queryNIFC(name, false)
+        if (features.length > 0) break
+      }
+    }
+
     const attrs = features[0]?.attributes
     if (!attrs) return res.json({ ok: true, nifc: null })
 
@@ -1959,7 +2133,8 @@ router.get('/gas-prices', async (req, res) => {
   let nationalVal = null
   let statePrice = null
 
-  // EIA API v2: petroleum/pri/gnd weekly retail price. Revised endpoint with X-Params header.
+  // EIA API v2: petroleum/pri/gnd — response uses duoarea (NUS=U.S., S+stateCode=e.g. SFL), area-name, product (EPM0U/EPM0R=gasoline, EPD2D=diesel).
+  const EIA_GASOLINE_PRODUCTS = ['EPM0U', 'EPM0R']
   const eiaV2Base = 'https://api.eia.gov/v2/petroleum/pri/gnd/data/'
   const eiaV2XParams = JSON.stringify({
     frequency: 'weekly',
@@ -1967,98 +2142,96 @@ router.get('/gas-prices', async (req, res) => {
     facets: {},
     start: null,
     end: null,
-    sort: [{ column: 'period', direction: 'desc' }],
+    sort: [{ column: 'duoarea', direction: 'desc' }],
     offset: 0,
     length: 5000,
   })
-  const eiaV2Params = new URLSearchParams({
+  const eiaV2Query = new URLSearchParams({
+    frequency: 'weekly',
+    'data[0]': 'value',
+    'sort[0][column]': 'duoarea',
+    'sort[0][direction]': 'desc',
+    offset: '0',
+    length: '5000',
+  })
+  if (EIA_KEY) eiaV2Query.set('api_key', EIA_KEY)
+  const EIA_TIMEOUT_MS = 22000
+  const duoareaState = stateCode ? 'S' + stateCode : null
+  // State request: facet by duoarea (e.g. SIN); URL and X-Params use sort=period so we get latest first
+  const stateFacetXParams = stateCode ? JSON.stringify({
+    frequency: 'weekly',
+    data: ['value'],
+    facets: { duoarea: [duoareaState] },
+    start: null,
+    end: null,
+    sort: [{ column: 'period', direction: 'desc' }],
+    offset: 0,
+    length: 100,
+  }) : null
+  const stateQuery = stateCode ? new URLSearchParams({
     frequency: 'weekly',
     'data[0]': 'value',
     'sort[0][column]': 'period',
     'sort[0][direction]': 'desc',
     offset: '0',
-    length: '5000',
-    api_key: EIA_KEY,
-  })
+    length: '100',
+  }) : null
+  if (stateCode && stateQuery && EIA_KEY) stateQuery.set('api_key', EIA_KEY)
   try {
-    const v2Res = await axios.get(`${eiaV2Base}?${eiaV2Params.toString()}`, {
-      timeout: 10000,
+    const nationalPromise = axios.get(`${eiaV2Base}?${eiaV2Query.toString()}`, {
+      timeout: EIA_TIMEOUT_MS,
       headers: {
-        'X-Api-Key': EIA_KEY,
         'X-Params': eiaV2XParams,
-        Accept: 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'SuperMap/1.0 (EIA Open Data)',
       },
     })
+    const statePromise = stateCode && stateFacetXParams && stateQuery
+      ? axios.get(`${eiaV2Base}?${stateQuery.toString()}`, {
+          timeout: EIA_TIMEOUT_MS,
+          headers: {
+            'X-Params': stateFacetXParams,
+            'Accept': 'application/json',
+            'User-Agent': 'SuperMap/1.0 (EIA Open Data)',
+          },
+        })
+      : null
+    const [v2Res, v2StateRes] = await Promise.all([nationalPromise, statePromise || Promise.resolve({ data: null })])
     const v2Data = v2Res.data?.response?.data ?? v2Res.data?.data
     const v2Rows = Array.isArray(v2Data) ? v2Data : []
-    const latestRow = v2Rows[0]
-    if (latestRow && (latestRow.value != null || latestRow.Value != null)) {
-      const val = latestRow.value ?? latestRow.Value
+    const nationalRow = v2Rows.find(
+      (r) => (r.duoarea === 'NUS' || (r['area-name'] && String(r['area-name']).toUpperCase() === 'U.S.')) &&
+        EIA_GASOLINE_PRODUCTS.includes(r.product)
+    ) || v2Rows.find((r) => r.duoarea === 'NUS' || (r['area-name'] && String(r['area-name']).toUpperCase() === 'U.S.'))
+    if (nationalRow && (nationalRow.value != null || nationalRow.Value != null)) {
+      const val = nationalRow.value ?? nationalRow.Value
       nationalVal = Number(val)
     }
     if (nationalVal != null && !Number.isNaN(nationalVal)) nationalVal = Number(nationalVal.toFixed(2))
+    if (stateCode && v2StateRes?.data) {
+      const raw = v2StateRes.data
+      const v2StateData = raw?.response?.data ?? raw?.data ?? (Array.isArray(raw) ? raw : null)
+      const v2StateRows = Array.isArray(v2StateData) ? v2StateData : []
+      const stateRow = v2StateRows.find((r) => EIA_GASOLINE_PRODUCTS.includes(r.product)) ||
+        v2StateRows.find((r) => r.duoarea === duoareaState) ||
+        v2StateRows.find((r) => (r.value != null || r.Value != null))
+      if (stateRow && (stateRow.value != null || stateRow.Value != null)) {
+        const val = stateRow.value ?? stateRow.Value
+        statePrice = Number(Number(val).toFixed(2))
+      }
+    }
+    if (stateCode && (statePrice == null || Number.isNaN(statePrice))) {
+      const stateRow = v2Rows.find((r) => r.duoarea === duoareaState && EIA_GASOLINE_PRODUCTS.includes(r.product)) || v2Rows.find((r) => r.duoarea === duoareaState)
+      if (stateRow && (stateRow.value != null || stateRow.Value != null)) {
+        const val = stateRow.value ?? stateRow.Value
+        statePrice = Number(Number(val).toFixed(2))
+      }
+    }
   } catch (err) {
     console.warn('[API /gas-prices] EIA v2 error:', err.message)
   }
 
-  // Fallback: EIA v1 series for national if v2 did not return a value
-  if (nationalVal == null || Number.isNaN(nationalVal)) {
-    try {
-      const eiaRes = await axios.get(
-        `https://api.eia.gov/series/?api_key=${EIA_KEY}&series_id=PET.EER_EPMRU_PF4_Y35US_DPG.W`,
-        { timeout: 10000 }
-      )
-      const series = eiaRes.data?.series?.[0]
-      const data = series?.data
-      const latest = Array.isArray(data) && data.length ? data[0] : null
-      if (latest != null && latest[1] != null) nationalVal = Number(Number(latest[1]).toFixed(2))
-    } catch (err) {
-      console.warn('[API /gas-prices] EIA v1 national error:', err.message)
-    }
-  }
-
-  // State: v2 gnd may return multiple areas in same dataset; otherwise use v1 state series
-  if (stateCode && US_GAS_STATES.some((s) => s.code === stateCode)) {
-    try {
-      const v2StateParams = new URLSearchParams({
-        frequency: 'weekly',
-        'data[0]': 'value',
-        'sort[0][column]': 'period',
-        'sort[0][direction]': 'desc',
-        offset: '0',
-        length: '5000',
-        api_key: EIA_KEY,
-      })
-      const v2StateRes = await axios.get(`${eiaV2Base}?${v2StateParams.toString()}`, {
-        timeout: 10000,
-        headers: { 'X-Api-Key': EIA_KEY, 'X-Params': eiaV2XParams, Accept: 'application/json' },
-      })
-      const v2StateData = v2StateRes.data?.response?.data ?? v2StateRes.data?.data
-      const v2StateRows = Array.isArray(v2StateData) ? v2StateData : []
-      const stateRow = v2StateRows.find((r) => (r.area || r.Area || r.state || r.State) === stateCode) ?? v2StateRows[0]
-      if (stateRow && (stateRow.value != null || stateRow.Value != null)) {
-        const val = stateRow.value ?? stateRow.Value
-        statePrice = Number(val)
-      }
-      if (statePrice != null && !Number.isNaN(statePrice)) statePrice = Number(statePrice.toFixed(2))
-    } catch (err) {
-      console.warn('[API /gas-prices] EIA v2 state error:', err.message)
-    }
-    if (statePrice == null || Number.isNaN(statePrice)) {
-      try {
-        const stateRes = await axios.get(
-          `https://api.eia.gov/series/?api_key=${EIA_KEY}&series_id=PET.EER_EPMRU_PF4_Y35${stateCode}_DPG.W`,
-          { timeout: 10000 }
-        )
-        const stateSeries = stateRes.data?.series?.[0]
-        const stateData = stateSeries?.data
-        const stateLatest = Array.isArray(stateData) && stateData.length ? stateData[0] : null
-        if (stateLatest != null && stateLatest[1] != null) statePrice = Number(Number(stateLatest[1]).toFixed(2))
-      } catch (err) {
-        console.warn('[API /gas-prices] EIA v1 state error:', err.message)
-      }
-    }
-  }
+  // EIA v1 API was retired; use only v2 (and GasBuddy fallback when configured).
 
   const st = stateCode ? US_GAS_STATES.find((s) => s.code === stateCode) : null
   const payload = {
@@ -2068,9 +2241,13 @@ router.get('/gas-prices', async (req, res) => {
     updatedAt,
   }
   if (stateCode && st) {
-    payload.states = statePrice != null
-      ? [{ code: stateCode, name: st.name, price: Number(statePrice.toFixed(2)) }]
-      : []
+    if (statePrice != null) {
+      payload.states = [{ code: stateCode, name: st.name, price: Number(statePrice.toFixed(2)) }]
+    } else if (nationalVal != null) {
+      payload.states = [{ code: stateCode, name: st.name, price: Number(nationalVal.toFixed(2)), useNationalFallback: true }]
+    } else {
+      payload.states = []
+    }
   } else {
     payload.states = []
   }

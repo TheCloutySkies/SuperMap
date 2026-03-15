@@ -327,9 +327,15 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
+}
+
+.main-content-scroll--tools .tools-view {
+  flex: 0 0 auto;
+  min-height: min-content;
 }
 
 /* Y2K page transition when switching footer sections */

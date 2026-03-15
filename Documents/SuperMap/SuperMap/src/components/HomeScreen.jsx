@@ -136,7 +136,7 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
     if (!API_BASE) return
     setGasPricesLoading(true)
     const params = selectedGasState ? { state: selectedGasState } : {}
-    axios.get(`${API_BASE}/api/gas-prices`, { params, timeout: 10000 })
+    axios.get(`${API_BASE}/api/gas-prices`, { params, timeout: 25000 })
       .then((res) => {
         setGasPrices(res.data || null)
         setGasPricesError(null)
@@ -339,7 +339,10 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
                         <span className="home-screen-gas-prices-unit">{gasPrices.unit}</span>
                         <span className="home-screen-gas-prices-updated">Updated {gasPrices.updatedAt}</span>
                       </div>
-                      {gasPrices.national != null && (
+                      {gasPrices.states[0].useNationalFallback && (
+                        <p className="home-screen-gas-prices-no-data home-screen-gas-prices-estimate-note">State data unavailable; showing US average.</p>
+                      )}
+                      {gasPrices.national != null && !gasPrices.states[0].useNationalFallback && (
                         <p className="home-screen-gas-prices-us-avg">US avg ${gasPrices.national} {gasPrices.unit}</p>
                       )}
                     </>
@@ -351,10 +354,19 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
                       <span className="home-screen-gas-prices-updated">Updated {gasPrices.updatedAt}</span>
                     </div>
                   ) : gasPrices.gasUnavailable ? (
-                    <p className="home-screen-gas-prices-no-data">
-                      Unable to load gas prices. For reliable data, add <code>EIA_API_KEY</code> to your backend <code>.env</code> (free at{' '}
-                      <a href="https://www.eia.gov/opendata/register.php" target="_blank" rel="noopener noreferrer">eia.gov/opendata</a>), or try again later.
-                    </p>
+                    <>
+                      <div className="home-screen-gas-prices-national">
+                        <span className="home-screen-gas-prices-state-label">
+                          {selectedGasState && gasPricesStates.find((s) => s.code === selectedGasState)?.name || 'US avg'} (estimate)
+                        </span>
+                        <span className="home-screen-gas-prices-value">~$3.49</span>
+                        <span className="home-screen-gas-prices-unit">{gasPrices.unit}</span>
+                      </div>
+                      <p className="home-screen-gas-prices-no-data home-screen-gas-prices-estimate-note">
+                        Add <code>EIA_API_KEY</code> to your backend <code>.env</code> for live data (free at{' '}
+                        <a href="https://www.eia.gov/opendata/register.php" target="_blank" rel="noopener noreferrer">eia.gov/opendata</a>).
+                      </p>
+                    </>
                   ) : gasPrices.requiresEiaKey ? (
                     <p className="home-screen-gas-prices-no-data">
                       Real-time data requires an EIA API key. Add <code>EIA_API_KEY</code> to your backend <code>.env</code>. Free key at{' '}

@@ -8,7 +8,7 @@ const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.
   ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
   : 'http://localhost:3001'
 
-const FEED_MODE = { NEWS: 'GLOBAL_NEWS', OSINT: 'GENERAL_OSINT' }
+const FEED_MODE = { NEWS: 'GLOBAL_NEWS', OSINT: 'GENERAL_OSINT', VIDEOS: 'RECENT_VIDEOS' }
 const OSINT_SUB = { INTEL: 'intel' }
 
 /** Display name for OSINT source (actual source, not alert type). */
@@ -59,6 +59,73 @@ function feedsDebugEnabled() {
   } catch {
     return false
   }
+}
+
+function youtubeEmbedUrl(url) {
+  if (!url || typeof url !== 'string') return null
+  const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/)
+  return m ? `https://www.youtube.com/embed/${m[1]}` : null
+}
+
+function vimeoEmbedUrl(url) {
+  if (!url || !url.includes('vimeo.com')) return null
+  const m = url.match(/vimeo\.com\/(?:video\/)?(\d+)/)
+  return m ? `https://player.vimeo.com/video/${m[1]}` : null
+}
+
+function VideoCard({ item, onExpand }) {
+  const link = item.videoUrl || item.link
+  const tags = Array.isArray(item.tags) ? item.tags : []
+  const ytEmbed = youtubeEmbedUrl(link)
+  const vimeoEmbed = vimeoEmbedUrl(link)
+  const canEmbed = ytEmbed || vimeoEmbed
+  const embedSrc = ytEmbed || vimeoEmbed
+  return (
+    <div
+      className="feeds-video-card feeds-video-card--clickable"
+      role="button"
+      tabIndex={0}
+      onClick={() => onExpand(item)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onExpand(item) } }}
+      aria-label={`Play ${item.title || 'video'}`}
+    >
+      <div className="feeds-video-card-thumb-wrap">
+        {canEmbed ? (
+          <iframe
+            src={embedSrc + (ytEmbed ? '?rel=0&modestbranding=1' : '')}
+            title={item.title || 'Video'}
+            className="feeds-video-card-embed"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+            allowFullScreen
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : item.thumbnail ? (
+          <span className="feeds-video-card-thumb-link">
+            <img src={item.thumbnail} alt="" className="feeds-video-card-thumb" loading="lazy" />
+            <span className="feeds-video-card-play-overlay" aria-hidden>▶</span>
+          </span>
+        ) : (
+          <span className="feeds-video-card-thumb-placeholder" aria-hidden>▶</span>
+        )}
+        {!canEmbed && <span className="feeds-video-card-source">{item.source}</span>}
+        {canEmbed && <span className="feeds-video-card-source feeds-video-card-source--overlay">{item.source}</span>}
+      </div>
+      <div className="feeds-video-card-body">
+        <h3 className="feeds-video-card-title">{item.title || 'Untitled'}</h3>
+        <span className="feeds-video-card-date">
+          {item.timestamp ? new Date(item.timestamp).toLocaleDateString(undefined, { dateStyle: 'short' }) : ''}
+        </span>
+        {tags.length > 0 && (
+          <div className="feeds-video-card-tags">
+            {tags.map((t, i) => (
+              <span key={`${item._key || item.id}-tag-${i}`} className="feeds-video-card-tag">{t}</span>
+            ))}
+          </div>
+        )}
+        <span className="feeds-video-card-expand-hint">Click to expand and play</span>
+      </div>
+    </div>
+  )
 }
 
 function matchesSource(item, sourceFilter, feedMode) {
@@ -116,11 +183,15 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
   const initialItems = initialNews ? geoJsonToItems(initialNews) : []
   const isNewsOnly = activeView === 'news-feeds'
   const isOsintOnly = activeView === 'osint-feeds'
-  const [feedMode, setFeedMode] = useState(isOsintOnly ? FEED_MODE.OSINT : FEED_MODE.NEWS)
+  const isVideosOnly = activeView === 'recent-videos'
+  const [feedMode, setFeedMode] = useState(isVideosOnly ? FEED_MODE.VIDEOS : isOsintOnly ? FEED_MODE.OSINT : FEED_MODE.NEWS)
   const [newsItems, setNewsItems] = useState(initialItems)
   const [osintItems, setOsintItems] = useState([])
+  const [videoItems, setVideoItems] = useState([])
   const [newsLoading, setNewsLoading] = useState(initialItems.length === 0)
   const [osintLoading, setOsintLoading] = useState(true)
+  const [videoLoading, setVideoLoading] = useState(false)
+  const [videoTagFilter, setVideoTagFilter] = useState('all')
   const { user, isConfigured: authConfigured } = useAuth()
   const { add: saveArticle, remove: unsaveArticle, isSaved } = useSavedArticles()
   const [savingId, setSavingId] = useState(null)
@@ -130,11 +201,33 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
   const [osintSub, setOsintSub] = useState(OSINT_SUB.INTEL)
   const [pinningId, setPinningId] = useState(null)
   const [pinError, setPinError] = useState(null)
+  const [expandedVideo, setExpandedVideo] = useState(null)
 
   useEffect(() => {
-    if (activeView === 'news-feeds') setFeedMode(FEED_MODE.NEWS)
+    if (activeView === 'recent-videos') setFeedMode(FEED_MODE.VIDEOS)
+    else if (activeView === 'news-feeds') setFeedMode(FEED_MODE.NEWS)
     else if (activeView === 'osint-feeds') setFeedMode(FEED_MODE.OSINT)
   }, [activeView])
+
+  useEffect(() => {
+    if (feedMode !== FEED_MODE.VIDEOS || !API_BASE) return
+    let cancelled = false
+    setVideoLoading(true)
+    axios.get(`${API_BASE}/api/feeds/videos`, { timeout: 20000 })
+      .then((res) => {
+        if (cancelled) return
+        const features = res.data?.features ?? []
+        const items = features.map((f) => ({
+          ...(f.properties || {}),
+          id: f.properties?.id ?? f.id,
+          _key: f.properties?.id ?? f.id ?? Math.random(),
+        }))
+        setVideoItems(items)
+      })
+      .catch(() => { if (!cancelled) setVideoItems([]) })
+      .finally(() => { if (!cancelled) setVideoLoading(false) })
+    return () => { cancelled = true }
+  }, [feedMode])
 
   useEffect(() => {
     if (!API_BASE) {
@@ -246,22 +339,36 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
     setRefreshing(true)
     setNewsLoading(true)
     setOsintLoading(true)
+    if (feedMode === FEED_MODE.VIDEOS) setVideoLoading(true)
     const requests = [
       axios.get(`${API_BASE}/api/news`, { timeout: 15000 }),
       axios.get(`${API_BASE}/api/osint`, { timeout: 15000 }),
     ]
+    if (feedMode === FEED_MODE.VIDEOS) {
+      requests.push(axios.get(`${API_BASE}/api/feeds/videos`, { timeout: 20000 }))
+    }
     Promise.all(requests)
       .then((responses) => {
         setNewsItems(geoJsonToItems(responses[0].data))
         setOsintItems(geoJsonToItems(responses[1].data))
+        if (feedMode === FEED_MODE.VIDEOS && responses[2]) {
+          const features = responses[2].data?.features ?? []
+          setVideoItems(features.map((f) => ({
+            ...(f.properties || {}),
+            id: f.properties?.id ?? f.id,
+            _key: f.properties?.id ?? f.id ?? Math.random(),
+          })))
+        }
       })
       .catch(() => {
         setNewsItems([])
         setOsintItems([])
+        if (feedMode === FEED_MODE.VIDEOS) setVideoItems([])
       })
       .finally(() => {
         setNewsLoading(false)
         setOsintLoading(false)
+        if (feedMode === FEED_MODE.VIDEOS) setVideoLoading(false)
         setRefreshing(false)
       })
   }
@@ -300,12 +407,94 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
     return list
   }, [osintItems, sourceFilter, sortBy, q])
 
-  const loading = newsLoading || osintLoading
-  const isEmpty = feedMode === FEED_MODE.NEWS ? !newsSourceList.length : !osintItems.length
-  const filteredEmpty = feedMode === FEED_MODE.NEWS ? !filteredAndSortedNews.length : !filteredAndSortedOsint.length
+  const allVideoTags = useMemo(() => {
+    const set = new Set()
+    videoItems.forEach((it) => {
+      const tags = it.tags
+      if (Array.isArray(tags)) tags.forEach((t) => set.add(t))
+    })
+    return Array.from(set).sort()
+  }, [videoItems])
+  const filteredVideos = useMemo(() => {
+    if (videoTagFilter === 'all') return videoItems
+    return videoItems.filter((it) => Array.isArray(it.tags) && it.tags.includes(videoTagFilter))
+  }, [videoItems, videoTagFilter])
+
+  const loading = newsLoading || osintLoading || (feedMode === FEED_MODE.VIDEOS && videoLoading)
+  const isEmpty = feedMode === FEED_MODE.VIDEOS ? !videoItems.length : feedMode === FEED_MODE.NEWS ? !newsSourceList.length : !osintItems.length
+  const filteredEmpty = feedMode === FEED_MODE.VIDEOS ? !filteredVideos.length : feedMode === FEED_MODE.NEWS ? !filteredAndSortedNews.length : !filteredAndSortedOsint.length
+
+  const expandedVideoModal = useMemo(() => {
+    if (!expandedVideo) return null
+    const link = expandedVideo.videoUrl || expandedVideo.link
+    const ytEmbed = youtubeEmbedUrl(link)
+    const vimeoEmbed = vimeoEmbedUrl(link)
+    const useIframe = ytEmbed || vimeoEmbed
+    const proxySrc = API_BASE && !useIframe && link
+      ? `${API_BASE}/api/proxy-video?url=${encodeURIComponent(link)}`
+      : null
+    return (
+      <div
+        className="feeds-video-modal-backdrop"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Video preview"
+        onClick={() => setExpandedVideo(null)}
+      >
+        <div className="feeds-video-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="feeds-video-modal-header">
+            <h2 className="feeds-video-modal-title">{expandedVideo.title || 'Untitled'}</h2>
+            <span className="feeds-video-modal-source">{expandedVideo.source}</span>
+            <button
+              type="button"
+              className="feeds-video-modal-close"
+              onClick={() => setExpandedVideo(null)}
+              aria-label="Close"
+            >
+              ×
+            </button>
+          </div>
+          <div className="feeds-video-modal-player">
+            {useIframe ? (
+              <iframe
+                src={(ytEmbed || vimeoEmbed) + (ytEmbed ? '?autoplay=1&rel=0' : '?autoplay=1')}
+                title={expandedVideo.title || 'Video'}
+                className="feeds-video-modal-embed"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                allowFullScreen
+              />
+            ) : proxySrc ? (
+              <video
+                src={proxySrc}
+                controls
+                autoPlay
+                playsInline
+                className="feeds-video-modal-video"
+              />
+            ) : (
+              <div className="feeds-video-modal-fallback">
+                <p>Cannot play this video inline. Open in a new tab to watch.</p>
+                <a href={link} target="_blank" rel="noopener noreferrer" className="feeds-video-modal-open-link">
+                  Open in new tab →
+                </a>
+              </div>
+            )}
+          </div>
+          <div className="feeds-video-modal-actions">
+            <a href={link} target="_blank" rel="noopener noreferrer" className="feeds-video-modal-open-link">
+              Open in new tab
+            </a>
+            <button type="button" className="feeds-video-modal-close-btn" onClick={() => setExpandedVideo(null)}>
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }, [expandedVideo])
 
   return (
-    <div className={`feeds-dashboard feeds-dashboard--${feedMode === FEED_MODE.NEWS ? 'news' : 'osint'}`}>
+    <div className={`feeds-dashboard feeds-dashboard--${feedMode === FEED_MODE.VIDEOS ? 'videos' : feedMode === FEED_MODE.NEWS ? 'news' : 'osint'}`}>
       <div className="feeds-dashboard-header">
         <div className="feeds-dashboard-title-row">
           <h1>{title}</h1>
@@ -324,7 +513,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
         </p>
       </div>
 
-      {!isNewsOnly && !isOsintOnly && (
+      {(activeView === 'news-feeds' || activeView === 'osint-feeds') && !isVideosOnly && (
         <div className="feeds-subnav">
           <button
             type="button"
@@ -340,37 +529,100 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
           >
             OSINT
           </button>
+          <button
+            type="button"
+            className={`feeds-subnav-btn ${feedMode === FEED_MODE.VIDEOS ? 'active' : ''}`}
+            onClick={() => { setFeedMode(FEED_MODE.VIDEOS); setVideoTagFilter('all') }}
+          >
+            Recent videos
+          </button>
         </div>
       )}
 
-      <div className="feeds-toolbar">
-        <div className="feeds-source-filter">
-          <span className="feeds-toolbar-label">Source:</span>
-          {(feedMode === FEED_MODE.OSINT || isOsintOnly ? SOURCE_SECTIONS_OSINT : SOURCE_SECTIONS_NEWS).map((sec) => (
-            <button
-              key={sec.key}
-              type="button"
-              className={`feeds-source-chip ${sourceFilter === sec.key ? 'active' : ''}`}
-              onClick={() => setSourceFilter(sec.key)}
-            >
-              {sec.label}
-            </button>
-          ))}
-        </div>
-        <div className="feeds-sort">
-          <label htmlFor="feeds-sort-select" className="feeds-toolbar-label">Sort:</label>
-          <select
-            id="feeds-sort-select"
-            className="feeds-sort-select"
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-          >
-            {SORT_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
+      {feedMode !== FEED_MODE.VIDEOS && (
+        <div className="feeds-toolbar">
+          <div className="feeds-source-filter">
+            <span className="feeds-toolbar-label">Source:</span>
+            {(feedMode === FEED_MODE.OSINT || isOsintOnly ? SOURCE_SECTIONS_OSINT : SOURCE_SECTIONS_NEWS).map((sec) => (
+              <button
+                key={sec.key}
+                type="button"
+                className={`feeds-source-chip ${sourceFilter === sec.key ? 'active' : ''}`}
+                onClick={() => setSourceFilter(sec.key)}
+              >
+                {sec.label}
+              </button>
             ))}
-          </select>
+          </div>
+          <div className="feeds-sort">
+            <label htmlFor="feeds-sort-select" className="feeds-toolbar-label">Sort:</label>
+            <select
+              id="feeds-sort-select"
+              className="feeds-sort-select"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+            >
+              {SORT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
-      </div>
+      )}
+
+      {feedMode === FEED_MODE.VIDEOS && (
+        <div className="feeds-videos-toolbar">
+          <span className="feeds-toolbar-label">Filter by tag:</span>
+          <div className="feeds-video-tags">
+            <button
+              type="button"
+              className={`feeds-video-tag ${videoTagFilter === 'all' ? 'active' : ''}`}
+              onClick={() => setVideoTagFilter('all')}
+            >
+              All
+            </button>
+            {allVideoTags.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                className={`feeds-video-tag ${videoTagFilter === tag ? 'active' : ''}`}
+                onClick={() => setVideoTagFilter(tag)}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(feedMode === FEED_MODE.VIDEOS) && (
+        <div className="feeds-videos-section">
+          {videoLoading ? (
+            <p className="feeds-loading">Loading recent videos…</p>
+          ) : filteredEmpty ? (
+            <div className="feeds-empty">
+              <p>No videos match the current filters.</p>
+              <p className="feeds-empty-hint">Video feeds include Al Jazeera Video, DW News, BBC World Video, plus video items from news and OSINT sources. Try <strong>Refresh</strong> or clear the tag filter.</p>
+              {videoTagFilter !== 'all' && (
+                <button type="button" className="feeds-clear-filter" onClick={() => setVideoTagFilter('all')}>Show all</button>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="feeds-video-timeline">
+                {filteredVideos.map((item) => (
+                  <VideoCard
+                    key={item._key || item.id || item.link}
+                    item={item}
+                    onExpand={setExpandedVideo}
+                  />
+                ))}
+              </div>
+              {expandedVideoModal}
+            </>
+          )}
+        </div>
+      )}
 
       {(feedMode === FEED_MODE.NEWS || isNewsOnly) && (
         <div className="feeds-news-section">

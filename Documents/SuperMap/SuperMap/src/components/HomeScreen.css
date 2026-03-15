@@ -539,6 +539,11 @@
   text-decoration: underline;
 }
 
+.home-screen-gas-prices-estimate-note {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+}
+
 .home-screen-gas-prices-error {
   color: var(--y2k-text-muted);
 }

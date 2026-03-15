@@ -182,3 +182,61 @@
   }
 }
 
+/* Mobile: stack header, no overlap, full-width controls */
+@media (max-width: 640px) {
+  .report-maker {
+    padding: 0.6rem 0.75rem 1rem;
+  }
+  .report-maker-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  .report-maker-title-wrap {
+    max-width: none;
+  }
+  .report-maker-export {
+    flex-direction: column;
+    width: 100%;
+  }
+  .report-maker-export button {
+    width: 100%;
+    justify-content: center;
+  }
+  .report-maker-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  .report-maker-card {
+    padding: 0.6rem 0.75rem;
+  }
+  .report-maker-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+  .report-maker-row button {
+    width: 100%;
+    min-height: 44px;
+  }
+  .report-maker-row-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+  .report-maker-row-3 .report-maker-label:first-child {
+    grid-column: 1 / -1;
+  }
+  .report-maker-row-3 button {
+    grid-column: 1 / -1;
+  }
+  .report-maker-lists {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  .report-maker-lists ul {
+    max-height: 120px;
+  }
+}
+

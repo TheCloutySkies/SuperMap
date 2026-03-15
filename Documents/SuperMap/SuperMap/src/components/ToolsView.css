@@ -1,7 +1,6 @@
 .tools-view {
   display: flex;
   flex-direction: column;
-  height: 100%;
   min-height: 400px;
   background: var(--y2k-surface, #0f1216);
   color: var(--y2k-text, #e6edf3);
@@ -172,11 +171,13 @@
 }
 
 .app--device-mobile .tools-view-embed-wrap {
-  min-height: 50vh;
+  min-height: 70vh;
+  touch-action: manipulation;
 }
 
 .app--device-mobile .tools-view-iframe {
-  min-height: 50vh;
+  min-height: 70vh;
+  touch-action: manipulation;
 }
 
 .app--device-mobile .tools-view-open-external-btn {

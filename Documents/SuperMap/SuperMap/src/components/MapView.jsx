@@ -32,8 +32,6 @@ import DrawHUD from './DrawHUD'
 import PinEditorDialog from './PinEditorDialog'
 import WeatherHUD from './WeatherHUD'
 import CoordinatesDisplay from './CoordinatesDisplay'
-import { useAuth } from '../contexts/AuthContext'
-import { useSavedPlaces } from '../contexts/SavedPlacesContext'
 import LegendControl from 'mapboxgl-legend'
 import 'mapboxgl-legend/dist/style.css'
 import GlobeMinimap from 'mapbox-gl-globe-minimap'
@@ -1111,8 +1109,6 @@ export default function MapView({
   onMapCenterChange = null,
   overlayOpacity = 0.6,
 }) {
-  const { user } = useAuth()
-  const { places, lists: listNames, addPlace, updatePlace, removePlace, clearPlaces, createList } = useSavedPlaces()
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const drawRef = useRef(null)
@@ -1146,8 +1142,6 @@ export default function MapView({
   const [pinEditorIsNew, setPinEditorIsNew] = useState(false)
   const searchDataByLayerRef = useRef({})
   const onSearchDataUpdateRef = useRef(onSearchDataUpdate)
-  const placesRef = useRef(places)
-  placesRef.current = places
   onSearchDataUpdateRef.current = onSearchDataUpdate
 
   const buildSearchEntries = useCallback(() => {
@@ -1241,23 +1235,8 @@ export default function MapView({
   }, [])
 
   const refreshSavedPointsLayer = useCallback(() => {
-    if (user?.id) {
-      const fromPlaces = (places || []).map((p) => ({
-        type: 'Feature',
-        id: p.id,
-        properties: { title: p.title || 'Saved point', icon: p.icon || '📍', source: p.list_name || 'My Places' },
-        geometry: { type: 'Point', coordinates: [Number(p.lon), Number(p.lat)] },
-      }))
-      const local = getSavedPoints()
-      const localLinesPolygons = (local.features || []).filter(
-        (f) => f.geometry && (f.geometry.type === 'LineString' || f.geometry.type === 'Polygon')
-      )
-      const features = [...fromPlaces, ...localLinesPolygons]
-      upsertSavedPointsLayer({ type: 'FeatureCollection', features })
-      return
-    }
     upsertSavedPointsLayer(getSavedPoints())
-  }, [upsertSavedPointsLayer, user?.id, places])
+  }, [upsertSavedPointsLayer])
 
   const addSavedPointAtCenter = useCallback(async (options = {}) => {
     const map = mapRef.current
@@ -1266,16 +1245,6 @@ export default function MapView({
     const name = String(options?.title || '').trim()
     const listName = String(options?.listName || 'General').trim() || 'General'
     const icon = options?.icon || pointIcon || '📍'
-    if (user?.id) {
-      await addPlace({
-        title: name || 'Pinned place',
-        lat: center.lat,
-        lon: center.lng,
-        icon,
-        listName,
-      })
-      return
-    }
     const current = getSavedPoints()
     const feature = {
       type: 'Feature',
@@ -1290,27 +1259,18 @@ export default function MapView({
     const next = { type: 'FeatureCollection', features: [...(current.features || []), feature] }
     setSavedPoints(next)
     upsertSavedPointsLayer(next)
-  }, [pointIcon, upsertSavedPointsLayer, user?.id, addPlace])
+  }, [pointIcon, upsertSavedPointsLayer])
 
   const clearSavedPoints = useCallback(async () => {
-    if (user?.id) {
-      await clearPlaces()
-      return
-    }
     const empty = { type: 'FeatureCollection', features: [] }
     setSavedPoints(empty)
     upsertSavedPointsLayer(empty)
-  }, [upsertSavedPointsLayer, user?.id, clearPlaces])
+  }, [upsertSavedPointsLayer])
 
   const handlePinEditorSave = useCallback(async (pinId, updates) => {
-    if (user?.id) {
-      await updatePlace(pinId, updates)
-      return
-    }
     const current = getSavedPoints()
     const features = (current.features || []).map((f) => {
       if (f.id !== pinId) return f
-      const [lon, lat] = f.geometry?.coordinates || []
       return {
         ...f,
         properties: {
@@ -1325,19 +1285,15 @@ export default function MapView({
     const next = { type: 'FeatureCollection', features }
     setSavedPoints(next)
     upsertSavedPointsLayer(next)
-  }, [user?.id, updatePlace, upsertSavedPointsLayer])
+  }, [upsertSavedPointsLayer])
 
   const handlePinEditorDelete = useCallback(async (pinId) => {
-    if (user?.id) {
-      await removePlace(pinId)
-      return
-    }
     const current = getSavedPoints()
     const features = (current.features || []).filter((f) => f.id !== pinId)
     const next = { type: 'FeatureCollection', features }
     setSavedPoints(next)
     upsertSavedPointsLayer(next)
-  }, [user?.id, removePlace, upsertSavedPointsLayer])
+  }, [upsertSavedPointsLayer])
 
   const doFetch = useCallback(
     (map, toggles, onLoading) => {
@@ -1711,42 +1667,26 @@ export default function MapView({
         const lng = Number(e?.lngLat?.lng)
         const lat = Number(e?.lngLat?.lat)
         if (Number.isFinite(lng) && Number.isFinite(lat)) {
-          if (user?.id) {
-            addPlace({
-              title: 'Pinned place',
-              lat,
-              lon: lng,
-              icon: pointIcon || '📍',
-              listName: 'General',
-            }).then((created) => {
-              if (created) {
-                setPinEditorPin(created)
-                setPinEditorIsNew(true)
-                setPinEditorOpen(true)
-              }
-            }).catch(() => {})
-          } else {
-            const current = getSavedPoints()
-            const feature = {
-              type: 'Feature',
-              id: `pt-${Date.now()}`,
-              properties: { title: 'Saved point', icon: pointIcon || '📍', source: 'General' },
-              geometry: { type: 'Point', coordinates: [lng, lat] },
-            }
-            const next = { type: 'FeatureCollection', features: [...(current.features || []), feature] }
-            setSavedPoints(next)
-            upsertSavedPointsLayer(next)
-            setPinEditorPin({
-              id: feature.id,
-              title: feature.properties.title,
-              icon: feature.properties.icon,
-              list_name: feature.properties.source,
-              lat: lat,
-              lon: lng,
-            })
-            setPinEditorIsNew(true)
-            setPinEditorOpen(true)
+          const current = getSavedPoints()
+          const feature = {
+            type: 'Feature',
+            id: `pt-${Date.now()}`,
+            properties: { title: 'Saved point', icon: pointIcon || '📍', source: 'General' },
+            geometry: { type: 'Point', coordinates: [lng, lat] },
           }
+          const next = { type: 'FeatureCollection', features: [...(current.features || []), feature] }
+          setSavedPoints(next)
+          upsertSavedPointsLayer(next)
+          setPinEditorPin({
+            id: feature.id,
+            title: feature.properties.title,
+            icon: feature.properties.icon,
+            list_name: feature.properties.source,
+            lat: lat,
+            lon: lng,
+          })
+          setPinEditorIsNew(true)
+          setPinEditorOpen(true)
         }
         return
       }
@@ -1773,29 +1713,20 @@ export default function MapView({
       if (!coords) return
       if (feat.layer.id === 'intel-saved-points-layer') {
         const pid = feat.id
-        if (user?.id) {
-          const place = (placesRef.current || []).find((p) => p.id === pid)
-          if (place) {
-            setPinEditorPin(place)
-            setPinEditorIsNew(false)
-            setPinEditorOpen(true)
-          }
-        } else {
-          const fc = getSavedPoints()
-          const f = (fc.features || []).find((f) => f.id === pid)
-          if (f) {
-            const [lon, lat] = f.geometry?.coordinates || []
-            setPinEditorPin({
-              id: f.id,
-              title: f.properties?.title,
-              icon: f.properties?.icon,
-              list_name: f.properties?.source,
-              lat,
-              lon,
-            })
-            setPinEditorIsNew(false)
-            setPinEditorOpen(true)
-          }
+        const fc = getSavedPoints()
+        const f = (fc.features || []).find((featItem) => featItem.id === pid)
+        if (f) {
+          const [lon, lat] = f.geometry?.coordinates || []
+          setPinEditorPin({
+            id: f.id,
+            title: f.properties?.title,
+            icon: f.properties?.icon,
+            list_name: f.properties?.source,
+            lat,
+            lon,
+          })
+          setPinEditorIsNew(false)
+          setPinEditorOpen(true)
         }
         return
       }
@@ -1943,7 +1874,7 @@ export default function MapView({
       mapReadyRef.current = false
       setMapInstance(null)
     }
-  }, [basemapId, doFetch, onLoadingChange, refreshSavedPointsLayer, user?.id, addPlace, pointIcon, upsertSavedPointsLayer])
+  }, [basemapId, doFetch, onLoadingChange, refreshSavedPointsLayer, pointIcon, upsertSavedPointsLayer])
 
   useEffect(() => {
     const map = mapRef.current
@@ -2328,7 +2259,7 @@ export default function MapView({
   useEffect(() => {
     if (!mapRef.current || !mapReadyRef.current) return
     refreshSavedPointsLayer()
-  }, [refreshSavedPointsLayer, user?.id, places])
+  }, [refreshSavedPointsLayer])
 
   useEffect(() => {
     const map = mapRef.current
@@ -2420,10 +2351,10 @@ export default function MapView({
         onClose={() => { setPinEditorOpen(false); setPinEditorPin(null) }}
         pin={pinEditorPin}
         isNew={pinEditorIsNew}
-        listNames={user?.id ? (listNames || []) : (pinEditorOpen ? Array.from(new Set([...(getSavedPoints().features || []).map((f) => f.properties?.source).filter(Boolean), 'General'])).sort() : [])}
+        listNames={pinEditorOpen ? Array.from(new Set([...(getSavedPoints().features || []).map((f) => f.properties?.source).filter(Boolean), 'General'])).sort() : []}
         onSave={pinEditorPin ? (updates) => handlePinEditorSave(pinEditorPin.id, updates) : undefined}
         onDelete={pinEditorPin ? () => handlePinEditorDelete(pinEditorPin.id) : undefined}
-        onCreateList={user?.id ? createList : undefined}
+        onCreateList={undefined}
       />
     </div>
   )

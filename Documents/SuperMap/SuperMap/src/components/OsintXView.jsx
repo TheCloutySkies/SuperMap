@@ -1,7 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
 import axios from 'axios'
-import { useAuth } from '../contexts/AuthContext'
-import { useSavedXPosts } from '../contexts/SavedXPostsContext'
 import './OsintXView.css'
 
 const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
@@ -54,8 +52,6 @@ const SORT_OPTIONS = [
 const REPORT_X_POSTS_KEY = 'supermap_report_x_posts'
 
 export default function OsintXView({ keywordFilter = '', onClearFilter, onPinnedToMap }) {
-  const { user } = useAuth()
-  const { addPost, isSavedPost } = useSavedXPosts()
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -64,8 +60,6 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
   const [filterCreator, setFilterCreator] = useState('')
   const [pinningId, setPinningId] = useState(null)
   const [pinError, setPinError] = useState(null)
-  const [savingId, setSavingId] = useState(null)
-  const [saveError, setSaveError] = useState(null)
   const [videoDialog, setVideoDialog] = useState(null)
   const [imageDialog, setImageDialog] = useState(null)
   const [imageDownloading, setImageDownloading] = useState(false)
@@ -173,22 +167,6 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
       .finally(() => setPinningId(null))
   }
 
-  const handleSavePost = async (post) => {
-    if (!user) {
-      setSaveError('Sign in to save X posts')
-      return
-    }
-    setSaveError(null)
-    setSavingId(post.id)
-    try {
-      await addPost(post)
-    } catch (err) {
-      setSaveError(err?.message || 'Could not save post')
-    } finally {
-      setSavingId(null)
-    }
-  }
-
   const handlePinToReport = (post) => {
     try {
       const current = JSON.parse(localStorage.getItem(REPORT_X_POSTS_KEY) || '[]')
@@ -258,7 +236,6 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
           )}
         </div>
         {pinError && <p className="osint-x-pin-error">{pinError}</p>}
-        {saveError && <p className="osint-x-pin-error">{saveError}</p>}
       </header>
 
       {loading && !refreshing ? (
@@ -436,15 +413,6 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
                   title="Add this post to Report Maker"
                 >
                   Pin to report
-                </button>
-                <button
-                  type="button"
-                  className="osint-x-pin-btn"
-                  onClick={() => handleSavePost(post)}
-                  disabled={savingId === post.id || isSavedPost(post.url)}
-                  title="Save post to your account"
-                >
-                  {isSavedPost(post.url) ? 'Saved' : savingId === post.id ? 'Saving…' : 'Save post'}
                 </button>
               </div>
             </li>

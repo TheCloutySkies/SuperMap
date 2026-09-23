@@ -414,79 +414,6 @@
   letter-spacing: 0.06em;
 }
 
-/* Community posts section */
-.home-screen-forum {
-  margin-top: 1.5rem;
-}
-
-.home-screen-forum-empty {
-  margin: 0 0 0.75rem;
-  font-size: 0.85rem;
-  color: var(--y2k-text-muted);
-}
-
-.home-screen-forum-list {
-  list-style: none;
-  margin: 0 0 0.75rem;
-  padding: 0;
-  border: 1px solid var(--y2k-border);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.home-screen-forum-list li {
-  border-bottom: 1px solid var(--y2k-border);
-}
-
-.home-screen-forum-list li:last-child {
-  border-bottom: none;
-}
-
-.home-screen-forum-item {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.25rem;
-  width: 100%;
-  padding: 0.6rem 0.85rem;
-  text-align: left;
-  background: var(--y2k-surface-raised);
-  border: none;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background 0.2s;
-}
-
-.home-screen-forum-item:hover {
-  background: #1e242c;
-}
-
-.home-screen-forum-item-title {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--y2k-text);
-}
-
-.home-screen-forum-item-meta {
-  font-size: 0.7rem;
-  color: var(--y2k-text-muted);
-}
-
-.home-screen-forum-item-preview {
-  font-size: 0.75rem;
-  color: var(--y2k-text-muted);
-  line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.home-screen-forum-link {
-  font-size: 0.8rem;
-  padding: 0.4rem 0.75rem;
-}
-
 /* Gas Prices (US) section */
 .home-screen-gas-prices {
   margin-top: 1.5rem;
@@ -987,30 +914,6 @@
   color: var(--y2k-accent-hover);
 }
 
-.home-screen-footer-auth {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  min-height: 44px;
-}
-
-.home-screen-footer-auth .header-auth-btn {
-  padding: 0.5rem 0.85rem;
-  font-size: 0.85rem;
-  min-height: 44px;
-  min-width: 120px;
-  flex-shrink: 0;
-  -webkit-tap-highlight-color: rgba(41, 182, 246, 0.2);
-}
-
-.home-screen-footer-auth .header-auth-menu {
-  top: auto;
-  bottom: calc(100% + 6px);
-  right: 0;
-  left: auto;
-}
-
 /* Mobile layout: single column, touch-friendly, sidebar below main. */
 @media (max-width: 900px) {
   .home-screen-main {
@@ -1115,12 +1018,6 @@
   -webkit-tap-highlight-color: rgba(41, 182, 246, 0.15);
 }
 
-.app--device-mobile .home-screen-forum-item {
-  min-height: 48px;
-  padding: 0.65rem 0.85rem;
-}
-
-.app--device-mobile .home-screen-forum-link,
 .app--device-mobile .btn-y2k {
   min-height: 44px;
   padding: 0.5rem 0.85rem;

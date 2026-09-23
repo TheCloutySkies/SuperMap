@@ -40,10 +40,6 @@ app.get('/', (req, res) => {
       crimeStats: '/api/crime/stats',
       crimeStates: '/api/crime/states?year=',
       crimeCities: '/api/crime/cities?q=&state=&limit=&offset=',
-      forumCategories: '/api/forum/categories',
-      forumCommunities: '/api/forum/communities?category_id=',
-      forumPosts: '/api/forum/posts?community_id=',
-      forumThread: '/api/forum/post/:id',
       config: 'GET/POST /api/config (user X handles, subreddits)',
     },
   })

@@ -1,6 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
 import axios from 'axios'
-import HeaderAuth from './HeaderAuth'
 import './HomeScreen.css'
 import './widgets/widgets.css'
 
@@ -24,7 +23,6 @@ const QUICK_LINKS = [
   { id: 'news-feeds', label: 'News Feeds', desc: 'Wikipedia, Reddit, Google News, BBC', icon: '📰', path: 'news-feeds' },
   { id: 'osint-feeds', label: 'OSINT Feeds', desc: 'Bellingcat, CISA, DW, tactical intel', icon: '📡', path: 'osint-feeds' },
   { id: 'osint-x', label: 'OSINT (X)', desc: 'Posts from OSINT X/Twitter accounts via RSS', icon: '𝕏', path: 'osint-x' },
-  { id: 'community', label: 'Community Forum', desc: 'Browse communities and post in the forum', icon: '💬', path: 'community' },
   { id: 'report-maker', label: 'Report Maker', desc: 'Build and save intelligence reports', icon: '📝', path: 'report-maker' },
   { id: 'resources', label: 'Resources', desc: 'Open OSINT tools and reference resources', icon: '📚', path: 'resources' },
 ]
@@ -37,17 +35,8 @@ function formatDate() {
   return `${month} ${day} | ${year}`
 }
 
-function stripHtml(html) {
-  if (!html || typeof html !== 'string') return ''
-  const div = document.createElement('div')
-  div.innerHTML = html
-  return (div.textContent || div.innerText || '').trim().slice(0, 100)
-}
-
-export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footerTabs, isMobileLayout, onOpenAuth, onNavigateAccount, onShowLocationOnMap }) {
+export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footerTabs, isMobileLayout, onShowLocationOnMap }) {
   const [nitterImages, setNitterImages] = useState([])
-  const [forumPosts, setForumPosts] = useState([])
-  const [forumCommunities, setForumCommunities] = useState([])
   const [threatSummary, setThreatSummary] = useState(null)
   const [threatSummaryLoading, setThreatSummaryLoading] = useState(true)
   const [threatSummaryError, setThreatSummaryError] = useState(null)
@@ -113,21 +102,6 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
 
   useEffect(() => {
     if (!API_BASE) return
-    Promise.all([
-      axios.get(`${API_BASE}/api/forum/posts`, { timeout: 12000 }),
-      axios.get(`${API_BASE}/api/forum/communities`, { timeout: 12000 }),
-    ])
-      .then(([postsRes, communitiesRes]) => {
-        const posts = Array.isArray(postsRes.data) ? postsRes.data.slice(0, 10) : []
-        const communities = Array.isArray(communitiesRes.data) ? communitiesRes.data : []
-        setForumPosts(posts)
-        setForumCommunities(communities)
-      })
-      .catch(() => { setForumPosts([]); setForumCommunities([]) })
-  }, [])
-
-  useEffect(() => {
-    if (!API_BASE) return
     axios.get(`${API_BASE}/api/gas-prices/states`, { timeout: 5000 })
       .then((res) => setGasPricesStates(Array.isArray(res.data) ? res.data : []))
       .catch(() => setGasPricesStates([]))
@@ -151,16 +125,6 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
 
   const handleCardClick = (path) => {
     if (onNavigate && path) onNavigate(path)
-  }
-
-  const getCommunityName = (communityId) => {
-    const c = forumCommunities.find((x) => x.id === communityId)
-    return c?.name || 'Community'
-  }
-
-  const handleForumPostClick = (post) => {
-    window.location.hash = `#/post/${post.id}`
-    if (onNavigate) onNavigate('community')
   }
 
   return (
@@ -462,12 +426,6 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
                 </li>
               ))}
             </ul>
-          </div>
-          <div className="home-screen-footer-col home-screen-footer-col--account">
-            <h3 className="home-screen-footer-head">Account</h3>
-            <div className="home-screen-footer-auth">
-              <HeaderAuth onOpenAuth={onOpenAuth} onNavigateAccount={onNavigateAccount} />
-            </div>
           </div>
           <div className="home-screen-footer-col">
             <h3 className="home-screen-footer-head">Source</h3>

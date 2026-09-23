@@ -85,10 +85,7 @@ export const DEFAULT_TAB_VISIBILITY = {
   osintFeeds: true,
   newsFeeds: true,
   osintX: true,
-  places: true,
   broadcasts: true,
-  saved: true,
-  updates: true,
 }
 
 export function getTabVisibility(userId = null) {

@@ -259,12 +259,13 @@ export default function CrimeDashboard({ onFlyToCity }) {
             <h3>Offense types (national)</h3>
             <ul className="crime-type-list">
               {types.map((t) => {
-                const hist = (t.nationalHistory || []).slice(-15).map((h) => h.value)
+                const hist = (t.nationalHistory || []).slice(-15).map((h) => h.rate ?? h.value ?? h.count)
+                const latestVal = t.latest?.rate ?? t.latest?.value ?? t.latest?.count
                 return (
                   <li key={t.slug}>
                     <div className="crime-type-row">
                       <strong>{t.name}</strong>
-                      <span>{fmt(t.latest?.value)}</span>
+                      <span>{fmt(latestVal, t.latest?.rate != null ? 1 : 0)}</span>
                     </div>
                     <Sparkline points={hist} stroke="#7dd3fc" />
                   </li>
@@ -277,34 +278,61 @@ export default function CrimeDashboard({ onFlyToCity }) {
         {!loading && section === 'arrests' && arrests && (
           <div className="crime-panel">
             <h3>Arrests</h3>
-            <div className="crime-stat-grid">
-              <div className="crime-stat">
-                <span className="crime-stat-label">Total (est.)</span>
-                <span className="crime-stat-value">{fmt(arrests.nationalEstimates?.totalArrests)}</span>
+            {Array.isArray(arrests.nationalEstimates) ? (
+              <ul className="crime-simple-list">
+                {arrests.nationalEstimates.slice(0, 12).map((r) => (
+                  <li key={r.offense}>
+                    <span>{r.offense}</span>
+                    <span>{fmt(r.total)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="crime-stat-grid">
+                <div className="crime-stat">
+                  <span className="crime-stat-label">Total (est.)</span>
+                  <span className="crime-stat-value">{fmt(arrests.nationalEstimates?.totalArrests)}</span>
+                </div>
+                <div className="crime-stat">
+                  <span className="crime-stat-label">Violent</span>
+                  <span className="crime-stat-value">{fmt(arrests.nationalEstimates?.violentArrests)}</span>
+                </div>
+                <div className="crime-stat">
+                  <span className="crime-stat-label">Property</span>
+                  <span className="crime-stat-value">{fmt(arrests.nationalEstimates?.propertyArrests)}</span>
+                </div>
+                <div className="crime-stat">
+                  <span className="crime-stat-label">Drug</span>
+                  <span className="crime-stat-value">{fmt(arrests.nationalEstimates?.drugArrests)}</span>
+                </div>
               </div>
-              <div className="crime-stat">
-                <span className="crime-stat-label">Violent</span>
-                <span className="crime-stat-value">{fmt(arrests.nationalEstimates?.violentArrests)}</span>
-              </div>
-              <div className="crime-stat">
-                <span className="crime-stat-label">Property</span>
-                <span className="crime-stat-value">{fmt(arrests.nationalEstimates?.propertyArrests)}</span>
-              </div>
-              <div className="crime-stat">
-                <span className="crime-stat-label">Drug</span>
-                <span className="crime-stat-value">{fmt(arrests.nationalEstimates?.drugArrests)}</span>
-              </div>
-            </div>
-            <h4>By sex</h4>
+            )}
+            <h4>By sex (total offenses)</h4>
             <ul className="crime-simple-list">
-              {(arrests.bySex || []).map((r) => (
-                <li key={r.sex}><span>{r.sex}</span><span>{fmt(r.pct, 1)}%</span></li>
-              ))}
+              {(() => {
+                if (!Array.isArray(arrests.bySex) || !arrests.bySex.length) return null
+                const row = arrests.bySex.find((r) => /total/i.test(r.offense || '')) || arrests.bySex[0]
+                if (row?.malePct != null || row?.femalePct != null) {
+                  return [
+                    <li key="male"><span>Male</span><span>{fmt(row.malePct, 1)}%</span></li>,
+                    <li key="female"><span>Female</span><span>{fmt(row.femalePct, 1)}%</span></li>,
+                  ]
+                }
+                return arrests.bySex.map((r) => (
+                  <li key={r.sex || r.offense}>
+                    <span>{r.sex || r.offense}</span>
+                    <span>{r.pct != null ? `${fmt(r.pct, 1)}%` : fmt(r.total)}</span>
+                  </li>
+                ))
+              })()}
             </ul>
             <h4>By age</h4>
             <ul className="crime-simple-list">
-              {(arrests.byAge || []).map((r) => (
-                <li key={r.group}><span>{r.group}</span><span>{fmt(r.pct, 1)}%</span></li>
+              {(arrests.byAge || []).slice(0, 12).map((r) => (
+                <li key={r.group || r.age}>
+                  <span>{r.group || r.age}</span>
+                  <span>{r.pct != null ? `${fmt(r.pct, 1)}%` : fmt(r.count)}</span>
+                </li>
               ))}
             </ul>
           </div>

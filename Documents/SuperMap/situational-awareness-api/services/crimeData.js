@@ -78,17 +78,22 @@ function getStateSummary(year) {
   try {
     const trends = loadJson('state-trends.json')
     const fromTrends = trends.map((row) => {
-      const point = (row.series || []).find((s) => s.year === y)
+      const series = row.years || row.series || []
+      const point = series.find((s) => Number(s.year) === y)
       if (!point) return null
       const base = summary.find((s) => s.abbr === row.abbr) || {}
       return {
         abbr: row.abbr,
         name: row.name,
-        population: base.population,
+        population: point.population || base.population,
+        violentCrime: point.violentCrime,
         violentRate: point.violentRate,
+        propertyCrime: point.propertyCrime,
         propertyRate: point.propertyRate,
+        homicide: point.homicide,
         homicideRate: point.homicideRate,
         violentChange: point.violentChange,
+        propertyChange: point.propertyChange,
         year: y,
       }
     }).filter(Boolean)

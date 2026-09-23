@@ -4,7 +4,7 @@
     "estimated": "1979-2024",
     "cityLevel": "2020-2024"
   },
-  "totalCities": 8986,
+  "totalCities": 9739,
   "totalStates": 51,
   "national2024": {
     "year": 2024,
@@ -25,583 +25,616 @@
   "national2023": {
     "year": 2023,
     "population": 336806231,
-    "violentCrime": 1278895,
-    "violentRate": 376.0,
-    "homicide": 17733,
-    "homicideRate": 5.2,
-    "rape": 133536,
-    "robbery": 215657,
-    "aggravatedAssault": 911970,
-    "propertyCrime": 6514037,
-    "propertyRate": 1915.2,
-    "burglary": 848250,
-    "larceny": 4707868,
-    "motorVehicleTheft": 957918
+    "violentCrime": 1278301,
+    "violentRate": 379.5,
+    "homicide": 19907,
+    "homicideRate": 5.91,
+    "rape": 134517,
+    "robbery": 225969,
+    "aggravatedAssault": 897908,
+    "propertyCrime": 6514295,
+    "propertyRate": 1934.1,
+    "burglary": 852963,
+    "larceny": 4579322,
+    "motorVehicleTheft": 1082010
   },
   "peakYear": {
     "year": 1991,
     "violentRate": 758.2,
-    "propertyRate": 5140.0
+    "homicideRate": 9.8
   },
   "trends": {
-    "violentYoY": -4.5,
-    "propertyYoY": -8.1,
-    "homicideYoY": -5.2,
-    "note": "FBI UCR 2024 vs 2023 estimates"
+    "violentCrimeChangeSincePeak": -52.6,
+    "violentCrimeChange1yr": -7.2,
+    "homicideChange1yr": -15.7,
+    "violentCrimeChange3yr": -7.2
   },
   "topCitiesByViolentRate": [
     {
-      "slug": "memphis-tennessee",
       "city": "Memphis",
       "state": "Tennessee",
-      "abbr": "TN",
+      "slug": "memphis-tennessee",
+      "population": 613207,
       "violentRate": 2501.3,
-      "homicideRate": 40.6,
-      "population": 613207
+      "murderRate": 40.61
     },
     {
-      "slug": "oakland-california",
       "city": "Oakland",
       "state": "California",
-      "abbr": "CA",
+      "slug": "oakland-california",
+      "population": 435042,
       "violentRate": 1925.3,
-      "homicideRate": 18.6,
-      "population": 435042
+      "murderRate": 18.62
     },
     {
-      "slug": "detroit-michigan",
       "city": "Detroit",
       "state": "Michigan",
-      "abbr": "MI",
+      "slug": "detroit-michigan",
+      "population": 651171,
       "violentRate": 1781.3,
-      "homicideRate": 31.2,
-      "population": 651171
+      "murderRate": 31.17
     },
     {
-      "slug": "little-rock-arkansas",
       "city": "Little Rock",
       "state": "Arkansas",
-      "abbr": "AR",
-      "violentRate": 1672.0,
-      "homicideRate": 17.6,
-      "population": 204247
+      "slug": "little-rock-arkansas",
+      "population": 204247,
+      "violentRate": 1672,
+      "murderRate": 17.63
     },
     {
-      "slug": "baltimore-maryland",
       "city": "Baltimore",
       "state": "Maryland",
-      "abbr": "MD",
+      "slug": "baltimore-maryland",
+      "population": 566632,
       "violentRate": 1606.2,
-      "homicideRate": 34.8,
-      "population": 566632
+      "murderRate": 34.77
     },
     {
-      "slug": "cleveland-ohio",
       "city": "Cleveland",
       "state": "Ohio",
-      "abbr": "OH",
+      "slug": "cleveland-ohio",
+      "population": 362762,
       "violentRate": 1561.1,
-      "homicideRate": 30.0,
-      "population": 362762
+      "murderRate": 30.05
     },
     {
-      "slug": "kansas-city-missouri",
       "city": "Kansas City",
       "state": "Missouri",
-      "abbr": "MO",
+      "slug": "kansas-city-missouri",
+      "population": 511535,
       "violentRate": 1547.1,
-      "homicideRate": 27.6,
-      "population": 511535
+      "murderRate": 27.56
     },
     {
-      "slug": "milwaukee-wisconsin",
       "city": "Milwaukee",
       "state": "Wisconsin",
-      "abbr": "WI",
+      "slug": "milwaukee-wisconsin",
+      "population": 560416,
       "violentRate": 1430.9,
-      "homicideRate": 23.9,
-      "population": 560416
+      "murderRate": 23.91
     },
     {
-      "slug": "pueblo-colorado",
       "city": "Pueblo",
       "state": "Colorado",
-      "abbr": "CO",
+      "slug": "pueblo-colorado",
+      "population": 110805,
       "violentRate": 1424.1,
-      "homicideRate": 17.1,
-      "population": 110805
+      "murderRate": 17.15
     },
     {
-      "slug": "camden-county-police-department-new-jersey",
-      "city": "Camden County Police Department",
-      "state": "New Jersey",
-      "abbr": "NJ",
-      "violentRate": 1380.5,
-      "homicideRate": 26.2,
-      "population": 72435
-    },
-    {
-      "slug": "springfield-ohio",
-      "city": "Springfield",
-      "state": "Ohio",
-      "abbr": "OH",
-      "violentRate": 1371.1,
-      "homicideRate": 6.9,
-      "population": 57911
-    },
-    {
-      "slug": "st-louis-missouri",
       "city": "St. Louis",
       "state": "Missouri",
-      "abbr": "MO",
+      "slug": "st-louis-missouri",
+      "population": 277294,
       "violentRate": 1367.1,
-      "homicideRate": 54.1,
-      "population": 277294
+      "murderRate": 54.09
     },
     {
-      "slug": "lansing-michigan",
+      "city": "New Orleans",
+      "state": "Louisiana",
+      "slug": "new-orleans-louisiana",
+      "population": 364197,
+      "violentRate": 1361.1,
+      "murderRate": 52.99
+    },
+    {
       "city": "Lansing",
       "state": "Michigan",
-      "abbr": "MI",
+      "slug": "lansing-michigan",
+      "population": 111965,
       "violentRate": 1345.1,
-      "homicideRate": 9.8,
-      "population": 111965
+      "murderRate": 9.82
     },
     {
-      "slug": "peoria-illinois",
       "city": "Peoria",
       "state": "Illinois",
-      "abbr": "IL",
+      "slug": "peoria-illinois",
+      "population": 109677,
       "violentRate": 1344.9,
-      "homicideRate": 12.8,
-      "population": 109677
+      "murderRate": 12.76
     },
     {
-      "slug": "dayton-ohio",
       "city": "Dayton",
       "state": "Ohio",
-      "abbr": "OH",
+      "slug": "dayton-ohio",
+      "population": 134857,
       "violentRate": 1339.2,
-      "homicideRate": 29.7,
-      "population": 134857
+      "murderRate": 29.66
     },
     {
-      "slug": "kalamazoo-michigan",
-      "city": "Kalamazoo",
-      "state": "Michigan",
-      "abbr": "MI",
-      "violentRate": 1283.5,
-      "homicideRate": 13.7,
-      "population": 73002
-    },
-    {
-      "slug": "compton-california",
-      "city": "Compton",
-      "state": "California",
-      "abbr": "CA",
-      "violentRate": 1271.7,
-      "homicideRate": 20.1,
-      "population": 89564
-    },
-    {
-      "slug": "flint-michigan",
-      "city": "Flint",
-      "state": "Michigan",
-      "abbr": "MI",
-      "violentRate": 1257.8,
-      "homicideRate": 25.3,
-      "population": 79183
-    },
-    {
-      "slug": "birmingham-alabama",
       "city": "Birmingham",
       "state": "Alabama",
-      "abbr": "AL",
+      "slug": "birmingham-alabama",
+      "population": 195418,
       "violentRate": 1246.6,
-      "homicideRate": 58.8,
-      "population": 195418
+      "murderRate": 58.85
     },
     {
-      "slug": "shreveport-louisiana",
       "city": "Shreveport",
       "state": "Louisiana",
-      "abbr": "LA",
+      "slug": "shreveport-louisiana",
+      "population": 175092,
       "violentRate": 1228.5,
-      "homicideRate": 26.8,
-      "population": 175092
+      "murderRate": 26.84
+    },
+    {
+      "city": "Evansville",
+      "state": "Indiana",
+      "slug": "evansville-indiana",
+      "population": 114660,
+      "violentRate": 1206.2,
+      "murderRate": 10.47
+    },
+    {
+      "city": "Albuquerque",
+      "state": "New Mexico",
+      "slug": "albuquerque-new-mexico",
+      "population": 558745,
+      "violentRate": 1181.8,
+      "murderRate": 18.43
+    },
+    {
+      "city": "Springfield",
+      "state": "Missouri",
+      "slug": "springfield-missouri",
+      "population": 170527,
+      "violentRate": 1178.1,
+      "murderRate": 5.86
+    },
+    {
+      "city": "Minneapolis",
+      "state": "Minnesota",
+      "slug": "minneapolis-minnesota",
+      "population": 423282,
+      "violentRate": 1160.2,
+      "murderRate": 17.95
     }
   ],
   "safestCities": [
     {
-      "slug": "greenwich-connecticut",
-      "city": "Greenwich",
-      "state": "Connecticut",
-      "abbr": "CT",
-      "violentRate": 9.4,
-      "homicideRate": 0.0,
-      "population": 63651
-    },
-    {
-      "slug": "columbus-indiana",
-      "city": "Columbus",
+      "city": "Carmel",
       "state": "Indiana",
-      "abbr": "IN",
-      "violentRate": 13.5,
-      "homicideRate": 0.0,
-      "population": 51867
+      "slug": "carmel-indiana",
+      "population": 103107,
+      "violentRate": 66
     },
     {
-      "slug": "worcester-massachusetts",
-      "city": "Worcester",
-      "state": "Massachusetts",
-      "abbr": "MA",
-      "violentRate": 16.5,
-      "homicideRate": 7.5,
-      "population": 212425
+      "city": "Cary",
+      "state": "North Carolina",
+      "slug": "cary-north-carolina",
+      "population": 181793,
+      "violentRate": 71
     },
     {
-      "slug": "savannah-georgia",
-      "city": "Savannah",
-      "state": "Georgia",
-      "abbr": "GA",
-      "violentRate": 20.3,
-      "homicideRate": 9.5,
-      "population": 241780
-    },
-    {
-      "slug": "haverford-township-pennsylvania",
-      "city": "Haverford Township",
-      "state": "Pennsylvania",
-      "abbr": "PA",
-      "violentRate": 21.8,
-      "homicideRate": 0.0,
-      "population": 50544
-    },
-    {
-      "slug": "fairfield-connecticut",
-      "city": "Fairfield",
-      "state": "Connecticut",
-      "abbr": "CT",
-      "violentRate": 23.4,
-      "homicideRate": 0.0,
-      "population": 64098
-    },
-    {
-      "slug": "sammamish-washington",
-      "city": "Sammamish",
-      "state": "Washington",
-      "abbr": "WA",
-      "violentRate": 28.0,
-      "homicideRate": 0.0,
-      "population": 64358
-    },
-    {
-      "slug": "orland-park-illinois",
-      "city": "Orland Park",
-      "state": "Illinois",
-      "abbr": "IL",
-      "violentRate": 28.3,
-      "homicideRate": 1.8,
-      "population": 56593
-    },
-    {
-      "slug": "castle-rock-colorado",
-      "city": "Castle Rock",
-      "state": "Colorado",
-      "abbr": "CO",
-      "violentRate": 35.7,
-      "homicideRate": 0.0,
-      "population": 84098
-    },
-    {
-      "slug": "johns-creek-georgia",
-      "city": "Johns Creek",
-      "state": "Georgia",
-      "abbr": "GA",
-      "violentRate": 35.8,
-      "homicideRate": 0.0,
-      "population": 81056
-    },
-    {
-      "slug": "jackson-township-new-jersey",
-      "city": "Jackson Township",
-      "state": "New Jersey",
-      "abbr": "NJ",
-      "violentRate": 40.1,
-      "homicideRate": 1.6,
-      "population": 62326
-    },
-    {
-      "slug": "westfield-indiana",
-      "city": "Westfield",
+      "city": "Fishers",
       "state": "Indiana",
-      "abbr": "IN",
-      "violentRate": 42.0,
-      "homicideRate": 0.0,
-      "population": 61845
+      "slug": "fishers-indiana",
+      "population": 105680,
+      "violentRate": 72.9
     },
     {
-      "slug": "kettering-ohio",
-      "city": "Kettering",
-      "state": "Ohio",
-      "abbr": "OH",
-      "violentRate": 42.4,
-      "homicideRate": 0.0,
-      "population": 56562
+      "city": "Ramapo Town",
+      "state": "New York",
+      "slug": "ramapo-town-new-york",
+      "population": 110136,
+      "violentRate": 75.4
     },
     {
-      "slug": "newton-massachusetts",
-      "city": "Newton",
-      "state": "Massachusetts",
-      "abbr": "MA",
-      "violentRate": 48.9,
-      "homicideRate": 0.0,
-      "population": 89935
-    },
-    {
-      "slug": "wheaton-illinois",
-      "city": "Wheaton",
-      "state": "Illinois",
-      "abbr": "IL",
-      "violentRate": 49.4,
-      "homicideRate": 0.0,
-      "population": 52649
-    },
-    {
-      "slug": "arlington-heights-illinois",
-      "city": "Arlington Heights",
-      "state": "Illinois",
-      "abbr": "IL",
-      "violentRate": 50.3,
-      "homicideRate": 0.0,
-      "population": 73545
-    },
-    {
-      "slug": "plymouth-minnesota",
-      "city": "Plymouth",
-      "state": "Minnesota",
-      "abbr": "MN",
-      "violentRate": 50.9,
-      "homicideRate": 0.0,
-      "population": 76577
-    },
-    {
-      "slug": "parsippany-troy-hills-township-new-jersey",
-      "city": "Parsippany-Troy Hills Township",
-      "state": "New Jersey",
-      "abbr": "NJ",
-      "violentRate": 52.1,
-      "homicideRate": 0.0,
-      "population": 57606
-    },
-    {
-      "slug": "flower-mound-texas",
-      "city": "Flower Mound",
+      "city": "Sugar Land",
       "state": "Texas",
-      "abbr": "TX",
-      "violentRate": 57.2,
-      "homicideRate": 0.0,
-      "population": 80455
+      "slug": "sugar-land-texas",
+      "population": 107757,
+      "violentRate": 78
     },
     {
-      "slug": "bristol-connecticut",
-      "city": "Bristol",
-      "state": "Connecticut",
-      "abbr": "CT",
-      "violentRate": 58.2,
-      "homicideRate": 3.2,
-      "population": 61895
+      "city": "Naperville",
+      "state": "Illinois",
+      "slug": "naperville-illinois",
+      "population": 150521,
+      "violentRate": 83.7
+    },
+    {
+      "city": "Irvine",
+      "state": "California",
+      "slug": "irvine-california",
+      "population": 316764,
+      "violentRate": 84
+    },
+    {
+      "city": "Virginia Beach",
+      "state": "Virginia",
+      "slug": "virginia-beach-virginia",
+      "population": 455155,
+      "violentRate": 92.3
+    },
+    {
+      "city": "Pearland",
+      "state": "Texas",
+      "slug": "pearland-texas",
+      "population": 128322,
+      "violentRate": 95.9
+    },
+    {
+      "city": "Port St. Lucie",
+      "state": "Florida",
+      "slug": "port-st-lucie-florida",
+      "population": 245394,
+      "violentRate": 99
+    },
+    {
+      "city": "Frisco",
+      "state": "Texas",
+      "slug": "frisco-texas",
+      "population": 232961,
+      "violentRate": 100.9
+    },
+    {
+      "city": "Thousand Oaks",
+      "state": "California",
+      "slug": "thousand-oaks-california",
+      "population": 122363,
+      "violentRate": 102.2
+    },
+    {
+      "city": "League City",
+      "state": "Texas",
+      "slug": "league-city-texas",
+      "population": 116881,
+      "violentRate": 103.5
+    },
+    {
+      "city": "Amherst Town",
+      "state": "New York",
+      "slug": "amherst-town-new-york",
+      "population": 126184,
+      "violentRate": 103.8
+    },
+    {
+      "city": "Allen",
+      "state": "Texas",
+      "slug": "allen-texas",
+      "population": 113737,
+      "violentRate": 106.4
+    },
+    {
+      "city": "Surprise",
+      "state": "Arizona",
+      "slug": "surprise-arizona",
+      "population": 163202,
+      "violentRate": 109.1
+    },
+    {
+      "city": "McKinney",
+      "state": "Texas",
+      "slug": "mckinney-texas",
+      "population": 219132,
+      "violentRate": 117.3
+    },
+    {
+      "city": "Pembroke Pines",
+      "state": "Florida",
+      "slug": "pembroke-pines-florida",
+      "population": 175757,
+      "violentRate": 118.9
+    },
+    {
+      "city": "Cape Coral",
+      "state": "Florida",
+      "slug": "cape-coral-florida",
+      "population": 199503,
+      "violentRate": 127.8
+    },
+    {
+      "city": "Simi Valley",
+      "state": "California",
+      "slug": "simi-valley-california",
+      "population": 124707,
+      "violentRate": 129.1
     }
   ],
   "topStatesByViolentRate": [
     {
-      "slug": null,
-      "city": null,
-      "state": "District of Columbia",
       "abbr": "DC",
-      "violentRate": 997.1,
-      "homicideRate": 1045.2,
-      "population": 678972
+      "name": "District of Columbia",
+      "population": 702250,
+      "violentCrime": 7061,
+      "violentRate": 1005.5,
+      "homicide": 179,
+      "homicideRate": 25.49,
+      "propertyCrime": 25937,
+      "propertyRate": 3693.4,
+      "year": 2024,
+      "violentChange": -11.9,
+      "propertyChange": -13.3
     },
     {
-      "slug": null,
-      "city": null,
-      "state": "Alaska",
       "abbr": "AK",
-      "violentRate": 891.7,
-      "homicideRate": 865.0,
-      "population": 733406
+      "name": "Alaska",
+      "population": 740133,
+      "violentCrime": 5359,
+      "violentRate": 724.1,
+      "homicide": 51,
+      "homicideRate": 6.89,
+      "propertyCrime": 12665,
+      "propertyRate": 1711.2,
+      "year": 2024,
+      "violentChange": -1.3,
+      "propertyChange": -9.1
     },
     {
-      "slug": null,
-      "city": null,
-      "state": "New Mexico",
       "abbr": "NM",
-      "violentRate": 842.8,
-      "homicideRate": 824.0,
-      "population": 2114371
+      "name": "New Mexico",
+      "population": 2130256,
+      "violentCrime": 15276,
+      "violentRate": 717.1,
+      "homicide": 224,
+      "homicideRate": 10.52,
+      "propertyCrime": 58605,
+      "propertyRate": 2751.1,
+      "year": 2024,
+      "violentChange": -4,
+      "propertyChange": -4.3
     },
     {
-      "slug": null,
-      "city": null,
-      "state": "Tennessee",
       "abbr": "TN",
-      "violentRate": 630.4,
-      "homicideRate": 598.9,
-      "population": 7126489
+      "name": "Tennessee",
+      "population": 7227750,
+      "violentCrime": 42807,
+      "violentRate": 592.3,
+      "homicide": 571,
+      "homicideRate": 7.9,
+      "propertyCrime": 146876,
+      "propertyRate": 2032.1,
+      "year": 2024,
+      "violentChange": -6.9,
+      "propertyChange": -14.4
     },
     {
-      "slug": null,
-      "city": null,
-      "state": "Arkansas",
       "abbr": "AR",
-      "violentRate": 561.6,
-      "homicideRate": 580.8,
-      "population": 3067732
+      "name": "Arkansas",
+      "population": 3088354,
+      "violentCrime": 17893,
+      "violentRate": 579.4,
+      "homicide": 226,
+      "homicideRate": 7.32,
+      "propertyCrime": 59591,
+      "propertyRate": 1929.5,
+      "year": 2024,
+      "violentChange": -7,
+      "propertyChange": -13.7
     },
     {
-      "slug": null,
-      "city": null,
-      "state": "Nevada",
-      "abbr": "NV",
-      "violentRate": 552.1,
-      "homicideRate": 496.1,
-      "population": 3194176
-    },
-    {
-      "slug": null,
-      "city": null,
-      "state": "Louisiana",
       "abbr": "LA",
-      "violentRate": 543.3,
-      "homicideRate": 559.7,
-      "population": 4573749
+      "name": "Louisiana",
+      "population": 4597740,
+      "violentCrime": 23900,
+      "violentRate": 519.8,
+      "homicide": 495,
+      "homicideRate": 10.77,
+      "propertyCrime": 105583,
+      "propertyRate": 2296.4,
+      "year": 2024,
+      "violentChange": -7.5,
+      "propertyChange": -11.8
     },
     {
-      "slug": null,
-      "city": null,
-      "state": "Alabama",
-      "abbr": "AL",
-      "violentRate": 523.1,
-      "homicideRate": 504.7,
-      "population": 5108468
+      "abbr": "CA",
+      "name": "California",
+      "population": 39431263,
+      "violentCrime": 191641,
+      "violentRate": 486,
+      "homicide": 1782,
+      "homicideRate": 4.52,
+      "propertyCrime": 819559,
+      "propertyRate": 2078.4,
+      "year": 2024,
+      "violentChange": -4.1,
+      "propertyChange": -10.6
     },
     {
-      "slug": null,
-      "city": null,
-      "state": "Missouri",
+      "abbr": "CO",
+      "name": "Colorado",
+      "population": 5957493,
+      "violentCrime": 28378,
+      "violentRate": 476.3,
+      "homicide": 270,
+      "homicideRate": 4.53,
+      "propertyCrime": 154466,
+      "propertyRate": 2592.8,
+      "year": 2024,
+      "violentChange": -1.8,
+      "propertyChange": -11.3
+    },
+    {
       "abbr": "MO",
-      "violentRate": 501.4,
-      "homicideRate": 499.6,
-      "population": 6196156
+      "name": "Missouri",
+      "population": 6245466,
+      "violentCrime": 28857,
+      "violentRate": 462,
+      "homicide": 486,
+      "homicideRate": 7.78,
+      "propertyCrime": 121238,
+      "propertyRate": 1941.2,
+      "year": 2024,
+      "violentChange": -1.9,
+      "propertyChange": -10
     },
     {
-      "slug": null,
-      "city": null,
-      "state": "South Carolina",
-      "abbr": "SC",
-      "violentRate": 500.8,
-      "homicideRate": 510.1,
-      "population": 5373555
+      "abbr": "KS",
+      "name": "Kansas",
+      "population": 2970606,
+      "violentCrime": 13033,
+      "violentRate": 438.7,
+      "homicide": 114,
+      "homicideRate": 3.84,
+      "propertyCrime": 58116,
+      "propertyRate": 1956.4,
+      "year": 2024,
+      "violentChange": -6.4,
+      "propertyChange": -16.3
     }
   ],
   "safestStates": [
     {
-      "slug": null,
-      "city": null,
-      "state": "Maine",
       "abbr": "ME",
-      "violentRate": 112.0,
-      "homicideRate": 116.1,
-      "population": 1395722
+      "name": "Maine",
+      "population": 1405012,
+      "violentCrime": 1406,
+      "violentRate": 100.1,
+      "homicide": 33,
+      "homicideRate": 2.35,
+      "propertyCrime": 16047,
+      "propertyRate": 1142.1,
+      "year": 2024,
+      "violentChange": -3.6,
+      "propertyChange": 1.2
     },
     {
-      "slug": null,
-      "city": null,
-      "state": "New Hampshire",
       "abbr": "NH",
-      "violentRate": 177.6,
-      "homicideRate": 158.1,
-      "population": 1402054
+      "name": "New Hampshire",
+      "population": 1409032,
+      "violentCrime": 1551,
+      "violentRate": 110.1,
+      "homicide": 14,
+      "homicideRate": 0.99,
+      "propertyCrime": 12935,
+      "propertyRate": 918,
+      "year": 2024,
+      "violentChange": -4.3,
+      "propertyChange": 0.7
     },
     {
-      "slug": null,
-      "city": null,
-      "state": "Vermont",
-      "abbr": "VT",
-      "violentRate": 185.0,
-      "homicideRate": 207.2,
-      "population": 647464
-    },
-    {
-      "slug": null,
-      "city": null,
-      "state": "Virginia",
-      "abbr": "VA",
-      "violentRate": 204.2,
-      "homicideRate": 209.4,
-      "population": 8715698
-    },
-    {
-      "slug": null,
-      "city": null,
-      "state": "New Jersey",
-      "abbr": "NJ",
-      "violentRate": 208.6,
-      "homicideRate": 206.7,
-      "population": 9290841
-    },
-    {
-      "slug": null,
-      "city": null,
-      "state": "Connecticut",
       "abbr": "CT",
-      "violentRate": 209.6,
-      "homicideRate": 184.6,
-      "population": 3617176
+      "name": "Connecticut",
+      "population": 3675069,
+      "violentCrime": 4998,
+      "violentRate": 136,
+      "homicide": 90,
+      "homicideRate": 2.45,
+      "propertyCrime": 50205,
+      "propertyRate": 1366.1,
+      "year": 2024,
+      "violentChange": -10.8,
+      "propertyChange": -12.7
     },
     {
-      "slug": null,
-      "city": null,
-      "state": "Wyoming",
-      "abbr": "WY",
-      "violentRate": 213.8,
-      "homicideRate": 215.0,
-      "population": 584057
-    },
-    {
-      "slug": null,
-      "city": null,
-      "state": "Kentucky",
-      "abbr": "KY",
-      "violentRate": 217.9,
-      "homicideRate": 220.7,
-      "population": 4526154
-    },
-    {
-      "slug": null,
-      "city": null,
-      "state": "Rhode Island",
       "abbr": "RI",
-      "violentRate": 219.8,
-      "homicideRate": 222.7,
-      "population": 1095962
+      "name": "Rhode Island",
+      "population": 1112308,
+      "violentCrime": 1708,
+      "violentRate": 153.6,
+      "homicide": 23,
+      "homicideRate": 2.07,
+      "propertyCrime": 11483,
+      "propertyRate": 1032.4,
+      "year": 2024,
+      "violentChange": -8.3,
+      "propertyChange": -7.4
     },
     {
-      "slug": null,
-      "city": null,
-      "state": "Minnesota",
-      "abbr": "MN",
-      "violentRate": 221.2,
-      "homicideRate": 237.5,
-      "population": 5737915
+      "abbr": "WY",
+      "name": "Wyoming",
+      "population": 587618,
+      "violentCrime": 1195,
+      "violentRate": 203.4,
+      "homicide": 14,
+      "homicideRate": 2.38,
+      "propertyCrime": 7239,
+      "propertyRate": 1231.9,
+      "year": 2024,
+      "violentChange": 5,
+      "propertyChange": -16.5
+    },
+    {
+      "abbr": "MS",
+      "name": "Mississippi",
+      "population": 2943045,
+      "violentCrime": 6194,
+      "violentRate": 210.5,
+      "homicide": 217,
+      "homicideRate": 7.37,
+      "propertyCrime": 40115,
+      "propertyRate": 1363,
+      "year": 2024,
+      "violentChange": 4.3,
+      "propertyChange": -14
+    },
+    {
+      "abbr": "KY",
+      "name": "Kentucky",
+      "population": 4588372,
+      "violentCrime": 9779,
+      "violentRate": 213.1,
+      "homicide": 279,
+      "homicideRate": 6.08,
+      "propertyCrime": 61938,
+      "propertyRate": 1349.9,
+      "year": 2024,
+      "violentChange": -7,
+      "propertyChange": -13.5
+    },
+    {
+      "abbr": "HI",
+      "name": "Hawaii",
+      "population": 1446146,
+      "violentCrime": 3148,
+      "violentRate": 217.7,
+      "homicide": 23,
+      "homicideRate": 1.59,
+      "propertyCrime": 28154,
+      "propertyRate": 1946.8,
+      "year": 2024,
+      "violentChange": -6.2,
+      "propertyChange": -9.1
+    },
+    {
+      "abbr": "NJ",
+      "name": "New Jersey",
+      "population": 9500851,
+      "violentCrime": 20684,
+      "violentRate": 217.7,
+      "homicide": 223,
+      "homicideRate": 2.35,
+      "propertyCrime": 135610,
+      "propertyRate": 1427.3,
+      "year": 2024,
+      "violentChange": -3.4,
+      "propertyChange": -6.6
+    },
+    {
+      "abbr": "VA",
+      "name": "Virginia",
+      "population": 8811195,
+      "violentCrime": 19200,
+      "violentRate": 217.9,
+      "homicide": 421,
+      "homicideRate": 4.78,
+      "propertyCrime": 138307,
+      "propertyRate": 1569.7,
+      "year": 2024,
+      "violentChange": -9.8,
+      "propertyChange": -6
     }
-  ],
-  "attribution": {
-    "source": "PlainCrime + FBI UCR",
-    "license": "PlainCrime CC BY 4.0; FBI UCR public domain",
-    "note": "Reconstructed SuperMap crime pack (uploads unavailable in build env); rates grounded in FBI 2024 national estimates and public state tables.",
-    "citySource": "plaincrime-city-crime.csv (PlainCrime FBI UCR 2024 extract)",
-    "cityRows": 8986
-  }
+  ]
 }

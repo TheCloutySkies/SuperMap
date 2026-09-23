@@ -40,6 +40,8 @@ export const DEFAULT_LAYER_TOGGLES = {
   dataCenters: false,
   odintRegions: false,
   surveillanceCapabilities: false,
+  crimeStateRates: false,
+  crimeCityHighlight: false,
 }
 
 export function getAoiFeatures() {
@@ -77,6 +79,7 @@ export function setSavedPoints(fc) {
 export const DEFAULT_TAB_VISIBILITY = {
   osintMap: true,
   conflictMap: true,
+  crimeMap: true,
   exploreMap: true,
   geolocateMap: true,
   osintFeeds: true,

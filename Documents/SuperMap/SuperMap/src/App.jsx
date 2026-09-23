@@ -6,6 +6,7 @@ import { SavedXPostsProvider } from './contexts/SavedXPostsContext'
 import { SavedPlacesProvider } from './contexts/SavedPlacesContext'
 import { SavedReportsProvider } from './contexts/SavedReportsContext'
 import HomeScreen from './components/HomeScreen'
+import CrimeDashboard from './components/CrimeDashboard'
 import MapView from './components/MapView'
 import FeedsView from './components/FeedsView'
 import RightSidebar from './components/RightSidebar'
@@ -53,6 +54,7 @@ const FOOTER_MODES = { HOME: 'HOME', MAPS: 'MAPS', FEEDS: 'FEEDS', COMMUNITY: 'C
 const MAP_VIEWS = [
   { id: 'osint-map', label: 'OSINT Map', tabKey: 'osintMap' },
   { id: 'conflict-map', label: 'Conflict Map', tabKey: 'conflictMap' },
+  { id: 'crime-map', label: 'Crime Map', tabKey: 'crimeMap' },
   { id: 'explore-map', label: 'Explore', tabKey: 'exploreMap' },
   { id: 'geolocate-map', label: 'Geolocate', tabKey: 'geolocateMap' },
 ]
@@ -226,7 +228,7 @@ function App() {
     } catch {}
   }, [])
 
-  const isMapView = ['osint-map', 'conflict-map', 'explore-map', 'geolocate-map'].includes(activeView)
+  const isMapView = ['osint-map', 'conflict-map', 'crime-map', 'explore-map', 'geolocate-map'].includes(activeView)
   const isFeedView = ['osint-feeds', 'news-feeds', 'recent-videos', 'osint-x', 'my-places', 'my-reports', 'my-comments', 'advanced-search', 'saved', 'updates', 'broadcasts'].includes(activeView)
   const isSettingsView = activeView === 'settings'
   const tabVisibility = getTabVisibility(settingsUserId)
@@ -245,7 +247,7 @@ function App() {
 
   const setActiveViewWithMode = useCallback((viewId) => {
     setActiveView(viewId)
-    if (['osint-map', 'conflict-map'].includes(viewId)) setFooterMode(FOOTER_MODES.MAPS)
+    if (['osint-map', 'conflict-map', 'crime-map', 'explore-map', 'geolocate-map'].includes(viewId)) setFooterMode(FOOTER_MODES.MAPS)
     else if (['osint-feeds', 'osint-x', 'my-places', 'my-reports', 'my-comments', 'advanced-search', 'news-feeds', 'saved', 'updates', 'broadcasts'].includes(viewId)) setFooterMode(FOOTER_MODES.FEEDS)
     else if (viewId === 'community') setFooterMode(FOOTER_MODES.COMMUNITY)
     else if (viewId === 'my-account') setFooterMode(FOOTER_MODES.SETTINGS)
@@ -255,6 +257,17 @@ function App() {
     else if (viewId === 'report-maker') setFooterMode(FOOTER_MODES.REPORTS)
     else if (viewId === 'settings') setFooterMode(FOOTER_MODES.SETTINGS)
   }, [])
+
+  // Crime mode: turn choropleth on by default when entering the view
+  useEffect(() => {
+    if (activeView !== 'crime-map') return
+    setLayerToggles((prev) => ({
+      ...prev,
+      crimeStateRates: true,
+      crimeCityHighlight: prev.crimeCityHighlight ?? true,
+    }))
+    setFlyToTarget({ lng: -98.5, lat: 39.8, zoom: 3.4 })
+  }, [activeView])
 
   // Warm up all APIs and functions immediately on startup
   useEffect(() => {
@@ -481,6 +494,37 @@ function App() {
                 setWeatherCoords(coord)
               }}
             />
+            {activeView === 'crime-map' && (
+              <CrimeDashboard
+                onFlyToCity={(city) => {
+                  const q = `${city.city}, ${city.state}`
+                  fetch(`${apiBase}/api/geocode?q=${encodeURIComponent(q)}&limit=1`, { signal: AbortSignal.timeout(12000) })
+                    .then((r) => r.json())
+                    .then((rows) => {
+                      const first = Array.isArray(rows) ? rows[0] : null
+                      const lat = first?.lat != null ? Number(first.lat) : null
+                      const lng = first?.lon != null ? Number(first.lon) : null
+                      if (lng != null && lat != null) {
+                        setFlyToTarget({ lng, lat, zoom: 10, properties: { title: q, source: 'Crime city' } })
+                        if (layerToggles.crimeCityHighlight) {
+                          setSearchResultsGeoJson({
+                            type: 'FeatureCollection',
+                            features: [{
+                              type: 'Feature',
+                              properties: {
+                                title: `${city.city}, ${city.state}`,
+                                source: `Violent ${city.violentRate}/100k`,
+                              },
+                              geometry: { type: 'Point', coordinates: [lng, lat] },
+                            }],
+                          })
+                        }
+                      }
+                    })
+                    .catch(() => {})
+                }}
+              />
+            )}
             {activeView !== 'explore-map' && (
               <WeatherHUD
                 lat={weatherCoords.lat ?? userCoords.lat}

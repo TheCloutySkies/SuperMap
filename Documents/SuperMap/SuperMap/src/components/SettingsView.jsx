@@ -13,6 +13,7 @@ import './SettingsView.css'
 const TAB_LABELS = {
   osintMap: 'OSINT Map',
   conflictMap: 'Conflict Map',
+  crimeMap: 'Crime Map',
   exploreMap: 'Explore',
   osintFeeds: 'OSINT Feeds',
   newsFeeds: 'News Feeds',

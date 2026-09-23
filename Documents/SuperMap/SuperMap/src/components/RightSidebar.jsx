@@ -96,6 +96,16 @@ const CONFLICT_LAYER_SECTIONS = [
   },
 ]
 
+const CRIME_LAYER_SECTIONS = [
+  {
+    title: 'Crime layers',
+    layers: [
+      { key: 'crimeStateRates', label: 'State violent crime rates', hint: 'Choropleth · FBI UCR / PlainCrime' },
+      { key: 'crimeCityHighlight', label: 'Highlight selected city', hint: 'After city search fly-to' },
+    ],
+  },
+]
+
 const SENTINEL_TIME_OPTIONS = [
   { value: '24h', label: '24h ago' },
   { value: '1w', label: '1 week ago' },
@@ -161,9 +171,14 @@ export default function RightSidebar({
   if (!visible) return null
 
   const isConflictMap = activeView === 'conflict-map'
+  const isCrimeMap = activeView === 'crime-map'
   const isExploreMap = activeView === 'explore-map'
   const isGeolocateMap = activeView === 'geolocate-map'
-  const sections = isConflictMap ? CONFLICT_LAYER_SECTIONS : OSINT_LAYER_SECTIONS
+  const sections = isCrimeMap
+    ? CRIME_LAYER_SECTIONS
+    : isConflictMap
+      ? CONFLICT_LAYER_SECTIONS
+      : OSINT_LAYER_SECTIONS
 
   const runGeolocatePreset = async (preset) => {
     const bbox = window.__supermapOverpassBbox

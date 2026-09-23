@@ -26,6 +26,7 @@ import {
 } from '../services/layerServices'
 import { buildTerminatorGeoJSON } from '../services/solarTerminator'
 import { fetchMilitaryAircraft, fetchUkraineFrontline, fetchInternetOutages } from '../services/newLayerFetchers'
+import { buildCrimeStateChoropleth, CRIME_RATE_COLOR_EXPRESSION } from '../services/crimeLayers'
 import MapControls from './MapControls'
 import DrawHUD from './DrawHUD'
 import PinEditorDialog from './PinEditorDialog'
@@ -982,6 +983,39 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     if (map.getSource('intel-ioda')) map.removeSource('intel-ioda')
   }
 
+  const addCrimeStates = (geoJson) => {
+    if (map.getSource('intel-crime-states')) {
+      map.getSource('intel-crime-states').setData(geoJson)
+      return
+    }
+    map.addSource('intel-crime-states', { type: 'geojson', data: geoJson })
+    map.addLayer({
+      id: 'intel-crime-states-fill',
+      type: 'fill',
+      source: 'intel-crime-states',
+      paint: {
+        'fill-color': CRIME_RATE_COLOR_EXPRESSION,
+        'fill-opacity': 0.62,
+      },
+    })
+    map.addLayer({
+      id: 'intel-crime-states-outline',
+      type: 'line',
+      source: 'intel-crime-states',
+      paint: {
+        'line-color': '#0b1220',
+        'line-width': 0.8,
+        'line-opacity': 0.85,
+      },
+    })
+  }
+
+  const removeCrimeStates = () => {
+    if (map.getLayer('intel-crime-states-outline')) map.removeLayer('intel-crime-states-outline')
+    if (map.getLayer('intel-crime-states-fill')) map.removeLayer('intel-crime-states-fill')
+    if (map.getSource('intel-crime-states')) map.removeSource('intel-crime-states')
+  }
+
   return {
     addRailway,
     removeRailway,
@@ -1038,6 +1072,8 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     removeFrontline,
     addIodaOutages,
     removeIodaOutages,
+    addCrimeStates,
+    removeCrimeStates,
   }
 }
 
@@ -1570,6 +1606,20 @@ export default function MapView({
           .finally(() => onLoading?.(false))
       } else helpers.removeSurveillanceCapabilities()
 
+      if (toggles.crimeStateRates) {
+        onLoading?.(true)
+        buildCrimeStateChoropleth('violentRate')
+          .then((geoJson) => {
+            helpers.addCrimeStates(geoJson)
+          })
+          .catch(() => {
+            helpers.addCrimeStates({ type: 'FeatureCollection', features: [] })
+          })
+          .finally(() => onLoading?.(false))
+      } else {
+        helpers.removeCrimeStates()
+      }
+
       if (toggles.aoiDraw) {
         const aoi = getAoiFeatures()
         helpers.addAoiSaved(aoi)
@@ -1650,7 +1700,11 @@ export default function MapView({
       className: 'maplibre-popup-dark',
     })
 
-    const existingClickableLayers = () => CLICKABLE_POINT_LAYERS.filter((id) => !!map.getLayer(id))
+    const existingClickableLayers = () => {
+      const layers = CLICKABLE_POINT_LAYERS.filter((id) => !!map.getLayer(id))
+      if (map.getLayer('intel-crime-states-fill')) layers.unshift('intel-crime-states-fill')
+      return layers
+    }
 
     const handleMapClick = (e) => {
       if (tapPinModeRef.current) {
@@ -1700,6 +1754,21 @@ export default function MapView({
       const features = layers.length ? map.queryRenderedFeatures(e.point, { layers }) : []
       const feat = features[0]
       if (!feat) return
+      if (feat.layer?.id === 'intel-crime-states-fill') {
+        const props = feat.properties || {}
+        const lngLat = e.lngLat
+        const html = `<div class="map-popup-content">
+          <div class="map-popup-title">${props.name || props.abbr || 'State'}</div>
+          <div><strong>Violent rate</strong>: ${props.violentRate ?? '—'} /100k</div>
+          <div><strong>Property rate</strong>: ${props.propertyRate ?? '—'} /100k</div>
+          <div><strong>Homicide rate</strong>: ${props.homicideRate ?? '—'} /100k</div>
+          <div><strong>YoY violent</strong>: ${props.violentChange ?? '—'}%</div>
+          <div><strong>Population</strong>: ${props.population ?? '—'}</div>
+          <div class="map-popup-source">PlainCrime + FBI UCR · ${props.year || ''}</div>
+        </div>`
+        popup.setLngLat(lngLat).setHTML(html).addTo(map)
+        return
+      }
       const coords = feat.geometry?.type === 'Point' ? feat.geometry.coordinates.slice() : null
       if (!coords) return
       if (feat.layer.id === 'intel-saved-points-layer') {
@@ -2216,6 +2285,13 @@ export default function MapView({
           }
         })
         .finally(() => onLoadingChange?.(false))
+      return
+    }
+
+    if (activeView === 'crime-map') {
+      helpers.addMappedNews(emptyFC())
+      helpers.addMappedOsint(emptyFC())
+      helpers.removeMappedConflictEvents()
       return
     }
 

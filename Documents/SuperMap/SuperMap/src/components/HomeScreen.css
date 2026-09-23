@@ -103,7 +103,7 @@
   padding-bottom: calc(0.45rem + 1px);
 }
 
-/* Main: two columns (desktop = old layout: quick access, community, footer left; widgets right) */
+/* Main: two columns (desktop = quick access + footer left; widgets right) */
 .home-screen-main {
   display: grid;
   grid-template-columns: 1fr 280px;

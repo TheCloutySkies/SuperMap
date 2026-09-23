@@ -25,7 +25,7 @@
    `newsService.getNewsCached()` already reduces repeated fetches. Ensure TTLs match your freshness needs.
 
 5. **Connection pooling**  
-   Supabase client is created once; no connection pool needed for it. If you add a direct Postgres pool later, use a small pool (e.g. 5–10) and reuse it.
+   Current stack uses SQLite (`better-sqlite3`) for local event/config storage. If you add a direct Postgres pool later, use a small pool (e.g. 5–10) and reuse it.
 
 ### Tag indexes
 

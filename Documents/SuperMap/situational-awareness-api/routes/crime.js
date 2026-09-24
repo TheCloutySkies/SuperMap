@@ -28,6 +28,10 @@ router.get('/states', (req, res) => {
   handle(res, () => crimeData.getStateSummary(req.query.year))
 })
 
+router.get('/states/:abbr', (req, res) => {
+  handle(res, () => crimeData.getStateByAbbr(req.params.abbr))
+})
+
 router.get('/cities', (req, res) => {
   handle(res, () => crimeData.searchCities({
     q: req.query.q,

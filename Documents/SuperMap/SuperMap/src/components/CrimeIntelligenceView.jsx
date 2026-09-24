@@ -1,22 +1,31 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { buildCrimeStateChoropleth } from '../services/crimeLayers'
+import { CITY_COORDS, coordsForCity, stateAbbrFromName } from '../services/crimeCentroids'
+import { LEVEL_THRESHOLDS, levelFromRatio } from '../lib/crimeLevels'
 import './CrimeIntelligenceView.css'
 
 const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
   ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
   : (import.meta.env.DEV ? '' : 'http://localhost:3001')
 
-const NAV_SECTIONS = [
-  { id: 'ask', label: 'Ask' },
-  { id: 'map', label: 'Map' },
+const SEGMENTS = [
+  { id: 'national', label: 'National' },
   { id: 'states', label: 'States' },
   { id: 'cities', label: 'Cities' },
-  { id: 'trends', label: 'Trends' },
-  { id: 'types', label: 'Types' },
-  { id: 'arrests', label: 'Arrests' },
-  { id: 'homicide', label: 'Homicide' },
-  { id: 'hate', label: 'Hate' },
-  { id: 'rankings', label: 'Rankings' },
+  { id: 'map', label: 'Map' },
+  { id: 'ask', label: 'Ask' },
+]
+
+const CRIME_METRIC_OPTIONS = [
+  { id: 'violentRate', label: 'Violent', countKey: 'violentCrime', rateKey: 'violentRate' },
+  { id: 'homicideRate', label: 'Homicide', countKey: 'homicide', rateKey: 'homicideRate' },
+  { id: 'propertyRate', label: 'Property', countKey: 'propertyCrime', rateKey: 'propertyRate' },
+  { id: 'burglary', label: 'Burglary', countKey: 'burglary', rateKey: null },
+  { id: 'larceny', label: 'Larceny', countKey: 'larceny', rateKey: null },
+  { id: 'motorVehicleTheft', label: 'Motor vehicle theft', countKey: 'motorVehicleTheft', rateKey: null },
+  { id: 'rape', label: 'Rape', countKey: 'rape', rateKey: null },
+  { id: 'robbery', label: 'Robbery', countKey: 'robbery', rateKey: null },
+  { id: 'aggravatedAssault', label: 'Aggravated assault', countKey: 'aggravatedAssault', rateKey: null },
 ]
 
 async function getJson(path) {
@@ -33,13 +42,46 @@ function fmt(n, digits = 0) {
   })
 }
 
-function rateColor(rate) {
-  const v = Number(rate) || 0
-  if (v < 150) return '#3d7a3d'
-  if (v < 300) return '#c9a227'
-  if (v < 450) return '#d97706'
-  if (v < 600) return '#dc2626'
-  return '#7f1d1d'
+/** Never render objects / JSON dumps as React children. */
+function scalar(v) {
+  if (v == null) return null
+  if (typeof v === 'number' && Number.isFinite(v)) return v
+  if (typeof v === 'string' || typeof v === 'boolean') return v
+  if (typeof v === 'object') {
+    if (typeof v.total === 'number') return v.total
+    if (typeof v.count === 'number') return v.count
+    if (typeof v.rate === 'number') return v.rate
+    if (typeof v.pct === 'number') return v.pct
+    return null
+  }
+  return null
+}
+
+function fmtScalar(v, digits = 0) {
+  const n = scalar(v)
+  if (n == null) return '—'
+  if (typeof n === 'number') return fmt(n, digits)
+  return String(n)
+}
+
+function rowLabel(row, fallback = 'Item') {
+  if (row == null) return fallback
+  if (typeof row === 'string') return row
+  if (typeof row !== 'object') return String(row)
+  return String(
+    row.offense || row.name || row.label || row.weapon || row.relationship
+    || row.age || row.type || row.circumstance || row.race || fallback,
+  )
+}
+
+function levelColor(id) {
+  switch (id) {
+    case 'low': return '#3d9a6a'
+    case 'medium': return '#c9a227'
+    case 'high': return '#e07a3a'
+    case 'extreme': return '#e04545'
+    default: return '#6b7c72'
+  }
 }
 
 function project([lon, lat], width, height) {
@@ -54,12 +96,12 @@ function project([lon, lat], width, height) {
 
 function ringToPath(ring, width, height) {
   if (!ring?.length) return ''
-  return ring
+  return `${ring
     .map((coord, i) => {
       const [x, y] = project(coord, width, height)
       return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`
     })
-    .join(' ') + ' Z'
+    .join(' ')} Z`
 }
 
 function geomToPaths(geometry, width, height) {
@@ -73,29 +115,144 @@ function geomToPaths(geometry, width, height) {
   return []
 }
 
-function Sparkline({ points = [], stroke = '#c9a227' }) {
-  const vals = points.map((p) => Number(p)).filter((n) => Number.isFinite(n))
-  if (vals.length < 2) return <div className="ci-sparkline ci-sparkline--empty" />
-  const min = Math.min(...vals)
-  const max = Math.max(...vals)
-  const span = Math.max(max - min, 1)
-  const w = 200
-  const h = 44
-  const d = vals
-    .map((v, i) => {
-      const x = (i / (vals.length - 1)) * w
-      const y = h - ((v - min) / span) * (h - 4) - 2
-      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`
-    })
-    .join(' ')
+function meanOf(values) {
+  const nums = values.map(Number).filter((n) => Number.isFinite(n))
+  if (!nums.length) return null
+  return nums.reduce((a, b) => a + b, 0) / nums.length
+}
+
+function LevelBadge({ level, hint }) {
+  if (!level || level.id === 'unknown') {
+    return <span className="ci-level ci-level--unknown">—</span>
+  }
   return (
-    <svg className="ci-sparkline" viewBox={`0 0 ${w} ${h}`} width={w} height={h} aria-hidden>
-      <path d={d} fill="none" stroke={stroke} strokeWidth="2" />
-    </svg>
+    <span
+      className={`ci-level ci-level--${level.id}`}
+      title={hint || (level.ratio != null ? `${fmt(level.ratio * 100, 0)}% of reference` : undefined)}
+    >
+      {level.label}
+    </span>
   )
 }
 
-function UsChoropleth({ features, selectedAbbr, onSelectState }) {
+function TrendChart({
+  series = [],
+  year,
+  onYearChange,
+  valueKey = 'rate',
+  accent = '#3d9a6a',
+  unit = '/ 100k',
+}) {
+  const years = series.map((p) => Number(p.year)).filter((y) => Number.isFinite(y))
+  const minY = years.length ? Math.min(...years) : 0
+  const maxY = years.length ? Math.max(...years) : 0
+  const activeYear = year ?? maxY
+  const vals = series.map((p) => Number(p[valueKey])).filter((n) => Number.isFinite(n))
+  const min = vals.length ? Math.min(...vals) : 0
+  const max = vals.length ? Math.max(...vals) : 1
+  const span = Math.max(max - min, 1e-6)
+  const w = 640
+  const h = 180
+  const pad = { t: 12, r: 12, b: 28, l: 8 }
+  const iw = w - pad.l - pad.r
+  const ih = h - pad.t - pad.b
+
+  const coords = series.map((p, i) => {
+    const x = pad.l + (series.length <= 1 ? iw / 2 : (i / (series.length - 1)) * iw)
+    const v = Number(p[valueKey])
+    const y = pad.t + ih - ((Number.isFinite(v) ? v : min) - min) / span * ih
+    return { x, y, year: p.year, value: v }
+  })
+
+  const path = coords.length > 1
+    ? coords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ')
+    : ''
+
+  const active = coords.find((c) => Number(c.year) === Number(activeYear)) || coords[coords.length - 1]
+  const exact = Number.isFinite(active?.value) ? active.value : null
+
+  if (series.length < 1) {
+    return <p className="ci-muted">No trend series for this metric.</p>
+  }
+
+  return (
+    <div className="ci-chart">
+      <div className="ci-chart-readout" aria-live="polite">
+        <span className="ci-chart-year">{activeYear}</span>
+        <span className="ci-chart-value">{exact != null ? fmt(exact, exact < 20 ? 2 : 1) : '—'}</span>
+        <span className="ci-chart-unit">{unit}</span>
+      </div>
+      <svg className="ci-chart-svg" viewBox={`0 0 ${w} ${h}`} role="img" aria-label="Crime trend chart">
+        <defs>
+          <linearGradient id="ciChartFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={accent} stopOpacity="0.35" />
+            <stop offset="100%" stopColor={accent} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {coords.length > 1 && (
+          <path
+            d={`${path} L${coords[coords.length - 1].x.toFixed(1)},${(pad.t + ih).toFixed(1)} L${coords[0].x.toFixed(1)},${(pad.t + ih).toFixed(1)} Z`}
+            fill="url(#ciChartFill)"
+          />
+        )}
+        {path && <path d={path} fill="none" stroke={accent} strokeWidth="2.5" strokeLinejoin="round" />}
+        {active && (
+          <g>
+            <line
+              x1={active.x}
+              x2={active.x}
+              y1={pad.t}
+              y2={pad.t + ih}
+              stroke="rgba(120, 220, 170, 0.35)"
+              strokeDasharray="3 4"
+            />
+            <circle cx={active.x} cy={active.y} r="5.5" fill={accent} stroke="#0a1610" strokeWidth="2" />
+          </g>
+        )}
+        <text x={pad.l} y={h - 6} className="ci-chart-axis">{minY}</text>
+        <text x={w - pad.r} y={h - 6} textAnchor="end" className="ci-chart-axis">{maxY}</text>
+      </svg>
+      {years.length > 1 && (
+        <label className="ci-year-slider">
+          <span className="ci-sr-only">Year</span>
+          <input
+            type="range"
+            min={minY}
+            max={maxY}
+            step={1}
+            value={activeYear}
+            onChange={(e) => onYearChange?.(Number(e.target.value))}
+          />
+          <div className="ci-year-slider-ends" aria-hidden>
+            <span>{minY}</span>
+            <span>{maxY}</span>
+          </div>
+        </label>
+      )}
+    </div>
+  )
+}
+
+function MetricPicker({ options, value, onChange }) {
+  return (
+    <div className="ci-metric-row" role="tablist" aria-label="Crime metric">
+      {options.map((opt) => (
+        <button
+          key={opt.id}
+          type="button"
+          role="tab"
+          aria-selected={value === opt.id}
+          className={`ci-metric-chip ${value === opt.id ? 'is-active' : ''}`}
+          onClick={() => onChange(opt.id)}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function UsCrimeMap({ features, cities, selectedAbbr, selectedCitySlug, onSelectState, onSelectCity }) {
   const width = 720
   const height = 420
   if (!features?.length) {
@@ -106,7 +263,7 @@ function UsChoropleth({ features, selectedAbbr, onSelectState }) {
       className="ci-choropleth"
       viewBox={`0 0 ${width} ${height}`}
       role="img"
-      aria-label="U.S. violent crime rate choropleth"
+      aria-label="U.S. crime map — tap a state or city"
     >
       {features.map((f, i) => {
         const abbr = f.properties?.abbr
@@ -114,16 +271,17 @@ function UsChoropleth({ features, selectedAbbr, onSelectState }) {
         const rate = f.properties?.violentRate
         const paths = geomToPaths(f.geometry, width, height)
         const active = selectedAbbr && String(abbr).toUpperCase() === String(selectedAbbr).toUpperCase()
-        // Skip AK/HI for compact CONUS projection (tiny/off-canvas)
         if (abbr === 'AK' || abbr === 'HI') return null
+        const fill = levelColor(levelFromRatio(rate, 359.1).id) // national violent ~fallback; parent passes better via features
+        const levelId = f.properties?.levelId
         return paths.map((d, pi) => (
           <path
             key={`${abbr || name}-${pi}`}
             d={d}
             className={`ci-state-path ${active ? 'is-active' : ''}`}
-            fill={rateColor(rate)}
-            stroke={active ? '#f5e6b8' : 'rgba(0,0,0,0.35)'}
-            strokeWidth={active ? 2 : 0.6}
+            fill={levelId ? levelColor(levelId) : fill}
+            stroke={active ? '#b8f0d0' : 'rgba(0,0,0,0.4)'}
+            strokeWidth={active ? 2.2 : 0.55}
             onClick={() => abbr && onSelectState?.(abbr)}
             onKeyDown={(e) => {
               if ((e.key === 'Enter' || e.key === ' ') && abbr) {
@@ -133,44 +291,129 @@ function UsChoropleth({ features, selectedAbbr, onSelectState }) {
             }}
             tabIndex={abbr ? 0 : -1}
             role="button"
-            aria-label={`${name}: violent rate ${fmt(rate, 1)} per 100k`}
+            aria-label={`${name}`}
           >
-            <title>{`${name} — ${fmt(rate, 1)} / 100k`}</title>
+            <title>{name}</title>
           </path>
         ))
+      })}
+      {(cities || []).map((c) => {
+        const coords = coordsForCity(c) || (CITY_COORDS[c.slug] ? CITY_COORDS[c.slug] : null)
+        if (!coords) return null
+        const [lat, lon] = coords
+        if (lat > 50 || lat < 24 || lon < -125 || lon > -66) return null
+        const [x, y] = project([lon, lat], width, height)
+        const active = selectedCitySlug && c.slug === selectedCitySlug
+        return (
+          <g
+            key={c.slug}
+            className={`ci-city-dot ${active ? 'is-active' : ''}`}
+            transform={`translate(${x}, ${y})`}
+            onClick={(e) => {
+              e.stopPropagation()
+              onSelectCity?.(c.slug)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                e.stopPropagation()
+                onSelectCity?.(c.slug)
+              }
+            }}
+            tabIndex={0}
+            role="button"
+            aria-label={`${c.city}, ${c.state}`}
+          >
+            <circle r={active ? 6 : 4} />
+            <title>{`${c.city}, ${c.state}`}</title>
+          </g>
+        )
       })}
     </svg>
   )
 }
 
+function ArrestOffenseTable({ rows }) {
+  const list = Array.isArray(rows) ? rows : []
+  if (!list.length) return <p className="ci-muted">No arrest offense totals.</p>
+  return (
+    <div className="ci-table-wrap">
+      <table className="ci-table">
+        <thead>
+          <tr>
+            <th>Offense</th>
+            <th>Total</th>
+            <th>Male</th>
+            <th>Female</th>
+          </tr>
+        </thead>
+        <tbody>
+          {list.slice(0, 24).map((row, i) => (
+            <tr key={`${rowLabel(row)}-${i}`}>
+              <td>{rowLabel(row, `Offense ${i + 1}`)}</td>
+              <td>{fmtScalar(row.total ?? row.count, 0)}</td>
+              <td>{fmtScalar(row.male, 0)}</td>
+              <td>{fmtScalar(row.female, 0)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function SimpleStatList({ rows, labelKey, valueKey = 'count' }) {
+  const list = Array.isArray(rows) ? rows : []
+  if (!list.length) return null
+  return (
+    <ul className="ci-simple-list">
+      {list.slice(0, 12).map((row, i) => (
+        <li key={`${rowLabel(row, labelKey)}-${i}`}>
+          <span>{rowLabel(row, `Item ${i + 1}`)}</span>
+          <strong>{fmtScalar(row[valueKey] ?? row.total ?? row.pct, typeof row.pct === 'number' ? 1 : 0)}</strong>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 export default function CrimeIntelligenceView() {
-  const scrollRef = useRef(null)
-  const [spyId, setSpyId] = useState('ask')
+  const panelRef = useRef(null)
+  const [segment, setSegment] = useState('national')
   const [stats, setStats] = useState(null)
   const [trends, setTrends] = useState([])
   const [states, setStates] = useState([])
   const [types, setTypes] = useState([])
   const [arrests, setArrests] = useState(null)
   const [homicide, setHomicide] = useState(null)
-  const [hate, setHate] = useState([])
   const [mapFeatures, setMapFeatures] = useState([])
   const [attribution, setAttribution] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  const [selectedAbbr, setSelectedAbbr] = useState(null)
+  const [nationalMetric, setNationalMetric] = useState('violentRate')
+  const [nationalYear, setNationalYear] = useState(null)
+
+  const [selectedAbbr, setSelectedAbbr] = useState('')
+  const [stateDetail, setStateDetail] = useState(null)
+  const [stateLoading, setStateLoading] = useState(false)
+  const [stateMetric, setStateMetric] = useState('violentRate')
+  const [stateYear, setStateYear] = useState(null)
+  const [stateAdvanced, setStateAdvanced] = useState(false)
+
   const [selectedCitySlug, setSelectedCitySlug] = useState(null)
   const [cityDetail, setCityDetail] = useState(null)
   const [cityQ, setCityQ] = useState('')
   const [cityResults, setCityResults] = useState([])
   const [cityLoading, setCityLoading] = useState(false)
+  const [cityAdvanced, setCityAdvanced] = useState(false)
 
   const [askInput, setAskInput] = useState('')
   const [askBusy, setAskBusy] = useState(false)
   const [askMessages, setAskMessages] = useState([
     {
       role: 'assistant',
-      text: 'Ask about a U.S. state or city — e.g. “How does Texas compare on violent crime?” or “Memphis rates”. Answers use PlainCrime + FBI UCR data (Groq → Ollama → heuristics).',
+      text: 'Ask about a U.S. state or city — e.g. “How does Texas compare on violent crime?” or “Memphis rates”. Answers use PlainCrime + FBI UCR data.',
       provider: 'system',
     },
   ])
@@ -185,20 +428,22 @@ export default function CrimeIntelligenceView() {
       getJson('/api/crime/types'),
       getJson('/api/crime/arrests'),
       getJson('/api/crime/homicide'),
-      getJson('/api/crime/hate-crime'),
       buildCrimeStateChoropleth('violentRate').catch(() => null),
     ])
-      .then(([s, t, st, ty, a, h, hc, choropleth]) => {
+      .then(([s, t, st, ty, a, h, choropleth]) => {
         if (cancelled) return
         setStats(s.data)
-        setTrends(Array.isArray(t.data) ? t.data : [])
+        const trendRows = Array.isArray(t.data) ? t.data : []
+        setTrends(trendRows)
         setStates(Array.isArray(st.data) ? st.data : [])
         setTypes(Array.isArray(ty.data) ? ty.data : [])
         setArrests(a.data)
         setHomicide(h.data)
-        setHate(Array.isArray(hc.data) ? hc.data : [])
         setMapFeatures(choropleth?.features || [])
         setAttribution(s.meta?.attribution || st.meta?.attribution)
+        if (trendRows.length) {
+          setNationalYear(Number(trendRows[trendRows.length - 1].year))
+        }
         setError(null)
       })
       .catch((err) => {
@@ -210,37 +455,176 @@ export default function CrimeIntelligenceView() {
     return () => { cancelled = true }
   }, [])
 
-  const scrollToId = useCallback((id) => {
-    const root = scrollRef.current
-    const el = root?.querySelector?.(`#${id}`) || document.getElementById(id)
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const national = stats?.national2024
+  const nationalViolentAvg = useMemo(
+    () => meanOf(trends.map((t) => t.violentRate)) ?? national?.violentRate ?? 359.1,
+    [trends, national],
+  )
+  const nationalPropertyAvg = useMemo(
+    () => meanOf(trends.map((t) => t.propertyRate)) ?? national?.propertyRate ?? 1760,
+    [trends, national],
+  )
+  const nationalHomicideAvg = useMemo(
+    () => meanOf(trends.map((t) => t.homicideRate)) ?? national?.homicideRate ?? 5,
+    [trends, national],
+  )
+
+  /** Current-year national rates as comparison baseline for states/cities. */
+  const nationalNow = useMemo(() => ({
+    violentRate: Number(national?.violentRate) || nationalViolentAvg,
+    propertyRate: Number(national?.propertyRate) || nationalPropertyAvg,
+    homicideRate: Number(national?.homicideRate) || nationalHomicideAvg,
+  }), [national, nationalViolentAvg, nationalPropertyAvg, nationalHomicideAvg])
+
+  const sortedStates = useMemo(
+    () => [...states].sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))),
+    [states],
+  )
+
+  const featuredCities = useMemo(() => {
+    const top = stats?.topCitiesByViolentRate || []
+    const safe = stats?.safestCities || []
+    const merged = [...top.slice(0, 12), ...safe.slice(0, 8)]
+    const seen = new Set()
+    return merged.filter((c) => {
+      if (!c.slug || seen.has(c.slug)) return false
+      seen.add(c.slug)
+      return true
+    })
+  }, [stats])
+
+  const mapCities = useMemo(() => {
+    const list = [...featuredCities]
+    if (cityDetail?.slug && !list.some((c) => c.slug === cityDetail.slug)) {
+      list.push(cityDetail)
+    }
+    return list
+  }, [featuredCities, cityDetail])
+
+  const mapFeaturesWithLevel = useMemo(() => {
+    const ref = nationalNow.violentRate
+    return (mapFeatures || []).map((f) => {
+      const rate = f.properties?.violentRate
+      const level = levelFromRatio(rate, ref)
+      return {
+        ...f,
+        properties: {
+          ...f.properties,
+          levelId: level.id,
+        },
+      }
+    })
+  }, [mapFeatures, nationalNow])
+
+  const typeByMetric = useMemo(() => {
+    const map = new Map()
+    for (const t of types) {
+      const key = t.key || t.slug
+      if (key) map.set(key, t)
+      if (t.slug === 'violent-crime') map.set('violentRate', t)
+      if (t.slug === 'property-crime') map.set('propertyRate', t)
+      if (t.slug === 'murder') map.set('homicideRate', t)
+    }
+    return map
+  }, [types])
+
+  const nationalSeries = useMemo(() => {
+    const type = typeByMetric.get(nationalMetric)
+    if (type?.nationalHistory?.length) {
+      return type.nationalHistory.map((h) => ({
+        year: h.year,
+        rate: h.rate,
+        count: h.count,
+      }))
+    }
+    const metric = CRIME_METRIC_OPTIONS.find((m) => m.id === nationalMetric)
+    if (!metric) return []
+    return trends.map((t) => ({
+      year: t.year,
+      rate: metric.rateKey ? t[metric.rateKey] : null,
+      count: t[metric.countKey],
+      value: metric.rateKey ? t[metric.rateKey] : t[metric.countKey],
+    })).filter((p) => Number.isFinite(Number(p.rate ?? p.value ?? p.count)))
+      .map((p) => ({ year: p.year, rate: p.rate ?? p.value ?? p.count }))
+  }, [nationalMetric, typeByMetric, trends])
+
+  const nationalMetricOptions = useMemo(() => {
+    const fromTypes = types
+      .filter((t) => Array.isArray(t.nationalHistory) && t.nationalHistory.length > 1)
+      .map((t) => ({
+        id: t.slug === 'violent-crime' ? 'violentRate'
+          : t.slug === 'property-crime' ? 'propertyRate'
+            : t.slug === 'murder' ? 'homicideRate'
+              : (t.key || t.slug),
+        label: t.name || t.label || t.slug,
+      }))
+    if (fromTypes.length) return fromTypes
+    return CRIME_METRIC_OPTIONS.filter((m) => m.rateKey)
+  }, [types])
+
+  useEffect(() => {
+    if (!nationalSeries.length) return
+    const years = nationalSeries.map((p) => Number(p.year))
+    const maxY = Math.max(...years)
+    if (nationalYear == null || !years.includes(Number(nationalYear))) {
+      setNationalYear(maxY)
+    }
+  }, [nationalSeries, nationalYear])
+
+  const goSegment = useCallback((id) => {
+    setSegment(id)
+    requestAnimationFrame(() => {
+      panelRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' })
+    })
   }, [])
 
-  const selectState = useCallback((abbr) => {
+  const loadState = useCallback(async (abbr, { open = true } = {}) => {
     const a = String(abbr || '').toUpperCase()
+    if (!a) return
     setSelectedAbbr(a)
-    requestAnimationFrame(() => scrollToId(`state-${a}`))
-  }, [scrollToId])
+    setStateAdvanced(false)
+    if (open) goSegment('states')
+    setStateLoading(true)
+    try {
+      const payload = await getJson(`/api/crime/states/${encodeURIComponent(a)}`)
+      const data = payload.data
+      setStateDetail(data)
+      const years = Array.isArray(data?.years) ? data.years : []
+      if (years.length) setStateYear(Number(years[years.length - 1].year))
+      else if (data?.year) setStateYear(Number(data.year))
+      requestAnimationFrame(() => {
+        document.getElementById('ci-state-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    } catch (err) {
+      setError(err.message || 'State load failed')
+    } finally {
+      setStateLoading(false)
+    }
+  }, [goSegment])
 
-  const openCity = useCallback(async (slug) => {
+  const openCity = useCallback(async (slug, { open = true } = {}) => {
     if (!slug) return
     setSelectedCitySlug(slug)
+    setCityAdvanced(false)
+    if (open) goSegment('cities')
     setCityLoading(true)
     try {
       const payload = await getJson(`/api/crime/cities/${encodeURIComponent(slug)}`)
       setCityDetail(payload.data)
-      requestAnimationFrame(() => scrollToId(`city-${slug}`))
+      requestAnimationFrame(() => {
+        document.getElementById('ci-city-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
     } catch (err) {
       setError(err.message || 'City load failed')
     } finally {
       setCityLoading(false)
     }
-  }, [scrollToId])
+  }, [goSegment])
 
   const searchCities = useCallback(async (q) => {
     setCityLoading(true)
     try {
-      const params = new URLSearchParams({ limit: '20', q: q || '' })
+      const params = new URLSearchParams({ limit: '16', q: q || '' })
       const payload = await getJson(`/api/crime/cities?${params}`)
       setCityResults(Array.isArray(payload.data) ? payload.data : [])
     } catch (err) {
@@ -257,6 +641,19 @@ export default function CrimeIntelligenceView() {
     }, 280)
     return () => clearTimeout(t)
   }, [cityQ, searchCities])
+
+  // Default first state once list loads (picker, not expanded dump)
+  useEffect(() => {
+    if (!selectedAbbr && sortedStates.length) {
+      setSelectedAbbr(sortedStates[0].abbr)
+    }
+  }, [sortedStates, selectedAbbr])
+
+  useEffect(() => {
+    if (segment === 'states' && selectedAbbr && !stateDetail && !stateLoading) {
+      loadState(selectedAbbr, { open: false })
+    }
+  }, [segment, selectedAbbr, stateDetail, stateLoading, loadState])
 
   const askCrime = useCallback(async (e) => {
     e?.preventDefault?.()
@@ -276,12 +673,12 @@ export default function CrimeIntelligenceView() {
       const data = payload.data || payload
       setAskMessages((prev) => [
         ...prev,
-        { role: 'assistant', text: data.answer, provider: data.provider, matched: data.matched },
+        { role: 'assistant', text: String(data.answer || ''), provider: data.provider, matched: data.matched },
       ])
       const abbr = data.matched?.states?.[0]
       const slug = data.matched?.cities?.[0]
       if (slug) openCity(slug)
-      else if (abbr) selectState(abbr)
+      else if (abbr) loadState(abbr)
     } catch (err) {
       setAskMessages((prev) => [
         ...prev,
@@ -290,85 +687,104 @@ export default function CrimeIntelligenceView() {
     } finally {
       setAskBusy(false)
     }
-  }, [askInput, askBusy, openCity, selectState])
+  }, [askInput, askBusy, openCity, loadState])
 
-  // Scroll spy
+  const stateSeries = useMemo(() => {
+    const years = Array.isArray(stateDetail?.years) ? stateDetail.years : []
+    const metric = CRIME_METRIC_OPTIONS.find((m) => m.id === stateMetric) || CRIME_METRIC_OPTIONS[0]
+    return years
+      .map((y) => ({
+        year: y.year,
+        rate: metric.rateKey ? y[metric.rateKey] : y[metric.countKey],
+      }))
+      .filter((p) => Number.isFinite(Number(p.rate)))
+  }, [stateDetail, stateMetric])
+
+  const stateMetricOptions = useMemo(() => {
+    const years = Array.isArray(stateDetail?.years) ? stateDetail.years : []
+    if (!years.length) return CRIME_METRIC_OPTIONS.filter((m) => m.rateKey)
+    const sample = years[years.length - 1] || {}
+    return CRIME_METRIC_OPTIONS.filter((m) => {
+      const key = m.rateKey || m.countKey
+      return sample[key] != null || years.some((y) => y[key] != null)
+    })
+  }, [stateDetail])
+
   useEffect(() => {
-    const root = scrollRef.current
-    if (!root) return undefined
-    const ids = [
-      'ci-ask', 'ci-map', 'ci-states', 'ci-cities', 'ci-trends',
-      'ci-types', 'ci-arrests', 'ci-homicide', 'ci-hate', 'ci-rankings',
-    ]
-    const mapNav = {
-      'ci-ask': 'ask', 'ci-map': 'map', 'ci-states': 'states', 'ci-cities': 'cities',
-      'ci-trends': 'trends', 'ci-types': 'types', 'ci-arrests': 'arrests',
-      'ci-homicide': 'homicide', 'ci-hate': 'hate', 'ci-rankings': 'rankings',
+    if (!stateSeries.length) return
+    const years = stateSeries.map((p) => Number(p.year))
+    if (stateYear == null || !years.includes(Number(stateYear))) {
+      setStateYear(Math.max(...years))
     }
-    const obs = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((en) => en.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0]
-        if (visible?.target?.id && mapNav[visible.target.id]) {
-          setSpyId(mapNav[visible.target.id])
-        }
-      },
-      { root, rootMargin: '-10% 0px -55% 0px', threshold: [0.15, 0.4, 0.7] },
-    )
-    ids.forEach((id) => {
-      const el = root.querySelector(`#${id}`)
-      if (el) obs.observe(el)
-    })
-    return () => obs.disconnect()
-  }, [loading])
+  }, [stateSeries, stateYear])
 
-  const national = stats?.national2024
-  const violentSeries = useMemo(
-    () => trends.map((t) => t.violentRate).filter((n) => Number.isFinite(Number(n))),
-    [trends],
-  )
-  const propertySeries = useMemo(
-    () => trends.map((t) => t.propertyRate).filter((n) => Number.isFinite(Number(n))),
-    [trends],
-  )
+  const nationalLevels = useMemo(() => {
+    const v = levelFromRatio(national?.violentRate, nationalViolentAvg)
+    const p = levelFromRatio(national?.propertyRate, nationalPropertyAvg)
+    const h = levelFromRatio(national?.homicideRate, nationalHomicideAvg)
+    return { violent: v, property: p, homicide: h }
+  }, [national, nationalViolentAvg, nationalPropertyAvg, nationalHomicideAvg])
 
-  const featuredCities = useMemo(() => {
-    const top = stats?.topCitiesByViolentRate || []
-    const safe = stats?.safestCities || []
-    const merged = [...top.slice(0, 6), ...safe.slice(0, 4)]
-    const seen = new Set()
-    return merged.filter((c) => {
-      if (!c.slug || seen.has(c.slug)) return false
-      seen.add(c.slug)
-      return true
-    })
-  }, [stats])
+  const activeStateYearPoint = useMemo(() => {
+    if (!stateDetail) return null
+    const years = Array.isArray(stateDetail.years) ? stateDetail.years : []
+    return years.find((y) => Number(y.year) === Number(stateYear)) || stateDetail
+  }, [stateDetail, stateYear])
 
-  const sortedStates = useMemo(
-    () => [...states].sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))),
-    [states],
-  )
+  const stateLevels = useMemo(() => {
+    if (!activeStateYearPoint) return null
+    return {
+      violent: levelFromRatio(activeStateYearPoint.violentRate, nationalNow.violentRate),
+      property: levelFromRatio(activeStateYearPoint.propertyRate, nationalNow.propertyRate),
+      homicide: levelFromRatio(activeStateYearPoint.homicideRate, nationalNow.homicideRate),
+    }
+  }, [activeStateYearPoint, nationalNow])
 
-  const hateSorted = useMemo(
-    () => [...hate].sort((a, b) => (Number(b.incidents || b.total || b.count) || 0) - (Number(a.incidents || a.total || a.count) || 0)),
-    [hate],
-  )
+  const cityLevels = useMemo(() => {
+    if (!cityDetail) return null
+    return {
+      violent: levelFromRatio(cityDetail.violentRate, nationalNow.violentRate),
+      property: levelFromRatio(cityDetail.propertyRate, nationalNow.propertyRate),
+      homicide: levelFromRatio(cityDetail.murderRate ?? cityDetail.homicideRate, nationalNow.homicideRate),
+    }
+  }, [cityDetail, nationalNow])
+
+  const cityCompositionSeries = useMemo(() => {
+    const c = cityDetail?.composition
+    if (!c) return []
+    return [
+      { year: 'Murder', rate: Number(c.murderPct) || 0 },
+      { year: 'Rape', rate: Number(c.rapePct) || 0 },
+      { year: 'Robbery', rate: Number(c.robberyPct) || 0 },
+      { year: 'Assault', rate: Number(c.assaultPct) || 0 },
+    ]
+  }, [cityDetail])
+
+  const onMapState = useCallback((abbr) => {
+    loadState(abbr, { open: true })
+  }, [loadState])
+
+  const onMapCity = useCallback((slug) => {
+    openCity(slug, { open: true })
+  }, [openCity])
+
+  const arrestBySex = Array.isArray(arrests?.bySex) ? arrests.bySex : []
+  const arrestEstimates = Array.isArray(arrests?.nationalEstimates) ? arrests.nationalEstimates : []
 
   return (
     <div className="ci-view" role="region" aria-label="Crime Intelligence">
       <header className="ci-topbar">
         <div className="ci-brand">
-          <h1>Crime Intelligence</h1>
-          <p>FBI UCR via PlainCrime — national snapshot, state &amp; city detail, Ask Crime</p>
+          <h1>Crime</h1>
+          <p>PlainCrime + FBI UCR · vs national averages</p>
         </div>
-        <nav className="ci-spy" aria-label="Crime sections">
-          {NAV_SECTIONS.map((s) => (
+        <nav className="ci-segments" aria-label="Crime sections">
+          {SEGMENTS.map((s) => (
             <button
               key={s.id}
               type="button"
-              className={spyId === s.id ? 'is-active' : ''}
-              onClick={() => scrollToId(`ci-${s.id}`)}
+              className={segment === s.id ? 'is-active' : ''}
+              onClick={() => goSegment(s.id)}
             >
               {s.label}
             </button>
@@ -376,433 +792,376 @@ export default function CrimeIntelligenceView() {
         </nav>
       </header>
 
-      <div className="ci-scroll" ref={scrollRef}>
+      <div className="ci-scroll" ref={panelRef}>
         {loading && <p className="ci-muted ci-enter">Loading crime pack…</p>}
         {error && <p className="ci-error ci-enter">{error}</p>}
 
-        <section id="ci-ask" className="ci-hero ci-enter">
-          <div className="ci-hero-stats">
-            <div className="ci-stat">
-              <span className="ci-stat-label">Violent / 100k</span>
-              <span className="ci-stat-value">{fmt(national?.violentRate, 1)}</span>
-              <span className="ci-stat-sub">
-                {national?.violentChange != null
-                  ? `${national.violentChange > 0 ? '+' : ''}${fmt(national.violentChange, 1)}% YoY`
-                  : 'National 2024'}
-              </span>
+        {segment === 'national' && !loading && (
+          <section className="ci-panel ci-enter" aria-labelledby="ci-national-title">
+            <div className="ci-section-head">
+              <h2 id="ci-national-title">National</h2>
+              <p>
+                Levels vs long-run national averages
+                {' '}
+                (Low &lt;{LEVEL_THRESHOLDS.low}× · Medium &lt;{LEVEL_THRESHOLDS.medium}× · High &lt;{LEVEL_THRESHOLDS.high}× · Extreme ≥{LEVEL_THRESHOLDS.high}×).
+              </p>
             </div>
-            <div className="ci-stat">
-              <span className="ci-stat-label">Property / 100k</span>
-              <span className="ci-stat-value">{fmt(national?.propertyRate, 1)}</span>
-              <span className="ci-stat-sub">
-                {national?.propertyChange != null
-                  ? `${national.propertyChange > 0 ? '+' : ''}${fmt(national.propertyChange, 1)}% YoY`
-                  : 'National 2024'}
-              </span>
-            </div>
-            <div className="ci-stat">
-              <span className="ci-stat-label">Homicide / 100k</span>
-              <span className="ci-stat-value">{fmt(national?.homicideRate, 1)}</span>
-              <span className="ci-stat-sub">{fmt(stats?.totalCities, 0)} cities · {fmt(stats?.totalStates, 0)} states</span>
-            </div>
-            <div className="ci-stat ci-stat--spark">
-              <span className="ci-stat-label">Violent trend</span>
-              <Sparkline points={violentSeries} />
-            </div>
-          </div>
 
-          <div className="ci-ask-panel">
-            <h2>Ask Crime</h2>
-            <div className="ci-ask-thread" aria-live="polite">
-              {askMessages.map((m, i) => (
-                <div key={i} className={`ci-ask-msg ci-ask-msg--${m.role}`}>
-                  <p>{m.text}</p>
-                  {m.provider && m.role === 'assistant' && m.provider !== 'system' && (
-                    <span className="ci-ask-provider">via {m.provider}</span>
-                  )}
+            <div className="ci-level-strip">
+              <div className="ci-level-card">
+                <span className="ci-stat-label">Violent / 100k</span>
+                <span className="ci-stat-value">{fmt(national?.violentRate, 1)}</span>
+                <LevelBadge
+                  level={nationalLevels.violent}
+                  hint={`vs long-run avg ${fmt(nationalViolentAvg, 1)}`}
+                />
+              </div>
+              <div className="ci-level-card">
+                <span className="ci-stat-label">Property / 100k</span>
+                <span className="ci-stat-value">{fmt(national?.propertyRate, 1)}</span>
+                <LevelBadge
+                  level={nationalLevels.property}
+                  hint={`vs long-run avg ${fmt(nationalPropertyAvg, 1)}`}
+                />
+              </div>
+              <div className="ci-level-card">
+                <span className="ci-stat-label">Homicide / 100k</span>
+                <span className="ci-stat-value">{fmt(national?.homicideRate, 1)}</span>
+                <LevelBadge
+                  level={nationalLevels.homicide}
+                  hint={`vs long-run avg ${fmt(nationalHomicideAvg, 2)}`}
+                />
+              </div>
+            </div>
+
+            <MetricPicker
+              options={nationalMetricOptions}
+              value={nationalMetric}
+              onChange={setNationalMetric}
+            />
+            <TrendChart
+              series={nationalSeries}
+              year={nationalYear}
+              onYearChange={setNationalYear}
+              valueKey="rate"
+            />
+
+            <details className="ci-advanced">
+              <summary>Advanced</summary>
+              <div className="ci-advanced-body">
+                <h3>Arrest offense totals</h3>
+                <ArrestOffenseTable rows={arrestBySex.length ? arrestBySex : arrestEstimates} />
+                <h3>Homicide weapons</h3>
+                <SimpleStatList rows={homicide?.weaponBreakdown} valueKey="count" />
+                <h3>Circumstances</h3>
+                <SimpleStatList rows={homicide?.circumstanceBreakdown} valueKey="count" />
+                <h3>Victim–offender relationship</h3>
+                <SimpleStatList rows={homicide?.relationship} valueKey="count" />
+              </div>
+            </details>
+          </section>
+        )}
+
+        {segment === 'states' && !loading && (
+          <section id="ci-state-panel" className="ci-panel ci-enter" aria-labelledby="ci-states-title">
+            <div className="ci-section-head">
+              <h2 id="ci-states-title">States</h2>
+              <p>Pick one state — levels vs current national rates. No endless list.</p>
+            </div>
+
+            <label className="ci-select-wrap">
+              <span>State</span>
+              <select
+                value={selectedAbbr}
+                onChange={(e) => loadState(e.target.value, { open: false })}
+                aria-label="Select state"
+              >
+                {sortedStates.map((s) => (
+                  <option key={s.abbr} value={s.abbr}>{s.name} ({s.abbr})</option>
+                ))}
+              </select>
+            </label>
+
+            {stateLoading && <p className="ci-muted">Loading state…</p>}
+
+            {stateDetail && !stateLoading && (
+              <div className="ci-detail ci-detail--open">
+                <header className="ci-detail-head">
+                  <h3>{stateDetail.name} <span className="ci-muted">({stateDetail.abbr})</span></h3>
+                  <span className="ci-muted">{stateYear || stateDetail.year}</span>
+                </header>
+
+                <div className="ci-level-strip">
+                  <div className="ci-level-card">
+                    <span className="ci-stat-label">Violent</span>
+                    <span className="ci-stat-value">{fmt(activeStateYearPoint?.violentRate, 1)}</span>
+                    <LevelBadge level={stateLevels?.violent} />
+                  </div>
+                  <div className="ci-level-card">
+                    <span className="ci-stat-label">Property</span>
+                    <span className="ci-stat-value">{fmt(activeStateYearPoint?.propertyRate, 1)}</span>
+                    <LevelBadge level={stateLevels?.property} />
+                  </div>
+                  <div className="ci-level-card">
+                    <span className="ci-stat-label">Homicide</span>
+                    <span className="ci-stat-value">{fmt(activeStateYearPoint?.homicideRate, 2)}</span>
+                    <LevelBadge level={stateLevels?.homicide} />
+                  </div>
                 </div>
-              ))}
-            </div>
-            <form className="ci-ask-form" onSubmit={askCrime}>
-              <input
-                type="search"
-                value={askInput}
-                onChange={(e) => setAskInput(e.target.value)}
-                placeholder="Ask about a state, city, or national trend…"
-                aria-label="Ask Crime question"
-                disabled={askBusy}
-              />
-              <button type="submit" disabled={askBusy || !askInput.trim()}>
-                {askBusy ? 'Thinking…' : 'Ask'}
-              </button>
-            </form>
-          </div>
-        </section>
 
-        <section id="ci-map" className="ci-section ci-enter ci-enter-delay">
-          <div className="ci-section-head">
-            <h2>State rates map</h2>
-            <p>Click a state to jump to its summary. Color = violent crime rate per 100k.</p>
-          </div>
-          <div className={`ci-map-wrap ${selectedAbbr ? 'has-selection' : ''}`}>
-            <UsChoropleth
-              features={mapFeatures}
-              selectedAbbr={selectedAbbr}
-              onSelectState={selectState}
-            />
-            <div className="ci-map-legend" aria-hidden>
-              <span style={{ background: '#3d7a3d' }} />&lt;150
-              <span style={{ background: '#c9a227' }} />300
-              <span style={{ background: '#d97706' }} />450
-              <span style={{ background: '#dc2626' }} />600+
-            </div>
-          </div>
-          {selectedAbbr && (
-            <p className="ci-muted">
-              Selected <strong>{selectedAbbr}</strong> — scrolling to summary.
-            </p>
-          )}
-        </section>
+                <MetricPicker
+                  options={stateMetricOptions.map((m) => ({ id: m.id, label: m.label }))}
+                  value={stateMetric}
+                  onChange={setStateMetric}
+                />
+                <TrendChart
+                  series={stateSeries}
+                  year={stateYear}
+                  onYearChange={setStateYear}
+                  valueKey="rate"
+                />
 
-        <section id="ci-states" className="ci-section ci-enter">
-          <div className="ci-section-head">
-            <h2>State summaries</h2>
-            <p>Latest year rates for all states and DC. Click a chip or map state to focus.</p>
-          </div>
-          <div className="ci-chip-row">
-            {sortedStates.map((s) => (
-              <button
-                key={s.abbr}
-                type="button"
-                className={`ci-chip ${selectedAbbr === s.abbr ? 'is-active' : ''}`}
-                onClick={() => selectState(s.abbr)}
-              >
-                {s.abbr}
-              </button>
-            ))}
-          </div>
-          <div className="ci-state-grid">
-            {sortedStates.map((s) => (
-              <article
-                key={s.abbr}
-                id={`state-${s.abbr}`}
-                className={`ci-state-card ${selectedAbbr === s.abbr ? 'is-active' : ''}`}
-              >
-                <header>
-                  <h3>{s.name} <span className="ci-muted">({s.abbr})</span></h3>
-                  <span className="ci-pill" style={{ borderColor: rateColor(s.violentRate) }}>
-                    {fmt(s.violentRate, 1)} violent
-                  </span>
-                </header>
-                <dl className="ci-dl">
-                  <div><dt>Property</dt><dd>{fmt(s.propertyRate, 1)}</dd></div>
-                  <div><dt>Homicide</dt><dd>{fmt(s.homicideRate, 1)}</dd></div>
-                  <div><dt>YoY violent</dt><dd>{s.violentChange != null ? `${s.violentChange > 0 ? '+' : ''}${fmt(s.violentChange, 1)}%` : '—'}</dd></div>
-                  <div><dt>Population</dt><dd>{fmt(s.population, 0)}</dd></div>
-                </dl>
-              </article>
-            ))}
-          </div>
-        </section>
+                <button
+                  type="button"
+                  className={`ci-advanced-btn ${stateAdvanced ? 'is-open' : ''}`}
+                  onClick={() => setStateAdvanced((v) => !v)}
+                >
+                  {stateAdvanced ? 'Hide advanced' : 'Advanced'}
+                </button>
 
-        <section id="ci-cities" className="ci-section ci-enter">
-          <div className="ci-section-head">
-            <h2>City detail</h2>
-            <p>Search the city index or pick a featured chip. Detail scrolls here.</p>
-          </div>
-          <div className="ci-chip-row">
-            {featuredCities.map((c) => (
-              <button
-                key={c.slug}
-                type="button"
-                className={`ci-chip ${selectedCitySlug === c.slug ? 'is-active' : ''}`}
-                onClick={() => openCity(c.slug)}
-              >
-                {c.city}
-              </button>
-            ))}
-          </div>
-          <div className="ci-city-search">
-            <input
-              type="search"
-              value={cityQ}
-              onChange={(e) => setCityQ(e.target.value)}
-              placeholder="Search cities…"
-              aria-label="Search cities"
-            />
-            {cityLoading && <span className="ci-muted">Searching…</span>}
-          </div>
-          {cityResults.length > 0 && (
-            <ul className="ci-city-results">
-              {cityResults.map((c) => (
-                <li key={c.slug}>
-                  <button type="button" onClick={() => openCity(c.slug)}>
-                    <strong>{c.city}</strong>
-                    <span className="ci-muted">, {c.state}</span>
-                    <span className="ci-rate">{fmt(c.violentRate, 1)}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div id={selectedCitySlug ? `city-${selectedCitySlug}` : 'city-detail'} className="ci-city-detail">
-            {cityDetail ? (
-              <article className="ci-city-card is-active">
-                <header>
-                  <h3>{cityDetail.city}, {cityDetail.state}</h3>
-                  <span className="ci-pill" style={{ borderColor: rateColor(cityDetail.violentRate) }}>
-                    {fmt(cityDetail.violentRate, 1)} violent · {cityDetail.trajectory || '—'}
-                  </span>
-                </header>
-                <dl className="ci-dl">
-                  <div><dt>Property</dt><dd>{fmt(cityDetail.propertyRate, 1)}</dd></div>
-                  <div><dt>Murder</dt><dd>{fmt(cityDetail.murderRate, 2)}</dd></div>
-                  <div><dt>YoY violent</dt><dd>{cityDetail.violentChange != null ? `${cityDetail.violentChange > 0 ? '+' : ''}${fmt(cityDetail.violentChange, 1)}%` : '—'}</dd></div>
-                  <div><dt>Safety %ile</dt><dd>{fmt(cityDetail.safetyPercentile, 0)}</dd></div>
-                  <div><dt>Population</dt><dd>{fmt(cityDetail.population, 0)}</dd></div>
-                  <div><dt>Years</dt><dd>{(cityDetail.yearsAvailable || []).join(', ') || '—'}</dd></div>
-                </dl>
-                {cityDetail.composition && (
-                  <p className="ci-muted">
-                    Composition — murder {fmt(cityDetail.composition.murderPct, 1)}%, rape {fmt(cityDetail.composition.rapePct, 1)}%,
-                    robbery {fmt(cityDetail.composition.robberyPct, 1)}%, assault {fmt(cityDetail.composition.assaultPct, 1)}%.
-                  </p>
-                )}
-                {cityDetail.csv2024 && (
-                  <div className="ci-csv-block">
-                    <h4>2024 offense counts (CSV)</h4>
+                {stateAdvanced && (
+                  <div className="ci-advanced-body ci-enter">
                     <dl className="ci-dl">
-                      <div><dt>Violent</dt><dd>{fmt(cityDetail.csv2024.violent_crime, 0)}</dd></div>
-                      <div><dt>Murder</dt><dd>{fmt(cityDetail.csv2024.murder, 0)}</dd></div>
-                      <div><dt>Robbery</dt><dd>{fmt(cityDetail.csv2024.robbery, 0)}</dd></div>
-                      <div><dt>Assault</dt><dd>{fmt(cityDetail.csv2024.aggravated_assault, 0)}</dd></div>
-                      <div><dt>Property</dt><dd>{fmt(cityDetail.csv2024.property_crime, 0)}</dd></div>
-                      <div><dt>Burglary</dt><dd>{fmt(cityDetail.csv2024.burglary, 0)}</dd></div>
-                      <div><dt>Larceny</dt><dd>{fmt(cityDetail.csv2024.larceny, 0)}</dd></div>
-                      <div><dt>MVT</dt><dd>{fmt(cityDetail.csv2024.motor_vehicle_theft, 0)}</dd></div>
+                      <div><dt>Population</dt><dd>{fmt(activeStateYearPoint?.population ?? stateDetail.population, 0)}</dd></div>
+                      <div><dt>Violent count</dt><dd>{fmt(activeStateYearPoint?.violentCrime ?? stateDetail.violentCrime, 0)}</dd></div>
+                      <div><dt>Property count</dt><dd>{fmt(activeStateYearPoint?.propertyCrime ?? stateDetail.propertyCrime, 0)}</dd></div>
+                      <div><dt>Homicide count</dt><dd>{fmt(activeStateYearPoint?.homicide ?? stateDetail.homicide, 0)}</dd></div>
+                      <div>
+                        <dt>YoY violent</dt>
+                        <dd>
+                          {activeStateYearPoint?.violentChange != null
+                            ? `${activeStateYearPoint.violentChange > 0 ? '+' : ''}${fmt(activeStateYearPoint.violentChange, 1)}%`
+                            : '—'}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>YoY property</dt>
+                        <dd>
+                          {activeStateYearPoint?.propertyChange != null
+                            ? `${activeStateYearPoint.propertyChange > 0 ? '+' : ''}${fmt(activeStateYearPoint.propertyChange, 1)}%`
+                            : '—'}
+                        </dd>
+                      </div>
                     </dl>
                   </div>
                 )}
-              </article>
-            ) : (
-              <p className="ci-muted">Select a city chip or search to open detail.</p>
+              </div>
             )}
-          </div>
-        </section>
+          </section>
+        )}
 
-        <section id="ci-trends" className="ci-section ci-enter">
-          <div className="ci-section-head">
-            <h2>National trends</h2>
-            <p>Long-run violent and property rates from the national series.</p>
-          </div>
-          <div className="ci-trend-row">
-            <div>
-              <h3>Violent</h3>
-              <Sparkline points={violentSeries} stroke="#dc2626" />
+        {segment === 'cities' && !loading && (
+          <section id="ci-city-panel" className="ci-panel ci-enter" aria-labelledby="ci-cities-title">
+            <div className="ci-section-head">
+              <h2 id="ci-cities-title">Cities</h2>
+              <p>Search or pick a featured city — one at a time.</p>
             </div>
-            <div>
-              <h3>Property</h3>
-              <Sparkline points={propertySeries} stroke="#58a6ff" />
+
+            <div className="ci-city-search">
+              <input
+                type="search"
+                value={cityQ}
+                onChange={(e) => setCityQ(e.target.value)}
+                placeholder="Search cities…"
+                aria-label="Search cities"
+              />
+              {cityLoading && <span className="ci-muted">…</span>}
             </div>
-          </div>
-          <div className="ci-table-wrap">
-            <table className="ci-table">
-              <thead>
-                <tr>
-                  <th>Year</th>
-                  <th>Violent</th>
-                  <th>Property</th>
-                  <th>Homicide</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...trends].slice(-12).reverse().map((t) => (
-                  <tr key={t.year}>
-                    <td>{t.year}</td>
-                    <td>{fmt(t.violentRate, 1)}</td>
-                    <td>{fmt(t.propertyRate, 1)}</td>
-                    <td>{fmt(t.homicideRate, 2)}</td>
-                  </tr>
+
+            {cityResults.length > 0 && (
+              <ul className="ci-city-results">
+                {cityResults.map((c) => (
+                  <li key={c.slug}>
+                    <button type="button" onClick={() => openCity(c.slug, { open: false })}>
+                      <strong>{c.city}</strong>
+                      <span className="ci-muted">, {c.state}</span>
+                      <LevelBadge level={levelFromRatio(c.violentRate, nationalNow.violentRate)} />
+                    </button>
+                  </li>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+              </ul>
+            )}
 
-        <section id="ci-types" className="ci-section ci-enter">
-          <div className="ci-section-head">
-            <h2>Crime types</h2>
-            <p>Offense categories and national history where available.</p>
-          </div>
-          <div className="ci-type-grid">
-            {types.map((t) => (
-              <article key={t.id || t.name || t.key} className="ci-type-card">
-                <h3>{t.name || t.label || t.id}</h3>
-                <p className="ci-stat-value">{fmt(t.nationalRate ?? t.rate ?? t.latestRate, 1)}</p>
-                <p className="ci-muted">per 100k · {t.change != null || t.yoy != null ? `${(t.change ?? t.yoy) > 0 ? '+' : ''}${fmt(t.change ?? t.yoy, 1)}%` : '—'}</p>
-                {Array.isArray(t.nationalHistory) && t.nationalHistory.length > 1 && (
-                  <Sparkline points={t.nationalHistory.map((h) => h.rate ?? h.violentRate ?? h.value)} />
-                )}
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section id="ci-arrests" className="ci-section ci-enter">
-          <div className="ci-section-head">
-            <h2>Arrests</h2>
-            <p>National estimates and demographic breakdowns from the arrest pack.</p>
-          </div>
-          {arrests?.nationalEstimates ? (
-            <pre className="ci-json-lite">{JSON.stringify(arrests.nationalEstimates, null, 2)}</pre>
-          ) : (
-            <p className="ci-muted">No national arrest estimates.</p>
-          )}
-          {arrests?.bySex && (
-            <dl className="ci-dl">
-              {Object.entries(arrests.bySex).map(([k, v]) => (
-                <div key={k}><dt>{k}</dt><dd>{typeof v === 'object' ? JSON.stringify(v) : fmt(v, 0)}</dd></div>
+            <div className="ci-chip-row">
+              {featuredCities.slice(0, 10).map((c) => (
+                <button
+                  key={c.slug}
+                  type="button"
+                  className={`ci-chip ${selectedCitySlug === c.slug ? 'is-active' : ''}`}
+                  onClick={() => openCity(c.slug, { open: false })}
+                >
+                  {c.city}
+                </button>
               ))}
-            </dl>
-          )}
-          {arrests?.byAge && (
-            <div className="ci-table-wrap">
-              <table className="ci-table">
-                <thead><tr><th>Age</th><th>Value</th></tr></thead>
-                <tbody>
-                  {Object.entries(arrests.byAge).slice(0, 12).map(([k, v]) => (
-                    <tr key={k}><td>{k}</td><td>{typeof v === 'object' ? JSON.stringify(v) : fmt(v, 0)}</td></tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
-          )}
-        </section>
 
-        <section id="ci-homicide" className="ci-section ci-enter">
-          <div className="ci-section-head">
-            <h2>Homicide</h2>
-            <p>Weapons, circumstances, and relationship breakdowns.</p>
-          </div>
-          <div className="ci-homicide-grid">
-            {['weapons', 'byWeapon', 'circumstances', 'relationship'].map((key) => {
-              const block = homicide?.[key]
-              if (!block) return null
-              const entries = Array.isArray(block)
-                ? block.map((row, i) => [row.name || row.label || row.type || `#${i}`, row.count ?? row.total ?? row.pct ?? row])
-                : Object.entries(block)
-              return (
-                <div key={key}>
-                  <h3>{key}</h3>
-                  <ul className="ci-simple-list">
-                    {entries.slice(0, 10).map(([k, v]) => (
-                      <li key={String(k)}>
-                        <span>{k}</span>
-                        <strong>{typeof v === 'object' ? JSON.stringify(v) : fmt(v, typeof v === 'number' && v < 100 ? 1 : 0)}</strong>
-                      </li>
-                    ))}
-                  </ul>
+            {cityDetail ? (
+              <div className="ci-detail ci-detail--open">
+                <header className="ci-detail-head">
+                  <h3>{cityDetail.city}, {cityDetail.state}</h3>
+                  <span className="ci-muted">{cityDetail.year || '—'}</span>
+                </header>
+
+                <div className="ci-level-strip">
+                  <div className="ci-level-card">
+                    <span className="ci-stat-label">Violent</span>
+                    <span className="ci-stat-value">{fmt(cityDetail.violentRate, 1)}</span>
+                    <LevelBadge level={cityLevels?.violent} />
+                  </div>
+                  <div className="ci-level-card">
+                    <span className="ci-stat-label">Property</span>
+                    <span className="ci-stat-value">{fmt(cityDetail.propertyRate, 1)}</span>
+                    <LevelBadge level={cityLevels?.property} />
+                  </div>
+                  <div className="ci-level-card">
+                    <span className="ci-stat-label">Murder</span>
+                    <span className="ci-stat-value">{fmt(cityDetail.murderRate, 2)}</span>
+                    <LevelBadge level={cityLevels?.homicide} />
+                  </div>
                 </div>
-              )
-            })}
-          </div>
-        </section>
 
-        <section id="ci-hate" className="ci-section ci-enter">
-          <div className="ci-section-head">
-            <h2>Hate crime by state</h2>
-            <p>Incidents from the hate-crime pack (click state to sync map).</p>
-          </div>
-          <div className="ci-table-wrap">
-            <table className="ci-table">
-              <thead>
-                <tr>
-                  <th>State</th>
-                  <th>Incidents</th>
-                </tr>
-              </thead>
-              <tbody>
-                {hateSorted.slice(0, 30).map((row, i) => {
-                  const abbr = row.abbr || row.stateAbbr
-                  const name = row.name || row.state || abbr || `row-${i}`
-                  const count = row.incidents ?? row.total ?? row.count ?? row.hateCrimes
-                  return (
-                    <tr
-                      key={abbr || name}
-                      className={selectedAbbr && abbr === selectedAbbr ? 'is-active' : ''}
-                      onClick={() => abbr && selectState(abbr)}
-                      style={{ cursor: abbr ? 'pointer' : 'default' }}
-                    >
-                      <td>{name}{abbr ? ` (${abbr})` : ''}</td>
-                      <td>{fmt(count, 0)}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                {cityCompositionSeries.length > 0 && (
+                  <>
+                    <h4 className="ci-subhead">Violent composition (%)</h4>
+                    <div className="ci-comp-bars" aria-label="Violent crime composition">
+                      {cityCompositionSeries.map((row) => (
+                        <div key={row.year} className="ci-comp-row">
+                          <span>{row.year}</span>
+                          <div className="ci-comp-track">
+                            <div className="ci-comp-fill" style={{ width: `${Math.min(100, row.rate)}%` }} />
+                          </div>
+                          <strong>{fmt(row.rate, 1)}%</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
 
-        <section id="ci-rankings" className="ci-section ci-enter">
-          <div className="ci-section-head">
-            <h2>Rankings</h2>
-            <p>Highest and lowest violent rates — click a city to open detail.</p>
-          </div>
-          <div className="ci-rank-grid">
-            <div>
-              <h3>Highest violent (cities)</h3>
-              <ul className="ci-simple-list">
-                {(stats?.topCitiesByViolentRate || []).slice(0, 10).map((c) => (
-                  <li key={c.slug}>
-                    <button type="button" className="ci-linkish" onClick={() => openCity(c.slug)}>
-                      {c.city}, {c.state}
-                    </button>
-                    <strong>{fmt(c.violentRate, 1)}</strong>
-                  </li>
-                ))}
-              </ul>
+                <button
+                  type="button"
+                  className={`ci-advanced-btn ${cityAdvanced ? 'is-open' : ''}`}
+                  onClick={() => setCityAdvanced((v) => !v)}
+                >
+                  {cityAdvanced ? 'Hide advanced' : 'Advanced'}
+                </button>
+
+                {cityAdvanced && (
+                  <div className="ci-advanced-body ci-enter">
+                    <dl className="ci-dl">
+                      <div><dt>Population</dt><dd>{fmt(cityDetail.population, 0)}</dd></div>
+                      <div><dt>Trajectory</dt><dd>{cityDetail.trajectory || '—'}</dd></div>
+                      <div>
+                        <dt>YoY violent</dt>
+                        <dd>
+                          {cityDetail.violentChange != null
+                            ? `${cityDetail.violentChange > 0 ? '+' : ''}${fmt(cityDetail.violentChange, 1)}%`
+                            : '—'}
+                        </dd>
+                      </div>
+                      <div><dt>Safety %ile</dt><dd>{fmt(cityDetail.safetyPercentile, 0)}</dd></div>
+                      <div>
+                        <dt>Years</dt>
+                        <dd>{(cityDetail.yearsAvailable || []).join(', ') || '—'}</dd>
+                      </div>
+                    </dl>
+                    {cityDetail.csv2024 && (
+                      <dl className="ci-dl">
+                        <div><dt>Violent (2024)</dt><dd>{fmt(cityDetail.csv2024.violent_crime, 0)}</dd></div>
+                        <div><dt>Murder</dt><dd>{fmt(cityDetail.csv2024.murder, 0)}</dd></div>
+                        <div><dt>Robbery</dt><dd>{fmt(cityDetail.csv2024.robbery, 0)}</dd></div>
+                        <div><dt>Assault</dt><dd>{fmt(cityDetail.csv2024.aggravated_assault, 0)}</dd></div>
+                        <div><dt>Property</dt><dd>{fmt(cityDetail.csv2024.property_crime, 0)}</dd></div>
+                        <div><dt>Burglary</dt><dd>{fmt(cityDetail.csv2024.burglary, 0)}</dd></div>
+                        <div><dt>Larceny</dt><dd>{fmt(cityDetail.csv2024.larceny, 0)}</dd></div>
+                        <div><dt>MVT</dt><dd>{fmt(cityDetail.csv2024.motor_vehicle_theft, 0)}</dd></div>
+                      </dl>
+                    )}
+                    {stateAbbrFromName(cityDetail.state) && (
+                      <button
+                        type="button"
+                        className="ci-linkish"
+                        onClick={() => loadState(stateAbbrFromName(cityDetail.state))}
+                      >
+                        Open {cityDetail.state} state summary →
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="ci-muted">Select or search a city to open its summary.</p>
+            )}
+          </section>
+        )}
+
+        {segment === 'map' && !loading && (
+          <section className="ci-panel ci-enter" aria-labelledby="ci-map-title">
+            <div className="ci-section-head">
+              <h2 id="ci-map-title">Map</h2>
+              <p>Tap a state or city marker — opens that summary. No layer toggles.</p>
             </div>
-            <div>
-              <h3>Safest cities</h3>
-              <ul className="ci-simple-list">
-                {(stats?.safestCities || []).slice(0, 10).map((c) => (
-                  <li key={c.slug}>
-                    <button type="button" className="ci-linkish" onClick={() => openCity(c.slug)}>
-                      {c.city}, {c.state}
-                    </button>
-                    <strong>{fmt(c.violentRate, 1)}</strong>
-                  </li>
-                ))}
-              </ul>
+            <div className={`ci-map-wrap ${selectedAbbr || selectedCitySlug ? 'has-selection' : ''}`}>
+              <UsCrimeMap
+                features={mapFeaturesWithLevel}
+                cities={mapCities}
+                selectedAbbr={selectedAbbr}
+                selectedCitySlug={selectedCitySlug}
+                onSelectState={onMapState}
+                onSelectCity={onMapCity}
+              />
+              <div className="ci-map-legend" aria-hidden>
+                <span style={{ background: levelColor('low') }} />Low
+                <span style={{ background: levelColor('medium') }} />Med
+                <span style={{ background: levelColor('high') }} />High
+                <span style={{ background: levelColor('extreme') }} />Extreme
+              </div>
             </div>
-            <div>
-              <h3>Highest violent (states)</h3>
-              <ul className="ci-simple-list">
-                {(stats?.topStatesByViolentRate || []).slice(0, 10).map((s) => (
-                  <li key={s.abbr}>
-                    <button type="button" className="ci-linkish" onClick={() => selectState(s.abbr)}>
-                      {s.name}
-                    </button>
-                    <strong>{fmt(s.violentRate, 1)}</strong>
-                  </li>
-                ))}
-              </ul>
+          </section>
+        )}
+
+        {segment === 'ask' && (
+          <section className="ci-panel ci-enter" aria-labelledby="ci-ask-title">
+            <div className="ci-section-head">
+              <h2 id="ci-ask-title">Ask Crime</h2>
+              <p>Natural-language questions over the crime pack.</p>
             </div>
-            <div>
-              <h3>Safest states</h3>
-              <ul className="ci-simple-list">
-                {(stats?.safestStates || []).slice(0, 10).map((s) => (
-                  <li key={s.abbr}>
-                    <button type="button" className="ci-linkish" onClick={() => selectState(s.abbr)}>
-                      {s.name}
-                    </button>
-                    <strong>{fmt(s.violentRate, 1)}</strong>
-                  </li>
+            <div className="ci-ask-panel">
+              <div className="ci-ask-thread" aria-live="polite">
+                {askMessages.map((m, i) => (
+                  <div key={i} className={`ci-ask-msg ci-ask-msg--${m.role}`}>
+                    <p>{typeof m.text === 'string' ? m.text : fmtScalar(m.text)}</p>
+                    {m.provider && m.role === 'assistant' && m.provider !== 'system' && (
+                      <span className="ci-ask-provider">via {String(m.provider)}</span>
+                    )}
+                  </div>
                 ))}
-              </ul>
+              </div>
+              <form className="ci-ask-form" onSubmit={askCrime}>
+                <input
+                  type="search"
+                  value={askInput}
+                  onChange={(e) => setAskInput(e.target.value)}
+                  placeholder="Ask about a state, city, or national trend…"
+                  aria-label="Ask Crime question"
+                  disabled={askBusy}
+                />
+                <button type="submit" disabled={askBusy || !askInput.trim()}>
+                  {askBusy ? 'Thinking…' : 'Ask'}
+                </button>
+              </form>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         <footer className="ci-footer ci-muted">
           {attribution

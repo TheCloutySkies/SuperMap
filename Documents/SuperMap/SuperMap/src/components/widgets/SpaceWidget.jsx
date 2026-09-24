@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import axios from 'axios'
 import WidgetCard from './WidgetCard'
+import { getApiBase } from '../../lib/homeBootstrap'
 
-const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
-  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
-  : 'http://localhost:3001'
+const API_BASE = getApiBase()
 const EONET_URL = 'https://eonet.gsfc.nasa.gov/api/v3/events?limit=20&status=open'
 const EONET_EVENT_URL = (id) => `https://eonet.gsfc.nasa.gov/api/v3/events/${id}`
 const PRESCRIBED_FIRE = /prescribed\s*fire|rx\s*pcs|controlled\s*burn/i
@@ -74,17 +73,34 @@ function parseEventDetail(ev) {
   }
 }
 
-export default function SpaceWidget() {
-  const [data, setData] = useState(null)
-  const [eonet, setEonet] = useState([])
-  const [loading, setLoading] = useState(true)
+export default function SpaceWidget({ initialData }) {
+  const [data, setData] = useState(() => initialData || null)
+  const [eonet, setEonet] = useState(() => {
+    const fromBackend = (initialData?.eonet || []).filter((e) => !PRESCRIBED_FIRE.test(e.title || ''))
+    return fromBackend
+  })
+  const [loading, setLoading] = useState(() => initialData === undefined ? true : !initialData)
   const [error, setError] = useState(null)
-  const [updatedAt, setUpdatedAt] = useState(null)
+  const [updatedAt, setUpdatedAt] = useState(() => initialData?.updatedAt || null)
   const [expandedEventId, setExpandedEventId] = useState(null)
   const [eventDetails, setEventDetails] = useState({})
   const [detailsLoadingId, setDetailsLoadingId] = useState(null)
 
   useEffect(() => {
+    if (initialData !== undefined) {
+      if (initialData) {
+        setData(initialData)
+        const fromBackend = (initialData.eonet || []).filter((e) => !PRESCRIBED_FIRE.test(e.title || ''))
+        setEonet(fromBackend)
+        setUpdatedAt(initialData.updatedAt || new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }))
+        setLoading(false)
+        setError(null)
+      } else {
+        setLoading(true)
+      }
+      return
+    }
+
     let cancelled = false
     Promise.all([
       axios.get(`${API_BASE}/api/space`, { timeout: 12000 }).then((r) => r.data).catch(() => null),
@@ -109,7 +125,7 @@ export default function SpaceWidget() {
     }).catch((err) => { if (!cancelled) setError(err.message || 'Failed to load') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [])
+  }, [initialData])
 
   const fetchEventDetail = useCallback(async (eventId) => {
     if (eventDetails[eventId]) return

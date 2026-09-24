@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import WidgetCard from './WidgetCard'
+import { getApiBase } from '../../lib/homeBootstrap'
 
-const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
-  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
-  : 'http://localhost:3001'
+const API_BASE = getApiBase()
 
-export default function StockWidget({ onOpenSettings }) {
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
+export default function StockWidget({ onOpenSettings, initialData }) {
+  const [data, setData] = useState(() => initialData || null)
+  const [loading, setLoading] = useState(() => initialData === undefined ? true : !initialData?.current)
   const [error, setError] = useState(null)
-  const [updatedAt, setUpdatedAt] = useState(null)
+  const [updatedAt, setUpdatedAt] = useState(() =>
+    initialData?.updatedAt || (initialData?.current ? new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }) : null)
+  )
 
   const fetchStocks = (refresh = false) => {
     setLoading(true)
@@ -28,8 +29,23 @@ export default function StockWidget({ onOpenSettings }) {
   }
 
   useEffect(() => {
+    if (initialData !== undefined) {
+      if (initialData?.current) {
+        setData(initialData)
+        setLoading(false)
+        setError(null)
+        setUpdatedAt(initialData.updatedAt || new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }))
+      } else if (initialData === null) {
+        // still waiting for bootstrap
+        setLoading(true)
+      } else {
+        setLoading(false)
+      }
+      return
+    }
     fetchStocks(false)
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialData])
 
   const tickers = (data?.current && data.current.length > 0)
     ? data.current.map((t, i) => {

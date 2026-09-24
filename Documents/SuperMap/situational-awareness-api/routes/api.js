@@ -37,12 +37,18 @@ const earthquakesWidgetCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 60 }
 const spaceCache = new NodeCache({ stdTTL: 60 * 60, checkperiod: 300 })
 const conflictMetricsCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 })
 const gasPricesCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 60 })
+const homeBootstrapCache = new NodeCache({ stdTTL: 60, checkperiod: 30 })
 const MAPBOX_TOKEN = process.env.MAPBOX_TOKEN || ''
 const GEOAPIFY_KEY = process.env.GEOAPIFY_KEY || ''
+const { HOME_CACHE_CONTROL, getHomePayload } = require('../services/homeBootstrap')
 
 function feedsDebugEnabled() {
   const v = String(process.env.DEBUG_FEEDS || '').trim().toLowerCase()
   return v === '1' || v === 'true' || v === 'yes'
+}
+
+function setHomeCacheHeaders(res) {
+  res.set('Cache-Control', HOME_CACHE_CONTROL)
 }
 
 
@@ -119,6 +125,7 @@ function filterByRadius(features, centerLat, centerLon, radiusKm) {
 
 router.get('/news', async (req, res) => {
   const t0 = Date.now()
+  setHomeCacheHeaders(res)
   try {
     const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
     const cached = !forceRefresh ? newsService.getNewsCached() : null
@@ -136,6 +143,26 @@ router.get('/news', async (req, res) => {
   } catch (err) {
     console.error('[API /news]', err.message)
     res.status(500).json({ error: 'Failed to fetch news' })
+  }
+})
+
+/** Single homescreen bootstrap: all home widgets in one response. Cache 60s. */
+router.get('/home', async (req, res) => {
+  setHomeCacheHeaders(res)
+  const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
+  if (!forceRefresh) {
+    const cached = homeBootstrapCache.get('home')
+    if (cached) return res.json({ ...cached, _cached: true })
+  }
+  try {
+    const payload = await getHomePayload()
+    homeBootstrapCache.set('home', payload)
+    return res.json(payload)
+  } catch (err) {
+    console.error('[API /home]', err.message)
+    const cached = homeBootstrapCache.get('home')
+    if (cached) return res.json({ ...cached, _cached: true, _staleOnError: true })
+    res.status(500).json({ error: 'Failed to build home payload' })
   }
 })
 
@@ -339,6 +366,7 @@ function writePersistedThreatSummary(payload) {
 
 /** AI threat summary. Cached 60 min; persisted to file so we avoid extra requests. Use ?refresh=1 to regenerate. */
 router.get('/threat-summary', async (req, res) => {
+  setHomeCacheHeaders(res)
   const cacheKey = 'threat-summary'
   const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
   if (!forceRefresh) {
@@ -381,6 +409,7 @@ router.get('/threat-summary', async (req, res) => {
 /** DEFCON level from defconlevel.com (OSINT estimate). Cached 30 min. */
 const DEFCONLEVEL_URL = 'https://www.defconlevel.com/current-level'
 router.get('/defcon', async (_req, res) => {
+  setHomeCacheHeaders(res)
   const cacheKey = 'defcon'
   const cached = defconCache.get(cacheKey)
   if (cached) return res.json({ ...cached, _cached: true })
@@ -434,6 +463,7 @@ const OSINT_X_MAX_AGE_MS = 12 * 60 * 60 * 1000 // 12 hours
 /** OSINT X (Twitter RSS) feed: GET /api/osint-x?limit=100. Only returns posts from the last 12 hours. */
 router.get('/osint-x', (req, res) => {
   const t0 = Date.now()
+  setHomeCacheHeaders(res)
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 100, 200)
     const rows = getEvents(limit, null, null, null, null, ['x'])
@@ -558,6 +588,7 @@ router.get('/earthquakes', async (req, res) => {
 
 /** Widget: recent earthquakes (USGS 2.5+ week). Cache 5 min. */
 router.get('/earthquakes/widget', async (req, res) => {
+  setHomeCacheHeaders(res)
   const cacheKey = 'earthquakes-widget'
   const cached = earthquakesWidgetCache.get(cacheKey)
   if (cached) return res.json({ ...cached, _cached: true })
@@ -1199,6 +1230,7 @@ function formatChartTimestamps(unixtimes, range) {
 
 /** Homepage widgets: stocks. Uses Finnhub (candles), else Alpha Vantage (quotes), else demo. Cache 2 min (demo) / 5 min (live). */
 router.get('/stocks', async (req, res) => {
+  setHomeCacheHeaders(res)
   let symbols = userConfig.getStockTickers()
   const querySymbols = (req.query.symbols || '').trim()
   if (querySymbols) {
@@ -1535,6 +1567,7 @@ router.get('/netblocks', async (req, res) => {
 
 /** NASA space: EONET (global hazards), NASA News, optional APOD. Cache 1 hour. */
 router.get('/space', async (req, res) => {
+  setHomeCacheHeaders(res)
   const cacheKey = 'space'
   const cached = spaceCache.get(cacheKey)
   if (cached) return res.json({ ...cached, _cached: true })
@@ -1676,6 +1709,7 @@ const US_GAS_STATES = [
 ]
 
 router.get('/gas-prices/states', (_req, res) => {
+  setHomeCacheHeaders(res)
   res.json(US_GAS_STATES)
 })
 
@@ -1748,6 +1782,7 @@ async function fetchGasBuddyPrice(searchTerm) {
 
 /** US gas prices: EIA when key set; else GasBuddy (no key). Real data only. */
 router.get('/gas-prices', async (req, res) => {
+  setHomeCacheHeaders(res)
   const stateCode = (req.query.state || '').trim().toUpperCase().slice(0, 2)
   const zip = (req.query.zip || '').trim().slice(0, 10)
   const cacheKey = stateCode ? `gas-prices:${stateCode}` : zip ? `gas-prices:zip:${zip}` : 'gas-prices'

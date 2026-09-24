@@ -1,7 +1,14 @@
-import { useState, useEffect, lazy, Suspense } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import axios from 'axios'
 import './HomeScreen.css'
 import './widgets/widgets.css'
+import {
+  getApiBase,
+  readHomeSnapshot,
+  writeHomeSnapshot,
+  fetchHomeBootstrap,
+  osintXToImages,
+} from '../lib/homeBootstrap'
 
 const StockWidget = lazy(() => import('./widgets/StockWidget'))
 const WorldClock = lazy(() => import('./widgets/WorldClock'))
@@ -9,9 +16,7 @@ const SpaceWidget = lazy(() => import('./widgets/SpaceWidget'))
 const HeadlinesWidget = lazy(() => import('./widgets/HeadlinesWidget'))
 const EarthquakesWidget = lazy(() => import('./widgets/EarthquakesWidget'))
 
-const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
-  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
-  : 'http://localhost:3001'
+const API_BASE = getApiBase()
 
 const DOOMSDAY_CLOCK_SECONDS = 85
 const DOOMSDAY_CLOCK_URL = 'https://thebulletin.org/doomsday-clock/#nav_menu'
@@ -35,18 +40,89 @@ function formatDate() {
   return `${month} ${day} | ${year}`
 }
 
-export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footerTabs, isMobileLayout, onShowLocationOnMap }) {
-  const [nitterImages, setNitterImages] = useState([])
-  const [threatSummary, setThreatSummary] = useState(null)
-  const [threatSummaryLoading, setThreatSummaryLoading] = useState(true)
+function applyHomePayload(data, setters) {
+  if (!data) return
+  const {
+    setThreatSummary,
+    setThreatSummaryError,
+    setThreatSummaryLoading,
+    setDefcon,
+    setNitterImages,
+    setGasPricesStates,
+    setGasPrices,
+    setGasPricesError,
+    setGasPricesLoading,
+    setWidgetBootstrap,
+  } = setters
+  if (data.threatSummary) {
+    setThreatSummary(data.threatSummary)
+    setThreatSummaryError(null)
+    setThreatSummaryLoading(false)
+  }
+  if (data.defcon && (data.defcon.level != null || data.defcon.label)) setDefcon(data.defcon)
+  setNitterImages(osintXToImages(data.osintX))
+  if (Array.isArray(data.gasStates)) setGasPricesStates(data.gasStates)
+  if (data.gasPrices) {
+    setGasPrices(data.gasPrices)
+    setGasPricesError(null)
+    setGasPricesLoading(false)
+  }
+  setWidgetBootstrap({
+    news: data.news || null,
+    stocks: data.stocks || null,
+    earthquakes: data.earthquakes || null,
+    space: data.space || null,
+  })
+}
+
+export default function HomeScreen({
+  onNavigate,
+  footerMode,
+  onFooterNav,
+  footerTabs,
+  isMobileLayout,
+  onShowLocationOnMap,
+  onHomeBootstrap,
+}) {
+  const initialSnap = useRef(typeof window !== 'undefined' ? readHomeSnapshot() : null)
+  const snap = initialSnap.current
+
+  const [nitterImages, setNitterImages] = useState(() => osintXToImages(snap?.osintX))
+  const [threatSummary, setThreatSummary] = useState(() => snap?.threatSummary || null)
+  const [threatSummaryLoading, setThreatSummaryLoading] = useState(() => !snap?.threatSummary)
   const [threatSummaryError, setThreatSummaryError] = useState(null)
-  const [defcon, setDefcon] = useState(null)
+  const [defcon, setDefcon] = useState(() =>
+    snap?.defcon && (snap.defcon.level != null || snap.defcon.label) ? snap.defcon : null
+  )
   const [osintPhotoModal, setOsintPhotoModal] = useState(null)
-  const [gasPrices, setGasPrices] = useState(null)
+  const [gasPrices, setGasPrices] = useState(() => snap?.gasPrices || null)
   const [gasPricesLoading, setGasPricesLoading] = useState(false)
   const [gasPricesError, setGasPricesError] = useState(null)
-  const [gasPricesStates, setGasPricesStates] = useState([])
+  const [gasPricesStates, setGasPricesStates] = useState(() =>
+    Array.isArray(snap?.gasStates) ? snap.gasStates : []
+  )
   const [selectedGasState, setSelectedGasState] = useState('')
+  const [widgetBootstrap, setWidgetBootstrap] = useState(() => ({
+    news: snap?.news || null,
+    stocks: snap?.stocks || null,
+    earthquakes: snap?.earthquakes || null,
+    space: snap?.space || null,
+  }))
+  const skipInitialGasFetch = useRef(true) // national gas comes from /api/home; only refetch on state pick
+  const notifiedBootstrap = useRef(false)
+
+  const payloadSetters = {
+    setThreatSummary,
+    setThreatSummaryError,
+    setThreatSummaryLoading,
+    setDefcon,
+    setNitterImages,
+    setGasPricesStates,
+    setGasPrices,
+    setGasPricesError,
+    setGasPricesLoading,
+    setWidgetBootstrap,
+  }
 
   const fetchThreatSummary = (refresh = false) => {
     if (!API_BASE) return
@@ -62,53 +138,48 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
       .then((res) => {
         setThreatSummary(res.data || null)
         setThreatSummaryError(null)
+        if (res.data) {
+          const prev = readHomeSnapshot() || {}
+          writeHomeSnapshot({ ...prev, threatSummary: res.data })
+        }
       })
       .catch((err) => {
         setThreatSummaryError(err.message || 'Failed to load threat summary')
-        setThreatSummary(null)
+        if (!refresh) setThreatSummary(null)
       })
       .finally(() => setThreatSummaryLoading(false))
   }
 
+  // Single /api/home bootstrap (hydrate from snapshot already done via useState init)
   useEffect(() => {
-    if (!API_BASE) { setThreatSummaryLoading(false); return }
-    fetchThreatSummary(false)
+    if (!API_BASE) {
+      setThreatSummaryLoading(false)
+      return
+    }
+    if (snap && !notifiedBootstrap.current) {
+      notifiedBootstrap.current = true
+      onHomeBootstrap?.(snap)
+    }
+    let cancelled = false
+    fetchHomeBootstrap({ timeoutMs: 90000 }).then(({ data }) => {
+      if (cancelled || !data) {
+        if (!cancelled && !snap?.threatSummary) setThreatSummaryLoading(false)
+        return
+      }
+      applyHomePayload(data, payloadSetters)
+      onHomeBootstrap?.(data)
+    })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only bootstrap
   }, [])
 
+  // Gas prices: skip first national fetch when bootstrap already supplied it; refetch on state change
   useEffect(() => {
     if (!API_BASE) return
-    axios.get(`${API_BASE}/api/defcon`, { timeout: 12000 })
-      .then((res) => { if (res.data && (res.data.level != null || res.data.label)) setDefcon(res.data) })
-      .catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    if (!API_BASE) return
-    axios
-      .get(`${API_BASE}/api/osint-x`, { params: { limit: 80 }, timeout: 12000 })
-      .then((res) => {
-        const posts = Array.isArray(res.data) ? res.data : []
-        const caption = (p) => (p.content || p.title || '').trim().slice(0, 400)
-        const items = posts.flatMap((p) => {
-          const postUrl = p.url && typeof p.url === 'string' && p.url.startsWith('http') ? p.url : null
-          return (Array.isArray(p.images) ? p.images : [])
-            .filter((src) => typeof src === 'string' && src.startsWith('http'))
-            .map((src) => ({ src, postUrl: postUrl || src, caption: caption(p) }))
-        })
-        setNitterImages(items.slice(0, 24))
-      })
-      .catch(() => setNitterImages([]))
-  }, [])
-
-  useEffect(() => {
-    if (!API_BASE) return
-    axios.get(`${API_BASE}/api/gas-prices/states`, { timeout: 5000 })
-      .then((res) => setGasPricesStates(Array.isArray(res.data) ? res.data : []))
-      .catch(() => setGasPricesStates([]))
-  }, [])
-
-  useEffect(() => {
-    if (!API_BASE) return
+    if (!selectedGasState && skipInitialGasFetch.current) {
+      skipInitialGasFetch.current = false
+      return
+    }
     setGasPricesLoading(true)
     const params = selectedGasState ? { state: selectedGasState } : {}
     axios.get(`${API_BASE}/api/gas-prices`, { params, timeout: 25000 })
@@ -385,11 +456,11 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
           </div>
           <aside className="home-screen-sidebar">
             <Suspense fallback={<div className="home-screen-sidebar-block card-y2k widget-card"><p className="widget-card-loading">Loading widgets…</p></div>}>
-              <div id="stocks"><StockWidget onOpenSettings={() => onNavigate?.('settings')} /></div>
-              <div id="headlines"><HeadlinesWidget /></div>
-              <div id="earthquakes"><EarthquakesWidget onShowOnMap={onShowLocationOnMap} /></div>
+              <div id="stocks"><StockWidget onOpenSettings={() => onNavigate?.('settings')} initialData={widgetBootstrap.stocks} /></div>
+              <div id="headlines"><HeadlinesWidget initialNews={widgetBootstrap.news} /></div>
+              <div id="earthquakes"><EarthquakesWidget onShowOnMap={onShowLocationOnMap} initialData={widgetBootstrap.earthquakes} /></div>
               <div id="world-clock"><WorldClock /></div>
-              <div id="space"><SpaceWidget /></div>
+              <div id="space"><SpaceWidget initialData={widgetBootstrap.space} /></div>
             </Suspense>
             {osintPhotoModal && (
               <div className="home-screen-photo-dialog-backdrop" role="dialog" aria-modal="true" aria-label="OSINT photo" onClick={() => setOsintPhotoModal(null)}>

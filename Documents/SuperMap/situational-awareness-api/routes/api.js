@@ -10,7 +10,7 @@ const hazardsService = require('../services/hazards')
 const infrastructureService = require('../services/infrastructure')
 const { searchAll } = require('../services/searchIndex')
 const { getEventsForSearch, getEvents, getEventTagNames, getEventsWithAnyTagInTimeRange } = require('../database')
-const { PRIORITY_ORDER } = require('../services/osintXFeedService')
+const { PRIORITY_ORDER, ensureOsintXFresh } = require('../services/osintXFeedService')
 const { correlate } = require('../services/correlation')
 const rapidApi = require('../services/rapidApi')
 const userConfig = require('../config/userConfig')
@@ -443,14 +443,15 @@ router.get('/defcon', async (_req, res) => {
   }
 })
 
-/** OSINT X configured feeds and mirrors (for verification). GET /api/osint-x/feeds */
+/** OSINT X feeds list (verification). GET /api/osint-x/feeds */
 router.get('/osint-x/feeds', (req, res) => {
   try {
     const feeds = userConfig.getOsintXFeeds()
-    const mirrors = userConfig.getNitterMirrors()
     res.json({
       count: feeds.length,
-      mirrors,
+      provider: 'fxtwitter',
+      providerUrl: 'https://api.fxtwitter.com/2/profile/:handle/statuses',
+      mirrors: [], // Nitter removed — public instances shut down
       feeds: feeds.map((f) => ({ handle: f.handle, name: f.name, priority: f.priority })),
     })
   } catch (err) {
@@ -459,47 +460,83 @@ router.get('/osint-x/feeds', (req, res) => {
   }
 })
 
-const OSINT_X_MAX_AGE_MS = 12 * 60 * 60 * 1000 // 12 hours
-
-/** OSINT X (Twitter RSS) feed: GET /api/osint-x?limit=100. Only returns posts from the last 12 hours. */
-router.get('/osint-x', (req, res) => {
-  const t0 = Date.now()
+/** Homepage gallery images (FxTwitter + Reddit fallback). GET /api/home-images */
+router.get('/home-images', async (req, res) => {
   setHomeCacheHeaders(res)
   try {
-    const limit = Math.min(parseInt(req.query.limit, 10) || 100, 200)
-    const rows = getEvents(limit, null, null, null, null, ['x'])
-    const cutoff = Date.now() - OSINT_X_MAX_AGE_MS
-    const posts = rows
-      .filter((r) => (r.timestamp != null ? Number(r.timestamp) : 0) >= cutoff)
-      .map((r) => {
-        let raw = {}
-        try {
-          raw = r.raw_data ? JSON.parse(r.raw_data) : {}
-        } catch (_) {}
-        const tags = getEventTagNames(r.id)
-        const priority = raw.priority || 'medium'
-        return {
-          id: r.id,
-          source: 'x',
-          account: raw.account || 'x',
-          title: r.title,
-          content: r.description,
-          timestamp: r.timestamp,
-          tags,
-          priority,
-          url: raw.link || raw.url,
-          images: Array.isArray(raw.images) ? raw.images : [],
-          videos: Array.isArray(raw.videos) ? raw.videos : [],
-        }
-      })
-    posts.sort((a, b) => {
+    const { buildHomeImages } = require('../services/homeBootstrap')
+    const images = await buildHomeImages({ max: Math.min(parseInt(req.query.limit, 10) || 24, 48) })
+    res.json({ images, count: images.length, updatedAt: new Date().toISOString() })
+  } catch (err) {
+    console.error('[API /home-images]', err.message)
+    res.status(500).json({ images: [], count: 0, error: err.message })
+  }
+})
+
+const OSINT_X_MAX_AGE_MS = 48 * 60 * 60 * 1000 // 48 hours (Nitter lag + sparse accounts)
+
+function mapOsintXRows(rows, cutoff) {
+  return rows
+    .filter((r) => (r.timestamp != null ? Number(r.timestamp) : 0) >= cutoff)
+    .map((r) => {
+      let raw = {}
+      try {
+        raw = r.raw_data ? JSON.parse(r.raw_data) : {}
+      } catch (_) {}
+      const tags = getEventTagNames(r.id)
+      const priority = raw.priority || 'medium'
+      return {
+        id: r.id,
+        source: 'x',
+        account: raw.account || 'x',
+        title: r.title,
+        content: r.description,
+        timestamp: r.timestamp,
+        tags,
+        priority,
+        url: raw.link || raw.url,
+        images: Array.isArray(raw.images) ? raw.images : [],
+        videos: Array.isArray(raw.videos) ? raw.videos : [],
+      }
+    })
+    .sort((a, b) => {
       const pa = PRIORITY_ORDER[a.priority] ?? 2
       const pb = PRIORITY_ORDER[b.priority] ?? 2
       if (pa !== pb) return pa - pb
       return (b.timestamp || 0) - (a.timestamp || 0)
     })
+}
+
+/** OSINT X (Twitter RSS / FxTwitter): GET /api/osint-x?limit=100. Last 48h. Live-refresh if empty. */
+router.get('/osint-x', async (req, res) => {
+  const t0 = Date.now()
+  setHomeCacheHeaders(res)
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 100, 200)
+    const force = String(req.query.refresh || '') === '1'
+    const cutoff = Date.now() - OSINT_X_MAX_AGE_MS
+    let rows = getEvents(limit, null, null, null, null, ['x'])
+    let posts = mapOsintXRows(rows, cutoff)
+    const withImages = posts.filter((p) => Array.isArray(p.images) && p.images.length > 0)
+
+    // Cold start / dead mirrors left the DB empty — pull live once (cooldown in service).
+    if (force || posts.length === 0 || withImages.length === 0) {
+      try {
+        await ensureOsintXFresh({ limitFeeds: force ? 25 : 12 })
+        rows = getEvents(limit, null, null, null, null, ['x'])
+        posts = mapOsintXRows(rows, cutoff)
+      } catch (err) {
+        console.warn('[API /osint-x] live refresh:', err.message)
+      }
+    }
+
     if (feedsDebugEnabled()) {
-      console.log('[FEEDS API /osint-x] OUTPUT', { limit, posts: posts.length, ms: Date.now() - t0 })
+      console.log('[FEEDS API /osint-x] OUTPUT', {
+        limit,
+        posts: posts.length,
+        withImages: posts.filter((p) => p.images?.length).length,
+        ms: Date.now() - t0,
+      })
     }
     res.json(posts)
   } catch (err) {

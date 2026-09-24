@@ -80,7 +80,12 @@ function applyHomePayload(data, setters) {
     setThreatSummaryLoading(false)
   }
   if (data.defcon && (data.defcon.level != null || data.defcon.label)) setDefcon(data.defcon)
-  setNitterImages(osintXToImages(data.osintX))
+  // Prefer dedicated homeImages (FxTwitter); fall back to osint-x post images
+  const fromHome = Array.isArray(data.homeImages) ? data.homeImages : []
+  const fromOsint = osintXToImages(data.osintX)
+  if (fromHome.length || fromOsint.length) {
+    setNitterImages(fromHome.length ? fromHome : fromOsint)
+  }
   if (Array.isArray(data.gasStates)) setGasPricesStates(data.gasStates)
   if (data.gasPrices) {
     const gas = normalizeGasPrices(data.gasPrices)
@@ -108,7 +113,10 @@ export default function HomeScreen({
   const initialSnap = useRef(typeof window !== 'undefined' ? readHomeSnapshot() : null)
   const snap = initialSnap.current
 
-  const [nitterImages, setNitterImages] = useState(() => osintXToImages(snap?.osintX))
+  const [nitterImages, setNitterImages] = useState(() => {
+    const fromHome = Array.isArray(snap?.homeImages) ? snap.homeImages : []
+    return fromHome.length ? fromHome : osintXToImages(snap?.osintX)
+  })
   const [threatSummary, setThreatSummary] = useState(() => snap?.threatSummary || null)
   const [threatSummaryLoading, setThreatSummaryLoading] = useState(() => !snap?.threatSummary)
   const [threatSummaryError, setThreatSummaryError] = useState(null)
@@ -498,7 +506,9 @@ export default function HomeScreen({
                   ))}
                 </div>
               ) : (
-                <p className="home-screen-hint">Connect to the API to show photos from the OSINT X feed.</p>
+                <p className="home-screen-hint">
+                  No live OSINT images right now. Photos load from public FxTwitter timelines (no API key) — try refresh in a minute.
+                </p>
               )}
             </section>
           </div>

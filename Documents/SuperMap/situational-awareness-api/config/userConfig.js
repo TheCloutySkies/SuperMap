@@ -67,21 +67,12 @@ function setConfig(updates) {
   return getConfig()
 }
 
-/** Nitter mirror list: try in order; if one fails, use next. Set NITTER_MIRRORS in .env (comma-separated) to override. */
+/**
+ * Optional mirror override (legacy). Ingestion uses FxTwitter, not Nitter.
+ * NITTER_MIRRORS / NITTER_BASE are ignored for fetch — kept so old .env files don't break.
+ */
 function getNitterMirrors() {
-  const env = process.env.NITTER_MIRRORS
-  if (env && typeof env === 'string') {
-    return env.split(',').map((b) => b.trim().replace(/\/$/, '')).filter(Boolean)
-  }
-  const single = process.env.NITTER_BASE
-  if (single) {
-    return [single.replace(/\/$/, '')]
-  }
-  return [
-    'https://nitter.net',
-    'https://nitter.poast.org',
-    'https://nitter.privacydev.net',
-  ]
+  return []
 }
 
 /** Normalize X handle for Nitter RSS URL: trim, strip @, allow only [a-zA-Z0-9_]. */

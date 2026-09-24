@@ -1,137 +1,118 @@
 /**
- * OSINT X feed ingestion: fetch from Nitter-style RSS mirrors, normalize, tag, ingest.
- * Fault-tolerant: retry once per feed, skip on failure, continue with others.
+ * OSINT X feed ingestion — no Nitter dependency.
+ *
+ * Primary source: FxTwitter / FixTweet public profile API (no API key):
+ *   GET https://api.fxtwitter.com/2/profile/:handle/statuses?count=N
+ *
+ * Fault-tolerant: per-handle failures are skipped; others continue.
  */
 
-const Parser = require('rss-parser')
-const { getOsintXFeeds, getNitterMirrors } = require('../config/userConfig')
+const axios = require('axios')
+const { getOsintXFeeds } = require('../config/userConfig')
 const { normalizeToEvent, ingestEvent } = require('./ingest')
 const { tagOsintPost } = require('./osintTagger')
 const { geotagArticle } = require('./geotagger')
 
-const parser = new Parser({
-  timeout: 18000,
-  headers: { 'User-Agent': 'SuperMap-OSINT-X/1.0 (https://github.com/supermap)' },
-})
-
 const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 }
 
-/** Extract image and video URLs from RSS item (HTML content and enclosures). */
-function extractMediaFromItem(item) {
-  const images = []
-  const videos = []
-  const seen = new Set()
-  const addImage = (url) => {
-    if (!url || seen.has(url)) return
-    const u = url.trim()
-    if (/^https?:\/\//i.test(u) && /\.(jpe?g|png|gif|webp)(\?|$)/i.test(u)) {
-      seen.add(u)
-      images.push(u)
-    }
-  }
-  const addVideo = (url) => {
-    if (!url || seen.has(url)) return
-    const u = url.trim()
-    if (!/^https?:\/\//i.test(u)) return
-    if (/\.(mp4|webm|ogg)(\?|$)/i.test(u) || /youtube\.com|youtu\.be|vimeo\.com|twimg\.com.*video/i.test(u)) {
-      seen.add(u)
-      videos.push(u)
-    }
-  }
-  const html = (item.content || item['content:encoded'] || '').trim()
-  if (html) {
-    const imgRe = /<img[^>]+src=["']([^"']+)["']/gi
-    let m
-    while ((m = imgRe.exec(html)) !== null) addImage(m[1])
-    const videoSrcRe = /<video[^>]+src=["']([^"']+)["']|<source[^>]+src=["']([^"']+)["']/gi
-    while ((m = videoSrcRe.exec(html)) !== null) addVideo(m[1] || m[2])
-    const aHrefRe = /<a[^>]+href=["']([^"']+)["']/gi
-    while ((m = aHrefRe.exec(html)) !== null) {
-      const href = (m[1] || '').trim()
-      if (/\.(jpe?g|png|gif|webp)(\?|$)/i.test(href)) addImage(href)
-      else addVideo(href)
-    }
-  }
-  const enc = item.enclosure || item.enclosures
-  if (enc) {
-    const list = Array.isArray(enc) ? enc : [enc]
-    for (const e of list) {
-      const url = e.url || e.$.url
-      const type = (e.type || (e.$ && e.$.type) || '').toLowerCase()
-      if (type.startsWith('image/')) addImage(url)
-      else if (type.startsWith('video/') || /video/.test(type)) addVideo(url)
-      else if (url && /\.(jpe?g|png|gif|webp)(\?|$)/i.test(url)) addImage(url)
-      else if (url && /\.(mp4|webm)(\?|$)/i.test(url)) addVideo(url)
-    }
-  }
-  return { images, videos }
-}
+const FXTWITTER_PROFILE = 'https://api.fxtwitter.com/2/profile'
+const BROWSER_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
 
-/** Filter out reposts/RTs (RT @user, r to @user, etc.) and keep only original posts with headline or substantive content */
-function isOriginalWithHeadline(item) {
-  const title = (item.title || '').trim()
-  const rawContent = (item.contentSnippet || item.content || '').trim()
-  const content = rawContent.replace(/<[^>]+>/g, ' ').trim().slice(0, 2000)
-  const combined = `${title} ${content}`
-  const combinedLower = combined.toLowerCase()
-  if (/^\s*r\s*t\s*@/i.test(combined) || /^\s*r\s+to\s+@/i.test(combined)) return false
-  if (/\brt\s+@\w+/i.test(combinedLower)) return false
-  if (/\br\s+to\s+@\w+/i.test(combinedLower)) return false
-  if (/\b(?:repost|retweet|via\s+@)\b/i.test(combinedLower) && combined.length < 80) return false
-  if (title.length >= 12) return true
-  if (content.length >= 40 && !/^https?:\/\//i.test(content.trim())) return true
+/** Prevent stampeding live refreshes when the DB is empty. */
+let lastLiveRefreshAt = 0
+let liveRefreshInFlight = null
+const LIVE_REFRESH_COOLDOWN_MS = 90 * 1000
+
+function isLikelyImageUrl(url) {
+  const u = String(url || '').trim()
+  if (!/^https?:\/\//i.test(u)) return false
+  if (/\.(jpe?g|png|gif|webp)(\?|$)/i.test(u)) return true
+  if (/pbs\.twimg\.com\/(media|card_img|amplify_video_thumb|ext_tw_video_thumb|tweet_video_thumb)\//i.test(u)) return true
+  if (/[?&]format=(jpe?g|png|webp|gif)\b/i.test(u)) return true
   return false
 }
 
-/** Try one mirror URL; returns { items } on success or throws. */
-async function fetchFromUrl(rssUrl) {
-  const parsed = await parser.parseURL(rssUrl)
-  const items = parsed.items || []
-  return items
+/** Filter out pure reposts; keep original posts and media posts. */
+function isOriginalWithHeadline(item) {
+  const title = (item.title || '').trim()
+  const content = (item.content || '').trim()
+  const combined = `${title} ${content}`.toLowerCase()
+  if (/^\s*rt\s+@/.test(combined) || /\brt\s+@\w+/.test(combined)) return false
+  if (/\b(?:repost|retweet)\b/.test(combined) && combined.length < 80) return false
+  if (title.length >= 8 || content.length >= 24) return true
+  if ((item.images && item.images.length) || (item.videos && item.videos.length)) return true
+  return false
 }
 
-/** Fetch one feed, trying each Nitter mirror in order. Returns items or []. */
-async function fetchOneFeed(feed, mirrors, retryMirror = true) {
+/** FxTwitter free profile timeline (JSON) — no API key, not Nitter. */
+async function fetchFromFxTwitter(feed) {
   const handle = feed.handle
-  for (let i = 0; i < mirrors.length; i++) {
-    const base = mirrors[i].replace(/\/$/, '')
-    const rssUrl = `${base}/${encodeURIComponent(handle)}/rss`
-    try {
-      const items = await fetchFromUrl(rssUrl)
-      const mapped = items
-        .map((item) => {
-          const media = extractMediaFromItem(item)
-          return {
-            source: 'x',
-            category: 'osint',
-            account: feed.handle,
-            name: feed.name,
-            title: item.title || '',
-            content: item.contentSnippet || (item.content || '').replace(/<[^>]+>/g, ' ').slice(0, 2000),
-            url: item.link || item.guid || '',
-            pubDate: item.pubDate || '',
-            priority: feed.priority,
-            images: media.images,
-            videos: media.videos,
-          }
-        })
-        .filter(isOriginalWithHeadline)
-      if (i > 0) {
-        console.log('[osint-x]', handle, 'succeeded via backup mirror', base)
-      }
-      return mapped
-    } catch (err) {
-      if (i < mirrors.length - 1) {
-        console.warn('[osint-x]', handle, 'mirror failed:', base, err.message)
-      } else if (retryMirror) {
-        console.warn('[osint-x] Retry once:', handle)
-        return fetchOneFeed(feed, mirrors, false)
-      } else {
-        console.error('[osint-x] Feed failed (all mirrors):', handle, err.message)
-      }
-    }
+  const url = `${FXTWITTER_PROFILE}/${encodeURIComponent(handle)}/statuses?count=20`
+  const res = await axios.get(url, {
+    timeout: 18000,
+    headers: {
+      'User-Agent': BROWSER_UA,
+      Accept: 'application/json',
+    },
+    validateStatus: (s) => s >= 200 && s < 500,
+  })
+  if (res.status !== 200 || !res.data || res.data.code !== 200) {
+    throw new Error(`FxTwitter HTTP ${res.status}`)
   }
-  return []
+  const results = Array.isArray(res.data.results) ? res.data.results : []
+  return results
+    .filter((t) => t && t.type === 'status')
+    .map((t) => {
+      const photos = Array.isArray(t.media?.photos) ? t.media.photos : []
+      const allMedia = Array.isArray(t.media?.all) ? t.media.all : photos
+      const images = allMedia
+        .filter((m) => m && (m.type === 'photo' || isLikelyImageUrl(m.url)))
+        .map((m) => m.url)
+        .filter(Boolean)
+      const videos = (Array.isArray(t.media?.videos) ? t.media.videos : [])
+        .map((m) => m.url || m.thumbnail_url)
+        .filter(Boolean)
+      // Video posts often expose a thumbnail usable in the gallery
+      const thumbs = (Array.isArray(t.media?.videos) ? t.media.videos : [])
+        .map((m) => m.thumbnail_url)
+        .filter((u) => isLikelyImageUrl(u))
+      for (const th of thumbs) {
+        if (!images.includes(th)) images.push(th)
+      }
+      const text = (t.text || t.raw_text?.text || '').trim()
+      let created = t.created_at || ''
+      if (!created && t.created_timestamp) {
+        const ts = Number(t.created_timestamp)
+        created = new Date(ts < 1e12 ? ts * 1000 : ts).toISOString()
+      }
+      return {
+        source: 'x',
+        category: 'osint',
+        account: feed.handle,
+        name: feed.name,
+        title: text.slice(0, 140),
+        content: text.slice(0, 2000),
+        url: t.url || `https://x.com/${handle}/status/${t.id}`,
+        pubDate: created,
+        priority: feed.priority,
+        images,
+        videos,
+        provider: 'fxtwitter',
+      }
+    })
+    .filter(isOriginalWithHeadline)
+}
+
+async function fetchOneFeed(feed) {
+  try {
+    const items = await fetchFromFxTwitter(feed)
+    if (items.length) console.log('[osint-x]', feed.handle, 'FxTwitter ok', `(${items.length})`)
+    return items
+  } catch (err) {
+    console.error('[osint-x] FxTwitter failed:', feed.handle, err.message)
+    return []
+  }
 }
 
 function normalizeToOsintEvent(item) {
@@ -160,6 +141,7 @@ function normalizeToOsintEvent(item) {
     videos: item.videos || [],
     country: item.country || null,
     confidence: item.confidence || null,
+    provider: item.provider || 'fxtwitter',
   })
   if (item.coordinates?.length >= 2) {
     event.lon = item.coordinates[0]
@@ -168,20 +150,24 @@ function normalizeToOsintEvent(item) {
   return event
 }
 
-async function fetchOsintXFeeds() {
-  const mirrors = getNitterMirrors()
-  const osintXFeeds = getOsintXFeeds()
+async function fetchOsintXFeeds({ limitFeeds = 0 } = {}) {
+  let osintXFeeds = getOsintXFeeds()
+  if (limitFeeds > 0) osintXFeeds = osintXFeeds.slice(0, limitFeeds)
   if (osintXFeeds.length === 0) {
     console.warn('[osint-x] No feeds configured. Add handles in Settings or user-config.json.')
     return []
   }
-  if (mirrors.length === 0) {
-    console.warn('[osint-x] No Nitter mirrors. Set NITTER_MIRRORS or NITTER_BASE in .env')
-    return []
+
+  const CONCURRENCY = 4
+  const settled = []
+  for (let i = 0; i < osintXFeeds.length; i += CONCURRENCY) {
+    const chunk = osintXFeeds.slice(i, i + CONCURRENCY)
+    const part = await Promise.allSettled(
+      chunk.map((feed) => fetchOneFeed(feed).then((items) => ({ feed, items }))),
+    )
+    settled.push(...part)
   }
-  const settled = await Promise.allSettled(
-    osintXFeeds.map((feed) => fetchOneFeed(feed, mirrors).then((items) => ({ feed, items })))
-  )
+
   const results = []
   const byHandle = {}
   for (let i = 0; i < settled.length; i++) {
@@ -196,16 +182,18 @@ async function fetchOsintXFeeds() {
     const { items } = s.value
     byHandle[handle] = { ok: true, count: items.length }
     for (const item of items) {
-      const tagged = await geotagArticle({
-        title: item.title,
-        content: item.content,
-        contentSnippet: item.content,
-      })
-      if (tagged.coordinates) {
-        item.coordinates = tagged.coordinates
-        item.country = tagged.country
-        item.confidence = tagged.confidence
-      }
+      try {
+        const tagged = await geotagArticle({
+          title: item.title,
+          content: item.content,
+          contentSnippet: item.content,
+        })
+        if (tagged.coordinates) {
+          item.coordinates = tagged.coordinates
+          item.country = tagged.country
+          item.confidence = tagged.confidence
+        }
+      } catch (_) { /* geotag optional */ }
       const tags = tagOsintPost({ title: item.title, content: item.content })
       const event = normalizeToOsintEvent(item)
       ingestEvent(event, { extraTags: ['x', 'osint', ...tags] })
@@ -219,14 +207,83 @@ async function fetchOsintXFeeds() {
         tags: ['x', 'osint', ...tags],
         priority: item.priority,
         url: item.url,
+        images: item.images || [],
+        videos: item.videos || [],
+        provider: 'fxtwitter',
       })
     }
   }
   const ok = Object.entries(byHandle).filter(([, v]) => v.ok && v.count > 0)
   const fail = Object.entries(byHandle).filter(([, v]) => !v.ok || v.count === 0)
   if (ok.length) console.log('[osint-x] OK:', ok.map(([h, v]) => `${h}=${v.count}`).join(', '))
-  if (fail.length) console.warn('[osint-x] No data or failed:', fail.map(([h]) => h).join(', '), '| Mirrors tried:', mirrors.join(', '))
+  if (fail.length) console.warn('[osint-x] Failed:', fail.map(([h]) => h).join(', '))
   return results
 }
 
-module.exports = { fetchOsintXFeeds, PRIORITY_ORDER }
+/**
+ * If the event DB has no recent X posts, run a live ingest (cooldown-guarded).
+ */
+async function ensureOsintXFresh({ limitFeeds = 12 } = {}) {
+  const now = Date.now()
+  if (now - lastLiveRefreshAt < LIVE_REFRESH_COOLDOWN_MS) {
+    return { refreshed: false, reason: 'cooldown' }
+  }
+  if (liveRefreshInFlight) {
+    await liveRefreshInFlight
+    return { refreshed: false, reason: 'awaited-inflight' }
+  }
+  liveRefreshInFlight = (async () => {
+    try {
+      const posts = await fetchOsintXFeeds({ limitFeeds })
+      lastLiveRefreshAt = Date.now()
+      return { refreshed: true, count: posts.length }
+    } finally {
+      liveRefreshInFlight = null
+    }
+  })()
+  return liveRefreshInFlight
+}
+
+/**
+ * Fast path for homepage gallery: live FxTwitter images only (no DB required).
+ * Returns [{ src, postUrl, caption, account, source }]
+ */
+async function fetchHomeOsintImages({ maxHandles = 8, maxImages = 24 } = {}) {
+  const feeds = getOsintXFeeds().slice(0, maxHandles)
+  const items = []
+  const seen = new Set()
+  const CONCURRENCY = 4
+  for (let i = 0; i < feeds.length && items.length < maxImages; i += CONCURRENCY) {
+    const chunk = feeds.slice(i, i + CONCURRENCY)
+    const settled = await Promise.allSettled(chunk.map((f) => fetchFromFxTwitter(f)))
+    for (let j = 0; j < settled.length; j++) {
+      const s = settled[j]
+      if (s.status !== 'fulfilled') continue
+      const feed = chunk[j]
+      for (const post of s.value) {
+        for (const src of post.images || []) {
+          if (!src || seen.has(src)) continue
+          seen.add(src)
+          items.push({
+            src,
+            postUrl: post.url || src,
+            caption: (post.content || post.title || '').trim().slice(0, 400),
+            account: feed.handle,
+            source: 'x',
+            provider: 'fxtwitter',
+          })
+          if (items.length >= maxImages) break
+        }
+        if (items.length >= maxImages) break
+      }
+    }
+  }
+  return items
+}
+
+module.exports = {
+  fetchOsintXFeeds,
+  ensureOsintXFresh,
+  fetchHomeOsintImages,
+  PRIORITY_ORDER,
+}

@@ -22,9 +22,14 @@
   position: fixed;
   inset: 0;
   z-index: 0;
-  opacity: 0.12;
-  background: url('https://cartodb-basemaps-a.global.ssl.fastly.net/dark_all/0/0/0.png') center / cover no-repeat;
   pointer-events: none;
+  /* Local CSS atmosphere only — no external basemap tiles (Carto watermarks
+     "KEY REQUIRED" on unauthorized production hosts). */
+  opacity: 1;
+  background:
+    radial-gradient(ellipse 90% 70% at 20% 15%, rgba(40, 90, 60, 0.2) 0%, transparent 55%),
+    radial-gradient(ellipse 80% 60% at 85% 75%, rgba(30, 70, 50, 0.16) 0%, transparent 50%),
+    linear-gradient(180deg, rgba(7, 10, 8, 0.35) 0%, rgba(5, 7, 6, 0.55) 100%);
 }
 
 .home-screen-frame {

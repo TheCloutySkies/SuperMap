@@ -574,4 +574,4 @@ async function getVideoFeedItems() {
   return items.slice(0, 80)
 }
 
-module.exports = { getNews, getNewsCached, getVideoFeedItems, VIDEO_FEEDS, isVideoThemeRelevant }
+module.exports = { getNews, getNewsCached, getVideoFeedItems, getRedditVideoItems, VIDEO_FEEDS, isVideoThemeRelevant }

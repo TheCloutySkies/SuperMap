@@ -1,48 +1,18 @@
 /**
  * OSINT X (Twitter) feed configuration.
- * Canonical list of OSINT handles; ingestion tries Nitter mirrors in order (see userConfig.getNitterMirrors).
- * RSS format: https://<mirror>/<handle>/rss
+ * Handles are ingested via FxTwitter public profile API (no key, no Nitter):
+ *   https://api.fxtwitter.com/2/profile/:handle/statuses
  *
- * Mirrors (backup if primary fails): nitter.net, nitter.poast.org, nitter.privacydev.net
- * Set NITTER_MIRRORS in .env (comma-separated) to override, or NITTER_BASE for a single mirror.
+ * Nitter public instances are shut down — do not rely on /:handle/rss mirrors.
  */
 
-const NITTER_MIRRORS_DEFAULT = [
-  'https://nitter.net',
-  'https://nitter.poast.org',
-  'https://nitter.privacydev.net',
-]
+/** @deprecated Kept for Settings UI / docs only — ingestion does not use Nitter. */
+const NITTER_MIRRORS_DEFAULT = []
 
-/** Canonical RSS URLs for all handles (primary mirror nitter.net). Backup mirrors used at fetch time. */
-const CANONICAL_RSS_URLS = [
-  'https://nitter.net/DefenceGeek/rss',
-  'https://nitter.net/MATA_osint/rss',
-  'https://nitter.net/TheOsintBunker/rss',
-  'https://nitter.net/UKDefJournal/rss',
-  'https://nitter.net/Archer83Able/rss',
-  'https://nitter.net/AuroraIntel/rss',
-  'https://nitter.net/no_itsmyturn/rss',
-  'https://nitter.net/Global_Mil_Info/rss',
-  'https://nitter.net/ELINTNews/rss',
-  'https://nitter.net/OSINTtechniques/rss',
-  'https://nitter.net/TheIntelFrog/rss',
-  'https://nitter.net/IntelCrab/rss',
-  'https://nitter.net/Conflicts/rss',
-  'https://nitter.net/MJ_Cruickshank/rss',
-  'https://nitter.net/KyleJGlen/rss',
-  'https://nitter.net/lukepierce100/rss',
-  'https://nitter.net/Liveuamap/rss',
-  'https://nitter.net/TheWarMonitor/rss',
-  'https://nitter.net/JenGriffinFNC/rss',
-  'https://nitter.net/FoxNews/rss',
-  'https://nitter.net/DEFCONWSALERTS/rss',
-  'https://nitter.net/BNONews/rss',
-  'https://nitter.net/BNODesk/rss',
-  'https://nitter.net/TheStudyofWar/rss',
-  'https://nitter.net/EndGameWW3/rss',
-]
+/** @deprecated Example URLs only — not used for fetch. */
+const CANONICAL_RSS_URLS = []
 
-/** Default feed entries (handle + name + priority). Must match DEFAULT_OSINT_X in userConfig. */
+/** Default feed entries (handle + name + priority). */
 const OSINT_X_FEEDS_DEFAULT = [
   { name: 'DefenceGeek', handle: 'DefenceGeek', priority: 'high' },
   { name: 'MATA OSINT', handle: 'MATA_osint', priority: 'high' },

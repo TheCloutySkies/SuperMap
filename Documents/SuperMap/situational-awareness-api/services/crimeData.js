@@ -70,6 +70,23 @@ function getHateCrime() {
   return withMeta(loadJson('hate-crime-by-state.json'))
 }
 
+function getStateByAbbr(abbr) {
+  const needle = String(abbr || '').trim().toUpperCase()
+  if (!needle) return null
+  const summary = loadJson('state-summary.json')
+  const base = summary.find((s) => String(s.abbr || '').toUpperCase() === needle)
+  if (!base) return null
+  let years = []
+  try {
+    const trends = loadJson('state-trends.json')
+    const row = trends.find((s) => String(s.abbr || '').toUpperCase() === needle)
+    years = Array.isArray(row?.years) ? row.years : []
+  } catch {
+    years = []
+  }
+  return withMeta({ ...base, years }, { meta: { abbr: needle, yearCount: years.length } })
+}
+
 function getStateSummary(year) {
   const summary = loadJson('state-summary.json')
   if (!year) return withMeta(summary, { meta: { year: 2024, count: summary.length } })
@@ -270,6 +287,7 @@ module.exports = {
   getStats,
   getNationalTrends,
   getStateSummary,
+  getStateByAbbr,
   searchCities,
   getCityBySlug,
   getCrimeTypes,

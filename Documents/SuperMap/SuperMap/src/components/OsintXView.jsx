@@ -36,9 +36,9 @@ function isCrossOriginVideoNoCors(url) {
   try {
     const u = new URL(url)
     const host = (u.hostname || '').toLowerCase()
-    return /nitter\.(net|poast|privacydev)/i.test(host) || /twimg\.com/i.test(host)
+    return /twimg\.com/i.test(host)
   } catch {
-    return /nitter\.|twimg\.com/i.test(url)
+    return /twimg\.com/i.test(url)
   }
 }
 
@@ -94,16 +94,25 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
     }
   }
 
-  const fetchPosts = () => {
+  const fetchPosts = (force = false) => {
     if (!API_BASE) {
       setPosts([])
       setLoading(false)
+      setRefreshing(false)
       return
     }
+    const params = { limit: 150 }
+    if (force) params.refresh = '1'
     axios
-      .get(`${API_BASE}/api/osint-x`, { params: { limit: 150 }, timeout: 15000 })
+      .get(`${API_BASE}/api/osint-x`, {
+        params,
+        timeout: force ? 90000 : 30000,
+        headers: force ? { 'Cache-Control': 'no-cache' } : undefined,
+      })
       .then((res) => setPosts(Array.isArray(res.data) ? res.data : []))
-      .catch(() => setPosts([]))
+      .catch(() => {
+        if (!force) setPosts([])
+      })
       .finally(() => {
         setLoading(false)
         setRefreshing(false)
@@ -112,12 +121,12 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
 
   useEffect(() => {
     setLoading(true)
-    fetchPosts()
+    fetchPosts(false)
   }, [])
 
   const handleRefresh = () => {
     setRefreshing(true)
-    fetchPosts()
+    fetchPosts(true)
   }
 
   const q = (keywordFilter || '').trim().toLowerCase()

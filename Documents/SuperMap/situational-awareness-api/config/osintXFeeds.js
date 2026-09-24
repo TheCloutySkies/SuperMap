@@ -1,16 +1,8 @@
 /**
  * OSINT X (Twitter) feed configuration.
- * Handles are ingested via FxTwitter public profile API (no key, no Nitter):
+ * Handles are ingested via FxTwitter public profile API (no key):
  *   https://api.fxtwitter.com/2/profile/:handle/statuses
- *
- * Nitter public instances are shut down — do not rely on /:handle/rss mirrors.
  */
-
-/** @deprecated Kept for Settings UI / docs only — ingestion does not use Nitter. */
-const NITTER_MIRRORS_DEFAULT = []
-
-/** @deprecated Example URLs only — not used for fetch. */
-const CANONICAL_RSS_URLS = []
 
 /** Default feed entries (handle + name + priority). */
 const OSINT_X_FEEDS_DEFAULT = [
@@ -42,7 +34,5 @@ const OSINT_X_FEEDS_DEFAULT = [
 ]
 
 module.exports = {
-  CANONICAL_RSS_URLS,
   OSINT_X_FEEDS_DEFAULT,
-  NITTER_MIRRORS_DEFAULT,
 }

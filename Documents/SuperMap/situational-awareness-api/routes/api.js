@@ -299,7 +299,6 @@ router.get('/feeds/videos', async (req, res) => {
 
 /** Proxy video URL so the browser can play it in-app (avoids CORS). GET /api/proxy-video?url=... */
 const PROXY_VIDEO_ALLOWED_HOSTS = [
-  'nitter.net', 'nitter.poast.org', 'nitter.privacydev.net',
   'video.twimg.com', 'v.twimg.com', 'pbs.twimg.com', 'twimg.com',
   'cdn.video.aljazeera.com', 'video.aljazeera.com',
   'www.dw.com', 'dw.com',
@@ -451,7 +450,6 @@ router.get('/osint-x/feeds', (req, res) => {
       count: feeds.length,
       provider: 'fxtwitter',
       providerUrl: 'https://api.fxtwitter.com/2/profile/:handle/statuses',
-      mirrors: [], // Nitter removed — public instances shut down
       feeds: feeds.map((f) => ({ handle: f.handle, name: f.name, priority: f.priority })),
     })
   } catch (err) {
@@ -460,20 +458,31 @@ router.get('/osint-x/feeds', (req, res) => {
   }
 })
 
-/** Homepage gallery images (FxTwitter + Reddit fallback). GET /api/home-images */
+/** Homepage gallery images (FxTwitter + Reddit fallback). GET /api/home-images?refresh=1 to bypass CDN/browser cache. */
 router.get('/home-images', async (req, res) => {
-  setHomeCacheHeaders(res)
+  const force = String(req.query.refresh || '') === '1' || String(req.query.refresh || '') === 'true'
+  if (force) {
+    res.set('Cache-Control', 'no-store')
+  } else {
+    setHomeCacheHeaders(res)
+  }
   try {
     const { buildHomeImages } = require('../services/homeBootstrap')
     const images = await buildHomeImages({ max: Math.min(parseInt(req.query.limit, 10) || 24, 48) })
-    res.json({ images, count: images.length, updatedAt: new Date().toISOString() })
+    res.json({
+      images,
+      count: images.length,
+      provider: 'fxtwitter',
+      refreshed: force,
+      updatedAt: new Date().toISOString(),
+    })
   } catch (err) {
     console.error('[API /home-images]', err.message)
     res.status(500).json({ images: [], count: 0, error: err.message })
   }
 })
 
-const OSINT_X_MAX_AGE_MS = 48 * 60 * 60 * 1000 // 48 hours (Nitter lag + sparse accounts)
+const OSINT_X_MAX_AGE_MS = 48 * 60 * 60 * 1000 // 48 hours (sparse accounts)
 
 function mapOsintXRows(rows, cutoff) {
   return rows
@@ -497,6 +506,7 @@ function mapOsintXRows(rows, cutoff) {
         url: raw.link || raw.url,
         images: Array.isArray(raw.images) ? raw.images : [],
         videos: Array.isArray(raw.videos) ? raw.videos : [],
+        provider: raw.provider || 'fxtwitter',
       }
     })
     .sort((a, b) => {
@@ -507,22 +517,26 @@ function mapOsintXRows(rows, cutoff) {
     })
 }
 
-/** OSINT X (Twitter RSS / FxTwitter): GET /api/osint-x?limit=100. Last 48h. Live-refresh if empty. */
+/** OSINT X via FxTwitter: GET /api/osint-x?limit=100&refresh=1. Last 48h. Live-refresh if empty or forced. */
 router.get('/osint-x', async (req, res) => {
   const t0 = Date.now()
-  setHomeCacheHeaders(res)
+  const force = String(req.query.refresh || '') === '1' || String(req.query.refresh || '') === 'true'
+  if (force) {
+    res.set('Cache-Control', 'no-store')
+  } else {
+    setHomeCacheHeaders(res)
+  }
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 100, 200)
-    const force = String(req.query.refresh || '') === '1'
     const cutoff = Date.now() - OSINT_X_MAX_AGE_MS
     let rows = getEvents(limit, null, null, null, null, ['x'])
     let posts = mapOsintXRows(rows, cutoff)
     const withImages = posts.filter((p) => Array.isArray(p.images) && p.images.length > 0)
 
-    // Cold start / dead mirrors left the DB empty — pull live once (cooldown in service).
+    // Cold start or user refresh — pull live FxTwitter (force bypasses cooldown).
     if (force || posts.length === 0 || withImages.length === 0) {
       try {
-        await ensureOsintXFresh({ limitFeeds: force ? 25 : 12 })
+        await ensureOsintXFresh({ limitFeeds: force ? 15 : 12, force })
         rows = getEvents(limit, null, null, null, null, ['x'])
         posts = mapOsintXRows(rows, cutoff)
       } catch (err) {
@@ -533,6 +547,7 @@ router.get('/osint-x', async (req, res) => {
     if (feedsDebugEnabled()) {
       console.log('[FEEDS API /osint-x] OUTPUT', {
         limit,
+        force,
         posts: posts.length,
         withImages: posts.filter((p) => p.images?.length).length,
         ms: Date.now() - t0,

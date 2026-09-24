@@ -249,7 +249,7 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
               <p className="settings-loading">Loading…</p>
             ) : (
               <>
-                <p className="settings-hint">OSINT (X) feeds are fetched via Nitter RSS. If you only see a few creators, click below to restore all default feeds.</p>
+                <p className="settings-hint">OSINT (X) feeds are fetched via FxTwitter (no API key). If you only see a few creators, click below to restore all default feeds.</p>
                 {defaultOsintXHandles.length > 0 && (
                   <button
                     type="button"

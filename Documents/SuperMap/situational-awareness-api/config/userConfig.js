@@ -67,15 +67,7 @@ function setConfig(updates) {
   return getConfig()
 }
 
-/**
- * Optional mirror override (legacy). Ingestion uses FxTwitter, not Nitter.
- * NITTER_MIRRORS / NITTER_BASE are ignored for fetch — kept so old .env files don't break.
- */
-function getNitterMirrors() {
-  return []
-}
-
-/** Normalize X handle for Nitter RSS URL: trim, strip @, allow only [a-zA-Z0-9_]. */
+/** Normalize X handle: trim, strip @, allow only [a-zA-Z0-9_]. */
 function normalizeHandle(handle) {
   if (handle == null || typeof handle !== 'string') return ''
   const s = handle.trim().replace(/^@/, '')
@@ -87,8 +79,7 @@ function getOsintXFeeds() {
   const list = Array.isArray(osintXHandles) ? osintXHandles : []
   return list
     .map((entry) => {
-      const raw = entry.handle != null ? String(entry.handle).trim().replace(/^@/, '') : ''
-      const handle = raw.replace(/[^a-zA-Z0-9_]/g, '') || raw
+      const handle = normalizeHandle(entry.handle != null ? String(entry.handle) : '')
       if (!handle) return null
       if (handle.toLowerCase() === 'alarabiya_brk') return null
       return {
@@ -110,4 +101,4 @@ function getStockTickers() {
   return Array.isArray(stockTickers) && stockTickers.length > 0 ? stockTickers : DEFAULT_STOCK_TICKERS
 }
 
-module.exports = { getConfig, setConfig, getOsintXFeeds, getNitterMirrors, getSubreddits, getStockTickers }
+module.exports = { getConfig, setConfig, getOsintXFeeds, getSubreddits, getStockTickers }

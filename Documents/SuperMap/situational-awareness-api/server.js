@@ -59,7 +59,7 @@ const INGEST_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
 const DW_INTERVAL_MS = 10 * 60 * 1000
 const CISA_INTERVAL_MS = 15 * 60 * 1000
 const BELLINGCAT_INTERVAL_MS = 30 * 60 * 1000
-const OSINT_X_INTERVAL_MS = 1 * 60 * 1000 // 1 minute (Nitter mirrors may still be 15–60 min delayed)
+const OSINT_X_INTERVAL_MS = 1 * 60 * 1000 // 1 minute (FxTwitter profile timelines)
 
 function runIngest(isWarmup = false) {
   newsService.getNews()

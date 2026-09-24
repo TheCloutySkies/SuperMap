@@ -915,6 +915,59 @@
   color: var(--y2k-accent-hover);
 }
 
+/* Mobile hub: radial menu + stacked threat/data */
+.home-screen--mobile .home-screen-header {
+  padding: 0.75rem 0.85rem 0.35rem;
+}
+
+.home-screen--mobile .home-screen-logo {
+  font-size: 1.15rem;
+}
+
+.home-screen-radial-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.25rem 0.5rem 0.5rem;
+}
+
+.home-screen-radial-hint {
+  margin: 0 0 0.15rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--y2k-text-muted);
+}
+
+.home-screen--mobile .home-screen-main {
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+
+.home-screen--mobile .home-screen-main-left {
+  border-right: none;
+  padding: 0 0.75rem 0.5rem;
+}
+
+.home-screen--mobile .home-screen-sidebar {
+  padding: 0.5rem 0.75rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.home-screen--mobile .home-screen-section-title {
+  font-size: 0.95rem;
+}
+
+.home-screen--mobile .home-screen-threat-card {
+  padding: 0.75rem;
+}
+
+.home-screen--mobile .home-screen-photos-main-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
 /* Mobile layout: single column, touch-friendly, sidebar below main. */
 @media (max-width: 900px) {
   .home-screen-main {

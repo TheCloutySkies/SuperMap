@@ -23,6 +23,8 @@ import AmbientBgLight from './components/AmbientBgLight'
 import OmnibarBanner from './components/OmnibarBanner'
 import ModeRail from './components/ModeRail'
 import ModeSubnav from './components/ModeSubnav'
+import MobileShell from './components/MobileShell'
+import MobileLayoutPrompt from './components/MobileLayoutPrompt'
 import { metallicss } from 'metallicss'
 import './App.css'
 
@@ -260,6 +262,15 @@ function App() {
   const appClass = ['app', `app--theme-${visuals.theme || 'dark'}`, visuals.compact ? 'app--compact' : '', `app--font-${visuals.fontSize || 'normal'}`, `app--device-${resolvedDeviceType}`].filter(Boolean).join(' ')
 
   const isMobileLayout = resolvedDeviceType === 'mobile'
+  const isHub = isMobileLayout && activeView === 'home'
+
+  const goHome = useCallback(() => {
+    handleFooterNav(APP_MODES.HOME)
+  }, [handleFooterNav])
+
+  useEffect(() => {
+    if (isMobileLayout) setIsRightSidebarOpen(false)
+  }, [isMobileLayout, activeView])
 
   useEffect(() => {
     const t = setTimeout(initMetallicss, 50)
@@ -277,110 +288,53 @@ function App() {
     prevFooterModeRef.current = footerMode
   }, [footerMode])
 
-  return (
-    <>
-    <div className={appClass}>
-      <AmbientBackground />
-      <AmbientBgLight />
-      <header className="app-omnibar-strip">
-        <div className="app-omnibar-inner">
-          <a href="https://cloutyskies.org" className="app-omnibar-logo" target="_blank" rel="noopener noreferrer" aria-label="Clouty Skies">
-            <img src="/cloutyskies-logo.png" alt="" />
-          </a>
-          <OmnibarBanner
-            headlines={prefetchedNews?.features
-              ?.filter((f) => {
-                const s = (f.properties?.source || '').toLowerCase()
-                return !s.includes('wikipedia')
-              })
-              ?.sort((a, b) => (b.properties?.timestamp ?? 0) - (a.properties?.timestamp ?? 0))
-              ?.slice(0, 15)
-              ?.map((f) => f.properties?.title || f.properties?.headline)
-              ?.filter(Boolean) || []}
-            xFeedItems={bannerXItems}
-          />
-          <Omnibar
-            query={searchQuery}
-            onQueryChange={setSearchQuery}
-            onFlyTo={handleFlyTo}
-            onKeywordChange={setSearchQuery}
-            onSearchResults={setSearchResultsGeoJson}
-            onNavigateToMap={() => setActiveViewWithMode('osint-map')}
-            onNavigateToSearchResults={(q) => { setSearchQuery(q || searchQuery); setActiveView('search-results'); setAppMode(APP_MODES.FEEDS) }}
-            onNavigateToFeeds={(q) => { setSearchQuery(q || ''); setActiveView('osint-feeds'); setAppMode(APP_MODES.FEEDS) }}
-            onCommandNavigate={setActiveViewWithMode}
-            placeholder="Search or jump (Ctrl+K)…"
-          />
-          {isMapView && !isMobileLayout && (
-            <PlaceSearch onFlyTo={handleFlyTo} />
-          )}
-          <div className="app-omnibar-right">
-            <span className="app-omnibar-copyright" aria-hidden>© {new Date().getFullYear()} TheCloutySkies</span>
-          </div>
-        </div>
-      </header>
-      <div className="app-body">
-      <ModeRail appMode={appMode} onModeSelect={handleFooterNav} />
-      {(() => {
-        const showSubnav =
-          subnavOpen &&
-          (appMode === APP_MODES.MAPS ||
-            appMode === APP_MODES.FEEDS ||
-            appMode === APP_MODES.TOOLS ||
-            appMode === APP_MODES.RESOURCES)
-        let subnavTitle = ''
-        let subnavItems = []
-        if (appMode === APP_MODES.MAPS) {
-          subnavTitle = 'Maps'
-          subnavItems = MAP_VIEWS
-            .filter((v) => tabVisibility[v.tabKey] !== false)
-            .map((v) => ({
-              id: v.id,
-              label: v.label,
-              active: activeView === v.id,
-              onClick: () => setActiveViewWithMode(v.id),
-            }))
-        } else if (appMode === APP_MODES.FEEDS) {
-          subnavTitle = 'Feeds'
-          subnavItems = FEED_VIEWS
-            .filter((v) => (v.id === 'osint-x' ? true : tabVisibility[v.tabKey] !== false))
-            .map((v) => ({
-              id: v.id,
-              label: v.label,
-              active: activeView === v.id,
-              onClick: () => setActiveViewWithMode(v.id),
-            }))
-        } else if (appMode === APP_MODES.TOOLS) {
-          subnavTitle = 'Tools'
-          subnavItems = TOOLS_LIST.map((t) => ({
-            id: t.id,
-            label: t.title,
-            active: activeToolId === t.id,
-            onClick: () => { setActiveViewWithMode('tools'); setActiveToolId(t.id) },
-          }))
-        } else if (appMode === APP_MODES.RESOURCES) {
-          subnavTitle = 'Resources'
-          subnavItems = RESOURCE_SECTIONS.map((s) => ({
-            id: s.id,
-            label: s.title,
-            active: false,
-            onClick: () => {
-              setActiveViewWithMode('resources')
-              setTimeout(() => resourcesScrollRef.current?.scrollToSection?.(s.id), 50)
-            },
-          }))
-        }
-        return (
-          <ModeSubnav
-            open={showSubnav}
-            title={subnavTitle}
-            items={subnavItems}
-            onClose={() => setSubnavOpen(false)}
-          />
-        )
-      })()}
+  const mapChips = MAP_VIEWS
+    .filter((v) => tabVisibility[v.tabKey] !== false)
+    .map((v) => ({
+      id: v.id,
+      label: v.label.replace(/\s*Map$/i, ''),
+      active: activeView === v.id,
+      onClick: () => setActiveViewWithMode(v.id),
+    }))
 
-      <main className={`main ${footerTransition ? 'main--y2k-transition' : ''} ${isMapView ? 'main--map' : ''}`}>
+  let mobilePageTitle = 'SuperMap'
+  let mobileChipItems = []
+  if (appMode === APP_MODES.MAPS) mobilePageTitle = 'Maps'
+  else if (appMode === APP_MODES.FEEDS) {
+    mobilePageTitle = 'Feeds'
+    mobileChipItems = FEED_VIEWS
+      .filter((v) => (v.id === 'osint-x' ? true : tabVisibility[v.tabKey] !== false))
+      .map((v) => ({
+        id: v.id,
+        label: v.label,
+        active: activeView === v.id,
+        onClick: () => setActiveViewWithMode(v.id),
+      }))
+  } else if (appMode === APP_MODES.TOOLS) {
+    mobilePageTitle = 'Tools'
+    mobileChipItems = TOOLS_LIST.map((t) => ({
+      id: t.id,
+      label: t.title,
+      active: activeToolId === t.id,
+      onClick: () => { setActiveViewWithMode('tools'); setActiveToolId(t.id) },
+    }))
+  } else if (appMode === APP_MODES.RESOURCES) {
+    mobilePageTitle = 'Resources'
+    mobileChipItems = RESOURCE_SECTIONS.map((s) => ({
+      id: s.id,
+      label: s.title,
+      active: false,
+      onClick: () => {
+        setActiveViewWithMode('resources')
+        setTimeout(() => resourcesScrollRef.current?.scrollToSection?.(s.id), 50)
+      },
+    }))
+  } else if (appMode === APP_MODES.REPORTS) mobilePageTitle = 'Report Maker'
+  else if (appMode === APP_MODES.SETTINGS) mobilePageTitle = 'Settings'
+  else if (activeView === 'search-results') mobilePageTitle = 'Search'
+
+  const mainContent = (
+    <>
         {activeView === 'home' && (
               <HomeScreen
                 onNavigate={setActiveViewWithMode}
@@ -401,17 +355,6 @@ function App() {
             )}
           {isMapView && (
           <>
-            {isMobileLayout && (
-              <button
-                type="button"
-                className="map-layers-toggle-btn"
-                onClick={() => setIsRightSidebarOpen((open) => !open)}
-                aria-label={isRightSidebarOpen ? 'Hide layers' : 'Show layers'}
-                title={isRightSidebarOpen ? 'Hide layers' : 'Layers'}
-              >
-                {isRightSidebarOpen ? '−' : '☰'}
-              </button>
-            )}
             <MapView
               basemapId={activeView === 'geolocate-map' ? 'osm-standard' : basemapId}
               overlayBasemapId={overlayBasemapId}
@@ -530,8 +473,10 @@ function App() {
             onVisualsChange={handleVisualsChange}
           />
         )}
-      </main>
+    </>
+  )
 
+  const sidebar = (
         <RightSidebar
         visible={isMapView && (!isMobileLayout || isRightSidebarOpen)}
         onClose={isMobileLayout ? () => setIsRightSidebarOpen(false) : undefined}
@@ -554,8 +499,141 @@ function App() {
         sentinelTime={sentinelTime}
         onSentinelTimeChange={setSentinelTime}
       />
+  )
+
+  return (
+    <>
+    <div className={appClass}>
+      <AmbientBackground />
+      <AmbientBgLight />
+      {!isMobileLayout && (
+      <header className="app-omnibar-strip">
+        <div className="app-omnibar-inner">
+          <a href="https://cloutyskies.org" className="app-omnibar-logo" target="_blank" rel="noopener noreferrer" aria-label="Clouty Skies">
+            <img src="/cloutyskies-logo.png" alt="" />
+          </a>
+          <OmnibarBanner
+            headlines={prefetchedNews?.features
+              ?.filter((f) => {
+                const s = (f.properties?.source || '').toLowerCase()
+                return !s.includes('wikipedia')
+              })
+              ?.sort((a, b) => (b.properties?.timestamp ?? 0) - (a.properties?.timestamp ?? 0))
+              ?.slice(0, 15)
+              ?.map((f) => f.properties?.title || f.properties?.headline)
+              ?.filter(Boolean) || []}
+            xFeedItems={bannerXItems}
+          />
+          <Omnibar
+            query={searchQuery}
+            onQueryChange={setSearchQuery}
+            onFlyTo={handleFlyTo}
+            onKeywordChange={setSearchQuery}
+            onSearchResults={setSearchResultsGeoJson}
+            onNavigateToMap={() => setActiveViewWithMode('osint-map')}
+            onNavigateToSearchResults={(q) => { setSearchQuery(q || searchQuery); setActiveView('search-results'); setAppMode(APP_MODES.FEEDS) }}
+            onNavigateToFeeds={(q) => { setSearchQuery(q || ''); setActiveView('osint-feeds'); setAppMode(APP_MODES.FEEDS) }}
+            onCommandNavigate={setActiveViewWithMode}
+            placeholder="Search or jump (Ctrl+K)…"
+          />
+          {isMapView && (
+            <PlaceSearch onFlyTo={handleFlyTo} />
+          )}
+          <div className="app-omnibar-right">
+            <span className="app-omnibar-copyright" aria-hidden>© {new Date().getFullYear()} TheCloutySkies</span>
+          </div>
+        </div>
+      </header>
+      )}
+      <div className={`app-body ${isMobileLayout ? 'app-body--mobile' : ''}`}>
+      {!isMobileLayout && <ModeRail appMode={appMode} onModeSelect={handleFooterNav} />}
+      {!isMobileLayout && (() => {
+        const showSubnav =
+          subnavOpen &&
+          (appMode === APP_MODES.MAPS ||
+            appMode === APP_MODES.FEEDS ||
+            appMode === APP_MODES.TOOLS ||
+            appMode === APP_MODES.RESOURCES)
+        let subnavTitle = ''
+        let subnavItems = []
+        if (appMode === APP_MODES.MAPS) {
+          subnavTitle = 'Maps'
+          subnavItems = MAP_VIEWS
+            .filter((v) => tabVisibility[v.tabKey] !== false)
+            .map((v) => ({
+              id: v.id,
+              label: v.label,
+              active: activeView === v.id,
+              onClick: () => setActiveViewWithMode(v.id),
+            }))
+        } else if (appMode === APP_MODES.FEEDS) {
+          subnavTitle = 'Feeds'
+          subnavItems = FEED_VIEWS
+            .filter((v) => (v.id === 'osint-x' ? true : tabVisibility[v.tabKey] !== false))
+            .map((v) => ({
+              id: v.id,
+              label: v.label,
+              active: activeView === v.id,
+              onClick: () => setActiveViewWithMode(v.id),
+            }))
+        } else if (appMode === APP_MODES.TOOLS) {
+          subnavTitle = 'Tools'
+          subnavItems = TOOLS_LIST.map((t) => ({
+            id: t.id,
+            label: t.title,
+            active: activeToolId === t.id,
+            onClick: () => { setActiveViewWithMode('tools'); setActiveToolId(t.id) },
+          }))
+        } else if (appMode === APP_MODES.RESOURCES) {
+          subnavTitle = 'Resources'
+          subnavItems = RESOURCE_SECTIONS.map((s) => ({
+            id: s.id,
+            label: s.title,
+            active: false,
+            onClick: () => {
+              setActiveViewWithMode('resources')
+              setTimeout(() => resourcesScrollRef.current?.scrollToSection?.(s.id), 50)
+            },
+          }))
+        }
+        return (
+          <ModeSubnav
+            open={showSubnav}
+            title={subnavTitle}
+            items={subnavItems}
+            onClose={() => setSubnavOpen(false)}
+          />
+        )
+      })()}
+
+      {isMobileLayout ? (
+        <MobileShell
+          isHub={isHub}
+          pageTitle={mobilePageTitle}
+          chipItems={mobileChipItems}
+          isMapPage={isMapView}
+          mapChips={mapChips}
+          onFlyTo={handleFlyTo}
+          layersOpen={isRightSidebarOpen}
+          onToggleLayers={() => setIsRightSidebarOpen((open) => !open)}
+          onGoHome={goHome}
+        >
+          <main className={`main main--mobile ${footerTransition ? 'main--y2k-transition' : ''} ${isMapView ? 'main--map' : ''}`}>
+            {mainContent}
+          </main>
+          {sidebar}
+        </MobileShell>
+      ) : (
+        <>
+      <main className={`main ${footerTransition ? 'main--y2k-transition' : ''} ${isMapView ? 'main--map' : ''}`}>
+        {mainContent}
+      </main>
+      {sidebar}
+        </>
+      )}
       </div>
     </div>
+    <MobileLayoutPrompt onChoice={() => setVisualsKey((k) => k + 1)} />
     {showTutorial && (
       <QuickTutorialModal
         onClose={(profileName) => {

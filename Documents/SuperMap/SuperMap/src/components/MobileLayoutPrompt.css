@@ -1,0 +1,75 @@
+.mobile-layout-prompt {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 1rem;
+  padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+  background: rgba(4, 8, 6, 0.72);
+  backdrop-filter: blur(6px);
+  animation: mobile-prompt-fade 0.28s ease;
+}
+
+.mobile-layout-prompt-card {
+  width: min(420px, 100%);
+  padding: 1.25rem 1.15rem 1.1rem;
+  border-radius: 16px;
+  border: 1px solid var(--y2k-border);
+  background: linear-gradient(165deg, rgba(18, 28, 22, 0.98), rgba(10, 14, 12, 0.98));
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  animation: mobile-prompt-rise 0.32s ease;
+}
+
+.mobile-layout-prompt-title {
+  margin: 0 0 0.45rem;
+  font-size: 1.15rem;
+  letter-spacing: 0.04em;
+  color: var(--y2k-text);
+}
+
+.mobile-layout-prompt-copy {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--y2k-text-muted);
+}
+
+.mobile-layout-prompt-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.mobile-layout-prompt-btn {
+  min-height: 48px;
+  padding: 0.7rem 1rem;
+  border-radius: 12px;
+  border: 1px solid var(--y2k-border);
+  background: var(--y2k-surface);
+  color: var(--y2k-text);
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.mobile-layout-prompt-btn--primary {
+  border-color: color-mix(in srgb, var(--y2k-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--y2k-accent) 22%, var(--y2k-surface));
+  color: var(--y2k-text);
+  font-weight: 600;
+}
+
+.mobile-layout-prompt-btn:active {
+  transform: scale(0.98);
+}
+
+@keyframes mobile-prompt-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes mobile-prompt-rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}

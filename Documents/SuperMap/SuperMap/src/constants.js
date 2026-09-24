@@ -8,6 +8,7 @@ export const STORAGE_KEYS = {
   LOCATION_REQUESTED: 'supermap_locationRequested',
   RAPIDAPI_KEYS: 'supermap_rapidapiKeys',
   VISUALS_PREFS: 'supermap_visualsPrefs',
+  MOBILE_PROMPT_SEEN: 'supermap_mobilePromptSeen',
 }
 
 function scopedKey(baseKey, userId) {

@@ -248,10 +248,10 @@
 @media (max-width: 900px) {
   .crime-dashboard {
     top: auto;
-    bottom: 4.5rem;
+    bottom: calc(4.75rem + env(safe-area-inset-bottom));
     left: 0.5rem;
     right: 0.5rem;
     width: auto;
-    max-height: 42vh;
+    max-height: 38vh;
   }
 }

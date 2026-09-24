@@ -34,21 +34,31 @@ function fmt(n, digits = 1) {
 function findStatesInText(q) {
   const lower = q.toLowerCase()
   const found = new Map()
+  // Two-letter USPS codes that are also common English words — only match when UPPERCASE in the query.
+  const ambiguousAbbr = new Set(['IN', 'OR', 'ME', 'OK', 'HI', 'DE', 'LA', 'OH', 'PA', 'ID', 'MA', 'MD', 'MT', 'NE', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'SC', 'SD', 'VA', 'WA', 'WI', 'WV', 'WY', 'CO', 'CA', 'AL', 'AR', 'AK', 'AZ', 'CT', 'FL', 'GA', 'IA', 'IL', 'KS', 'KY', 'MI', 'MN', 'MO', 'MS', 'NV', 'RI', 'TN', 'TX', 'UT', 'VT'])
+
   try {
     const summary = crimeData.loadJson('state-summary.json')
     for (const row of summary) {
       const name = String(row.name || '').toLowerCase()
       const abbr = String(row.abbr || '').toUpperCase()
       if (!abbr) continue
-      if (name && (lower.includes(name) || new RegExp(`\\b${name}\\b`, 'i').test(q))) {
+      if (name && name.length > 3 && lower.includes(name)) {
         found.set(abbr, row)
-      } else if (abbr.length === 2 && new RegExp(`\\b${abbr}\\b`, 'i').test(q)) {
-        found.set(abbr, row)
+      }
+    }
+    // Uppercase USPS codes only (avoids matching "in" → Indiana)
+    for (const row of summary) {
+      const abbr = String(row.abbr || '').toUpperCase()
+      if (!abbr || abbr.length !== 2) continue
+      if (ambiguousAbbr.has(abbr)) {
+        if (new RegExp(`\\b${abbr}\\b`).test(q)) found.set(abbr, row)
       }
     }
   } catch (_) { /* ignore */ }
 
   for (const [alias, abbr] of Object.entries(STATE_ALIASES)) {
+    if (alias.length < 3) continue // skip 2-letter aliases here
     if (lower.includes(alias) && !found.has(abbr)) {
       try {
         const summary = crimeData.loadJson('state-summary.json')
@@ -62,19 +72,29 @@ function findStatesInText(q) {
 
 function findCitiesInText(q) {
   const lower = q.toLowerCase().replace(/[?,.!;:]/g, ' ')
-  const words = lower.split(/\s+/).filter(Boolean)
-  if (words.length < 1) return []
+  if (!/\w{3,}/.test(lower)) return []
   try {
     const cities = crimeData.loadJson('city-index.json')
+    let topSlugs = new Set()
+    try {
+      const stats = crimeData.loadJson('stats.json')
+      for (const c of [...(stats.topCitiesByViolentRate || []), ...(stats.safestCities || [])]) {
+        if (c.slug) topSlugs.add(c.slug)
+      }
+    } catch (_) { /* ignore */ }
+
     const scored = []
     for (const c of cities) {
       const city = String(c.city || '').toLowerCase()
       if (!city || city.length < 3) continue
-      if (!lower.includes(city)) continue
-      // Prefer longer / more specific matches
+      // Word-boundary-ish match so "York" does not hit every "...york..."
+      const re = new RegExp(`(?:^|[^a-z])${city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:[^a-z]|$)`)
+      if (!re.test(lower)) continue
       let score = city.length
       const st = String(c.state || '').toLowerCase()
-      if (st && lower.includes(st)) score += 20
+      if (st && lower.includes(st)) score += 50
+      if (topSlugs.has(c.slug)) score += 30
+      score += Math.min(20, Math.log10(Math.max(Number(c.population) || 1, 1)) * 4)
       scored.push({ score, city: c })
     }
     scored.sort((a, b) => b.score - a.score)
@@ -84,7 +104,7 @@ function findCitiesInText(q) {
       if (seen.has(city.slug)) continue
       seen.add(city.slug)
       out.push(city)
-      if (out.length >= 4) break
+      if (out.length >= 3) break
     }
     return out
   } catch (_) {
@@ -137,7 +157,14 @@ function compactCity(c) {
 function buildContext(question) {
   const q = String(question || '').trim()
   const states = findStatesInText(q).map(compactState).filter(Boolean)
-  const cities = findCitiesInText(q).map(compactCity).filter(Boolean)
+  let cities = findCitiesInText(q).map(compactCity).filter(Boolean)
+
+  // If several cities share a name and no state was named, keep the best match only
+  if (cities.length > 1 && states.length === 0) {
+    const primary = String(cities[0].city || '').toLowerCase()
+    const sameName = cities.every((c) => String(c.city || '').toLowerCase() === primary)
+    if (sameName) cities = cities.slice(0, 1)
+  }
 
   let stats = null
   let nationalLatest = null

@@ -8,8 +8,8 @@ const OLLAMA_BASE = process.env.OLLAMA_BASE_URL || 'http://localhost:11434'
 const OLLAMA_MODEL = process.env.OLLAMA_THREAT_MODEL || 'tinyllama:1.1b'
 const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_THREAT_TIMEOUT_MS) || 90 * 1000
 const GROQ_API_KEY = (process.env.GROQ_API_KEY || '').trim()
-const GROQ_MODEL = process.env.GROQ_THREAT_MODEL || 'llama-3.1-8b-instant'
-const GROQ_BACKUP_MODEL = process.env.GROQ_THREAT_BACKUP_MODEL || 'meta-llama/llama-4-scout-17b-16e-instruct'
+const GROQ_MODEL = process.env.GROQ_THREAT_MODEL || 'openai/gpt-oss-20b'
+const GROQ_BACKUP_MODEL = process.env.GROQ_THREAT_BACKUP_MODEL || 'qwen/qwen3.8-27b'
 const GROQ_TIMEOUT_MS = Number(process.env.GROQ_THREAT_TIMEOUT_MS) || 60 * 1000
 
 // Threat-summary call budget (strict — summaries are expensive / rare)
@@ -154,10 +154,55 @@ async function callTagModel(prompt, { maxTokens = 800 } = {}) {
   return null
 }
 
+// Crime Ask: interactive Q&A — prefer Groq for speed; lighter budget than threat summary.
+const GROQ_CRIME_MAX_CALLS_PER_24H = Math.max(1, parseInt(process.env.GROQ_CRIME_MAX_CALLS_PER_24H, 10) || 80)
+const GROQ_CRIME_MIN_INTERVAL_MS = Math.max(0, parseInt(process.env.GROQ_CRIME_MIN_INTERVAL_MS, 10) || 2 * 1000)
+const crimeTimestamps = []
+let lastCrimeCall = 0
+
+function canCallCrime() {
+  prune(crimeTimestamps, 24 * 60 * 60 * 1000)
+  if (crimeTimestamps.length >= GROQ_CRIME_MAX_CALLS_PER_24H) return false
+  if (lastCrimeCall > 0 && Date.now() - lastCrimeCall < GROQ_CRIME_MIN_INTERVAL_MS) return false
+  return true
+}
+
+function recordCrimeCall() {
+  lastCrimeCall = Date.now()
+  crimeTimestamps.push(lastCrimeCall)
+}
+
+/**
+ * Crime Ask path: Groq first when GROQ_API_KEY is set (faster hosted), else Ollama.
+ * Returns { text, provider } or null when both fail — callers use heuristics.
+ */
+async function callCrimeModel(prompt, { maxTokens = 700 } = {}) {
+  if (GROQ_API_KEY && canCallCrime()) {
+    const primary = await callGroq(prompt, { model: GROQ_MODEL, maxTokens, timeoutMs: 25 * 1000 })
+    if (primary) {
+      recordCrimeCall()
+      return { text: primary, provider: 'groq' }
+    }
+    if (canCallCrime()) {
+      const backup = await callGroq(prompt, { model: GROQ_BACKUP_MODEL, maxTokens, timeoutMs: 25 * 1000 })
+      if (backup) {
+        recordCrimeCall()
+        return { text: backup, provider: 'groq' }
+      }
+    }
+  }
+  // Short Ollama window so interactive Ask Crime does not hang when Ollama is down
+  const ollamaTimeout = GROQ_API_KEY ? 6 * 1000 : 45 * 1000
+  const ollama = await callOllama(prompt, { maxTokens, timeoutMs: ollamaTimeout })
+  if (ollama) return { text: ollama, provider: 'ollama' }
+  return null
+}
+
 module.exports = {
   hasLlmConfigured,
   callThreatModel,
   callTagModel,
+  callCrimeModel,
   callOllama,
   callGroq,
   GROQ_API_KEY,

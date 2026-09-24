@@ -1,5 +1,6 @@
 const express = require('express')
 const crimeData = require('../services/crimeData')
+const { askCrime } = require('../services/crimeAsk')
 
 const router = express.Router()
 
@@ -47,5 +48,27 @@ router.get('/arrests', (_req, res) => handle(res, () => crimeData.getArrests()))
 router.get('/homicide', (_req, res) => handle(res, () => crimeData.getHomicide()))
 
 router.get('/hate-crime', (_req, res) => handle(res, () => crimeData.getHateCrime()))
+
+/**
+ * POST /api/crime/ask
+ * Body: { question: string }
+ * RAG-lite over crime pack → Groq → Ollama → heuristic.
+ */
+router.post('/ask', async (req, res) => {
+  try {
+    const question = req.body?.question ?? req.body?.q ?? req.query?.q
+    const result = await askCrime(question)
+    return res.json({ data: result, meta: result.meta })
+  } catch (err) {
+    if (err.code === 'BAD_REQUEST') {
+      return res.status(400).json({ error: err.message, meta: { attribution: crimeData.ATTRIBUTION } })
+    }
+    if (err.code === 'CRIME_DATA_MISSING') {
+      return res.status(503).json({ error: err.message, meta: { attribution: crimeData.ATTRIBUTION } })
+    }
+    console.error('[API /crime/ask]', err.message)
+    return res.status(500).json({ error: err.message || 'Crime ask failed' })
+  }
+})
 
 module.exports = router

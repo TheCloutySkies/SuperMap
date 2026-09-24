@@ -11,15 +11,9 @@ import {
   fetchOverpassCellTowers,
   fetchNasaFirmsArea,
   fetchGdacsEvents,
-  fetchGeoconfirmed,
   fetchUsgsEarthquakes,
-  fetchAcled,
-  fetchAdsbRapidApi,
-  fetchAdsbPlaceholder,
   fetchUtilityOutages,
   fetchFccTowers,
-  fetchCamerasFromApi,
-  fetchFlockTiles,
   fetchDatacenters,
   fetchOdintRegions,
   fetchSurveillanceCapabilities,
@@ -50,13 +44,10 @@ const CLICKABLE_POINT_LAYERS = [
   'intel-power-points',
   'intel-firms-layer',
   'intel-gdacs-layer',
-  'intel-geoconfirmed-layer',
   'intel-usgs-layer',
-  'intel-acled-layer',
   'intel-outages-layer',
   'intel-comms-layer',
   'intel-fcc-towers-layer',
-  'intel-flock-layer',
   'intel-datacenters-layer',
   'intel-odint-layer',
   'intel-surveillance-capabilities-layer',
@@ -205,31 +196,6 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     if (map.getSource('intel-gdacs')) map.removeSource('intel-gdacs')
   }
 
-  const addGeoconfirmed = (geoJson) => {
-    if (map.getSource('intel-geoconfirmed')) {
-      map.getSource('intel-geoconfirmed').setData(geoJson)
-      return
-    }
-    map.addSource('intel-geoconfirmed', { type: 'geojson', data: geoJson })
-    map.addLayer({
-      id: 'intel-geoconfirmed-layer',
-      type: 'circle',
-      source: 'intel-geoconfirmed',
-      paint: {
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 2, 5, 10, 12],
-        'circle-color': '#8b5cf6',
-        'circle-opacity': 0.9,
-        'circle-stroke-width': 2,
-        'circle-stroke-color': '#c4b5fd',
-      },
-    })
-  }
-
-  const removeGeoconfirmed = () => {
-    if (map.getLayer('intel-geoconfirmed-layer')) map.removeLayer('intel-geoconfirmed-layer')
-    if (map.getSource('intel-geoconfirmed')) map.removeSource('intel-geoconfirmed')
-  }
-
   const addUsgs = (geoJson) => {
     if (map.getSource('intel-usgs')) {
       map.getSource('intel-usgs').setData(geoJson)
@@ -253,25 +219,6 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     if (map.getSource('intel-usgs')) map.removeSource('intel-usgs')
   }
 
-  const addAcled = (geoJson) => {
-    if (map.getSource('intel-acled')) {
-      map.getSource('intel-acled').setData(geoJson)
-      return
-    }
-    map.addSource('intel-acled', { type: 'geojson', data: geoJson })
-    map.addLayer({
-      id: 'intel-acled-layer',
-      type: 'circle',
-      source: 'intel-acled',
-      paint: { 'circle-radius': 6, 'circle-color': '#dc2626', 'circle-opacity': 0.9 },
-    })
-  }
-
-  const removeAcled = () => {
-    if (map.getLayer('intel-acled-layer')) map.removeLayer('intel-acled-layer')
-    if (map.getSource('intel-acled')) map.removeSource('intel-acled')
-  }
-
   const addRailway = () => {
     if (map.getSource('intel-railway')) return
     map.addSource('intel-railway', {
@@ -286,25 +233,6 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
   const removeRailway = () => {
     if (map.getLayer('intel-railway-layer')) map.removeLayer('intel-railway-layer')
     if (map.getSource('intel-railway')) map.removeSource('intel-railway')
-  }
-
-  const addAdsb = () => {
-    if (map.getSource('intel-adsb')) return
-    map.addSource('intel-adsb', {
-      type: 'geojson',
-      data: { type: 'FeatureCollection', features: [] },
-    })
-    map.addLayer({
-      id: 'intel-adsb-layer',
-      type: 'circle',
-      source: 'intel-adsb',
-      paint: { 'circle-radius': 5, 'circle-color': '#3b82f6' },
-    })
-  }
-
-  const removeAdsb = () => {
-    if (map.getLayer('intel-adsb-layer')) map.removeLayer('intel-adsb-layer')
-    if (map.getSource('intel-adsb')) map.removeSource('intel-adsb')
   }
 
   const addNoaaRadar = () => {
@@ -467,72 +395,6 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     if (map.getLayer('intel-fcc-towers-labels')) map.removeLayer('intel-fcc-towers-labels')
     if (map.getLayer('intel-fcc-towers-layer')) map.removeLayer('intel-fcc-towers-layer')
     if (map.getSource('intel-fcc-towers')) map.removeSource('intel-fcc-towers')
-  }
-
-  const addFlockCameras = (geoJson) => {
-    if (map.getSource('intel-flock')) {
-      map.getSource('intel-flock').setData(geoJson)
-      return
-    }
-    map.addSource('intel-flock', {
-      type: 'geojson',
-      data: geoJson,
-      cluster: true,
-      clusterRadius: 48,
-      clusterMaxZoom: 12,
-    })
-    map.addLayer({
-      id: 'intel-flock-clusters',
-      type: 'circle',
-      source: 'intel-flock',
-      filter: ['has', 'point_count'],
-      paint: {
-        'circle-color': '#2563eb',
-        'circle-opacity': 0.85,
-        'circle-radius': ['step', ['get', 'point_count'], 14, 20, 18, 100, 24],
-      },
-    })
-    map.addLayer({
-      id: 'intel-flock-cluster-count',
-      type: 'symbol',
-      source: 'intel-flock',
-      filter: ['has', 'point_count'],
-      layout: { 'text-field': ['get', 'point_count_abbreviated'], 'text-size': 11 },
-      paint: { 'text-color': '#ffffff' },
-    })
-    map.addLayer({
-      id: 'intel-flock-layer',
-      type: 'circle',
-      source: 'intel-flock',
-      filter: ['!', ['has', 'point_count']],
-      paint: {
-        'circle-radius': 8,
-        'circle-color': '#3b82f6',
-        'circle-opacity': 0.9,
-        'circle-stroke-width': 2,
-        'circle-stroke-color': '#fff',
-      },
-    })
-    map.addLayer({
-      id: 'intel-flock-icons',
-      type: 'symbol',
-      source: 'intel-flock',
-      filter: ['!', ['has', 'point_count']],
-      layout: {
-        'text-field': '📷',
-        'text-size': 13,
-        'text-allow-overlap': true,
-      },
-      paint: { 'text-color': '#ffffff' },
-    })
-  }
-
-  const removeFlockCameras = () => {
-    if (map.getLayer('intel-flock-cluster-count')) map.removeLayer('intel-flock-cluster-count')
-    if (map.getLayer('intel-flock-clusters')) map.removeLayer('intel-flock-clusters')
-    if (map.getLayer('intel-flock-icons')) map.removeLayer('intel-flock-icons')
-    if (map.getLayer('intel-flock-layer')) map.removeLayer('intel-flock-layer')
-    if (map.getSource('intel-flock')) map.removeSource('intel-flock')
   }
 
   const addDatacenters = (geoJson) => {
@@ -1023,14 +885,8 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     removeFirms,
     addGdacs,
     removeGdacs,
-    addGeoconfirmed,
-    removeGeoconfirmed,
     addUsgs,
     removeUsgs,
-    addAcled,
-    removeAcled,
-    addAdsb,
-    removeAdsb,
     addNoaaRadar,
     removeNoaaRadar,
     addSentinel2BurnScars,
@@ -1040,8 +896,6 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     removeComms,
     addFccTowers,
     removeFccTowers,
-    addFlockCameras,
-    removeFlockCameras,
     addDatacenters,
     removeDatacenters,
     addOdintRegions,
@@ -1298,7 +1152,8 @@ export default function MapView({
   const doFetch = useCallback(
     (map, toggles, onLoading) => {
       if (!map || !map.getStyle) return
-      if (activeViewRef.current === 'explore-map' || activeViewRef.current === 'geolocate-map') return
+      // Geolocate uses Overpass presets only; Explore should still load layer toggles.
+      if (activeViewRef.current === 'geolocate-map') return
       const getRadarWanted = () => layerTogglesRef.current?.noaaRadar === true
       const helpers = addOrUpdateLayer(map, toggles, onLoading, getRadarWanted)
       const bbox = () => {
@@ -1361,20 +1216,6 @@ export default function MapView({
           .finally(() => onLoading?.(false))
       } else helpers.removeGdacs()
 
-      if (toggles.geoconfirmed) {
-        onLoading?.(true)
-        fetchGeoconfirmed(bbox())
-          .then((geoJson) => {
-            helpers.addGeoconfirmed(geoJson)
-            pushSearchLayerRef.current('geoconfirmed', geoJson)
-          })
-          .catch(() => {
-            helpers.addGeoconfirmed({ type: 'FeatureCollection', features: [] })
-            pushSearchLayerRef.current('geoconfirmed', { type: 'FeatureCollection', features: [] })
-          })
-          .finally(() => onLoading?.(false))
-      } else helpers.removeGeoconfirmed()
-
       if (toggles.usgsEarthquakes) {
         onLoading?.(true)
         fetchUsgsEarthquakes(bbox())
@@ -1388,32 +1229,6 @@ export default function MapView({
           })
           .finally(() => onLoading?.(false))
       } else helpers.removeUsgs()
-
-      if (toggles.acled) {
-        onLoading?.(true)
-        fetchAcled(bbox())
-          .then((geoJson) => {
-            helpers.addAcled(geoJson)
-            pushSearchLayerRef.current('acled', geoJson)
-          })
-          .catch(() => {
-            helpers.addAcled({ type: 'FeatureCollection', features: [] })
-            pushSearchLayerRef.current('acled', { type: 'FeatureCollection', features: [] })
-          })
-          .finally(() => onLoading?.(false))
-      } else helpers.removeAcled()
-
-      if (toggles.adsbAircraft) {
-        helpers.addAdsb()
-        const center = map.getCenter()
-        onLoading?.(true)
-        fetchAdsbRapidApi(center.lat, center.lng)
-          .then((fc) => {
-            if (map.getSource('intel-adsb')) map.getSource('intel-adsb').setData(fc)
-          })
-          .catch(() => {})
-          .finally(() => onLoading?.(false))
-      } else helpers.removeAdsb()
 
       if (toggles.noaaRadar) helpers.addNoaaRadar()
       else helpers.removeNoaaRadar()
@@ -1516,27 +1331,6 @@ export default function MapView({
           })
           .finally(() => onLoading?.(false))
       } else helpers.removeFccTowers()
-
-      if (toggles.flockCameras) {
-        onLoading?.(true)
-        const center = map.getCenter()
-        fetchFlockTiles(bbox())
-          .then((geoJson) => {
-            if (geoJson.features?.length === 0) {
-              return fetchCamerasFromApi(center.lat, center.lng, bbox())
-            }
-            return geoJson
-          })
-          .then((geoJson) => {
-            helpers.addFlockCameras(geoJson)
-            pushSearchLayerRef.current('flock', geoJson)
-          })
-          .catch(() => {
-            helpers.addFlockCameras({ type: 'FeatureCollection', features: [] })
-            pushSearchLayerRef.current('flock', { type: 'FeatureCollection', features: [] })
-          })
-          .finally(() => onLoading?.(false))
-      } else helpers.removeFlockCameras()
 
       if (toggles.dataCenters) {
         onLoading?.(true)
@@ -1732,7 +1526,7 @@ export default function MapView({
       }
       const props = feat.properties || {}
       let html
-      if (feat.layer.id === 'search-results-layer' || feat.layer.id === 'mapped-news-layer' || feat.layer.id === 'mapped-osint-layer' || feat.layer.id === 'mapped-conflict-events-layer' || feat.layer.id === 'intel-geoconfirmed-layer') {
+      if (feat.layer.id === 'search-results-layer' || feat.layer.id === 'mapped-news-layer' || feat.layer.id === 'mapped-osint-layer' || feat.layer.id === 'mapped-conflict-events-layer') {
         const title = props.title || 'Untitled'
         const link = props.link ? `<a href="${props.link}" target="_blank" rel="noopener noreferrer" class="map-popup-read-more">Read More</a>` : ''
         html = `<div class="map-popup-content"><div class="map-popup-title">${title}</div><div class="map-popup-source">${props.source || ''}</div>${link}</div>`
@@ -1806,15 +1600,11 @@ export default function MapView({
       const needsRefresh =
         toggles.liveWildfires ||
         toggles.gdacs ||
-        toggles.geoconfirmed ||
         toggles.usgsEarthquakes ||
-        toggles.acled ||
-        toggles.adsbAircraft ||
         toggles.milAircraft ||
         toggles.iodaOutages ||
         toggles.commsInfrastructure ||
         toggles.fccTowers ||
-        toggles.flockCameras ||
         toggles.dataCenters ||
         toggles.surveillanceCapabilities ||
         (toggles.powerGrid && map.getZoom() >= MIN_POWER_ZOOM)
@@ -2260,18 +2050,6 @@ export default function MapView({
     if (!mapRef.current || !mapReadyRef.current) return
     refreshSavedPointsLayer()
   }, [refreshSavedPointsLayer])
-
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map) return
-    const handler = (e) => {
-      if (map?.getSource?.('intel-adsb') && e.detail?.type === 'FeatureCollection') {
-        map.getSource('intel-adsb').setData(e.detail)
-      }
-    }
-    window.addEventListener('supermap-adsb-data', handler)
-    return () => window.removeEventListener('supermap-adsb-data', handler)
-  }, [])
 
   useEffect(() => {
     if (!layerToggles?.dayNightTerminator) return

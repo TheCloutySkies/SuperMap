@@ -44,7 +44,6 @@ const OSINT_LAYER_SECTIONS = [
     title: 'Transportation (Tactical)',
     layers: [
       { key: 'milAircraft', label: 'Military Aircraft (adsb.lol)', hint: 'Free — no API key required' },
-      { key: 'aisShips', label: 'AIS (Ships)', placeholder: true },
     ],
   },
   {
@@ -52,7 +51,7 @@ const OSINT_LAYER_SECTIONS = [
     layers: [
       { key: 'noaaRadar', label: 'Weather radar' },
       { key: 'dayNightTerminator', label: 'Day / Night Terminator' },
-      { key: 'sentinel2BurnScars', label: 'Sentinel-2 Burn Scars', hasTimeFilter: true },
+      { key: 'sentinel2BurnScars', label: 'NASA GIBS (MODIS True Color)', hasTimeFilter: true },
     ],
   },
   {
@@ -89,9 +88,7 @@ const CONFLICT_LAYER_SECTIONS = [
     title: 'Conflict & Disasters',
     layers: [
       { key: 'gdacs', label: 'GDACS (Disasters)' },
-      { key: 'geoconfirmed', label: 'GeoConfirmed (OSINT)' },
-      { key: 'acled', label: 'ACLED (Conflict)' },
-      { key: 'sentinel2BurnScars', label: 'Sentinel-2 Burn Scars', hasTimeFilter: true },
+      { key: 'sentinel2BurnScars', label: 'NASA GIBS (MODIS True Color)', hasTimeFilter: true },
     ],
   },
 ]
@@ -312,7 +309,7 @@ export default function RightSidebar({
                         <span className="layer-hint">Zoom 14+ to load</span>
                       )}
                       {key === 'sentinel2BurnScars' && layerToggles[key] && (
-                        <span className="layer-hint">Sentinel Hub instance active</span>
+                        <span className="layer-hint">NASA GIBS MODIS Terra true-color tiles</span>
                       )}
                       {hasTimeFilter && layerToggles[key] && (
                         <div className="sentinel-time-filter">
@@ -400,7 +397,7 @@ export default function RightSidebar({
                         <span className="layer-hint">Zoom 14+ to load</span>
                       )}
                       {key === 'sentinel2BurnScars' && layerToggles[key] && (
-                        <span className="layer-hint">Sentinel Hub instance active</span>
+                        <span className="layer-hint">NASA GIBS MODIS Terra true-color tiles</span>
                       )}
                       {hasTimeFilter && layerToggles[key] && (
                         <div className="sentinel-time-filter">
@@ -461,7 +458,7 @@ export default function RightSidebar({
           </section>
           <section className="right-sidebar-section intelligence-layer-manager">
             <h3>Conflict Map Layers</h3>
-            <p className="layers-hint">GDACS, ACLED, and Sentinel-2 for disaster and conflict events.</p>
+            <p className="layers-hint">GDACS disasters and NASA GIBS imagery for conflict views.</p>
             {sections.map((section) => (
               <div key={section.title} className="layer-subsection">
                 <h4>{section.title}</h4>
@@ -477,7 +474,7 @@ export default function RightSidebar({
                         <span>{label}</span>
                       </label>
                       {key === 'sentinel2BurnScars' && layerToggles[key] && (
-                        <span className="layer-hint">Sentinel Hub instance active</span>
+                        <span className="layer-hint">NASA GIBS MODIS Terra true-color tiles</span>
                       )}
                       {hasTimeFilter && layerToggles[key] && (
                         <div className="sentinel-time-filter">

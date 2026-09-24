@@ -746,18 +746,6 @@ router.get('/search', (req, res) => {
   res.json(geo)
 })
 
-/** Flock cameras (RapidAPI). GET /api/flock/cameras?city=SanDiego */
-router.get('/flock/cameras', async (req, res) => {
-  const city = (req.query.city || 'SanDiego').trim()
-  try {
-    const geo = await rapidApi.fetchFlockCameras(city)
-    res.json(geo)
-  } catch (err) {
-    console.error('[API /flock/cameras]', err.message)
-    res.status(500).json({ error: 'Failed to fetch Flock cameras' })
-  }
-})
-
 /** Yahoo Finance screener. GET /api/finance/screener?list=day_gainers */
 router.get('/finance/screener', async (req, res) => {
   if (!rapidApi.requireKey(res)) return
@@ -880,22 +868,6 @@ router.get('/weather/nearby', async (req, res) => {
   }
 })
 
-/** ADS-B aircraft via backend RapidAPI key. GET /api/adsb?lat=..&lon=.. */
-router.get('/adsb', async (req, res) => {
-  if (!rapidApi.requireKey(res)) return
-  const lat = req.query.lat != null ? parseFloat(req.query.lat) : NaN
-  const lon = req.query.lon != null ? parseFloat(req.query.lon) : NaN
-  if (Number.isNaN(lat) || Number.isNaN(lon)) return res.status(400).json({ error: 'lat and lon required' })
-  try {
-    const { body, error } = await rapidApi.fetchAdsbAircraft(lat, lon)
-    if (error) return res.status(200).json(body || { type: 'FeatureCollection', features: [] })
-    res.json(body || { type: 'FeatureCollection', features: [] })
-  } catch (err) {
-    console.error('[API /adsb]', err.message)
-    res.status(500).json({ error: err.message })
-  }
-})
-
 /** adsb.lol API proxy (see https://api.adsb.lol/docs). GET /api/adsb-lol/airport/:icao */
 router.get('/adsb-lol/airport/:icao', async (req, res) => {
   const icao = (req.params.icao || '').trim().toUpperCase()
@@ -929,50 +901,6 @@ router.get('/adsb/mil', async (_req, res) => {
   } catch (err) {
     console.warn('[API /adsb/mil]', err.message)
     res.status(502).json({ error: 'Failed to fetch mil aircraft feed' })
-  }
-})
-
-/** GeoConfirmed.org map pins (KML → GeoJSON). GET /api/geoconfirmed?bbox=w,s,e,n */
-router.get('/geoconfirmed', async (req, res) => {
-  const GEOCONFIRMED_KML = 'https://geoconfirmed.org/api/map/ExportAsKml/World'
-  let bbox = null
-  if (req.query.bbox) {
-    const parts = String(req.query.bbox).split(',').map((n) => parseFloat(n.trim()))
-    if (parts.length >= 4 && parts.every((n) => !Number.isNaN(n))) bbox = parts
-  }
-  try {
-    const { data: kml } = await axios.get(GEOCONFIRMED_KML, { timeout: 20000, responseType: 'text' })
-    const features = []
-    const placemarkRe = /<Placemark[^>]*>([\s\S]*?)<\/Placemark>/gi
-    let m
-    while ((m = placemarkRe.exec(kml)) !== null) {
-      const block = m[1]
-      const nameMatch = block.match(/<name[^>]*>([\s\S]*?)<\/name>/i)
-      const name = (nameMatch && nameMatch[1].replace(/<[^>]+>/g, '').trim()) || ''
-      const coordMatch = block.match(/<coordinates[^>]*>([\s\S]*?)<\/coordinates>/i)
-      if (!coordMatch) continue
-      const coordStr = coordMatch[1].trim().split(/[\s]+/)[0] || ''
-      const parts = coordStr.split(',')
-      const lon = parseFloat(parts[0])
-      const lat = parseFloat(parts[1])
-      if (Number.isNaN(lon) || Number.isNaN(lat)) continue
-      if (bbox && bbox.length >= 4) {
-        const [w, s, e, n] = bbox
-        if (lon < w || lon > e || lat < s || lat > n) continue
-      }
-      const descMatch = block.match(/<description[^>]*>([\s\S]*?)<\/description>/i)
-      const description = (descMatch && descMatch[1].replace(/<[^>]+>/g, '').trim().slice(0, 300)) || ''
-      features.push({
-        type: 'Feature',
-        properties: { name, title: name, source: 'GeoConfirmed', description, link: 'https://geoconfirmed.org' },
-        geometry: { type: 'Point', coordinates: [lon, lat] },
-      })
-    }
-    res.setHeader('Content-Type', 'application/json')
-    res.json({ type: 'FeatureCollection', features })
-  } catch (err) {
-    console.warn('[API /geoconfirmed]', err.message)
-    res.status(502).json({ error: 'Failed to fetch GeoConfirmed data' })
   }
 })
 

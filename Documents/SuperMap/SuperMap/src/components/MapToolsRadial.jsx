@@ -21,7 +21,14 @@ function ToolPanel({ id, title, children, onClose, defaultPos }) {
   const nodeRef = useRef(null)
   const saved = loadPanelPositions()[id]
   const [collapsed, setCollapsed] = useState(() => loadPanelCollapsed(id))
-  const [pos] = useState(() => saved || defaultPos || { x: 16, y: 72 })
+  // Prefer on-screen defaults; ignore saved coords that look off-map
+  const startPos = (() => {
+    const fallback = defaultPos || { x: 16, y: 72 }
+    if (!saved || typeof saved.x !== 'number' || typeof saved.y !== 'number') return fallback
+    if (saved.x < -40 || saved.y < -40 || saved.x > 900 || saved.y > 700) return fallback
+    return saved
+  })()
+  const [pos] = useState(() => startPos)
 
   const toggleCollapse = () => {
     setCollapsed((prev) => {
@@ -182,11 +189,21 @@ export default function MapToolsRadial({
       const next = { ...prev }
       if (activeView !== 'geolocate-map') delete next.geolocatePresets
       if (activeView !== 'explore-map') delete next.draw
-      // Auto-open presets on Geolocate so tools are discoverable
-      if (activeView === 'geolocate-map') next.geolocatePresets = true
       saveOpenPanels(next)
       return next
     })
+    // Defer auto-open so remount after basemap switch still shows the panel
+    if (activeView === 'geolocate-map') {
+      const t = setTimeout(() => {
+        setPanels((prev) => {
+          const next = { ...prev, geolocatePresets: true }
+          saveOpenPanels(next)
+          return next
+        })
+      }, 50)
+      return () => clearTimeout(t)
+    }
+    return undefined
   }, [activeView])
 
   const setChrome = useCallback((key, value) => {
@@ -329,6 +346,16 @@ export default function MapToolsRadial({
           }}
           onClose={() => closePanel('chrome')}
         />
+      )}
+
+      {activeView === 'geolocate-map' && !panels.geolocatePresets && (
+        <button
+          type="button"
+          className="map-tools-presets-chip"
+          onClick={() => openPanel('geolocatePresets')}
+        >
+          Open presets
+        </button>
       )}
     </>
   )

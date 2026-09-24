@@ -1071,7 +1071,7 @@ export default function MapView({
       source: 'intel-saved-points',
       filter: ['==', ['geometry-type'], 'LineString'],
       paint: {
-        'line-color': '#58a6ff',
+        'line-color': '#3dd68c',
         'line-width': 2,
       },
     })
@@ -1081,9 +1081,9 @@ export default function MapView({
       source: 'intel-saved-points',
       filter: ['==', ['geometry-type'], 'Polygon'],
       paint: {
-        'fill-color': '#58a6ff',
+        'fill-color': '#3dd68c',
         'fill-opacity': 0.25,
-        'fill-outline-color': '#58a6ff',
+        'fill-outline-color': '#3dd68c',
       },
     })
   }, [])
@@ -1791,7 +1791,7 @@ export default function MapView({
           globeSize: 82,
           landColor: '#2d333b',
           waterColor: '#0d1117',
-          markerColor: '#58a6ff',
+          markerColor: '#3dd68c',
         })
         if (typeof globeMinimap.onRemove !== 'function') {
           globeMinimap.onRemove = function () {
@@ -2077,11 +2077,11 @@ export default function MapView({
   }
 
   return (
-    <div className="map-view-wrapper" style={{ minHeight: 'calc(100vh - 140px)' }}>
+    <div className="map-view-wrapper" style={{ minHeight: 0, flex: 1, height: '100%' }}>
       <div
         ref={containerRef}
         className="map-view map-container"
-        style={{ width: '100%', height: '100%', minHeight: 'calc(100vh - 140px)' }}
+        style={{ width: '100%', height: '100%', minHeight: 0 }}
       />
       <div className="map-crosshair" aria-hidden="true" />
       <MapControls map={mapInstance} activeView={activeView} />

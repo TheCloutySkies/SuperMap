@@ -1,0 +1,110 @@
+.mode-subnav {
+  flex-shrink: 0;
+  width: var(--y2k-subnav-width, 200px);
+  max-width: min(220px, 42vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--y2k-surface-raised);
+  border-right: 1px solid var(--y2k-border);
+  z-index: 35;
+  overflow: hidden;
+  animation: mode-subnav-in 0.24s ease;
+}
+
+@keyframes mode-subnav-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+    max-width: 0;
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+    max-width: min(220px, 42vw);
+  }
+}
+
+.mode-subnav-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.85rem 0.75rem 0.65rem;
+  border-bottom: 1px solid var(--y2k-border);
+  flex-shrink: 0;
+}
+
+.mode-subnav-title {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--y2k-accent);
+}
+
+.mode-subnav-close {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--y2k-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--y2k-text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.mode-subnav-close:hover {
+  color: var(--y2k-text);
+  border-color: var(--y2k-border-light);
+  background: var(--y2k-accent-soft);
+}
+
+.mode-subnav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0.5rem 0.4rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  min-height: 0;
+}
+
+.mode-subnav-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.55rem 0.7rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--y2k-text-muted);
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.mode-subnav-item:hover {
+  color: var(--y2k-text);
+  background: rgba(61, 214, 140, 0.08);
+}
+
+.mode-subnav-item.active {
+  color: var(--y2k-text);
+  background: rgba(61, 214, 140, 0.14);
+  font-weight: 700;
+  box-shadow: inset 2px 0 0 var(--y2k-accent);
+}
+
+@media (max-width: 900px) {
+  .mode-subnav {
+    position: absolute;
+    left: var(--y2k-rail-width, 48px);
+    top: 0;
+    bottom: 0;
+    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.35);
+  }
+}

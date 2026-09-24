@@ -1,0 +1,111 @@
+.mode-rail {
+  flex-shrink: 0;
+  width: var(--y2k-rail-width, 56px);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  background: var(--y2k-surface);
+  border-right: 1px solid var(--y2k-border);
+  z-index: 40;
+  position: relative;
+}
+
+.mode-rail-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 48px;
+  border-bottom: 1px solid var(--y2k-border);
+  flex-shrink: 0;
+}
+
+.mode-rail-brand-mark {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--y2k-accent);
+}
+
+.mode-rail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0.4rem 0.3rem;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.mode-rail-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  width: 100%;
+  min-height: 52px;
+  padding: 0.4rem 0.2rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--y2k-text-muted);
+  cursor: pointer;
+  transition: color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.mode-rail-btn:hover {
+  color: var(--y2k-text);
+  background: var(--y2k-accent-soft);
+  transform: translateY(-1px);
+}
+
+.mode-rail-btn.active {
+  color: var(--y2k-accent);
+  background: rgba(61, 214, 140, 0.1);
+}
+
+.mode-rail-icon {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.mode-rail-label {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.1;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mode-rail-indicator {
+  position: absolute;
+  left: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--y2k-accent);
+  animation: mode-rail-indicator-in 0.22s ease;
+}
+
+@keyframes mode-rail-indicator-in {
+  from { transform: scaleY(0.4); opacity: 0; }
+  to { transform: scaleY(1); opacity: 1; }
+}
+
+@media (max-width: 900px) {
+  .mode-rail {
+    width: 48px;
+  }
+  .mode-rail-label {
+    display: none;
+  }
+  .mode-rail-btn {
+    min-height: 44px;
+  }
+}

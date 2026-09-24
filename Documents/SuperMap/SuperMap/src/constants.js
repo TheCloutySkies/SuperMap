@@ -143,20 +143,24 @@ const DEFAULT_VISUALS = { theme: 'dark', compact: false, fontSize: 'normal' }
 export function getVisualsPrefs(userId = null) {
   try {
     const raw = localStorage.getItem(scopedKey(STORAGE_KEYS.VISUALS_PREFS, userId))
+    let parsed = null
     if (!raw) {
-      // Backward compatibility with older global key.
       const legacy = localStorage.getItem(STORAGE_KEYS.VISUALS_PREFS)
       if (!legacy) return { ...DEFAULT_VISUALS }
-      return { ...DEFAULT_VISUALS, ...JSON.parse(legacy) }
+      parsed = JSON.parse(legacy)
+    } else {
+      parsed = JSON.parse(raw)
     }
-    return { ...DEFAULT_VISUALS, ...JSON.parse(raw) }
+    // Constant night mode — ignore any stored light theme
+    return { ...DEFAULT_VISUALS, ...parsed, theme: 'dark' }
   } catch {
     return { ...DEFAULT_VISUALS }
   }
 }
 
 export function setVisualsPrefs(prefs, userId = null) {
-  localStorage.setItem(scopedKey(STORAGE_KEYS.VISUALS_PREFS, userId), JSON.stringify(prefs || {}))
+  const next = { ...(prefs || {}), theme: 'dark' }
+  localStorage.setItem(scopedKey(STORAGE_KEYS.VISUALS_PREFS, userId), JSON.stringify(next))
 }
 
 // Basemap definitions: id, label, style (URL or inline style object)

@@ -165,14 +165,7 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
             <h2>Visuals</h2>
             <div className="settings-field">
               <label>Theme</label>
-              <select
-                value={visuals.theme || 'dark'}
-                onChange={(e) => setVisuals((v) => ({ ...v, theme: e.target.value }))}
-                className="settings-select"
-              >
-                <option value="dark">Dark</option>
-                <option value="light">Light</option>
-              </select>
+              <p className="settings-hint">Night ops (charcoal + emerald) is always on.</p>
             </div>
             <div className="settings-field">
               <label>

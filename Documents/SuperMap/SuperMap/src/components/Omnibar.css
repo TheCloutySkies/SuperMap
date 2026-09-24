@@ -55,14 +55,29 @@
 }
 
 .omnibar-search-btn--primary {
-  color: #fff;
-  background: linear-gradient(180deg, #4fc3f7 0%, var(--y2k-accent) 50%, #1e88e5 100%);
-  border-color: var(--y2k-accent);
+  color: #06100a;
+  background: linear-gradient(180deg, var(--y2k-accent-hover) 0%, var(--y2k-accent) 55%, #2bb872 100%);
+  border-color: #2bb872;
 }
 
 .omnibar-search-btn--primary:hover {
-  background: linear-gradient(180deg, #4fc3f7 0%, var(--y2k-accent-hover) 50%, #1e88e5 100%);
+  background: linear-gradient(180deg, #7aecc0 0%, var(--y2k-accent-hover) 50%, var(--y2k-accent) 100%);
   border-color: var(--y2k-accent-hover);
+}
+
+.omnibar-cmd-btn {
+  color: var(--y2k-accent);
+  background: var(--y2k-surface-raised);
+  border-color: var(--y2k-border);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0.5rem 0.55rem;
+}
+
+.omnibar-cmd-btn:hover {
+  background: var(--y2k-accent-soft);
+  border-color: var(--y2k-border-light);
 }
 
 .omnibar-search-btn--secondary {
@@ -71,7 +86,7 @@
 }
 
 .omnibar-search-btn--secondary:hover:not(:disabled) {
-  background: linear-gradient(180deg, #323a45 0%, #252b33 50%, #1a1f26 100%);
+  background: linear-gradient(180deg, #24332c 0%, #1a2420 50%, #121a15 100%);
   border-color: var(--y2k-border-light);
 }
 

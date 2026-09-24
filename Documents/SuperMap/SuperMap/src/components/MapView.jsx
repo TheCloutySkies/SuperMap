@@ -12,6 +12,10 @@ import {
   fetchNasaFirmsArea,
   fetchGdacsEvents,
   fetchUsgsEarthquakes,
+  fetchEmscEarthquakes,
+  fetchNwsAlerts,
+  fetchUsgsVolcanoes,
+  fetchNhcTropical,
   fetchUtilityOutages,
   fetchFccTowers,
   fetchDatacenters,
@@ -45,6 +49,11 @@ const CLICKABLE_POINT_LAYERS = [
   'intel-firms-layer',
   'intel-gdacs-layer',
   'intel-usgs-layer',
+  'intel-emsc-layer',
+  'intel-nws-layer',
+  'intel-nws-fill',
+  'intel-volcanoes-layer',
+  'intel-nhc-layer',
   'intel-outages-layer',
   'intel-comms-layer',
   'intel-fcc-towers-layer',
@@ -217,6 +226,134 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
   const removeUsgs = () => {
     if (map.getLayer('intel-usgs-layer')) map.removeLayer('intel-usgs-layer')
     if (map.getSource('intel-usgs')) map.removeSource('intel-usgs')
+  }
+
+  const addEmsc = (geoJson) => {
+    if (map.getSource('intel-emsc')) {
+      map.getSource('intel-emsc').setData(geoJson)
+      return
+    }
+    map.addSource('intel-emsc', { type: 'geojson', data: geoJson })
+    map.addLayer({
+      id: 'intel-emsc-layer',
+      type: 'circle',
+      source: 'intel-emsc',
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['coalesce', ['to-number', ['get', 'mag']], 0], 0, 4, 7, 16],
+        'circle-color': '#06b6d4',
+        'circle-opacity': 0.9,
+        'circle-stroke-width': 1,
+        'circle-stroke-color': '#fff',
+      },
+    })
+  }
+
+  const removeEmsc = () => {
+    if (map.getLayer('intel-emsc-layer')) map.removeLayer('intel-emsc-layer')
+    if (map.getSource('intel-emsc')) map.removeSource('intel-emsc')
+  }
+
+  const addNwsAlerts = (geoJson) => {
+    if (map.getSource('intel-nws')) {
+      map.getSource('intel-nws').setData(geoJson)
+      return
+    }
+    map.addSource('intel-nws', { type: 'geojson', data: geoJson })
+    map.addLayer({
+      id: 'intel-nws-fill',
+      type: 'fill',
+      source: 'intel-nws',
+      filter: ['any', ['==', ['geometry-type'], 'Polygon'], ['==', ['geometry-type'], 'MultiPolygon']],
+      paint: {
+        'fill-color': '#f59e0b',
+        'fill-opacity': 0.25,
+      },
+    })
+    map.addLayer({
+      id: 'intel-nws-line',
+      type: 'line',
+      source: 'intel-nws',
+      filter: ['any',
+        ['==', ['geometry-type'], 'Polygon'],
+        ['==', ['geometry-type'], 'MultiPolygon'],
+        ['==', ['geometry-type'], 'LineString'],
+      ],
+      paint: {
+        'line-color': '#f59e0b',
+        'line-width': 2,
+        'line-opacity': 0.8,
+      },
+    })
+    map.addLayer({
+      id: 'intel-nws-layer',
+      type: 'circle',
+      source: 'intel-nws',
+      filter: ['==', ['geometry-type'], 'Point'],
+      paint: {
+        'circle-radius': 7,
+        'circle-color': '#f59e0b',
+        'circle-opacity': 0.9,
+        'circle-stroke-width': 1,
+        'circle-stroke-color': '#fff',
+      },
+    })
+  }
+
+  const removeNwsAlerts = () => {
+    if (map.getLayer('intel-nws-layer')) map.removeLayer('intel-nws-layer')
+    if (map.getLayer('intel-nws-line')) map.removeLayer('intel-nws-line')
+    if (map.getLayer('intel-nws-fill')) map.removeLayer('intel-nws-fill')
+    if (map.getSource('intel-nws')) map.removeSource('intel-nws')
+  }
+
+  const addVolcanoes = (geoJson) => {
+    if (map.getSource('intel-volcanoes')) {
+      map.getSource('intel-volcanoes').setData(geoJson)
+      return
+    }
+    map.addSource('intel-volcanoes', { type: 'geojson', data: geoJson })
+    map.addLayer({
+      id: 'intel-volcanoes-layer',
+      type: 'circle',
+      source: 'intel-volcanoes',
+      paint: {
+        'circle-radius': 9,
+        'circle-color': '#dc2626',
+        'circle-opacity': 0.9,
+        'circle-stroke-width': 2,
+        'circle-stroke-color': '#fef08a',
+      },
+    })
+  }
+
+  const removeVolcanoes = () => {
+    if (map.getLayer('intel-volcanoes-layer')) map.removeLayer('intel-volcanoes-layer')
+    if (map.getSource('intel-volcanoes')) map.removeSource('intel-volcanoes')
+  }
+
+  const addNhc = (geoJson) => {
+    if (map.getSource('intel-nhc')) {
+      map.getSource('intel-nhc').setData(geoJson)
+      return
+    }
+    map.addSource('intel-nhc', { type: 'geojson', data: geoJson })
+    map.addLayer({
+      id: 'intel-nhc-layer',
+      type: 'circle',
+      source: 'intel-nhc',
+      paint: {
+        'circle-radius': 10,
+        'circle-color': '#0ea5e9',
+        'circle-opacity': 0.9,
+        'circle-stroke-width': 2,
+        'circle-stroke-color': '#fff',
+      },
+    })
+  }
+
+  const removeNhc = () => {
+    if (map.getLayer('intel-nhc-layer')) map.removeLayer('intel-nhc-layer')
+    if (map.getSource('intel-nhc')) map.removeSource('intel-nhc')
   }
 
   const addRailway = () => {
@@ -887,6 +1024,14 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     removeGdacs,
     addUsgs,
     removeUsgs,
+    addEmsc,
+    removeEmsc,
+    addNwsAlerts,
+    removeNwsAlerts,
+    addVolcanoes,
+    removeVolcanoes,
+    addNhc,
+    removeNhc,
     addNoaaRadar,
     removeNoaaRadar,
     addSentinel2BurnScars,
@@ -1229,6 +1374,62 @@ export default function MapView({
           })
           .finally(() => onLoading?.(false))
       } else helpers.removeUsgs()
+
+      if (toggles.emscEarthquakes) {
+        onLoading?.(true)
+        fetchEmscEarthquakes(bbox())
+          .then((geoJson) => {
+            helpers.addEmsc(geoJson)
+            pushSearchLayerRef.current('emsc', geoJson)
+          })
+          .catch(() => {
+            helpers.addEmsc({ type: 'FeatureCollection', features: [] })
+            pushSearchLayerRef.current('emsc', { type: 'FeatureCollection', features: [] })
+          })
+          .finally(() => onLoading?.(false))
+      } else helpers.removeEmsc()
+
+      if (toggles.nwsAlerts) {
+        onLoading?.(true)
+        fetchNwsAlerts(bbox())
+          .then((geoJson) => {
+            helpers.addNwsAlerts(geoJson)
+            pushSearchLayerRef.current('nws', geoJson)
+          })
+          .catch(() => {
+            helpers.addNwsAlerts({ type: 'FeatureCollection', features: [] })
+            pushSearchLayerRef.current('nws', { type: 'FeatureCollection', features: [] })
+          })
+          .finally(() => onLoading?.(false))
+      } else helpers.removeNwsAlerts()
+
+      if (toggles.usgsVolcanoes) {
+        onLoading?.(true)
+        fetchUsgsVolcanoes(bbox())
+          .then((geoJson) => {
+            helpers.addVolcanoes(geoJson)
+            pushSearchLayerRef.current('volcanoes', geoJson)
+          })
+          .catch(() => {
+            helpers.addVolcanoes({ type: 'FeatureCollection', features: [] })
+            pushSearchLayerRef.current('volcanoes', { type: 'FeatureCollection', features: [] })
+          })
+          .finally(() => onLoading?.(false))
+      } else helpers.removeVolcanoes()
+
+      if (toggles.nhcTropical) {
+        onLoading?.(true)
+        fetchNhcTropical(bbox())
+          .then((geoJson) => {
+            helpers.addNhc(geoJson)
+            pushSearchLayerRef.current('nhc', geoJson)
+          })
+          .catch(() => {
+            helpers.addNhc({ type: 'FeatureCollection', features: [] })
+            pushSearchLayerRef.current('nhc', { type: 'FeatureCollection', features: [] })
+          })
+          .finally(() => onLoading?.(false))
+      } else helpers.removeNhc()
 
       if (toggles.noaaRadar) helpers.addNoaaRadar()
       else helpers.removeNoaaRadar()
@@ -1601,6 +1802,10 @@ export default function MapView({
         toggles.liveWildfires ||
         toggles.gdacs ||
         toggles.usgsEarthquakes ||
+        toggles.emscEarthquakes ||
+        toggles.nwsAlerts ||
+        toggles.usgsVolcanoes ||
+        toggles.nhcTropical ||
         toggles.milAircraft ||
         toggles.iodaOutages ||
         toggles.commsInfrastructure ||

@@ -6,6 +6,7 @@ const router = express.Router()
 const newsService = require('../services/news')
 const osintService = require('../services/osint')
 const safetyService = require('../services/safety')
+const hazardsService = require('../services/hazards')
 const infrastructureService = require('../services/infrastructure')
 const { searchAll } = require('../services/searchIndex')
 const { getEventsForSearch, getEvents, getEventTagNames, getEventsWithAnyTagInTimeRange } = require('../database')
@@ -629,6 +630,43 @@ router.get('/disasters', async (req, res) => {
   } catch (err) {
     console.error('[API /disasters]', err.message)
     res.status(500).json({ error: 'Failed to fetch disasters' })
+  }
+})
+
+/** Free no-key hazard layers: NWS alerts, EMSC quakes, USGS volcanoes, NHC tropical. */
+router.get('/hazards/nws', async (req, res) => {
+  try {
+    res.json(await hazardsService.getNwsAlerts(req.query))
+  } catch (err) {
+    console.error('[API /hazards/nws]', err.message)
+    res.status(500).json({ type: 'FeatureCollection', features: [] })
+  }
+})
+
+router.get('/hazards/emsc', async (req, res) => {
+  try {
+    res.json(await hazardsService.getEmscEarthquakes(req.query))
+  } catch (err) {
+    console.error('[API /hazards/emsc]', err.message)
+    res.status(500).json({ type: 'FeatureCollection', features: [] })
+  }
+})
+
+router.get('/hazards/volcanoes', async (req, res) => {
+  try {
+    res.json(await hazardsService.getUsgsVolcanoes(req.query))
+  } catch (err) {
+    console.error('[API /hazards/volcanoes]', err.message)
+    res.status(500).json({ type: 'FeatureCollection', features: [] })
+  }
+})
+
+router.get('/hazards/nhc', async (req, res) => {
+  try {
+    res.json(await hazardsService.getNhcTropical(req.query))
+  } catch (err) {
+    console.error('[API /hazards/nhc]', err.message)
+    res.status(500).json({ type: 'FeatureCollection', features: [] })
   }
 })
 

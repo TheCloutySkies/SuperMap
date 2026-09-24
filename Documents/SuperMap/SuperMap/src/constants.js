@@ -8,6 +8,7 @@ export const STORAGE_KEYS = {
   LOCATION_REQUESTED: 'supermap_locationRequested',
   RAPIDAPI_KEYS: 'supermap_rapidapiKeys',
   VISUALS_PREFS: 'supermap_visualsPrefs',
+  MOBILE_PROMPT_SEEN: 'supermap_mobilePromptSeen',
 }
 
 function scopedKey(baseKey, userId) {
@@ -22,6 +23,10 @@ export const DEFAULT_LAYER_TOGGLES = {
   liveWildfires: false,
   gdacs: false,
   usgsEarthquakes: false,
+  emscEarthquakes: false,
+  nwsAlerts: false,
+  usgsVolcanoes: false,
+  nhcTropical: false,
   milAircraft: false,
   noaaRadar: false,
   aoiDraw: false,

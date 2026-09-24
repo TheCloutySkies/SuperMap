@@ -112,6 +112,7 @@
   min-height: 0;
   position: relative;
   z-index: 1;
+  overflow: visible;
 }
 
 .sidebar-left {

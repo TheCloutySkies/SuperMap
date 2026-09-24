@@ -8,6 +8,10 @@ const newsService = require('./news')
 
 const HOME_CACHE_CONTROL = 'public, max-age=60, stale-while-revalidate=600'
 
+/** In-memory homeImages cache so gallery stays non-empty and refreshes on a TTL. */
+const HOME_IMAGES_TTL_MS = 90 * 1000
+let homeImagesCache = { at: 0, items: [], source: null }
+
 function apiBaseUrl() {
   const port = process.env.PORT || 3001
   return `http://127.0.0.1:${port}`
@@ -29,10 +33,28 @@ function isRealPhotoUrl(url) {
   return true
 }
 
+function invalidateHomeImagesCache() {
+  homeImagesCache = { at: 0, items: [], source: null }
+}
+
 /**
- * Homepage gallery images: FxTwitter OSINT handles first, then Reddit combat video frames.
+ * Homepage gallery images:
+ * 1) Recent DB OSINT-X images (from continuous ingest) — fast, always available
+ * 2) Live FxTwitter top-up (rotating handles) — keeps gallery fresh
+ * 3) Reddit video frames fallback
+ *
+ * Cached ~90s unless force=true.
  */
-async function buildHomeImages({ max = 24 } = {}) {
+async function buildHomeImages({ max = 24, force = false } = {}) {
+  const now = Date.now()
+  if (
+    !force &&
+    homeImagesCache.items.length > 0 &&
+    now - homeImagesCache.at < HOME_IMAGES_TTL_MS
+  ) {
+    return homeImagesCache.items.slice(0, max)
+  }
+
   const items = []
   const seen = new Set()
   const push = (row) => {
@@ -41,45 +63,114 @@ async function buildHomeImages({ max = 24 } = {}) {
     items.push(row)
   }
 
+  // 1) DB-backed images from continuous ingest
   try {
-    const xImages = await osintXFeedService.fetchHomeOsintImages({ maxHandles: 10, maxImages: max })
-    for (const img of xImages) {
-      push({
-        src: img.src,
-        postUrl: img.postUrl,
-        caption: img.caption,
-        account: img.account,
-        source: 'x',
-        provider: img.provider || 'fxtwitter',
-      })
-      if (items.length >= max) return items
-    }
+    const fromDb = osintXFeedService.collectDbOsintImages({ max })
+    for (const img of fromDb) push(img)
   } catch (err) {
-    console.warn('[home] FxTwitter images:', err.message)
+    console.warn('[home] DB images:', err.message)
   }
 
-  // Resilient fallback already in repo: Reddit video preview frames (real photos)
-  try {
-    const reddit = typeof newsService.getRedditVideoItems === 'function'
-      ? await newsService.getRedditVideoItems()
-      : []
-    for (const r of reddit) {
-      if (!r?.thumbnail) continue
-      push({
-        src: r.thumbnail,
-        postUrl: r.link || r.thumbnail,
-        caption: r.title || '',
-        account: null,
-        source: 'reddit',
-        provider: r.source || 'reddit',
+  // 2) Live FxTwitter top-up (skip if already full unless force)
+  if (items.length < max || force) {
+    try {
+      const need = Math.max(max - items.length, force ? Math.min(8, max) : 0)
+      const maxHandles = force ? 10 : 6
+      const xImages = await osintXFeedService.fetchHomeOsintImages({
+        maxHandles,
+        maxImages: Math.max(need, force ? max : need),
       })
-      if (items.length >= max) break
+      // On force, prefer live images first by rebuilding order: live then prior DB
+      if (force && xImages.length) {
+        const liveFirst = []
+        const liveSeen = new Set()
+        for (const img of xImages) {
+          if (!img?.src || liveSeen.has(img.src) || !isRealPhotoUrl(img.src)) continue
+          liveSeen.add(img.src)
+          liveFirst.push({
+            src: img.src,
+            postUrl: img.postUrl,
+            caption: img.caption,
+            account: img.account,
+            source: 'x',
+            provider: img.provider || 'fxtwitter',
+          })
+          if (liveFirst.length >= max) break
+        }
+        for (const prev of items) {
+          if (liveFirst.length >= max) break
+          if (liveSeen.has(prev.src)) continue
+          liveSeen.add(prev.src)
+          liveFirst.push(prev)
+        }
+        items.length = 0
+        seen.clear()
+        for (const row of liveFirst) {
+          seen.add(row.src)
+          items.push(row)
+        }
+      } else {
+        for (const img of xImages) {
+          push({
+            src: img.src,
+            postUrl: img.postUrl,
+            caption: img.caption,
+            account: img.account,
+            source: 'x',
+            provider: img.provider || 'fxtwitter',
+          })
+          if (items.length >= max) break
+        }
+      }
+    } catch (err) {
+      console.warn('[home] FxTwitter images:', err.message)
     }
-  } catch (err) {
-    console.warn('[home] Reddit image fallback:', err.message)
   }
 
-  return items
+  // 3) Reddit fallback if still short
+  if (items.length < Math.min(8, max)) {
+    try {
+      const reddit = typeof newsService.getRedditVideoItems === 'function'
+        ? await newsService.getRedditVideoItems()
+        : []
+      for (const r of reddit) {
+        if (!r?.thumbnail) continue
+        push({
+          src: r.thumbnail,
+          postUrl: r.link || r.thumbnail,
+          caption: r.title || '',
+          account: null,
+          source: 'reddit',
+          provider: r.source || 'reddit',
+        })
+        if (items.length >= max) break
+      }
+    } catch (err) {
+      console.warn('[home] Reddit image fallback:', err.message)
+    }
+  }
+
+  if (items.length) {
+    homeImagesCache = {
+      at: Date.now(),
+      items: items.slice(0, max),
+      source: items[0]?.provider || 'mixed',
+    }
+  }
+  return items.slice(0, max)
+}
+
+/** Background refresh used after scheduled X ingest. */
+async function refreshHomeImagesBackground() {
+  try {
+    invalidateHomeImagesCache()
+    const images = await buildHomeImages({ max: 24, force: true })
+    console.log('[home] images refreshed:', images.length)
+    return images
+  } catch (err) {
+    console.warn('[home] images refresh:', err.message)
+    return []
+  }
 }
 
 /**
@@ -145,7 +236,10 @@ async function warmHomeCaches() {
 
 module.exports = {
   HOME_CACHE_CONTROL,
+  HOME_IMAGES_TTL_MS,
   getHomePayload,
   warmHomeCaches,
   buildHomeImages,
+  invalidateHomeImagesCache,
+  refreshHomeImagesBackground,
 }

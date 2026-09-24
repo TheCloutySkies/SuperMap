@@ -267,11 +267,21 @@ async function ensureOsintXFresh({ limitFeeds = 12, force = false, budgetMs = 0 
 }
 
 /**
- * Fast path for homepage gallery: live FxTwitter images only (no DB required).
- * Returns [{ src, postUrl, caption, account, source }]
+ * Fast path for homepage gallery: live FxTwitter images (no DB required).
+ * Rotates start handle so repeated calls surface fresher accounts over time.
+ * Returns [{ src, postUrl, caption, account, source, provider }]
  */
+let homeImageHandleCursor = 0
+
 async function fetchHomeOsintImages({ maxHandles = 8, maxImages = 24 } = {}) {
-  const feeds = getOsintXFeeds().slice(0, maxHandles)
+  const all = getOsintXFeeds()
+  if (!all.length) return []
+  const start = homeImageHandleCursor % all.length
+  homeImageHandleCursor = (start + maxHandles) % all.length
+  const feeds = []
+  for (let i = 0; i < Math.min(maxHandles, all.length); i++) {
+    feeds.push(all[(start + i) % all.length])
+  }
   const items = []
   const seen = new Set()
   const CONCURRENCY = 4
@@ -303,9 +313,136 @@ async function fetchHomeOsintImages({ maxHandles = 8, maxImages = 24 } = {}) {
   return items
 }
 
+/**
+ * Images already ingested into the DB (from scheduled/live pulls).
+ * Fast, non-network path so the homepage stays non-empty between FxTwitter calls.
+ */
+function collectDbOsintImages({ max = 24, maxAgeMs = 48 * 60 * 60 * 1000 } = {}) {
+  let getEvents
+  try {
+    getEvents = require('../database').getEvents
+  } catch (_) {
+    return []
+  }
+  const cutoff = Date.now() - maxAgeMs
+  const rows = getEvents(Math.min(max * 4, 200), null, null, null, null, ['x'])
+  const items = []
+  const seen = new Set()
+  for (const r of rows) {
+    if ((r.timestamp != null ? Number(r.timestamp) : 0) < cutoff) continue
+    let raw = {}
+    try {
+      raw = r.raw_data ? JSON.parse(r.raw_data) : {}
+    } catch (_) {}
+    const images = Array.isArray(raw.images) ? raw.images : []
+    for (const src of images) {
+      if (!src || seen.has(src)) continue
+      seen.add(src)
+      items.push({
+        src,
+        postUrl: raw.link || raw.url || src,
+        caption: (r.description || r.title || '').trim().slice(0, 400),
+        account: raw.account || null,
+        source: 'x',
+        provider: raw.provider || 'fxtwitter',
+      })
+      if (items.length >= max) return items
+    }
+  }
+  return items
+}
+
+/**
+ * Continuous scheduled ingest: rotate through handles in batches so every
+ * account is refreshed regularly without hammering FxTwitter all at once.
+ * Overlap-guarded — skips if a previous tick is still running.
+ */
+let rotateCursor = 0
+let scheduledIngestInFlight = null
+let lastScheduledAt = 0
+let lastScheduledResult = null
+
+async function fetchOsintXFeedsRotated({ batchSize = 8 } = {}) {
+  if (scheduledIngestInFlight) {
+    return { skipped: true, reason: 'inflight', ...(lastScheduledResult || {}) }
+  }
+  const all = getOsintXFeeds()
+  if (!all.length) return { skipped: true, reason: 'no-feeds', count: 0, handles: [] }
+
+  const size = Math.max(1, Math.min(batchSize, all.length))
+  const start = rotateCursor % all.length
+  const batch = []
+  for (let i = 0; i < size; i++) batch.push(all[(start + i) % all.length])
+  rotateCursor = (start + size) % all.length
+
+  scheduledIngestInFlight = (async () => {
+    const t0 = Date.now()
+    // Temporarily restrict getOsintXFeeds consumers by fetching only this batch
+    const results = []
+    const CONCURRENCY = 4
+    for (let i = 0; i < batch.length; i += CONCURRENCY) {
+      const chunk = batch.slice(i, i + CONCURRENCY)
+      const part = await Promise.allSettled(chunk.map((feed) => fetchOneFeed(feed)))
+      for (let j = 0; j < part.length; j++) {
+        const s = part[j]
+        const feed = chunk[j]
+        if (s.status !== 'fulfilled' || !s.value.length) continue
+        for (const item of s.value) {
+          const tags = tagOsintPost({ title: item.title, content: item.content })
+          const event = normalizeToOsintEvent(item)
+          ingestEvent(event, { extraTags: ['x', 'osint', ...tags] })
+          results.push({
+            id: event.id,
+            account: item.account,
+            title: item.title,
+            images: item.images || [],
+            provider: 'fxtwitter',
+          })
+        }
+      }
+    }
+    lastScheduledAt = Date.now()
+    lastLiveRefreshAt = lastScheduledAt
+    lastScheduledResult = {
+      skipped: false,
+      count: results.length,
+      handles: batch.map((f) => f.handle),
+      nextCursor: rotateCursor,
+      ms: Date.now() - t0,
+    }
+    console.log(
+      '[osint-x] rotated ingest',
+      `handles=${batch.map((f) => f.handle).join(',')}`,
+      `posts=${results.length}`,
+      `ms=${lastScheduledResult.ms}`,
+    )
+    return lastScheduledResult
+  })()
+
+  try {
+    return await scheduledIngestInFlight
+  } finally {
+    scheduledIngestInFlight = null
+  }
+}
+
+function getIngestStatus() {
+  return {
+    lastScheduledAt: lastScheduledAt || null,
+    lastLiveRefreshAt: lastLiveRefreshAt || null,
+    rotateCursor,
+    lastScheduledResult,
+    liveInFlight: !!liveRefreshInFlight,
+    scheduledInFlight: !!scheduledIngestInFlight,
+  }
+}
+
 module.exports = {
   fetchOsintXFeeds,
+  fetchOsintXFeedsRotated,
   ensureOsintXFresh,
   fetchHomeOsintImages,
+  collectDbOsintImages,
+  getIngestStatus,
   PRIORITY_ORDER,
 }

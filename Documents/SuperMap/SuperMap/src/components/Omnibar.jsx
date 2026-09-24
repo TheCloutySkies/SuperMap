@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import axios from 'axios'
+import { CRIME_VIEW_ID } from '../constants'
 import './Omnibar.css'
 
 const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
@@ -10,7 +11,7 @@ const DEFAULT_COMMANDS = [
   { id: 'cmd-home', label: 'Go Home', keywords: 'home dashboard', action: 'navigate', viewId: 'home' },
   { id: 'cmd-osint-map', label: 'OSINT Map', keywords: 'maps osint', action: 'navigate', viewId: 'osint-map' },
   { id: 'cmd-conflict-map', label: 'Conflict Map', keywords: 'maps conflict war', action: 'navigate', viewId: 'conflict-map' },
-  { id: 'cmd-crime', label: 'Crime Intelligence', keywords: 'crime fbi ucr ask intelligence', action: 'navigate', viewId: 'crime' },
+  { id: 'cmd-crime', label: 'Crime Intelligence', keywords: 'crime fbi ucr ask intelligence', action: 'navigate', viewId: CRIME_VIEW_ID },
   { id: 'cmd-explore-map', label: 'Explore Map', keywords: 'maps explore', action: 'navigate', viewId: 'explore-map' },
   { id: 'cmd-geolocate', label: 'Geolocate', keywords: 'maps geolocate overpass', action: 'navigate', viewId: 'geolocate-map' },
   { id: 'cmd-news', label: 'News Feeds', keywords: 'feeds news', action: 'navigate', viewId: 'news-feeds' },

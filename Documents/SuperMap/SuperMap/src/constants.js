@@ -1,3 +1,18 @@
+/** Canonical Crime Intelligence page view id (ModeRail CRIME, Radial, Home, Omnibar). */
+export const CRIME_VIEW_ID = 'crime'
+/** Legacy ids redirected to CRIME_VIEW_ID — never open the old Maps crime-map overlay. */
+export const CRIME_VIEW_ALIASES = Object.freeze(['crime-map', 'crime-intel'])
+
+export function resolveCrimeViewId(viewId) {
+  if (viewId === CRIME_VIEW_ID || CRIME_VIEW_ALIASES.includes(viewId)) return CRIME_VIEW_ID
+  return viewId
+}
+
+/** True when the dedicated CrimeIntelligenceView should render. */
+export function isCrimeIntelligenceView(viewId) {
+  return viewId === CRIME_VIEW_ID || viewId === 'crime-intel'
+}
+
 // LocalStorage keys
 export const STORAGE_KEYS = {
   HAS_CONFIGURED: 'supermap_hasConfigured',

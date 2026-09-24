@@ -1,5 +1,6 @@
 import './ModeRail.css'
 
+/** Mode ids. CRIME opens CrimeIntelligenceView via App handleFooterNav → CRIME_VIEW_ID (`crime`). */
 const MODES = [
   { id: 'HOME', label: 'Home', icon: '⌂' },
   { id: 'MAPS', label: 'Maps', icon: '◎' },

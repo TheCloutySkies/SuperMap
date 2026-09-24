@@ -1,8 +1,17 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { hasConfigured, setConfigured as persistConfigured, setConfigProfile, getTabVisibility, DEFAULT_LAYER_TOGGLES, getVisualsPrefs } from './constants'
+import {
+  hasConfigured,
+  setConfigured as persistConfigured,
+  setConfigProfile,
+  getTabVisibility,
+  DEFAULT_LAYER_TOGGLES,
+  getVisualsPrefs,
+  CRIME_VIEW_ID,
+  resolveCrimeViewId,
+  isCrimeIntelligenceView,
+} from './constants'
 import { loadChromePrefs, saveChromePrefs } from './lib/mapToolsPrefs'
 import HomeScreen from './components/HomeScreen'
-import CrimeDashboard from './components/CrimeDashboard'
 import CrimeIntelligenceView from './components/CrimeIntelligenceView'
 import MapView from './components/MapView'
 import FeedsView from './components/FeedsView'
@@ -199,8 +208,8 @@ function App() {
     } catch {}
   }, [])
 
-  const isMapView = ['osint-map', 'conflict-map', 'crime-map', 'explore-map', 'geolocate-map'].includes(activeView)
-  const isCrimeView = activeView === 'crime' || activeView === 'crime-intel'
+  const isMapView = ['osint-map', 'conflict-map', 'explore-map', 'geolocate-map'].includes(activeView)
+  const isCrimeView = isCrimeIntelligenceView(activeView)
   const isFeedView = ['osint-feeds', 'news-feeds', 'recent-videos', 'osint-x', 'advanced-search', 'broadcasts'].includes(activeView)
   const isSettingsView = activeView === 'settings'
   const tabVisibility = getTabVisibility()
@@ -210,7 +219,7 @@ function App() {
     setSubnavOpen(true)
     if (mode === APP_MODES.HOME) setActiveView('home')
     else if (mode === APP_MODES.MAPS) setActiveView('osint-map')
-    else if (mode === APP_MODES.CRIME) setActiveView('crime')
+    else if (mode === APP_MODES.CRIME) setActiveView(CRIME_VIEW_ID)
     else if (mode === APP_MODES.FEEDS) setActiveView('news-feeds')
     else if (mode === APP_MODES.TOOLS) setActiveView('tools')
     else if (mode === APP_MODES.RESOURCES) setActiveView('resources')
@@ -219,12 +228,12 @@ function App() {
   }, [])
 
   const setActiveViewWithMode = useCallback((viewId) => {
-    // Legacy crime-map entry points land on the dedicated Crime Intelligence page
-    const resolved = (viewId === 'crime-map' || viewId === 'crime-intel') ? 'crime' : viewId
+    // Legacy crime-map / crime-intel entry points land on CrimeIntelligenceView
+    const resolved = resolveCrimeViewId(viewId)
     setActiveView(resolved)
     setSubnavOpen(true)
-    if (resolved === 'crime') setAppMode(APP_MODES.CRIME)
-    else if (['osint-map', 'conflict-map', 'crime-map', 'explore-map', 'geolocate-map'].includes(resolved)) setAppMode(APP_MODES.MAPS)
+    if (resolved === CRIME_VIEW_ID) setAppMode(APP_MODES.CRIME)
+    else if (['osint-map', 'conflict-map', 'explore-map', 'geolocate-map'].includes(resolved)) setAppMode(APP_MODES.MAPS)
     else if (['osint-feeds', 'osint-x', 'advanced-search', 'news-feeds', 'broadcasts', 'recent-videos'].includes(resolved)) setAppMode(APP_MODES.FEEDS)
     else if (resolved === 'home') setAppMode(APP_MODES.HOME)
     else if (resolved === 'tools') setAppMode(APP_MODES.TOOLS)
@@ -232,16 +241,6 @@ function App() {
     else if (resolved === 'report-maker') setAppMode(APP_MODES.REPORTS)
     else if (resolved === 'settings') setAppMode(APP_MODES.SETTINGS)
   }, [])
-
-  useEffect(() => {
-    if (activeView !== 'crime-map') return
-    setLayerToggles((prev) => ({
-      ...prev,
-      crimeStateRates: true,
-      crimeCityHighlight: prev.crimeCityHighlight ?? true,
-    }))
-    setFlyToTarget({ lng: -98.5, lat: 39.8, zoom: 3.4 })
-  }, [activeView])
 
   useEffect(() => {
     if (!apiBase || !configured) return
@@ -398,37 +397,6 @@ function App() {
               onOverpassResults={(geojson) => setOverpassResults(geojson)}
               onEnableDraw={() => setLayerToggles((prev) => ({ ...prev, aoiDraw: true }))}
             />
-            {activeView === 'crime-map' && mapChromePrefs.crimeDash !== false && (
-              <CrimeDashboard
-                onFlyToCity={(city) => {
-                  const q = `${city.city}, ${city.state}`
-                  fetch(`${apiBase}/api/geocode?q=${encodeURIComponent(q)}&limit=1`, { signal: AbortSignal.timeout(12000) })
-                    .then((r) => r.json())
-                    .then((rows) => {
-                      const first = Array.isArray(rows) ? rows[0] : null
-                      const lat = first?.lat != null ? Number(first.lat) : null
-                      const lng = first?.lon != null ? Number(first.lon) : null
-                      if (lng != null && lat != null) {
-                        setFlyToTarget({ lng, lat, zoom: 10, properties: { title: q, source: 'Crime city' } })
-                        if (layerToggles.crimeCityHighlight) {
-                          setSearchResultsGeoJson({
-                            type: 'FeatureCollection',
-                            features: [{
-                              type: 'Feature',
-                              properties: {
-                                title: `${city.city}, ${city.state}`,
-                                source: `Violent ${city.violentRate}/100k`,
-                              },
-                              geometry: { type: 'Point', coordinates: [lng, lat] },
-                            }],
-                          })
-                        }
-                      }
-                    })
-                    .catch(() => {})
-                }}
-              />
-            )}
             {activeView !== 'explore-map' && mapChromePrefs.weather !== false && (
               <WeatherHUD
                 lat={weatherCoords.lat ?? userCoords.lat}

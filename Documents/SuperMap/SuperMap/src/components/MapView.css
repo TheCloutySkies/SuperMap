@@ -4,6 +4,77 @@
   height: 100%;
   min-height: 300px;
   background: var(--y2k-bg);
+  --map-accent: #3dd68c;
+  --map-accent-soft: rgba(61, 214, 140, 0.18);
+}
+
+/* Mode-tinted vignette / frame so each map type reads differently */
+.map-view-wrapper::after {
+  content: '';
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--map-accent) 35%, transparent),
+    inset 0 0 80px color-mix(in srgb, var(--map-accent) 12%, transparent);
+}
+
+.map-mode-badge {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.4rem 0.85rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(8, 12, 10, 0.82);
+  border: 1px solid color-mix(in srgb, var(--map-accent) 55%, transparent);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+}
+
+.map-mode-badge-label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: var(--map-accent);
+  line-height: 1.1;
+}
+
+.map-mode-badge-tagline {
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--y2k-text-muted, #9aa4b2);
+  line-height: 1.1;
+}
+
+/* Explore keeps weather HUD centered — shift badge left */
+.map-view-wrapper--explore-map .map-mode-badge {
+  left: 1rem;
+  transform: none;
+  align-items: flex-start;
+  border-radius: 10px;
+}
+
+.map-view-wrapper--conflict-map::after {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--map-accent) 45%, transparent),
+    inset 0 0 100px color-mix(in srgb, var(--map-accent) 16%, transparent);
+}
+
+.map-view-wrapper--crime-map::after {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--map-accent) 40%, transparent),
+    inset 0 60px 90px color-mix(in srgb, var(--map-accent) 10%, transparent);
+}
+
+.map-view-wrapper--geolocate-map::after {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--map-accent) 40%, transparent),
+    inset 0 0 70px color-mix(in srgb, var(--map-accent) 14%, transparent);
 }
 
 .coordinates-display-wrap {
@@ -100,8 +171,8 @@
 .map-crosshair::after {
   content: '';
   position: absolute;
-  background: #00ff41;
-  box-shadow: 0 0 4px #00ff41, 0 0 8px #00ff41;
+  background: var(--map-accent, #00ff41);
+  box-shadow: 0 0 4px var(--map-accent, #00ff41), 0 0 8px color-mix(in srgb, var(--map-accent, #00ff41) 60%, transparent);
 }
 
 .map-crosshair::before {

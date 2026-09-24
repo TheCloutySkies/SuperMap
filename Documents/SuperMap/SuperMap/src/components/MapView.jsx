@@ -1101,6 +1101,7 @@ export default function MapView({
   layerFilterKeyword = '',
   searchResultsGeoJson = null,
   activeView = 'osint-map',
+  mapTheme = null,
   eventCountry = null,
   eventFilterByView = false,
   weatherCoords = null,
@@ -2282,13 +2283,28 @@ export default function MapView({
   }
 
   return (
-    <div className="map-view-wrapper" style={{ minHeight: 0, flex: 1, height: '100%' }}>
+    <div
+      className={`map-view-wrapper map-view-wrapper--${activeView}`}
+      style={{
+        minHeight: 0,
+        flex: 1,
+        height: '100%',
+        ['--map-accent']: mapTheme?.accent || '#3dd68c',
+        ['--map-accent-soft']: mapTheme?.accentSoft || 'rgba(61, 214, 140, 0.18)',
+      }}
+    >
       <div
         ref={containerRef}
         className="map-view map-container"
         style={{ width: '100%', height: '100%', minHeight: 0 }}
       />
       <div className="map-crosshair" aria-hidden="true" />
+      {mapTheme && (
+        <div className="map-mode-badge" aria-label={`${mapTheme.shortLabel} map mode`}>
+          <span className="map-mode-badge-label">{mapTheme.shortLabel}</span>
+          <span className="map-mode-badge-tagline">{mapTheme.tagline}</span>
+        </div>
+      )}
       <MapControls map={mapInstance} activeView={activeView} />
       {activeView === 'explore-map' && weatherCoords && (
         <div className="explore-top-stack">

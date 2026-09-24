@@ -36,30 +36,34 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.15rem;
+  gap: 0.1rem;
   cursor: pointer;
   box-shadow:
     0 0 0 4px color-mix(in srgb, var(--y2k-accent) 10%, transparent),
     0 10px 28px rgba(0, 0, 0, 0.4);
   animation: radial-center-pulse 2.8s ease-in-out infinite;
+  overflow: hidden;
+  padding: 0.35rem;
 }
 
 .radial-menu-center:active {
   transform: scale(0.96);
 }
 
-.radial-menu-center-title {
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  line-height: 1.1;
+.radial-menu-center-logo {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  display: block;
+  background: transparent;
+  flex-shrink: 0;
 }
 
 .radial-menu-center-sub {
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   color: var(--y2k-text-muted);
   letter-spacing: 0.04em;
+  line-height: 1;
 }
 
 .radial-menu-item {
@@ -154,6 +158,10 @@
     width: 84px;
     height: 84px;
     margin: -42px 0 0 -42px;
+  }
+  .radial-menu-center-logo {
+    width: 48px;
+    height: 48px;
   }
   .radial-menu-item {
     width: 56px;

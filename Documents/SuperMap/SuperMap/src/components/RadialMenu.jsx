@@ -1,5 +1,5 @@
 import './RadialMenu.css'
-import { CRIME_VIEW_ID } from '../constants'
+import { CRIME_VIEW_ID, BRAND_LOGO_SRC, BRAND_LOGO_ALT } from '../constants'
 
 export const RADIAL_ORBIT_ITEMS = [
   { id: 'MAPS', label: 'Maps', icon: '◎' },
@@ -12,7 +12,7 @@ export const RADIAL_ORBIT_ITEMS = [
 ]
 
 /**
- * Circular menu: center SuperMap (Home), orbit items equally spaced.
+ * Circular menu: center Clouty Skies / SuperMap (Home), orbit items equally spaced.
  * onSelectMode(item) — item may include viewId for direct views (e.g. Crime).
  */
 export default function RadialMenu({ onSelectHome, onSelectMode, activeMode, activeView }) {
@@ -27,7 +27,13 @@ export default function RadialMenu({ onSelectHome, onSelectMode, activeMode, act
         onClick={onSelectHome}
         aria-label="SuperMap Home"
       >
-        <span className="radial-menu-center-title">SuperMap</span>
+        <img
+          className="radial-menu-center-logo"
+          src={BRAND_LOGO_SRC}
+          alt={BRAND_LOGO_ALT}
+          width={56}
+          height={56}
+        />
         <span className="radial-menu-center-sub">Home</span>
       </button>
       {RADIAL_ORBIT_ITEMS.map((item, i) => {

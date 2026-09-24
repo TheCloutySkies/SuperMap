@@ -3,6 +3,7 @@ import './ModeRail.css'
 const MODES = [
   { id: 'HOME', label: 'Home', icon: '⌂' },
   { id: 'MAPS', label: 'Maps', icon: '◎' },
+  { id: 'CRIME', label: 'Crime', icon: '▦' },
   { id: 'FEEDS', label: 'Feeds', icon: '☰' },
   { id: 'TOOLS', label: 'Tools', icon: '⚒' },
   { id: 'RESOURCES', label: 'Resources', icon: '▣' },

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { hasConfigured, setConfigured as persistConfigured, setConfigProfile, getTabVisibility, DEFAULT_LAYER_TOGGLES, getVisualsPrefs, getMapViewTheme, initialBasemapByView } from './constants'
 import HomeScreen from './components/HomeScreen'
-import CrimeDashboard from './components/CrimeDashboard'
+import CrimeView from './components/CrimeView'
 import MapView from './components/MapView'
 import FeedsView from './components/FeedsView'
 import RightSidebar from './components/RightSidebar'
@@ -38,7 +38,7 @@ function initMetallicss() {
   })
 }
 
-const APP_MODES = { HOME: 'HOME', MAPS: 'MAPS', FEEDS: 'FEEDS', TOOLS: 'TOOLS', RESOURCES: 'RESOURCES', REPORTS: 'REPORTS', SETTINGS: 'SETTINGS' }
+const APP_MODES = { HOME: 'HOME', MAPS: 'MAPS', CRIME: 'CRIME', FEEDS: 'FEEDS', TOOLS: 'TOOLS', RESOURCES: 'RESOURCES', REPORTS: 'REPORTS', SETTINGS: 'SETTINGS' }
 /** @deprecated alias — keep for gradual rename */
 const FOOTER_MODES = APP_MODES
 
@@ -46,7 +46,6 @@ const FOOTER_MODES = APP_MODES
 const MAP_VIEWS = [
   { id: 'osint-map', label: 'OSINT Map', tabKey: 'osintMap' },
   { id: 'conflict-map', label: 'Conflict Map', tabKey: 'conflictMap' },
-  { id: 'crime-map', label: 'Crime Map', tabKey: 'crimeMap' },
   { id: 'explore-map', label: 'Explore', tabKey: 'exploreMap' },
   { id: 'geolocate-map', label: 'Geolocate', tabKey: 'geolocateMap' },
 ]
@@ -193,7 +192,8 @@ function App() {
     } catch {}
   }, [])
 
-  const isMapView = ['osint-map', 'conflict-map', 'crime-map', 'explore-map', 'geolocate-map'].includes(activeView)
+  const isCrimeView = activeView === 'crime-map'
+  const isMapView = ['osint-map', 'conflict-map', 'explore-map', 'geolocate-map'].includes(activeView) || isCrimeView
   const isFeedView = ['osint-feeds', 'news-feeds', 'recent-videos', 'osint-x', 'advanced-search', 'broadcasts'].includes(activeView)
   const isSettingsView = activeView === 'settings'
   const tabVisibility = getTabVisibility()
@@ -213,6 +213,7 @@ function App() {
     setSubnavOpen(true)
     if (mode === APP_MODES.HOME) setActiveView('home')
     else if (mode === APP_MODES.MAPS) setActiveView('osint-map')
+    else if (mode === APP_MODES.CRIME) setActiveView('crime-map')
     else if (mode === APP_MODES.FEEDS) setActiveView('news-feeds')
     else if (mode === APP_MODES.TOOLS) setActiveView('tools')
     else if (mode === APP_MODES.RESOURCES) setActiveView('resources')
@@ -223,7 +224,8 @@ function App() {
   const setActiveViewWithMode = useCallback((viewId) => {
     setActiveView(viewId)
     setSubnavOpen(true)
-    if (['osint-map', 'conflict-map', 'crime-map', 'explore-map', 'geolocate-map'].includes(viewId)) setAppMode(APP_MODES.MAPS)
+    if (viewId === 'crime-map') setAppMode(APP_MODES.CRIME)
+    else if (['osint-map', 'conflict-map', 'explore-map', 'geolocate-map'].includes(viewId)) setAppMode(APP_MODES.MAPS)
     else if (['osint-feeds', 'osint-x', 'advanced-search', 'news-feeds', 'broadcasts', 'recent-videos'].includes(viewId)) setAppMode(APP_MODES.FEEDS)
     else if (viewId === 'home') setAppMode(APP_MODES.HOME)
     else if (viewId === 'tools') setAppMode(APP_MODES.TOOLS)
@@ -304,6 +306,7 @@ function App() {
   let mobilePageTitle = 'SuperMap'
   let mobileChipItems = []
   if (appMode === APP_MODES.MAPS) mobilePageTitle = 'Maps'
+  else if (appMode === APP_MODES.CRIME) mobilePageTitle = 'Crime'
   else if (appMode === APP_MODES.FEEDS) {
     mobilePageTitle = 'Feeds'
     mobileChipItems = FEED_VIEWS
@@ -347,6 +350,7 @@ function App() {
                 footerTabs={[
                   { key: APP_MODES.HOME, label: 'HOME' },
                   { key: APP_MODES.MAPS, label: 'MAPS' },
+                  { key: APP_MODES.CRIME, label: 'CRIME' },
                   { key: APP_MODES.FEEDS, label: 'FEEDS' },
                   { key: APP_MODES.TOOLS, label: 'TOOLS' },
                   { key: APP_MODES.RESOURCES, label: 'RESOURCES' },
@@ -358,7 +362,62 @@ function App() {
                 onHomeBootstrap={handleHomeBootstrap}
               />
             )}
-          {isMapView && (
+          {isCrimeView && (
+            <CrimeView
+              basemapId={basemapId}
+              overlayBasemapId={overlayBasemapId}
+              overlayOpacity={overlayOpacity}
+              layerToggles={layerToggles}
+              isMapLoading={isMapLoading}
+              onLoadingChange={setIsMapLoading}
+              overpassResults={overpassResults}
+              sentinelTime={sentinelTime}
+              flyToTarget={flyToTarget}
+              onFlyToComplete={clearFlyToTarget}
+              onSearchDataUpdate={setMapPointEntries}
+              layerFilterKeyword={searchQuery}
+              searchResultsGeoJson={searchResultsGeoJson}
+              eventCountry={eventCountry || null}
+              eventFilterByView={eventFilterByView}
+              weatherCoords={weatherCoords}
+              mapCenter={mapCenter}
+              onMapCenterChange={(coord) => {
+                setMapCenter(coord)
+                setWeatherCoords(coord)
+              }}
+              userCoords={userCoords}
+              onFlyTo={handleFlyTo}
+              onSearchCoords={(lng, lat) => setWeatherCoords({ lat, lon: lng })}
+              onFlyToCity={(city) => {
+                const q = `${city.city}, ${city.state}`
+                fetch(`${apiBase}/api/geocode?q=${encodeURIComponent(q)}&limit=1`, { signal: AbortSignal.timeout(12000) })
+                  .then((r) => r.json())
+                  .then((rows) => {
+                    const first = Array.isArray(rows) ? rows[0] : null
+                    const lat = first?.lat != null ? Number(first.lat) : null
+                    const lng = first?.lon != null ? Number(first.lon) : null
+                    if (lng != null && lat != null) {
+                      setFlyToTarget({ lng, lat, zoom: 10, properties: { title: q, source: 'Crime city' } })
+                      if (layerToggles.crimeCityHighlight) {
+                        setSearchResultsGeoJson({
+                          type: 'FeatureCollection',
+                          features: [{
+                            type: 'Feature',
+                            properties: {
+                              title: `${city.city}, ${city.state}`,
+                              source: `Violent ${city.violentRate}/100k`,
+                            },
+                            geometry: { type: 'Point', coordinates: [lng, lat] },
+                          }],
+                        })
+                      }
+                    }
+                  })
+                  .catch(() => {})
+              }}
+            />
+          )}
+          {isMapView && !isCrimeView && (
           <>
             <MapView
               basemapId={basemapId}
@@ -385,37 +444,6 @@ function App() {
                 setWeatherCoords(coord)
               }}
             />
-            {activeView === 'crime-map' && (
-              <CrimeDashboard
-                onFlyToCity={(city) => {
-                  const q = `${city.city}, ${city.state}`
-                  fetch(`${apiBase}/api/geocode?q=${encodeURIComponent(q)}&limit=1`, { signal: AbortSignal.timeout(12000) })
-                    .then((r) => r.json())
-                    .then((rows) => {
-                      const first = Array.isArray(rows) ? rows[0] : null
-                      const lat = first?.lat != null ? Number(first.lat) : null
-                      const lng = first?.lon != null ? Number(first.lon) : null
-                      if (lng != null && lat != null) {
-                        setFlyToTarget({ lng, lat, zoom: 10, properties: { title: q, source: 'Crime city' } })
-                        if (layerToggles.crimeCityHighlight) {
-                          setSearchResultsGeoJson({
-                            type: 'FeatureCollection',
-                            features: [{
-                              type: 'Feature',
-                              properties: {
-                                title: `${city.city}, ${city.state}`,
-                                source: `Violent ${city.violentRate}/100k`,
-                              },
-                              geometry: { type: 'Point', coordinates: [lng, lat] },
-                            }],
-                          })
-                        }
-                      }
-                    })
-                    .catch(() => {})
-                }}
-              />
-            )}
             {activeView !== 'explore-map' && (
               <WeatherHUD
                 lat={weatherCoords.lat ?? userCoords.lat}

@@ -9,6 +9,9 @@ export const STORAGE_KEYS = {
   RAPIDAPI_KEYS: 'supermap_rapidapiKeys',
   VISUALS_PREFS: 'supermap_visualsPrefs',
   MOBILE_PROMPT_SEEN: 'supermap_mobilePromptSeen',
+  MAP_TOOLS_FAB_POS: 'supermap_map_tools_fab_pos',
+  MAP_TOOLS_CHROME: 'supermap_map_tools_chrome',
+  MAP_TOOLS_PANELS: 'supermap_map_tools_panels',
 }
 
 function scopedKey(baseKey, userId) {

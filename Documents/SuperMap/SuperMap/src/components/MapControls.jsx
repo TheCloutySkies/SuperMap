@@ -21,7 +21,7 @@ function bearing(lat1, lon1, lat2, lon2) {
   return (((Math.atan2(y, x) * 180) / Math.PI) + 360) % 360
 }
 
-export default function MapControls({ map, activeView }) {
+export default function MapControls({ map, activeView, chromePrefs = {} }) {
   const [zoom, setZoom] = useState(2)
   const [mapBearing, setMapBearing] = useState(0)
   const [locating, setLocating] = useState(false)
@@ -35,6 +35,10 @@ export default function MapControls({ map, activeView }) {
   const [measureUnit, setMeasureUnit] = useState('km') // 'km' | 'mi'
   const measureModeRef = useRef(false)
   const measurePointsRef = useRef([])
+
+  const showZoom = chromePrefs.zoom !== false
+  const showSpaceWx = chromePrefs.spaceWx !== false
+  const showLocateStack = chromePrefs.locateStack === true
 
   useEffect(() => {
     fetchSpaceWeather().then(setSpaceWx).catch(() => {})
@@ -119,17 +123,47 @@ export default function MapControls({ map, activeView }) {
     }
   }, [map, measurePoints])
 
-  if (!map) return null
-
-  const zoomIn = () => map.zoomIn()
-  const zoomOut = () => map.zoomOut()
-  const resetNorth = () => map.easeTo({ bearing: 0, pitch: 0 })
+  const zoomIn = () => map?.zoomIn()
+  const zoomOut = () => map?.zoomOut()
+  const resetNorth = () => map?.easeTo({ bearing: 0, pitch: 0 })
   const handleSlider = (e) => {
+    if (!map) return
     const z = parseFloat(e.target.value)
     map.setZoom(z)
   }
 
-  const locateMe = () => {
+  const toggleTapPinMode = useCallback(() => {
+    setTapPinMode((prev) => {
+      const next = !prev
+      window.dispatchEvent(new CustomEvent('supermap-toggle-tap-pin', { detail: { enabled: next } }))
+      return next
+    })
+  }, [])
+
+  const toggleMeasure = useCallback(() => {
+    setMeasureMode((prev) => {
+      const next = !prev
+      measureModeRef.current = next
+      if (!next) {
+        measurePointsRef.current = []
+        setMeasurePoints([])
+        setMeasureResult(null)
+        if (map) {
+          if (map.getLayer('measure-line')) map.removeLayer('measure-line')
+          if (map.getLayer('measure-pts')) map.removeLayer('measure-pts')
+          if (map.getSource('measure-src')) map.removeSource('measure-src')
+        }
+      } else {
+        measurePointsRef.current = []
+        setMeasurePoints([])
+        setMeasureResult(null)
+      }
+      return next
+    })
+  }, [map])
+
+  const locateMe = useCallback(() => {
+    if (!map) return
     if (!navigator.geolocation) {
       window.alert('Geolocation is not available in this browser.')
       return
@@ -148,31 +182,23 @@ export default function MapControls({ map, activeView }) {
       },
       { enableHighAccuracy: true }
     )
-  }
+  }, [map])
 
-  const toggleTapPinMode = () => {
-    const next = !tapPinMode
-    setTapPinMode(next)
-    window.dispatchEvent(new CustomEvent('supermap-toggle-tap-pin', { detail: { enabled: next } }))
-  }
-
-  const toggleMeasure = () => {
-    const next = !measureMode
-    setMeasureMode(next)
-    measureModeRef.current = next
-    if (!next) {
-      measurePointsRef.current = []
-      setMeasurePoints([])
-      setMeasureResult(null)
-      if (map.getLayer('measure-line')) map.removeLayer('measure-line')
-      if (map.getLayer('measure-pts')) map.removeLayer('measure-pts')
-      if (map.getSource('measure-src')) map.removeSource('measure-src')
-    } else {
-      measurePointsRef.current = []
-      setMeasurePoints([])
-      setMeasureResult(null)
+  useEffect(() => {
+    const onLocate = () => locateMe()
+    const onMeasure = () => toggleMeasure()
+    const onPin = () => toggleTapPinMode()
+    window.addEventListener('supermap-locate-me', onLocate)
+    window.addEventListener('supermap-toggle-measure', onMeasure)
+    window.addEventListener('supermap-toggle-tap-pin-request', onPin)
+    return () => {
+      window.removeEventListener('supermap-locate-me', onLocate)
+      window.removeEventListener('supermap-toggle-measure', onMeasure)
+      window.removeEventListener('supermap-toggle-tap-pin-request', onPin)
     }
-  }
+  }, [locateMe, toggleMeasure, toggleTapPinMode])
+
+  if (!map) return null
 
   const resetMeasure = () => {
     measurePointsRef.current = []
@@ -188,41 +214,43 @@ export default function MapControls({ map, activeView }) {
 
   return (
     <>
-      <div className={`map-controls${isExplore ? ' map-controls--explore' : ''}`}>
-        <div className="map-controls-zoom-group">
-          <button type="button" className="map-control-btn metallicss" onClick={zoomIn} aria-label="Zoom in">
-            +
-          </button>
-          <div className="map-controls-zoom-slider">
-            <input
-              type="range"
-              min={0}
-              max={22}
-              step={0.5}
-              value={zoom}
-              onChange={handleSlider}
-              className="zoom-slider"
-            />
+      {showZoom && (
+        <div className={`map-controls${isExplore ? ' map-controls--explore' : ''}`}>
+          <div className="map-controls-zoom-group">
+            <button type="button" className="map-control-btn metallicss" onClick={zoomIn} aria-label="Zoom in">
+              +
+            </button>
+            <div className="map-controls-zoom-slider">
+              <input
+                type="range"
+                min={0}
+                max={22}
+                step={0.5}
+                value={zoom}
+                onChange={handleSlider}
+                className="zoom-slider"
+              />
+            </div>
+            <button type="button" className="map-control-btn metallicss" onClick={zoomOut} aria-label="Zoom out">
+              −
+            </button>
           </div>
-          <button type="button" className="map-control-btn metallicss" onClick={zoomOut} aria-label="Zoom out">
-            −
+          <div className="map-controls-zoom-indicator">Z: {zoom.toFixed(1)}</div>
+          <button
+            type="button"
+            className="map-control-btn map-control-compass metallicss"
+            onClick={resetNorth}
+            aria-label="Reset to North"
+            style={{ transform: `rotate(${-mapBearing}deg)` }}
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20">
+              <path fill="currentColor" d="M12 2l-4 8h3v10h2V10h3L12 2z" />
+            </svg>
           </button>
         </div>
-        <div className="map-controls-zoom-indicator">Z: {zoom.toFixed(1)}</div>
-        <button
-          type="button"
-          className="map-control-btn map-control-compass metallicss"
-          onClick={resetNorth}
-          aria-label="Reset to North"
-          style={{ transform: `rotate(${-mapBearing}deg)` }}
-        >
-          <svg viewBox="0 0 24 24" width="20" height="20">
-            <path fill="currentColor" d="M12 2l-4 8h3v10h2V10h3L12 2z" />
-          </svg>
-        </button>
-      </div>
+      )}
 
-      {!isExplore && spaceWx && (
+      {!isExplore && showSpaceWx && spaceWx && (
         <div
           className="space-wx-badge"
           title={`Kp ${spaceWx.kp.toFixed(1)} — ${spaceWx.label}. NOAA planetary K-index: geomagnetic activity (0–9). Affects radio & GPS.`}
@@ -258,40 +286,42 @@ export default function MapControls({ map, activeView }) {
         </div>
       )}
 
-      <div className="map-controls-locate-wrap">
-        <button
-          type="button"
-          className={`map-control-btn map-control-measure metallicss ${measureMode ? 'active' : ''}`}
-          onClick={toggleMeasure}
-          aria-label="Measure distance"
-          title="Measure distance & bearing between two points"
-        >
-          <span aria-hidden>📏</span>
-          <span>Measure</span>
-        </button>
-        <button
-          type="button"
-          className={`map-control-btn map-control-pin metallicss ${tapPinMode ? 'active' : ''}`}
-          onClick={toggleTapPinMode}
-          aria-label="Toggle tap-to-add pin mode"
-          title="Tap map to add pin"
-        >
-          📍
-        </button>
-        <button
-          type="button"
-          className={`map-control-btn map-control-locate metallicss ${userLocation ? 'active' : ''} ${locating ? 'locating' : ''}`}
-          onClick={locateMe}
-          aria-label="Locate me"
-          title="Center map on your location"
-        >
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
-            <path fill="currentColor" d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm0 6c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm0-11.5C6.48 2.5 2.5 6.48 2.5 12S6.48 21.5 12 21.5 21.5 17.52 21.5 12 17.52 2.5 12 2.5zM12 20c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" />
-          </svg>
-          <span>Locate</span>
-          {userLocation && <span className="locate-pulse" />}
-        </button>
-      </div>
+      {showLocateStack && (
+        <div className="map-controls-locate-wrap">
+          <button
+            type="button"
+            className={`map-control-btn map-control-measure metallicss ${measureMode ? 'active' : ''}`}
+            onClick={toggleMeasure}
+            aria-label="Measure distance"
+            title="Measure distance & bearing between two points"
+          >
+            <span aria-hidden>📏</span>
+            <span>Measure</span>
+          </button>
+          <button
+            type="button"
+            className={`map-control-btn map-control-pin metallicss ${tapPinMode ? 'active' : ''}`}
+            onClick={toggleTapPinMode}
+            aria-label="Toggle tap-to-add pin mode"
+            title="Tap map to add pin"
+          >
+            📍
+          </button>
+          <button
+            type="button"
+            className={`map-control-btn map-control-locate metallicss ${userLocation ? 'active' : ''} ${locating ? 'locating' : ''}`}
+            onClick={locateMe}
+            aria-label="Locate me"
+            title="Center map on your location"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+              <path fill="currentColor" d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm0 6c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm0-11.5C6.48 2.5 2.5 6.48 2.5 12S6.48 21.5 12 21.5 21.5 17.52 21.5 12 17.52 2.5 12 2.5zM12 20c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" />
+            </svg>
+            <span>Locate</span>
+            {userLocation && <span className="locate-pulse" />}
+          </button>
+        </div>
+      )}
     </>
   )
 }

@@ -26,6 +26,7 @@ import { buildTerminatorGeoJSON } from '../services/solarTerminator'
 import { fetchMilitaryAircraft, fetchUkraineFrontline, fetchInternetOutages } from '../services/newLayerFetchers'
 import { buildCrimeStateChoropleth, CRIME_RATE_COLOR_EXPRESSION } from '../services/crimeLayers'
 import MapControls from './MapControls'
+import MapToolsRadial from './MapToolsRadial'
 import DrawHUD from './DrawHUD'
 import PinEditorDialog from './PinEditorDialog'
 import WeatherHUD from './WeatherHUD'
@@ -1107,6 +1108,12 @@ export default function MapView({
   mapCenter = null,
   onMapCenterChange = null,
   overlayOpacity = 0.6,
+  chromePrefs = {},
+  onChromeChange = null,
+  onToggleLayers = null,
+  onOpenOverpass = null,
+  onOverpassResults = null,
+  onEnableDraw = null,
 }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
@@ -1635,8 +1642,18 @@ export default function MapView({
       center: Array.isArray(center) && center.length >= 2 ? center : [0, 20],
       zoom: typeof zoom === 'number' && zoom >= 0 ? zoom : 2,
       transformRequest: (url, resourceType) => {
-        if (resourceType === 'Source' && url && url.includes('openstreetmap')) {
-          return { url, headers: { 'User-Agent': 'SuperMap/1.0 (https://github.com/supermap)' } }
+        // OSM tiles use resourceType 'Tile' (not only 'Source'). Prefer a friendly UA.
+        if (
+          url &&
+          (url.includes('openstreetmap.org') || url.includes('tile.openstreetmap')) &&
+          (resourceType === 'Tile' || resourceType === 'Source' || resourceType === 'Unknown')
+        ) {
+          return {
+            url,
+            headers: {
+              Accept: 'image/png,image/*;q=0.8,*/*;q=0.5',
+            },
+          }
         }
       },
     })
@@ -2289,8 +2306,18 @@ export default function MapView({
         style={{ width: '100%', height: '100%', minHeight: 0 }}
       />
       <div className="map-crosshair" aria-hidden="true" />
-      <MapControls map={mapInstance} activeView={activeView} />
-      {activeView === 'explore-map' && weatherCoords && (
+      <MapControls map={mapInstance} activeView={activeView} chromePrefs={chromePrefs} />
+      <MapToolsRadial
+        activeView={activeView}
+        chromePrefs={chromePrefs}
+        onChromeChange={onChromeChange}
+        onToggleLayers={onToggleLayers}
+        onOpenOverpass={onOpenOverpass}
+        onOverpassResults={onOverpassResults}
+        onOverpassLoading={onLoadingChange}
+        onEnableDraw={onEnableDraw}
+      />
+      {activeView === 'explore-map' && weatherCoords && chromePrefs.weather !== false && (
         <div className="explore-top-stack">
           <div className="weather-compact-wrap">
             <WeatherHUD
@@ -2299,14 +2326,14 @@ export default function MapView({
               lon={weatherCoords.lon}
             />
           </div>
-          {mapCenter && (
+          {mapCenter && chromePrefs.coords !== false && (
             <div className="coordinates-display-wrap coordinates-display-wrap--under-weather">
               <CoordinatesDisplay lat={mapCenter.lat} lon={mapCenter.lon} />
             </div>
           )}
         </div>
       )}
-      {mapCenter && activeView !== 'explore-map' && (
+      {mapCenter && activeView !== 'explore-map' && chromePrefs.coords !== false && (
         <div className="coordinates-display-wrap">
           <CoordinatesDisplay lat={mapCenter.lat} lon={mapCenter.lon} />
         </div>

@@ -16,16 +16,17 @@
 
 .mobile-chip {
   flex: 0 0 auto;
-  min-height: 36px;
-  padding: 0.35rem 0.75rem;
+  min-height: 44px;
+  padding: 0.4rem 0.85rem;
   border-radius: 999px;
   border: 1px solid var(--y2k-border);
   background: var(--y2k-surface);
   color: var(--y2k-text-muted);
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   letter-spacing: 0.03em;
   white-space: nowrap;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .mobile-chip.is-active {

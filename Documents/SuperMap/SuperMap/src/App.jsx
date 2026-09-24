@@ -351,6 +351,7 @@ function App() {
                   { key: APP_MODES.SETTINGS, label: 'SETTINGS' },
                 ]}
                 isMobileLayout={isMobileLayout}
+                activeView={activeView}
                 onShowLocationOnMap={handleShowLocationOnMap}
                 onHomeBootstrap={handleHomeBootstrap}
               />

@@ -7,6 +7,10 @@
   pointer-events: none;
 }
 
+.map-tools-radial-root.is-open {
+  z-index: 1250;
+}
+
 .map-tools-fab-wrap {
   position: absolute;
   right: 1rem;
@@ -17,9 +21,15 @@
   z-index: 71;
 }
 
+.map-tools-fab-wrap.is-open {
+  z-index: 1251;
+}
+
 .map-tools-fab {
   width: 52px;
   height: 52px;
+  min-width: 44px;
+  min-height: 44px;
   border-radius: 50%;
   border: 1px solid color-mix(in srgb, var(--y2k-accent) 55%, var(--y2k-border));
   background: linear-gradient(160deg, rgba(22, 36, 28, 0.98), rgba(8, 12, 10, 0.98));
@@ -28,6 +38,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
   box-shadow:
     0 0 0 3px color-mix(in srgb, var(--y2k-accent) 10%, transparent),
     0 10px 24px rgba(0, 0, 0, 0.45);
@@ -81,6 +93,8 @@
   z-index: 2;
   width: 56px;
   height: 56px;
+  min-width: 44px;
+  min-height: 44px;
   margin: -28px 0 0 -28px;
   border-radius: 50%;
   border: 1px solid var(--y2k-border);
@@ -93,6 +107,8 @@
   gap: 0.08rem;
   cursor: pointer;
   pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   transform: rotate(var(--radial-angle)) translate(var(--map-radial-radius)) rotate(calc(-1 * var(--radial-angle)));
   animation: map-tools-item-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
   animation-delay: var(--radial-delay);
@@ -194,8 +210,10 @@
 }
 
 .map-tools-panel-btn {
-  width: 28px;
-  height: 28px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   border-radius: 6px;
   border: 1px solid var(--y2k-border);
   background: var(--y2k-surface-raised);
@@ -203,6 +221,7 @@
   cursor: pointer;
   font-size: 0.95rem;
   line-height: 1;
+  touch-action: manipulation;
 }
 
 .map-tools-panel-btn:hover {
@@ -271,6 +290,39 @@
   accent-color: var(--y2k-accent);
 }
 
+.map-tools-zoom-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.map-tools-zoom-row {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.map-tools-zoom-btn {
+  flex: 1;
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 700;
+  min-height: 44px;
+  touch-action: manipulation;
+}
+
+.map-tools-zoom-slider-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--y2k-text-muted);
+}
+
+.map-tools-zoom-range {
+  width: 100%;
+  accent-color: var(--y2k-accent);
+}
+
 .map-tools-presets-chip {
   position: absolute;
   top: 0.75rem;
@@ -305,8 +357,10 @@
     --map-radial-size: min(250px, 82vw);
   }
   .map-tools-radial-item {
-    width: 50px;
-    height: 50px;
-    margin: -25px 0 0 -25px;
+    width: 48px;
+    height: 48px;
+    min-width: 44px;
+    min-height: 44px;
+    margin: -24px 0 0 -24px;
   }
 }

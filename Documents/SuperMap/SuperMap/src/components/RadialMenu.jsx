@@ -2,6 +2,7 @@ import './RadialMenu.css'
 
 export const RADIAL_ORBIT_ITEMS = [
   { id: 'MAPS', label: 'Maps', icon: '◎' },
+  { id: 'CRIME', label: 'Crime', icon: '📉', viewId: 'crime-map' },
   { id: 'FEEDS', label: 'Feeds', icon: '☰' },
   { id: 'TOOLS', label: 'Tools', icon: '⚒' },
   { id: 'RESOURCES', label: 'Resources', icon: '▣' },
@@ -11,8 +12,9 @@ export const RADIAL_ORBIT_ITEMS = [
 
 /**
  * Circular menu: center SuperMap (Home), orbit items equally spaced.
+ * onSelectMode(item) — item may include viewId for direct views (e.g. Crime).
  */
-export default function RadialMenu({ onSelectHome, onSelectMode, activeMode }) {
+export default function RadialMenu({ onSelectHome, onSelectMode, activeMode, activeView }) {
   const n = RADIAL_ORBIT_ITEMS.length
 
   return (
@@ -29,7 +31,9 @@ export default function RadialMenu({ onSelectHome, onSelectMode, activeMode }) {
       </button>
       {RADIAL_ORBIT_ITEMS.map((item, i) => {
         const angle = (360 / n) * i - 90
-        const active = activeMode === item.id
+        const active = item.viewId
+          ? activeView === item.viewId
+          : activeMode === item.id
         return (
           <button
             key={item.id}
@@ -39,7 +43,7 @@ export default function RadialMenu({ onSelectHome, onSelectMode, activeMode }) {
               '--radial-angle': `${angle}deg`,
               '--radial-delay': `${0.05 + i * 0.045}s`,
             }}
-            onClick={() => onSelectMode?.(item.id)}
+            onClick={() => onSelectMode?.(item)}
             aria-current={active ? 'page' : undefined}
           >
             <span className="radial-menu-item-icon" aria-hidden>{item.icon}</span>

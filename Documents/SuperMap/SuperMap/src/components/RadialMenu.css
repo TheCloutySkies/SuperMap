@@ -1,6 +1,6 @@
 .radial-menu {
-  --radial-size: min(292px, 78vw);
-  --radial-radius: calc(var(--radial-size) * 0.38);
+  --radial-size: min(320px, 84vw);
+  --radial-radius: calc(var(--radial-size) * 0.4);
   position: relative;
   width: var(--radial-size);
   height: var(--radial-size);

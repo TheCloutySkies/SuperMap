@@ -1967,8 +1967,9 @@ export default function MapView({
     let setDrawCursor
     try {
       draw = new MapboxDraw({
-        displayControlsDefault: true,
-        controls: { point: true, line_string: true, polygon: true, trash: true },
+        displayControlsDefault: false,
+        // Hide default white toolbar — draw via AOI / radial Draw tools instead
+        controls: { point: false, line_string: false, polygon: false, trash: false },
         styles: MAPLIBRE_DRAW_STYLES,
       })
       map.addControl(draw, 'top-left')
@@ -2007,25 +2008,43 @@ export default function MapView({
         try { map.removeControl(globeMinimapRef.current) } catch (_) {}
         globeMinimapRef.current = null
       }
-      let globeMinimap = null
-      try {
-        globeMinimap = new GlobeMinimap({
-          globeSize: 82,
-          landColor: '#2d333b',
-          waterColor: '#0d1117',
-          markerColor: '#3dd68c',
-        })
-        if (typeof globeMinimap.onRemove !== 'function') {
-          globeMinimap.onRemove = function () {
-            try {
-              const el = this._container
-              if (el && el.parentNode) el.parentNode.removeChild(el)
-            } catch (_) {}
+      // Skip globe minimap on narrow/mobile viewports — plugin paints a blank square
+      const preferGlobe = typeof window === 'undefined' || !window.matchMedia('(max-width: 900px)').matches
+      if (preferGlobe) {
+        let globeMinimap = null
+        try {
+          globeMinimap = new GlobeMinimap({
+            globeSize: 82,
+            landColor: '#2d333b',
+            waterColor: '#0d1117',
+            markerColor: '#3dd68c',
+          })
+          if (typeof globeMinimap.onRemove !== 'function') {
+            globeMinimap.onRemove = function () {
+              try {
+                const el = this._container
+                if (el && el.parentNode) el.parentNode.removeChild(el)
+              } catch (_) {}
+            }
           }
-        }
-        map.addControl(globeMinimap, 'bottom-left')
-        globeMinimapRef.current = globeMinimap
-      } catch (_) {}
+          // Fix invalid width/height (plugin omits "px")
+          const origOnAdd = globeMinimap.onAdd?.bind(globeMinimap)
+          if (origOnAdd) {
+            globeMinimap.onAdd = function (m) {
+              const el = origOnAdd(m)
+              try {
+                if (this._container) {
+                  this._container.style.width = '82px'
+                  this._container.style.height = '82px'
+                }
+              } catch (_) {}
+              return el
+            }
+          }
+          map.addControl(globeMinimap, 'bottom-left')
+          globeMinimapRef.current = globeMinimap
+        } catch (_) {}
+      }
     } catch (_) {
       return
     }
@@ -2308,6 +2327,7 @@ export default function MapView({
       <div className="map-crosshair" aria-hidden="true" />
       <MapControls map={mapInstance} activeView={activeView} chromePrefs={chromePrefs} />
       <MapToolsRadial
+        map={mapInstance}
         activeView={activeView}
         chromePrefs={chromePrefs}
         onChromeChange={onChromeChange}

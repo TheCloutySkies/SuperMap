@@ -6,7 +6,7 @@ export const MAP_TOOLS_PANELS_KEY = 'supermap_map_tools_panels'
 export const MAP_TOOLS_PANEL_POS_KEY = 'supermap_map_tools_panel_pos'
 
 export const DEFAULT_CHROME = {
-  zoom: true,
+  zoom: false, // zoom lives in collapsible tools panel; optional docked chrome
   weather: true,
   spaceWx: true,
   coords: true,

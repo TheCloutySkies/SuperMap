@@ -224,26 +224,46 @@ async function fetchOsintXFeeds({ limitFeeds = 0, skipGeotag = false } = {}) {
  * If the event DB has no recent X posts, run a live ingest (cooldown-guarded).
  * Pass force: true to bypass cooldown (user-initiated refresh).
  * Live path skips geotag so the API returns quickly; scheduled ingest still geotags.
+ *
+ * @param {object} [opts]
+ * @param {number} [opts.limitFeeds]
+ * @param {boolean} [opts.force]
+ * @param {number} [opts.budgetMs] — hard cap; returns early without cancelling the in-flight job
  */
-async function ensureOsintXFresh({ limitFeeds = 12, force = false } = {}) {
+async function ensureOsintXFresh({ limitFeeds = 12, force = false, budgetMs = 0 } = {}) {
   const now = Date.now()
   if (!force && now - lastLiveRefreshAt < LIVE_REFRESH_COOLDOWN_MS) {
     return { refreshed: false, reason: 'cooldown' }
   }
-  if (liveRefreshInFlight) {
-    await liveRefreshInFlight
-    return { refreshed: false, reason: 'awaited-inflight' }
+
+  const startOrJoin = () => {
+    if (liveRefreshInFlight) return liveRefreshInFlight
+    liveRefreshInFlight = (async () => {
+      try {
+        const posts = await fetchOsintXFeeds({ limitFeeds, skipGeotag: true })
+        lastLiveRefreshAt = Date.now()
+        return { refreshed: true, count: posts.length }
+      } finally {
+        liveRefreshInFlight = null
+      }
+    })()
+    return liveRefreshInFlight
   }
-  liveRefreshInFlight = (async () => {
-    try {
-      const posts = await fetchOsintXFeeds({ limitFeeds, skipGeotag: true })
-      lastLiveRefreshAt = Date.now()
-      return { refreshed: true, count: posts.length }
-    } finally {
-      liveRefreshInFlight = null
-    }
-  })()
-  return liveRefreshInFlight
+
+  const job = startOrJoin()
+  if (!budgetMs || budgetMs <= 0) return job
+
+  let timer
+  try {
+    return await Promise.race([
+      job,
+      new Promise((resolve) => {
+        timer = setTimeout(() => resolve({ refreshed: false, reason: 'budget' }), budgetMs)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }
 
 /**

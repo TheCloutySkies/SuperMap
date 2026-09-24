@@ -517,7 +517,10 @@ function mapOsintXRows(rows, cutoff) {
     })
 }
 
-/** OSINT X via FxTwitter: GET /api/osint-x?limit=100&refresh=1. Last 48h. Live-refresh if empty or forced. */
+/** OSINT X via FxTwitter: GET /api/osint-x?limit=100&refresh=1. Last 48h.
+ * Always returns DB posts quickly. Live FxTwitter pull is budgeted so the client
+ * never hangs in a "Try Refresh" loop (Render + FxTwitter can exceed 90s).
+ */
 router.get('/osint-x', async (req, res) => {
   const t0 = Date.now()
   const force = String(req.query.refresh || '') === '1' || String(req.query.refresh || '') === 'true'
@@ -531,16 +534,26 @@ router.get('/osint-x', async (req, res) => {
     const cutoff = Date.now() - OSINT_X_MAX_AGE_MS
     let rows = getEvents(limit, null, null, null, null, ['x'])
     let posts = mapOsintXRows(rows, cutoff)
-    const withImages = posts.filter((p) => Array.isArray(p.images) && p.images.length > 0)
+    let refreshMeta = { attempted: false, reason: null }
 
-    // Cold start or user refresh — pull live FxTwitter (force bypasses cooldown).
-    if (force || posts.length === 0 || withImages.length === 0) {
+    // Only block the response for a live pull when forced or the DB is empty.
+    // Do NOT wait just because images are missing — that caused 30–90s hangs.
+    const shouldLive = force || posts.length === 0
+    if (shouldLive) {
+      refreshMeta.attempted = true
+      const budgetMs = force ? 22000 : 15000
       try {
-        await ensureOsintXFresh({ limitFeeds: force ? 15 : 12, force })
+        const result = await ensureOsintXFresh({
+          limitFeeds: force ? 12 : 8,
+          force,
+          budgetMs,
+        })
+        refreshMeta.reason = result?.reason || (result?.refreshed ? 'ok' : null)
         rows = getEvents(limit, null, null, null, null, ['x'])
         posts = mapOsintXRows(rows, cutoff)
       } catch (err) {
         console.warn('[API /osint-x] live refresh:', err.message)
+        refreshMeta.reason = err.message
       }
     }
 
@@ -550,9 +563,13 @@ router.get('/osint-x', async (req, res) => {
         force,
         posts: posts.length,
         withImages: posts.filter((p) => p.images?.length).length,
+        refreshMeta,
         ms: Date.now() - t0,
       })
     }
+    // Array body kept for backward compat with OsintXView; meta via headers.
+    res.set('X-Osint-X-Count', String(posts.length))
+    if (refreshMeta.attempted) res.set('X-Osint-X-Refresh', refreshMeta.reason || 'attempted')
     res.json(posts)
   } catch (err) {
     console.error('[API /osint-x]', err.message)

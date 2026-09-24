@@ -37,6 +37,10 @@ const OSINT_LAYER_SECTIONS = [
     layers: [
       { key: 'liveWildfires', label: 'Live Wildfires' },
       { key: 'usgsEarthquakes', label: 'USGS Earthquakes' },
+      { key: 'emscEarthquakes', label: 'EMSC Earthquakes (global)', hint: 'Seismic Portal · free, no key' },
+      { key: 'usgsVolcanoes', label: 'USGS Elevated Volcanoes', hint: 'Active alert notices · free' },
+      { key: 'nwsAlerts', label: 'NWS Weather Alerts (US)', hint: 'Watches / warnings · free' },
+      { key: 'nhcTropical', label: 'NHC Tropical Cyclones', hint: 'Atlantic / EP / CP centers' },
       { key: 'iodaOutages', label: 'Internet Outages (IODA)' },
     ],
   },
@@ -88,6 +92,10 @@ const CONFLICT_LAYER_SECTIONS = [
     title: 'Conflict & Disasters',
     layers: [
       { key: 'gdacs', label: 'GDACS (Disasters)' },
+      { key: 'emscEarthquakes', label: 'EMSC Earthquakes (global)' },
+      { key: 'usgsVolcanoes', label: 'USGS Elevated Volcanoes' },
+      { key: 'nwsAlerts', label: 'NWS Weather Alerts (US)' },
+      { key: 'nhcTropical', label: 'NHC Tropical Cyclones' },
       { key: 'sentinel2BurnScars', label: 'NASA GIBS (MODIS True Color)', hasTimeFilter: true },
     ],
   },

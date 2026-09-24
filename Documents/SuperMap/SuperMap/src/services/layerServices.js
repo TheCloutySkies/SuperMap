@@ -515,3 +515,184 @@ export async function fetchFccTowers(bbox) {
   return { type: 'FeatureCollection', features: [] }
 }
 
+function bboxQuery(bbox) {
+  return bbox && bbox.length >= 4 ? `bbox=${bbox.join(',')}` : ''
+}
+
+function filterFcByBbox(fc, bbox) {
+  if (!bbox || bbox.length < 4 || !fc?.features) return fc || { type: 'FeatureCollection', features: [] }
+  const [w, s, e, n] = bbox
+  return {
+    type: 'FeatureCollection',
+    features: fc.features.filter((f) => {
+      const c = f.geometry?.coordinates
+      if (!c) return true
+      if (f.geometry.type === 'Point') {
+        const [lon, lat] = c
+        return lon >= w && lon <= e && lat >= s && lat <= n
+      }
+      // Keep polygons/multipolygons; bbox clipping is approximate via first ring point
+      const ring = f.geometry.type === 'Polygon' ? c[0] : (f.geometry.type === 'MultiPolygon' ? c[0]?.[0] : null)
+      if (!ring?.[0]) return true
+      const [lon, lat] = ring[0]
+      return lon >= w && lon <= e && lat >= s && lat <= n
+    }),
+  }
+}
+
+/** EMSC / Seismic Portal global quakes (free, CORS-enabled). Falls back via API proxy. */
+export async function fetchEmscEarthquakes(bbox) {
+  const q = bboxQuery(bbox)
+  if (API_BASE) {
+    try {
+      const res = await fetch(`${API_BASE}/api/hazards/emsc${q ? `?${q}` : ''}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data?.type === 'FeatureCollection') return data
+      }
+    } catch (err) {
+      console.warn('[SuperMap EMSC] API proxy failed', err.message)
+    }
+  }
+  try {
+    let url = 'https://www.seismicportal.eu/fdsnws/event/1/query?format=json&limit=100&minmag=4&orderby=time'
+    if (bbox) {
+      const [w, s, e, n] = bbox
+      url += `&minlon=${w}&minlat=${s}&maxlon=${e}&maxlat=${n}`
+    }
+    const res = await fetch(url)
+    if (!res.ok) return { type: 'FeatureCollection', features: [] }
+    const data = await res.json()
+    const features = (data.features || []).map((f) => {
+      const p = f.properties || {}
+      const coords = f.geometry?.coordinates
+      if (!coords || coords.length < 2) return null
+      const mag = p.mag
+      return {
+        type: 'Feature',
+        properties: {
+          source: 'emsc',
+          mag,
+          place: p.flynn_region || 'Earthquake',
+          time: p.time || '',
+          title: mag != null ? `M${mag} ${p.flynn_region || 'Earthquake'}` : (p.flynn_region || 'Earthquake'),
+        },
+        geometry: { type: 'Point', coordinates: [coords[0], coords[1]] },
+      }
+    }).filter(Boolean)
+    return { type: 'FeatureCollection', features }
+  } catch (err) {
+    console.warn('[SuperMap EMSC]', err?.message || err)
+    return { type: 'FeatureCollection', features: [] }
+  }
+}
+
+/** NWS active alerts / WWA polygons (free, no key). Prefer API proxy when available. */
+export async function fetchNwsAlerts(bbox) {
+  const q = bboxQuery(bbox)
+  if (API_BASE) {
+    try {
+      const res = await fetch(`${API_BASE}/api/hazards/nws${q ? `?${q}` : ''}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data?.type === 'FeatureCollection') return data
+      }
+    } catch (err) {
+      console.warn('[SuperMap NWS] API proxy failed', err.message)
+    }
+  }
+  try {
+    const res = await fetch('https://api.weather.gov/alerts/active?status=actual&message_type=alert', {
+      headers: { Accept: 'application/geo+json', 'User-Agent': 'SuperMap/1.0' },
+    })
+    if (!res.ok) return { type: 'FeatureCollection', features: [] }
+    const data = await res.json()
+    const withGeom = {
+      type: 'FeatureCollection',
+      features: (data.features || [])
+        .filter((f) => f.geometry)
+        .map((f) => ({
+          type: 'Feature',
+          properties: {
+            source: 'nws',
+            event: f.properties?.event || 'Alert',
+            headline: f.properties?.headline || f.properties?.event || 'NWS Alert',
+            title: f.properties?.headline || f.properties?.event || 'NWS Alert',
+            severity: f.properties?.severity || '',
+            link: f.properties?.id || 'https://www.weather.gov/',
+          },
+          geometry: f.geometry,
+        })),
+    }
+    return filterFcByBbox(withGeom, bbox)
+  } catch (err) {
+    console.warn('[SuperMap NWS]', err?.message || err)
+    return { type: 'FeatureCollection', features: [] }
+  }
+}
+
+/** USGS elevated volcano notices (free JSON). */
+export async function fetchUsgsVolcanoes(bbox) {
+  const q = bboxQuery(bbox)
+  if (API_BASE) {
+    try {
+      const res = await fetch(`${API_BASE}/api/hazards/volcanoes${q ? `?${q}` : ''}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data?.type === 'FeatureCollection') return data
+      }
+    } catch (err) {
+      console.warn('[SuperMap volcanoes] API proxy failed', err.message)
+    }
+  }
+  try {
+    const res = await fetch('https://volcanoes.usgs.gov/vsc/api/volcanoApi/elevated', {
+      headers: { Accept: 'application/json' },
+    })
+    if (!res.ok) return { type: 'FeatureCollection', features: [] }
+    const rows = await res.json()
+    if (!Array.isArray(rows)) return { type: 'FeatureCollection', features: [] }
+    const [w, s, e, n] = bbox || [-180, -90, 180, 90]
+    const features = rows
+      .map((v) => {
+        const lat = Number(v.lat)
+        const lon = Number(v.long ?? v.lon)
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
+        if (lon < w || lon > e || lat < s || lat > n) return null
+        return {
+          type: 'Feature',
+          properties: {
+            source: 'usgs-volcano',
+            name: v.vName || 'Volcano',
+            title: `${v.vName || 'Volcano'} · ${v.alertLevel || ''}/${v.colorCode || ''}`.trim(),
+            alertLevel: v.alertLevel || '',
+            colorCode: v.colorCode || '',
+            synopsis: (v.noticeSynopsis || '').slice(0, 500),
+            link: v.noticeUrl || 'https://volcanoes.usgs.gov/',
+          },
+          geometry: { type: 'Point', coordinates: [lon, lat] },
+        }
+      })
+      .filter(Boolean)
+    return { type: 'FeatureCollection', features }
+  } catch (err) {
+    console.warn('[SuperMap volcanoes]', err?.message || err)
+    return { type: 'FeatureCollection', features: [] }
+  }
+}
+
+/** NHC tropical cyclone centers — CORS blocked client-side; requires API proxy. */
+export async function fetchNhcTropical(bbox) {
+  const q = bboxQuery(bbox)
+  if (!API_BASE) return { type: 'FeatureCollection', features: [] }
+  try {
+    const res = await fetch(`${API_BASE}/api/hazards/nhc${q ? `?${q}` : ''}`)
+    if (!res.ok) return { type: 'FeatureCollection', features: [] }
+    const data = await res.json()
+    return data?.type === 'FeatureCollection' ? data : { type: 'FeatureCollection', features: [] }
+  } catch (err) {
+    console.warn('[SuperMap NHC]', err?.message || err)
+    return { type: 'FeatureCollection', features: [] }
+  }
+}
+

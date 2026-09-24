@@ -20,48 +20,9 @@
 }
 
 .broadcasts-subtitle {
-  margin: 0 0 0.75rem;
+  margin: 0;
   font-size: 0.875rem;
   color: #8b949e;
-}
-
-.broadcasts-header-options {
-  margin-top: 0.5rem;
-  display: flex;
-  gap: 0.8rem;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.broadcasts-refresh-btn {
-  padding: 0.35rem 0.7rem;
-  font-size: 0.8rem;
-  color: #e6edf3;
-  background: #21262d;
-  border: 1px solid #30363d;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.broadcasts-refresh-btn:hover {
-  border-color: #58a6ff;
-}
-
-.broadcasts-embed-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-  color: #8b949e;
-  cursor: pointer;
-}
-
-.broadcasts-embed-toggle input {
-  margin: 0;
-}
-
-.broadcasts-embed-toggle span {
-  user-select: none;
 }
 
 .broadcasts-grid {
@@ -77,10 +38,6 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-}
-
-.broadcasts-card--expanded {
-  grid-column: 1 / -1;
 }
 
 .broadcasts-card-header {
@@ -101,95 +58,6 @@
   color: #e6edf3;
 }
 
-.broadcasts-card-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.broadcasts-card-link {
-  font-size: 0.8rem;
-  color: #58a6ff;
-  text-decoration: none;
-}
-
-.broadcasts-card-link:hover {
-  text-decoration: underline;
-}
-
-.broadcasts-card-link--primary {
-  font-weight: 600;
-  color: #3fb950;
-}
-
-.broadcasts-card-link--primary:hover {
-  color: #56d364;
-}
-
-.broadcasts-card-btn-inline {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font: inherit;
-  padding: 0;
-}
-
-.broadcasts-stream-error {
-  margin: 0;
-  padding: 0.75rem 1rem;
-  font-size: 0.85rem;
-  color: #f85149;
-  background: #161b22;
-}
-
-.broadcasts-card-toggle {
-  padding: 0.3rem 0.6rem;
-  font-size: 0.8rem;
-  color: #58a6ff;
-  background: transparent;
-  border: 1px solid #30363d;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.broadcasts-card-toggle:hover {
-  border-color: #58a6ff;
-}
-
-.broadcasts-card-embed-wrap {
-  position: relative;
-  width: 100%;
-  padding-bottom: 56.25%;
-  height: 0;
-  overflow: hidden;
-}
-
-.broadcasts-embed {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  border: none;
-}
-
-.broadcasts-card--expanded .broadcasts-card-embed-wrap {
-  padding-bottom: 36%;
-}
-
-.broadcasts-embed-fallback {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.4rem 0.7rem 0.55rem;
-  font-size: 0.78rem;
-  color: #8b949e;
-  background: #0d1117;
-  border-top: 1px solid #30363d;
-}
-
-/* Link-only cards (no embed) */
 .broadcasts-card-links-only {
   padding: 1.25rem 1rem;
   background: #0d1117;

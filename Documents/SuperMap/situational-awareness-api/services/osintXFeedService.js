@@ -1,7 +1,5 @@
 /**
- * OSINT X feed ingestion — no Nitter dependency.
- *
- * Primary source: FxTwitter / FixTweet public profile API (no API key):
+ * OSINT X feed ingestion via FxTwitter / FixTweet public profile API (no API key):
  *   GET https://api.fxtwitter.com/2/profile/:handle/statuses?count=N
  *
  * Fault-tolerant: per-handle failures are skipped; others continue.
@@ -45,7 +43,7 @@ function isOriginalWithHeadline(item) {
   return false
 }
 
-/** FxTwitter free profile timeline (JSON) — no API key, not Nitter. */
+/** FxTwitter free profile timeline (JSON) — no API key. */
 async function fetchFromFxTwitter(feed) {
   const handle = feed.handle
   const url = `${FXTWITTER_PROFILE}/${encodeURIComponent(handle)}/statuses?count=20`
@@ -150,7 +148,7 @@ function normalizeToOsintEvent(item) {
   return event
 }
 
-async function fetchOsintXFeeds({ limitFeeds = 0 } = {}) {
+async function fetchOsintXFeeds({ limitFeeds = 0, skipGeotag = false } = {}) {
   let osintXFeeds = getOsintXFeeds()
   if (limitFeeds > 0) osintXFeeds = osintXFeeds.slice(0, limitFeeds)
   if (osintXFeeds.length === 0) {
@@ -174,7 +172,7 @@ async function fetchOsintXFeeds({ limitFeeds = 0 } = {}) {
     const s = settled[i]
     const feed = osintXFeeds[i]
     const handle = feed.handle
-    if (s.status === 'rejected') {
+    if (s.status !== 'fulfilled') {
       console.warn('[osint-x]', handle, 'rejected:', s.reason?.message || s.reason)
       byHandle[handle] = { ok: false, count: 0, err: s.reason?.message }
       continue
@@ -182,18 +180,20 @@ async function fetchOsintXFeeds({ limitFeeds = 0 } = {}) {
     const { items } = s.value
     byHandle[handle] = { ok: true, count: items.length }
     for (const item of items) {
-      try {
-        const tagged = await geotagArticle({
-          title: item.title,
-          content: item.content,
-          contentSnippet: item.content,
-        })
-        if (tagged.coordinates) {
-          item.coordinates = tagged.coordinates
-          item.country = tagged.country
-          item.confidence = tagged.confidence
-        }
-      } catch (_) { /* geotag optional */ }
+      if (!skipGeotag) {
+        try {
+          const tagged = await geotagArticle({
+            title: item.title,
+            content: item.content,
+            contentSnippet: item.content,
+          })
+          if (tagged.coordinates) {
+            item.coordinates = tagged.coordinates
+            item.country = tagged.country
+            item.confidence = tagged.confidence
+          }
+        } catch (_) { /* geotag optional */ }
+      }
       const tags = tagOsintPost({ title: item.title, content: item.content })
       const event = normalizeToOsintEvent(item)
       ingestEvent(event, { extraTags: ['x', 'osint', ...tags] })
@@ -222,10 +222,12 @@ async function fetchOsintXFeeds({ limitFeeds = 0 } = {}) {
 
 /**
  * If the event DB has no recent X posts, run a live ingest (cooldown-guarded).
+ * Pass force: true to bypass cooldown (user-initiated refresh).
+ * Live path skips geotag so the API returns quickly; scheduled ingest still geotags.
  */
-async function ensureOsintXFresh({ limitFeeds = 12 } = {}) {
+async function ensureOsintXFresh({ limitFeeds = 12, force = false } = {}) {
   const now = Date.now()
-  if (now - lastLiveRefreshAt < LIVE_REFRESH_COOLDOWN_MS) {
+  if (!force && now - lastLiveRefreshAt < LIVE_REFRESH_COOLDOWN_MS) {
     return { refreshed: false, reason: 'cooldown' }
   }
   if (liveRefreshInFlight) {
@@ -234,7 +236,7 @@ async function ensureOsintXFresh({ limitFeeds = 12 } = {}) {
   }
   liveRefreshInFlight = (async () => {
     try {
-      const posts = await fetchOsintXFeeds({ limitFeeds })
+      const posts = await fetchOsintXFeeds({ limitFeeds, skipGeotag: true })
       lastLiveRefreshAt = Date.now()
       return { refreshed: true, count: posts.length }
     } finally {

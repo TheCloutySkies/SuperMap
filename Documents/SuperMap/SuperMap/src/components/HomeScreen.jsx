@@ -28,7 +28,7 @@ const QUICK_LINKS = [
   { id: 'crime-map', label: 'Crime Map', desc: 'FBI UCR state rates, rankings, and city search', icon: '📉', path: 'crime-map' },
   { id: 'news-feeds', label: 'News Feeds', desc: 'Wikipedia, Reddit, Google News, BBC', icon: '📰', path: 'news-feeds' },
   { id: 'osint-feeds', label: 'OSINT Feeds', desc: 'Bellingcat, CISA, DW, tactical intel', icon: '📡', path: 'osint-feeds' },
-  { id: 'osint-x', label: 'OSINT (X)', desc: 'Posts from OSINT X/Twitter accounts via RSS', icon: '𝕏', path: 'osint-x' },
+  { id: 'osint-x', label: 'OSINT (X)', desc: 'Posts from OSINT X/Twitter accounts via FxTwitter', icon: '𝕏', path: 'osint-x' },
   { id: 'report-maker', label: 'Report Maker', desc: 'Build and save intelligence reports', icon: '📝', path: 'report-maker' },
   { id: 'resources', label: 'Resources', desc: 'Open OSINT tools and reference resources', icon: '📚', path: 'resources' },
 ]
@@ -67,7 +67,7 @@ function applyHomePayload(data, setters) {
     setThreatSummaryError,
     setThreatSummaryLoading,
     setDefcon,
-    setNitterImages,
+    setHomeXImages,
     setGasPricesStates,
     setGasPrices,
     setGasPricesError,
@@ -84,7 +84,7 @@ function applyHomePayload(data, setters) {
   const fromHome = Array.isArray(data.homeImages) ? data.homeImages : []
   const fromOsint = osintXToImages(data.osintX)
   if (fromHome.length || fromOsint.length) {
-    setNitterImages(fromHome.length ? fromHome : fromOsint)
+    setHomeXImages(fromHome.length ? fromHome : fromOsint)
   }
   if (Array.isArray(data.gasStates)) setGasPricesStates(data.gasStates)
   if (data.gasPrices) {
@@ -113,10 +113,11 @@ export default function HomeScreen({
   const initialSnap = useRef(typeof window !== 'undefined' ? readHomeSnapshot() : null)
   const snap = initialSnap.current
 
-  const [nitterImages, setNitterImages] = useState(() => {
+  const [homeXImages, setHomeXImages] = useState(() => {
     const fromHome = Array.isArray(snap?.homeImages) ? snap.homeImages : []
     return fromHome.length ? fromHome : osintXToImages(snap?.osintX)
   })
+  const [homeXImagesLoading, setHomeXImagesLoading] = useState(false)
   const [threatSummary, setThreatSummary] = useState(() => snap?.threatSummary || null)
   const [threatSummaryLoading, setThreatSummaryLoading] = useState(() => !snap?.threatSummary)
   const [threatSummaryError, setThreatSummaryError] = useState(null)
@@ -145,7 +146,7 @@ export default function HomeScreen({
     setThreatSummaryError,
     setThreatSummaryLoading,
     setDefcon,
-    setNitterImages,
+    setHomeXImages,
     setGasPricesStates,
     setGasPrices,
     setGasPricesError,
@@ -181,6 +182,31 @@ export default function HomeScreen({
         if (!refresh) setThreatSummary(null)
       })
       .finally(() => setThreatSummaryLoading(false))
+  }
+
+  const fetchHomeXImages = (force = false) => {
+    if (!API_BASE) return
+    setHomeXImagesLoading(true)
+    const url = force
+      ? `${API_BASE}/api/home-images?refresh=1&limit=24&_=${Date.now()}`
+      : `${API_BASE}/api/home-images?limit=24`
+    axios.get(url, { timeout: 60000, headers: force ? { 'Cache-Control': 'no-cache' } : undefined })
+      .then((res) => {
+        const images = Array.isArray(res.data?.images) ? res.data.images : []
+        setHomeXImages(images)
+        if (images.length) {
+          const prev = readHomeSnapshot() || {}
+          writeHomeSnapshot({ ...prev, homeImages: images })
+        }
+      })
+      .catch(() => {
+        if (force) {
+          // Keep existing gallery on force-refresh failure
+        } else {
+          setHomeXImages([])
+        }
+      })
+      .finally(() => setHomeXImagesLoading(false))
   }
 
   // Single /api/home bootstrap (hydrate from snapshot already done via useState init)
@@ -483,10 +509,21 @@ export default function HomeScreen({
               )}
             </section>
             <section className="home-screen-section home-screen-photos-main card-y2k">
-              <h2 className="home-screen-section-title">Latest Images from X</h2>
-              {nitterImages.length > 0 ? (
+              <div className="home-screen-photos-header">
+                <h2 className="home-screen-section-title">Latest Images from X</h2>
+                <button
+                  type="button"
+                  className="home-screen-photos-refresh btn-y2k"
+                  onClick={() => fetchHomeXImages(true)}
+                  disabled={homeXImagesLoading}
+                  title="Force refresh images from FxTwitter"
+                >
+                  {homeXImagesLoading ? 'Refreshing…' : 'Refresh images'}
+                </button>
+              </div>
+              {homeXImages.length > 0 ? (
                 <div className="home-screen-photos-main-grid">
-                  {nitterImages.map((item, i) => (
+                  {homeXImages.map((item, i) => (
                     <div
                       key={`${item.src}-${i}`}
                       className="home-screen-photos-main-wrap"
@@ -507,7 +544,9 @@ export default function HomeScreen({
                 </div>
               ) : (
                 <p className="home-screen-hint">
-                  No live OSINT images right now. Photos load from public FxTwitter timelines (no API key) — try refresh in a minute.
+                  {homeXImagesLoading
+                    ? 'Loading OSINT images from FxTwitter…'
+                    : 'No live OSINT images right now. Photos load from public FxTwitter timelines (no API key) — tap Refresh images to try again.'}
                 </p>
               )}
             </section>

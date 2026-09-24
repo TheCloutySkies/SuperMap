@@ -31,7 +31,6 @@ function isRealPhotoUrl(url) {
 
 /**
  * Homepage gallery images: FxTwitter OSINT handles first, then Reddit combat video frames.
- * Never depends on Nitter.
  */
 async function buildHomeImages({ max = 24 } = {}) {
   const items = []

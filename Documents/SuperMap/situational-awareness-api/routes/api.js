@@ -1729,96 +1729,17 @@ router.get('/wildfire-detail', async (req, res) => {
   }
 })
 
-/** US states + DC for gas price lookup. Order: name for dropdown. */
-const US_GAS_STATES = [
-  { code: 'AL', name: 'Alabama' }, { code: 'AK', name: 'Alaska' }, { code: 'AZ', name: 'Arizona' }, { code: 'AR', name: 'Arkansas' },
-  { code: 'CA', name: 'California' }, { code: 'CO', name: 'Colorado' }, { code: 'CT', name: 'Connecticut' }, { code: 'DE', name: 'Delaware' },
-  { code: 'DC', name: 'District of Columbia' }, { code: 'FL', name: 'Florida' }, { code: 'GA', name: 'Georgia' }, { code: 'HI', name: 'Hawaii' },
-  { code: 'ID', name: 'Idaho' }, { code: 'IL', name: 'Illinois' }, { code: 'IN', name: 'Indiana' }, { code: 'IA', name: 'Iowa' },
-  { code: 'KS', name: 'Kansas' }, { code: 'KY', name: 'Kentucky' }, { code: 'LA', name: 'Louisiana' }, { code: 'ME', name: 'Maine' },
-  { code: 'MD', name: 'Maryland' }, { code: 'MA', name: 'Massachusetts' }, { code: 'MI', name: 'Michigan' }, { code: 'MN', name: 'Minnesota' },
-  { code: 'MS', name: 'Mississippi' }, { code: 'MO', name: 'Missouri' }, { code: 'MT', name: 'Montana' }, { code: 'NE', name: 'Nebraska' },
-  { code: 'NV', name: 'Nevada' }, { code: 'NH', name: 'New Hampshire' }, { code: 'NJ', name: 'New Jersey' }, { code: 'NM', name: 'New Mexico' },
-  { code: 'NY', name: 'New York' }, { code: 'NC', name: 'North Carolina' }, { code: 'ND', name: 'North Dakota' }, { code: 'OH', name: 'Ohio' },
-  { code: 'OK', name: 'Oklahoma' }, { code: 'OR', name: 'Oregon' }, { code: 'PA', name: 'Pennsylvania' }, { code: 'RI', name: 'Rhode Island' },
-  { code: 'SC', name: 'South Carolina' }, { code: 'SD', name: 'South Dakota' }, { code: 'TN', name: 'Tennessee' }, { code: 'TX', name: 'Texas' },
-  { code: 'UT', name: 'Utah' }, { code: 'VT', name: 'Vermont' }, { code: 'VA', name: 'Virginia' }, { code: 'WA', name: 'Washington' },
-  { code: 'WV', name: 'West Virginia' }, { code: 'WI', name: 'Wisconsin' }, { code: 'WY', name: 'Wyoming' },
-]
+const gasPricesService = require('../services/gasPrices')
 
 router.get('/gas-prices/states', (_req, res) => {
   setHomeCacheHeaders(res)
-  res.json(US_GAS_STATES)
+  res.json(gasPricesService.US_GAS_STATES)
 })
 
-/** Representative ZIP per state for GasBuddy fallback (one per state). */
-const GASBUDDY_STATE_ZIPS = {
-  AL: '35203', AK: '99501', AZ: '85001', AR: '72201', CA: '90210', CO: '80202', CT: '06101', DE: '19901',
-  DC: '20001', FL: '33101', GA: '30301', HI: '96801', ID: '83701', IL: '60601', IN: '46201', IA: '50301',
-  KS: '66101', KY: '40201', LA: '70112', ME: '04101', MD: '21201', MA: '02101', MI: '48201', MN: '55401',
-  MS: '39101', MO: '63101', MT: '59101', NE: '68101', NV: '89101', NH: '03431', NJ: '07101', NM: '87101',
-  NY: '10001', NC: '28201', ND: '58102', OH: '43201', OK: '73101', OR: '97201', PA: '19101', RI: '02901',
-  SC: '29201', SD: '57101', TN: '37201', TX: '75201', UT: '84101', VT: '05401', VA: '23219', WA: '98101',
-  WV: '25301', WI: '53201', WY: '82001',
-}
-
-const GASBUDDY_GRAPHQL_URLS = [
-  'https://www.gasbuddy.com/graphql',
-  'https://gasbuddy.com/graphql',
-]
-
-function parseGasBuddyTrends(data) {
-  const loc = data?.data?.locationBySearchTerm
-  const trends = loc?.trends ?? loc?.trend
-  const arr = Array.isArray(trends) ? trends : (trends ? [trends] : [])
-  const first = arr[0]
-  if (!first) return null
-  const price = first.today != null ? Number(first.today) : (first.todayLow != null ? Number(first.todayLow) : null)
-  if (price == null || Number.isNaN(price)) return null
-  return { price: Number(price.toFixed(2)), areaName: first.areaName || '' }
-}
-
-/** GasBuddy GraphQL: fetch price for a zip. Returns { price, areaName } or null. */
-async function fetchGasBuddyPrice(searchTerm) {
-  const body = {
-    operationName: 'LocationBySearchTerm',
-    variables: { fuel: 1, maxAge: 0, search: String(searchTerm || '') },
-    query: `query LocationBySearchTerm($search: String, $fuel: Int, $maxAge: Int) {
-  locationBySearchTerm(search: $search, fuel: $fuel, maxAge: $maxAge) {
-    trends { areaName country today todayLow }
-  }
-}`,
-  }
-  const opts = {
-    timeout: 10000,
-    headers: {
-      'Content-Type': 'application/json',
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept': 'application/json',
-    },
-    validateStatus: () => true,
-  }
-  for (const url of GASBUDDY_GRAPHQL_URLS) {
-    try {
-      const res = await axios.post(url, body, opts)
-      if (res.data?.errors?.length) {
-        console.warn('[API /gas-prices] GasBuddy GraphQL errors:', res.data.errors[0]?.message || res.data.errors)
-        continue
-      }
-      const parsed = parseGasBuddyTrends(res.data)
-      if (parsed) return { ...parsed, areaName: parsed.areaName || searchTerm }
-      if (res.status === 403 || res.status === 429) {
-        console.warn('[API /gas-prices] GasBuddy', res.status, url)
-        continue
-      }
-    } catch (err) {
-      console.warn('[API /gas-prices] GasBuddy', url, err.message)
-    }
-  }
-  return null
-}
-
-/** US gas prices: EIA when key set; else GasBuddy (no key). Real data only. */
+/**
+ * US gas prices: EIA API (if EIA_API_KEY) → EIA public gasdiesel HTML (no key) → GasBuddy.
+ * No user setup required for live national + regional + major-state prices.
+ */
 router.get('/gas-prices', async (req, res) => {
   setHomeCacheHeaders(res)
   const stateCode = (req.query.state || '').trim().toUpperCase().slice(0, 2)
@@ -1827,170 +1748,23 @@ router.get('/gas-prices', async (req, res) => {
   const cached = gasPricesCache.get(cacheKey)
   if (cached) return res.json({ ...cached, _cached: true })
 
-  const EIA_KEY = (process.env.EIA_API_KEY || '').trim()
-  const unit = 'USD/gal'
-  const updatedAt = new Date().toLocaleTimeString(undefined, { timeStyle: 'short' })
-
-  const emptyPayload = (opts = {}) => {
-    const { requiresEiaKey = false, gasUnavailable = false } = opts
-    const payload = {
+  try {
+    const payload = await gasPricesService.getGasPrices({ stateCode, zip })
+    gasPricesCache.set(cacheKey, payload)
+    res.json(payload)
+  } catch (err) {
+    console.error('[API /gas-prices]', err.message)
+    const fallback = {
       national: null,
-      unit,
+      unit: 'USD/gal',
       regions: [],
       states: [],
-      requiresEiaKey,
-      gasUnavailable,
-      updatedAt,
+      gasUnavailable: true,
+      updatedAt: new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }),
     }
-    gasPricesCache.set(cacheKey, payload)
-    return res.json(payload)
+    gasPricesCache.set(cacheKey, fallback)
+    res.json(fallback)
   }
-
-  if (!EIA_KEY) {
-    const defaultZip = (process.env.GASBUDDY_DEFAULT_ZIP || '10001').trim()
-    const searchTerm = stateCode && GASBUDDY_STATE_ZIPS[stateCode]
-      ? GASBUDDY_STATE_ZIPS[stateCode]
-      : zip || defaultZip
-    const gasbuddy = await fetchGasBuddyPrice(searchTerm)
-    if (gasbuddy) {
-      const st = stateCode ? US_GAS_STATES.find((s) => s.code === stateCode) : null
-      const payload = {
-        national: gasbuddy.price,
-        unit,
-        regions: [],
-        states: stateCode && st ? [{ code: stateCode, name: st.name, price: gasbuddy.price }] : [],
-        updatedAt,
-      }
-      gasPricesCache.set(cacheKey, payload)
-      return res.json(payload)
-    }
-    return emptyPayload({ gasUnavailable: true })
-  }
-
-  let nationalVal = null
-  let statePrice = null
-
-  // EIA API v2: petroleum/pri/gnd — response uses duoarea (NUS=U.S., S+stateCode=e.g. SFL), area-name, product (EPM0U/EPM0R=gasoline, EPD2D=diesel).
-  const EIA_GASOLINE_PRODUCTS = ['EPM0U', 'EPM0R']
-  const eiaV2Base = 'https://api.eia.gov/v2/petroleum/pri/gnd/data/'
-  const eiaV2XParams = JSON.stringify({
-    frequency: 'weekly',
-    data: ['value'],
-    facets: {},
-    start: null,
-    end: null,
-    sort: [{ column: 'duoarea', direction: 'desc' }],
-    offset: 0,
-    length: 5000,
-  })
-  const eiaV2Query = new URLSearchParams({
-    frequency: 'weekly',
-    'data[0]': 'value',
-    'sort[0][column]': 'duoarea',
-    'sort[0][direction]': 'desc',
-    offset: '0',
-    length: '5000',
-  })
-  if (EIA_KEY) eiaV2Query.set('api_key', EIA_KEY)
-  const EIA_TIMEOUT_MS = 22000
-  const duoareaState = stateCode ? 'S' + stateCode : null
-  // State request: facet by duoarea (e.g. SIN); URL and X-Params use sort=period so we get latest first
-  const stateFacetXParams = stateCode ? JSON.stringify({
-    frequency: 'weekly',
-    data: ['value'],
-    facets: { duoarea: [duoareaState] },
-    start: null,
-    end: null,
-    sort: [{ column: 'period', direction: 'desc' }],
-    offset: 0,
-    length: 100,
-  }) : null
-  const stateQuery = stateCode ? new URLSearchParams({
-    frequency: 'weekly',
-    'data[0]': 'value',
-    'sort[0][column]': 'period',
-    'sort[0][direction]': 'desc',
-    offset: '0',
-    length: '100',
-  }) : null
-  if (stateCode && stateQuery && EIA_KEY) stateQuery.set('api_key', EIA_KEY)
-  try {
-    const nationalPromise = axios.get(`${eiaV2Base}?${eiaV2Query.toString()}`, {
-      timeout: EIA_TIMEOUT_MS,
-      headers: {
-        'X-Params': eiaV2XParams,
-        'Accept': 'application/json',
-        'User-Agent': 'SuperMap/1.0 (EIA Open Data)',
-      },
-    })
-    const statePromise = stateCode && stateFacetXParams && stateQuery
-      ? axios.get(`${eiaV2Base}?${stateQuery.toString()}`, {
-          timeout: EIA_TIMEOUT_MS,
-          headers: {
-            'X-Params': stateFacetXParams,
-            'Accept': 'application/json',
-            'User-Agent': 'SuperMap/1.0 (EIA Open Data)',
-          },
-        })
-      : null
-    const [v2Res, v2StateRes] = await Promise.all([nationalPromise, statePromise || Promise.resolve({ data: null })])
-    const v2Data = v2Res.data?.response?.data ?? v2Res.data?.data
-    const v2Rows = Array.isArray(v2Data) ? v2Data : []
-    const nationalRow = v2Rows.find(
-      (r) => (r.duoarea === 'NUS' || (r['area-name'] && String(r['area-name']).toUpperCase() === 'U.S.')) &&
-        EIA_GASOLINE_PRODUCTS.includes(r.product)
-    ) || v2Rows.find((r) => r.duoarea === 'NUS' || (r['area-name'] && String(r['area-name']).toUpperCase() === 'U.S.'))
-    if (nationalRow && (nationalRow.value != null || nationalRow.Value != null)) {
-      const val = nationalRow.value ?? nationalRow.Value
-      nationalVal = Number(val)
-    }
-    if (nationalVal != null && !Number.isNaN(nationalVal)) nationalVal = Number(nationalVal.toFixed(2))
-    if (stateCode && v2StateRes?.data) {
-      const raw = v2StateRes.data
-      const v2StateData = raw?.response?.data ?? raw?.data ?? (Array.isArray(raw) ? raw : null)
-      const v2StateRows = Array.isArray(v2StateData) ? v2StateData : []
-      const stateRow = v2StateRows.find((r) => EIA_GASOLINE_PRODUCTS.includes(r.product)) ||
-        v2StateRows.find((r) => r.duoarea === duoareaState) ||
-        v2StateRows.find((r) => (r.value != null || r.Value != null))
-      if (stateRow && (stateRow.value != null || stateRow.Value != null)) {
-        const val = stateRow.value ?? stateRow.Value
-        statePrice = Number(Number(val).toFixed(2))
-      }
-    }
-    if (stateCode && (statePrice == null || Number.isNaN(statePrice))) {
-      const stateRow = v2Rows.find((r) => r.duoarea === duoareaState && EIA_GASOLINE_PRODUCTS.includes(r.product)) || v2Rows.find((r) => r.duoarea === duoareaState)
-      if (stateRow && (stateRow.value != null || stateRow.Value != null)) {
-        const val = stateRow.value ?? stateRow.Value
-        statePrice = Number(Number(val).toFixed(2))
-      }
-    }
-  } catch (err) {
-    console.warn('[API /gas-prices] EIA v2 error:', err.message)
-  }
-
-  // EIA v1 API was retired; use only v2 (and GasBuddy fallback when configured).
-
-  const st = stateCode ? US_GAS_STATES.find((s) => s.code === stateCode) : null
-  const payload = {
-    national: nationalVal != null ? Number(nationalVal.toFixed(2)) : null,
-    unit,
-    regions: [],
-    updatedAt,
-  }
-  if (stateCode && st) {
-    if (statePrice != null) {
-      payload.states = [{ code: stateCode, name: st.name, price: Number(statePrice.toFixed(2)) }]
-    } else if (nationalVal != null) {
-      payload.states = [{ code: stateCode, name: st.name, price: Number(nationalVal.toFixed(2)), useNationalFallback: true }]
-    } else {
-      payload.states = []
-    }
-  } else {
-    payload.states = []
-  }
-
-  gasPricesCache.set(cacheKey, payload)
-  res.json(payload)
 })
 
 /** Conflict / intel metrics from ingested events (last 24h). Chart by event type (primary); optional by region. Cache 10 min. */

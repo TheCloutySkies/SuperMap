@@ -246,7 +246,7 @@
 }
 
 @media (max-width: 900px) {
-  .crime-dashboard {
+  .crime-dashboard:not(.crime-dashboard--section) {
     top: auto;
     bottom: calc(4.75rem + env(safe-area-inset-bottom));
     left: 0.5rem;

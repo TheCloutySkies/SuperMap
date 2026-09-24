@@ -1,0 +1,91 @@
+.crime-section {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.crime-section-panel {
+  flex: 0 0 min(460px, 38vw);
+  max-width: 520px;
+  min-width: 300px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  z-index: 5;
+  border-right: 1px solid var(--y2k-border, #2a3344);
+}
+
+.crime-section-panel .crime-dashboard {
+  position: relative;
+  top: auto;
+  left: auto;
+  width: 100%;
+  max-height: none;
+  height: 100%;
+  border-radius: 0;
+  border: 0;
+  box-shadow: none;
+  background: rgba(10, 14, 12, 0.97);
+}
+
+.crime-section-panel .crime-dashboard-header h2 {
+  font-size: 1.2rem;
+}
+
+.crime-section-panel .crime-dashboard-sub {
+  font-size: 0.78rem;
+}
+
+.crime-section-panel .crime-stat-grid {
+  grid-template-columns: 1fr 1fr;
+}
+
+.crime-section-panel .crime-panel--split {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 1100px) {
+  .crime-section-panel .crime-panel--split {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.crime-section-map {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.crime-section-map .map-view-wrapper {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+}
+
+@media (max-width: 900px) {
+  .crime-section {
+    flex-direction: column;
+  }
+
+  .crime-section-panel {
+    flex: 0 0 46%;
+    max-width: none;
+    min-width: 0;
+    width: 100%;
+    border-right: 0;
+    border-bottom: 1px solid var(--y2k-border, #2a3344);
+  }
+
+  .crime-section-map {
+    flex: 1 1 54%;
+  }
+}

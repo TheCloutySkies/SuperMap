@@ -10,7 +10,7 @@ const DEFAULT_COMMANDS = [
   { id: 'cmd-home', label: 'Go Home', keywords: 'home dashboard', action: 'navigate', viewId: 'home' },
   { id: 'cmd-osint-map', label: 'OSINT Map', keywords: 'maps osint', action: 'navigate', viewId: 'osint-map' },
   { id: 'cmd-conflict-map', label: 'Conflict Map', keywords: 'maps conflict war', action: 'navigate', viewId: 'conflict-map' },
-  { id: 'cmd-crime-map', label: 'Crime Map', keywords: 'maps crime fbi', action: 'navigate', viewId: 'crime-map' },
+  { id: 'cmd-crime-map', label: 'Crime', keywords: 'crime fbi ucr intelligence rates', action: 'navigate', viewId: 'crime-map' },
   { id: 'cmd-explore-map', label: 'Explore Map', keywords: 'maps explore', action: 'navigate', viewId: 'explore-map' },
   { id: 'cmd-geolocate', label: 'Geolocate', keywords: 'maps geolocate overpass', action: 'navigate', viewId: 'geolocate-map' },
   { id: 'cmd-news', label: 'News Feeds', keywords: 'feeds news', action: 'navigate', viewId: 'news-feeds' },

@@ -79,7 +79,7 @@ function RankTable({ rows, rateKey = 'violentRate', labelKey = 'city' }) {
   )
 }
 
-export default function CrimeDashboard({ onFlyToCity }) {
+export default function CrimeDashboard({ onFlyToCity, variant = 'overlay' }) {
   const [section, setSection] = useState('overview')
   const [stats, setStats] = useState(null)
   const [trends, setTrends] = useState([])
@@ -172,11 +172,20 @@ export default function CrimeDashboard({ onFlyToCity }) {
     }
   }
 
+  const isSection = variant === 'section'
+
   return (
-    <aside className="crime-dashboard" aria-label="Crime analytics">
+    <aside
+      className={`crime-dashboard${isSection ? ' crime-dashboard--section' : ''}`}
+      aria-label="Crime analytics"
+    >
       <header className="crime-dashboard-header">
-        <h2>Crime Map</h2>
-        <p className="crime-dashboard-sub">FBI UCR rates · state choropleth + city search</p>
+        <h2>{isSection ? 'Crime Intelligence' : 'Crime Map'}</h2>
+        <p className="crime-dashboard-sub">
+          {isSection
+            ? 'FBI UCR · national trends, rankings, arrests, homicide, hate crime, and city search with state choropleth map'
+            : 'FBI UCR rates · state choropleth + city search'}
+        </p>
       </header>
 
       <nav className="crime-dashboard-tabs" aria-label="Crime sections">

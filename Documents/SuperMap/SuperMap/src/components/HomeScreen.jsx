@@ -391,54 +391,38 @@ export default function HomeScreen({
                     <>
                       <div className="home-screen-gas-prices-national">
                         <span className="home-screen-gas-prices-state-label">{gasPrices.states[0].name}</span>
-                        <span className="home-screen-gas-prices-value">${gasPrices.states[0].price}</span>
+                        <span className="home-screen-gas-prices-value">${Number(gasPrices.states[0].price).toFixed(2)}</span>
                         <span className="home-screen-gas-prices-unit">{gasPrices.unit}</span>
                         <span className="home-screen-gas-prices-updated">Updated {gasPrices.updatedAt}</span>
                       </div>
                       {gasPrices.states[0].useNationalFallback && (
                         <p className="home-screen-gas-prices-no-data home-screen-gas-prices-estimate-note">State data unavailable; showing US average.</p>
                       )}
+                      {gasPrices.states[0].useRegionalFallback && (
+                        <p className="home-screen-gas-prices-no-data home-screen-gas-prices-estimate-note">State series unavailable; showing regional (PADD) average.</p>
+                      )}
                       {gasPrices.national != null && !gasPrices.states[0].useNationalFallback && (
-                        <p className="home-screen-gas-prices-us-avg">US avg ${gasPrices.national} {gasPrices.unit}</p>
+                        <p className="home-screen-gas-prices-us-avg">US avg ${Number(gasPrices.national).toFixed(2)} {gasPrices.unit}</p>
                       )}
                     </>
                   ) : gasPrices.national != null ? (
                     <div className="home-screen-gas-prices-national">
                       <span className="home-screen-gas-prices-state-label">US average</span>
-                      <span className="home-screen-gas-prices-value">${gasPrices.national}</span>
+                      <span className="home-screen-gas-prices-value">${Number(gasPrices.national).toFixed(2)}</span>
                       <span className="home-screen-gas-prices-unit">{gasPrices.unit}</span>
                       <span className="home-screen-gas-prices-updated">Updated {gasPrices.updatedAt}</span>
                     </div>
-                  ) : gasPrices.gasUnavailable ? (
-                    <>
-                      <div className="home-screen-gas-prices-national">
-                        <span className="home-screen-gas-prices-state-label">
-                          {selectedGasState && gasPricesStates.find((s) => s.code === selectedGasState)?.name || 'US avg'} (estimate)
-                        </span>
-                        <span className="home-screen-gas-prices-value">~$3.49</span>
-                        <span className="home-screen-gas-prices-unit">{gasPrices.unit}</span>
-                      </div>
-                      <p className="home-screen-gas-prices-no-data home-screen-gas-prices-estimate-note">
-                        Add <code>EIA_API_KEY</code> to your backend <code>.env</code> for live data (free at{' '}
-                        <a href="https://www.eia.gov/opendata/register.php" target="_blank" rel="noopener noreferrer">eia.gov/opendata</a>).
-                      </p>
-                    </>
-                  ) : gasPrices.requiresEiaKey ? (
-                    <p className="home-screen-gas-prices-no-data">
-                      Real-time data requires an EIA API key. Add <code>EIA_API_KEY</code> to your backend <code>.env</code>. Free key at{' '}
-                      <a href="https://www.eia.gov/opendata/register.php" target="_blank" rel="noopener noreferrer">eia.gov/opendata</a>.
-                    </p>
-                  ) : selectedGasState ? (
-                    <p className="home-screen-gas-prices-no-data">Data unavailable for this state from EIA.</p>
                   ) : (
-                    <p className="home-screen-gas-prices-no-data">No data from EIA. Check backend logs.</p>
+                    <p className="home-screen-gas-prices-no-data">
+                      {selectedGasState ? 'Data unavailable for this state right now.' : 'Gas price data temporarily unavailable.'}
+                    </p>
                   )}
                   {Array.isArray(gasPrices.regions) && gasPrices.regions.length > 0 && !selectedGasState && (
                     <ul className="home-screen-gas-prices-regions">
                       {gasPrices.regions.map((r) => (
                         <li key={r.name}>
                           <span className="home-screen-gas-prices-region-name">{r.name}</span>
-                          <span className="home-screen-gas-prices-region-price">${r.price}</span>
+                          <span className="home-screen-gas-prices-region-price">${Number(r.price).toFixed(2)}</span>
                         </li>
                       ))}
                     </ul>

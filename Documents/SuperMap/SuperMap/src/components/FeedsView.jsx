@@ -662,6 +662,14 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
                             <img src={item.thumbnail} alt="" className="feeds-news-card-favicon" loading="lazy" />
                           )}
                           {item.source}
+                          {item.risk_score != null && Number(item.risk_score) >= 2 && (
+                            <span
+                              className={`feeds-risk-badge feeds-risk-badge--${Number(item.risk_score)}`}
+                              title={item.risk_label || `Risk ${item.risk_score}/5`}
+                            >
+                              {item.risk_score}/5
+                            </span>
+                          )}
                         </span>
                         <h3 className="feeds-news-card-title">{item.title || 'Untitled'}</h3>
                         <span className="feeds-news-card-date">
@@ -715,7 +723,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
                       <tr>
                         <th>Time</th>
                         <th>Source</th>
-                        <th>Alert</th>
+                        <th>Risk</th>
                         <th>Content</th>
                         {onPinnedToMap && <th>Map</th>}
                       </tr>
@@ -733,7 +741,15 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
                             {item.pubDate ? new Date(item.pubDate).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : '—'}
                           </td>
                           <td className="feeds-osint-source">{osintSourceDisplayName(item.source)}</td>
-                          <td className="feeds-osint-badge">{item.alertLevel || '—'}</td>
+                          <td className="feeds-osint-badge">
+                            {item.risk_score != null ? (
+                              <span className={`feeds-risk-badge feeds-risk-badge--${Number(item.risk_score)}`} title={item.risk_label || `Risk ${item.risk_score}/5`}>
+                                {item.risk_score}/5
+                              </span>
+                            ) : (
+                              item.alertLevel || '—'
+                            )}
+                          </td>
                           <td className="feeds-osint-content">
                             <a href={item.link} target="_blank" rel="noopener noreferrer">
                               {item.title || 'Untitled'}

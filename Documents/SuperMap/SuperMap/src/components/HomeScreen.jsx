@@ -330,6 +330,11 @@ export default function HomeScreen({
                     <span className={`home-screen-threat-level home-screen-threat-level--${(threatSummary.threat_level || 'GUARDED').toLowerCase()}`}>
                       {threatSummary.threat_level || 'GUARDED'}
                     </span>
+                    {threatSummary.high_risk_count > 0 && (
+                      <span className="home-screen-threat-high-count" title="Items scored 4–5 in the last 24h">
+                        {threatSummary.high_risk_count} high-risk
+                      </span>
+                    )}
                   </div>
                   {defcon?.url && (
                     <div className="home-screen-threat-defcon">

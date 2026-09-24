@@ -1,39 +1,19 @@
 /**
  * AI Threat Summary: fetch threat-tagged events from the last 24h,
- * cluster duplicates, call TinyLlama via Ollama, return summary + threat level.
- * Failsafe: fallback to title-based summary if Ollama fails or times out.
+ * prioritize high risk_score (4–5) items, cluster duplicates, call Groq/Ollama,
+ * return summary + threat level.
+ * Failsafe: fallback to title-based summary weighted by item scores.
  */
 
-const { getEventsWithAnyTagInTimeRange, getEvents } = require('../database')
+const { getEventsWithAnyTagInTimeRange, getEvents, getEventTagNames } = require('../database')
+const { callThreatModel } = require('./llmClient')
+const { readRiskScore, riskLabel, clampScore } = require('./riskScoring')
 
 const THREAT_TAGS = ['geopolitics', 'war', 'conflict', 'military', 'osint', 'intelligence', 'security']
-const OLLAMA_BASE = process.env.OLLAMA_BASE_URL || 'http://localhost:11434'
-const OLLAMA_MODEL = process.env.OLLAMA_THREAT_MODEL || 'tinyllama:1.1b'
-const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_THREAT_TIMEOUT_MS) || 90 * 1000
-const GROQ_API_KEY = (process.env.GROQ_API_KEY || '').trim()
-const GROQ_MODEL = process.env.GROQ_THREAT_MODEL || 'llama-3.1-8b-instant'
-const GROQ_BACKUP_MODEL = process.env.GROQ_THREAT_BACKUP_MODEL || 'meta-llama/llama-4-scout-17b-16e-instruct'
-const GROQ_TIMEOUT_MS = Number(process.env.GROQ_THREAT_TIMEOUT_MS) || 60 * 1000
-const GROQ_MAX_CALLS_PER_24H = Math.max(1, parseInt(process.env.GROQ_THREAT_MAX_CALLS_PER_24H, 10) || 28)
-const GROQ_MIN_INTERVAL_MS = Math.max(60 * 1000, parseInt(process.env.GROQ_THREAT_MIN_INTERVAL_MS, 10) || 55 * 60 * 1000)
 const MAX_ARTICLES_FOR_PROMPT = 40
 const TITLE_CLUSTER_MIN_WORDS = 3
-
-const groqCallTimestamps = []
-let lastGroqCallTime = 0
-
-function pruneAndCheckGroqLimits() {
-  const cutoff = Date.now() - 24 * 60 * 60 * 1000
-  while (groqCallTimestamps.length > 0 && groqCallTimestamps[0] < cutoff) groqCallTimestamps.shift()
-  if (groqCallTimestamps.length >= GROQ_MAX_CALLS_PER_24H) return false
-  if (lastGroqCallTime > 0 && Date.now() - lastGroqCallTime < GROQ_MIN_INTERVAL_MS) return false
-  return true
-}
-
-function recordGroqCall() {
-  lastGroqCallTime = Date.now()
-  groqCallTimestamps.push(lastGroqCallTime)
-}
+/** Prefer these scores when building the summary prompt (high-signal first). */
+const HIGH_RISK_MIN = 4
 
 /**
  * Normalize and tokenize title for similarity (simple word set).
@@ -59,7 +39,34 @@ function jaccard(a, b) {
 }
 
 /**
- * Cluster articles by title similarity; keep one representative per cluster (most information-dense: longest description).
+ * Attach risk_score from raw_data / tags onto article objects.
+ */
+function withRiskScore(row) {
+  const tags = getEventTagNames(row.id)
+  let risk = readRiskScore(row, tags)
+  if (risk == null) {
+    // Lightweight heuristic fallback for unscored legacy rows
+    const text = `${row.title || ''} ${row.description || ''}`
+    if (/\b(nuclear|mass\s+casualt|invasion|missile\s+strike)\b/i.test(text)) risk = 4
+    else if (/\b(attack|strike|explosion|war|casualt|evacuat)\b/i.test(text)) risk = 3
+    else if (/\b(military|sanction|protest|cyber|geopolitic)\b/i.test(text)) risk = 2
+    else risk = 1
+  }
+  return {
+    id: row.id,
+    title: row.title || '',
+    description: row.description || '',
+    source: row.source || 'Unknown',
+    raw_data: row.raw_data,
+    tags,
+    risk_score: clampScore(risk),
+    risk_label: riskLabel(risk),
+    timestamp: row.timestamp,
+  }
+}
+
+/**
+ * Cluster articles by title similarity; keep densest representative; preserve max risk in cluster.
  */
 function clusterArticles(events) {
   const items = events.map((e) => ({
@@ -68,6 +75,9 @@ function clusterArticles(events) {
     description: e.description || '',
     source: e.source || 'Unknown',
     raw_data: e.raw_data,
+    risk_score: e.risk_score != null ? clampScore(e.risk_score) : 1,
+    risk_label: e.risk_label || riskLabel(e.risk_score || 1),
+    tags: e.tags || [],
   }))
   if (items.length <= 1) return items
 
@@ -88,22 +98,73 @@ function clusterArticles(events) {
         used.add(items[j].id)
       }
     }
-    const best = cluster.reduce((a, b) =>
-      (a.description || '').length >= (b.description || '').length ? a : b
-    )
-    clusters.push(best)
+    const best = cluster.reduce((a, b) => {
+      const scoreA = (a.risk_score || 1) * 1000 + (a.description || '').length
+      const scoreB = (b.risk_score || 1) * 1000 + (b.description || '').length
+      return scoreA >= scoreB ? a : b
+    })
+    const maxRisk = Math.max(...cluster.map((c) => c.risk_score || 1))
+    clusters.push({
+      ...best,
+      risk_score: maxRisk,
+      risk_label: riskLabel(maxRisk),
+    })
   }
   return clusters
 }
 
 /**
- * Build text block of articles for the prompt (titles + short summaries + sources).
+ * Rank articles: high risk first, then recency. Cap prompt size but always include 4–5s.
+ */
+function prioritizeForPrompt(articles) {
+  const sorted = [...articles].sort((a, b) => {
+    const rs = (b.risk_score || 1) - (a.risk_score || 1)
+    if (rs !== 0) return rs
+    return (b.timestamp || 0) - (a.timestamp || 0)
+  })
+  const high = sorted.filter((a) => (a.risk_score || 1) >= HIGH_RISK_MIN)
+  const rest = sorted.filter((a) => (a.risk_score || 1) < HIGH_RISK_MIN)
+  const combined = [...high, ...rest]
+  return combined.slice(0, MAX_ARTICLES_FOR_PROMPT)
+}
+
+/**
+ * Build text block of articles for the prompt (includes risk scores).
  */
 function buildInputFromArticles(articles) {
-  return articles.slice(0, MAX_ARTICLES_FOR_PROMPT).map((a, i) => {
+  return articles.map((a, i) => {
     const desc = (a.description || '').slice(0, 300)
-    return `[${i + 1}] Title: ${a.title}\nSummary: ${desc || '(no summary)'}\nSource: ${a.source}`
+    const score = a.risk_score != null ? a.risk_score : 1
+    return `[${i + 1}] Risk:${score}/5 (${a.risk_label || riskLabel(score)}) | Title: ${a.title}\nSummary: ${desc || '(no summary)'}\nSource: ${a.source}`
   }).join('\n\n')
+}
+
+/**
+ * Aggregate item scores → suggested dashboard threat level (used in fallback / bias).
+ */
+function aggregateThreatFromScores(articles) {
+  if (!articles.length) {
+    return { threat_level: 'LOW', threat_score: 1 }
+  }
+  const scores = articles.map((a) => a.risk_score || 1)
+  const highCount = scores.filter((s) => s >= 4).length
+  const elevCount = scores.filter((s) => s >= 3).length
+  const max = Math.max(...scores)
+  const avg = scores.reduce((a, b) => a + b, 0) / scores.length
+
+  let threat_score = clampScore(Math.round(avg))
+  if (highCount >= 3 || max >= 5) threat_score = Math.max(threat_score, 5)
+  else if (highCount >= 1) threat_score = Math.max(threat_score, 4)
+  else if (elevCount >= 3) threat_score = Math.max(threat_score, 3)
+  else if (elevCount >= 1) threat_score = Math.max(threat_score, 2)
+
+  const levels = ['LOW', 'GUARDED', 'ELEVATED', 'HIGH', 'CRITICAL']
+  return {
+    threat_level: levels[threat_score - 1],
+    threat_score,
+    high_risk_count: highCount,
+    scored_items: scores.length,
+  }
 }
 
 /**
@@ -128,7 +189,6 @@ function parseThreatResponse(text) {
     if (s >= 1 && s <= 5) out.threat_score = s
   }
 
-  // Extract narrative: under a section label, or as first 1-3 paragraphs before "Threat Summary" / "Bullet" / "Threat Level"
   const withLabel = text.match(
     /(?:Daily Summary|News of the Day|Summary|Narrative)[:\s]*([\s\S]*?)(?=Threat Summary|Bullet|Threat Level|Potential impacts|$)/i
   )
@@ -160,92 +220,16 @@ function parseThreatResponse(text) {
 }
 
 /**
- * Call Ollama /api/generate. Returns full response text or null on failure.
- */
-async function callOllama(prompt) {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS)
-  try {
-    const res = await fetch(`${OLLAMA_BASE}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: OLLAMA_MODEL,
-        prompt,
-        stream: false,
-        options: { temperature: 0.3, num_predict: 1024 },
-      }),
-      signal: controller.signal,
-    })
-    clearTimeout(timeout)
-    if (!res.ok) return null
-    const data = await res.json()
-    return data.response || null
-  } catch (_) {
-    clearTimeout(timeout)
-    return null
-  }
-}
-
-/**
- * Call Groq OpenAI-compatible chat completions. Use when deploying to Render (no Ollama).
- * Returns full response text or null on failure.
- * @param {string} prompt
- * @param {string} [model] - Override model (default GROQ_MODEL).
- */
-async function callGroq(prompt, model = GROQ_MODEL) {
-  if (!GROQ_API_KEY) return null
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), GROQ_TIMEOUT_MS)
-  try {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 1024,
-        temperature: 0.3,
-      }),
-      signal: controller.signal,
-    })
-    clearTimeout(timeout)
-    if (!res.ok) return null
-    const data = await res.json()
-    const content = data.choices?.[0]?.message?.content
-    return typeof content === 'string' ? content.trim() : null
-  } catch (_) {
-    clearTimeout(timeout)
-    return null
-  }
-}
-
-/** Call AI backend: Groq if API key set (primary then backup model), else Ollama. Respects rate limits. */
-async function callThreatModel(prompt) {
-  if (!GROQ_API_KEY) return callOllama(prompt)
-  if (!pruneAndCheckGroqLimits()) return null
-  const primary = await callGroq(prompt, GROQ_MODEL)
-  if (primary) {
-    recordGroqCall()
-    return primary
-  }
-  if (!pruneAndCheckGroqLimits()) return null
-  const backup = await callGroq(prompt, GROQ_BACKUP_MODEL)
-  if (backup) {
-    recordGroqCall()
-    return backup
-  }
-  return null
-}
-
-/**
- * Fallback: generate a simple summary from article titles only.
+ * Fallback: generate a simple summary from high-risk titles first.
  */
 function fallbackSummaryFromTitles(articles) {
-  const titles = articles.slice(0, 15).map((a) => a.title).filter(Boolean)
+  const ranked = prioritizeForPrompt(articles)
+  const agg = aggregateThreatFromScores(ranked)
+  const titles = ranked.slice(0, 15).map((a) => {
+    const t = a.title || ''
+    const prefix = (a.risk_score || 1) >= 4 ? `[${a.risk_score}/5] ` : ''
+    return prefix + t
+  }).filter(Boolean)
   if (titles.length === 0) {
     return {
       summary: 'No threat-tagged articles in the last 24 hours.',
@@ -258,12 +242,14 @@ function fallbackSummaryFromTitles(articles) {
   return {
     summary: bullets.join('\n'),
     bullets,
-    threat_level: 'GUARDED',
-    threat_score: 2,
+    threat_level: agg.threat_level,
+    threat_score: agg.threat_score,
   }
 }
 
 const PROMPT_PREFIX = `You are writing the "news of the day" summary for a situational-awareness dashboard. Use the following articles from the last 24 hours.
+
+Each article includes a Risk score (1–5). Weight HIGH and CRITICAL items (4–5) heavily — they must dominate the narrative. Mention specific places, actors, and numbers when present. Do NOT write a generic overview that could fit any day.
 
 Your main job: Write a short dissertation-style brief. Do NOT just list or regurgitate headlines. Combine and synthesize headline information into an actual analytical summary: connect events across sources, explain causes and consequences, and state why it matters. Write in clear, direct prose (like an intelligence or policy brief), not as a list of headlines.
 
@@ -306,35 +292,32 @@ General Developments:
 [1–3 sentences synthesizing relevant headlines.]
 
 Threat Summary:
-- 3 to 5 short bullet points (optional; only the most critical follow-ups).
+- 3 to 5 short bullet points (optional; only the most critical follow-ups). Prefer items scored 4–5.
 
 Threat Level:
 Return one of: LOW, GUARDED, ELEVATED, HIGH, CRITICAL. Also output a numeric value from 1-5 (1=LOW, 5=CRITICAL).
+Bias the level toward the highest-weighted article scores (many 4–5s ⇒ HIGH/CRITICAL).
 
 Articles:
 
 `
 
 /**
- * Main: get tagged events from last 24h, cluster, call Ollama, parse. On failure use title fallback.
+ * Main: get tagged events from last 24h, score-rank, cluster, call LLM, parse.
  */
 async function getThreatSummary() {
   const since = Date.now() - 24 * 60 * 60 * 1000
-  let rows = getEventsWithAnyTagInTimeRange(THREAT_TAGS, since, 150)
+  let rows = getEventsWithAnyTagInTimeRange(THREAT_TAGS, since, 200)
   if (rows.length === 0) {
-    rows = getEvents(150, since, null)
+    rows = getEvents(200, since, null)
   }
-  const articles = rows.map((r) => ({
-    id: r.id,
-    title: r.title || '',
-    description: r.description || '',
-    source: r.source || 'Unknown',
-    raw_data: r.raw_data,
-  }))
+  const articles = rows.map(withRiskScore)
   const clustered = clusterArticles(articles)
-  const sources = [...new Set(clustered.map((a) => a.source))].slice(0, 20)
+  const prioritized = prioritizeForPrompt(clustered)
+  const sources = [...new Set(prioritized.map((a) => a.source))].slice(0, 20)
+  const scoreAgg = aggregateThreatFromScores(prioritized)
 
-  if (clustered.length === 0) {
+  if (prioritized.length === 0) {
     return {
       summary: 'No recent articles or events in the last 24 hours. The threat summary uses the same event pool as the search bar; run a map or feed load so the API has ingested news and OSINT first.',
       narrative: '',
@@ -342,30 +325,44 @@ async function getThreatSummary() {
       threat_level: 'LOW',
       threat_score: 1,
       sources: [],
+      high_risk_count: 0,
       timestamp: new Date().toISOString(),
       fallback: true,
     }
   }
 
-  const inputText = buildInputFromArticles(clustered)
-  const fullPrompt = PROMPT_PREFIX + inputText
+  const inputText = buildInputFromArticles(prioritized)
+  const scoreHint = `\n(Item score aggregate hint: ${scoreAgg.high_risk_count} high-risk (4–5) of ${scoreAgg.scored_items}; suggested floor ${scoreAgg.threat_level} / ${scoreAgg.threat_score})\n\n`
+  const fullPrompt = PROMPT_PREFIX + scoreHint + inputText
   const rawResponse = await callThreatModel(fullPrompt)
   const parsed = rawResponse ? parseThreatResponse(rawResponse) : null
 
   if (parsed && parsed.summary) {
+    // Never under-report vs aggregate of item scores when model is soft
+    let threat_score = parsed.threat_score
+    let threat_level = parsed.threat_level
+    if (scoreAgg.threat_score > threat_score && scoreAgg.high_risk_count > 0) {
+      threat_score = Math.max(threat_score, Math.min(scoreAgg.threat_score, threat_score + 1))
+      threat_level = THREAT_LEVELS[threat_score - 1]
+    }
     return {
       summary: parsed.summary,
       narrative: parsed.narrative || '',
       bullets: parsed.bullets.length ? parsed.bullets : [],
-      threat_level: parsed.threat_level,
-      threat_score: parsed.threat_score,
+      threat_level,
+      threat_score,
       sources,
+      high_risk_count: scoreAgg.high_risk_count,
+      top_risks: prioritized
+        .filter((a) => (a.risk_score || 1) >= HIGH_RISK_MIN)
+        .slice(0, 5)
+        .map((a) => ({ title: a.title, risk_score: a.risk_score, source: a.source })),
       timestamp: new Date().toISOString(),
       fallback: false,
     }
   }
 
-  const fallback = fallbackSummaryFromTitles(clustered)
+  const fallback = fallbackSummaryFromTitles(prioritized)
   return {
     summary: fallback.summary,
     narrative: '',
@@ -373,6 +370,11 @@ async function getThreatSummary() {
     threat_level: fallback.threat_level,
     threat_score: fallback.threat_score,
     sources,
+    high_risk_count: scoreAgg.high_risk_count,
+    top_risks: prioritized
+      .filter((a) => (a.risk_score || 1) >= HIGH_RISK_MIN)
+      .slice(0, 5)
+      .map((a) => ({ title: a.title, risk_score: a.risk_score, source: a.source })),
     timestamp: new Date().toISOString(),
     fallback: true,
   }
@@ -384,4 +386,7 @@ module.exports = {
   clusterArticles,
   parseThreatResponse,
   fallbackSummaryFromTitles,
+  prioritizeForPrompt,
+  aggregateThreatFromScores,
+  withRiskScore,
 }

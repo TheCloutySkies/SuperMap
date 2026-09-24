@@ -107,6 +107,7 @@ export default function HomeScreen({
   onFooterNav,
   footerTabs,
   isMobileLayout,
+  activeView = null,
   onShowLocationOnMap,
   onHomeBootstrap,
 }) {
@@ -293,16 +294,21 @@ export default function HomeScreen({
           )}
         </header>
 
-        {isMobileLayout && (
-          <section className="home-screen-radial-wrap" aria-label="Mode menu">
-            <p className="home-screen-radial-hint">Tap a mode to open it</p>
-            <RadialMenu
-              activeMode={footerMode === 'HOME' ? null : footerMode}
-              onSelectHome={goHomeHub}
-              onSelectMode={(modeId) => onFooterNav?.(modeId)}
-            />
-          </section>
-        )}
+        <section className="home-screen-radial-wrap" aria-label="Mode menu">
+          <p className="home-screen-radial-hint">Tap a mode to open it</p>
+          <RadialMenu
+            activeMode={footerMode === 'HOME' ? null : footerMode}
+            activeView={activeView}
+            onSelectHome={goHomeHub}
+            onSelectMode={(item) => {
+              if (item?.viewId) {
+                onNavigate?.(item.viewId)
+                return
+              }
+              onFooterNav?.(item?.id || item)
+            }}
+          />
+        </section>
 
         <div className="home-screen-main">
           <div className="home-screen-main-left">
@@ -407,7 +413,6 @@ export default function HomeScreen({
                 </div>
               )}
             </section>
-            {!isMobileLayout && (
             <section className="home-screen-section">
               <h2 className="home-screen-section-title">Quick access</h2>
               <ul className="home-screen-list">
@@ -429,7 +434,6 @@ export default function HomeScreen({
                 ))}
               </ul>
             </section>
-            )}
             <section className="home-screen-section home-screen-gas-prices card-y2k" id="gas-prices">
               <h2 className="home-screen-section-title">Gas Prices (US)</h2>
               {gasPricesStates.length > 0 && (

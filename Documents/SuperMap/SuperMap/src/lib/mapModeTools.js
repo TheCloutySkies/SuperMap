@@ -1,13 +1,15 @@
 /**
  * Per-map-mode tool definitions for the map tools radial menu.
  * Keep the orbit small (~6–8 items) so buttons don’t overlap.
- * Chrome toggles (zoom/weather/coords/…) live in the Chrome panel.
+ * Chrome toggles (weather/coords/…) live in the Chrome panel.
+ * Zoom opens its own collapsible panel (not fixed chrome).
  */
 
 const COMMON = [
   { id: 'locate', label: 'Locate', icon: '⌖', action: 'event', event: 'supermap-locate-me' },
   { id: 'measure', label: 'Measure', icon: '📏', action: 'event', event: 'supermap-toggle-measure' },
   { id: 'pin', label: 'Pin', icon: '📍', action: 'event', event: 'supermap-toggle-tap-pin-request' },
+  { id: 'zoom', label: 'Zoom', icon: '±', action: 'panel', panel: 'zoom' },
   { id: 'layers', label: 'Layers', icon: '☰', action: 'callback', callback: 'toggleLayers' },
   { id: 'chrome', label: 'Chrome', icon: '👁', action: 'panel', panel: 'chrome' },
 ]
@@ -40,7 +42,7 @@ export function getToolsForView(activeView) {
 
 /** Labels for chrome toggles shown in the Chrome panel */
 export const CHROME_TOGGLES = [
-  { key: 'zoom', label: 'Zoom / compass' },
+  { key: 'zoom', label: 'Docked zoom / compass (map corner)' },
   { key: 'weather', label: 'Weather HUD' },
   { key: 'spaceWx', label: 'Space Wx (Kp)' },
   { key: 'coords', label: 'Coordinates' },

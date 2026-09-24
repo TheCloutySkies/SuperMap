@@ -65,6 +65,38 @@
   display: none !important;
 }
 
+/* MapLibre remaps Draw to .maplibregl-ctrl-group (white by default) — restyle / hide empty groups */
+.map-view-wrapper .maplibregl-ctrl-group {
+  background: rgba(12, 18, 14, 0.96) !important;
+  border: 1px solid var(--y2k-border, #1c2a22) !important;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+
+.map-view-wrapper .maplibregl-ctrl-group:empty {
+  display: none !important;
+}
+
+/* Explore draw with all controls disabled still mounts an empty white group */
+.app--device-mobile .map-view-wrapper .maplibregl-ctrl-top-left {
+  display: none !important;
+}
+
+/* Hide broken / blank globe minimap boxes on mobile */
+.app--device-mobile .mapboxgl-ctrl-globe-minimap,
+.app--device-mobile .maplibregl-ctrl-globe-minimap {
+  display: none !important;
+}
+
+.mapboxgl-ctrl-globe-minimap,
+.maplibregl-ctrl-globe-minimap {
+  width: 82px !important;
+  height: 82px !important;
+  overflow: hidden;
+  background: rgba(12, 18, 14, 0.9) !important;
+  border: 1px solid var(--y2k-border, #1c2a22);
+  border-radius: 8px;
+}
+
 /* Keep top-right controls (e.g. Mapbox Draw) below the Layers button */
 .map-view-wrapper .maplibregl-ctrl-top-right {
   top: 52px !important;

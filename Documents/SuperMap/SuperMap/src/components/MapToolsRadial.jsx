@@ -4,7 +4,6 @@ import { getToolsForView, CHROME_TOGGLES } from '../lib/mapModeTools'
 import { GEOLOCATE_PRESETS } from '../lib/geolocatePresets'
 import { runOverpassQuery } from '../services/layerServices'
 import {
-  loadChromePrefs,
   saveChromePrefs,
   loadFabPosition,
   saveFabPosition,
@@ -17,11 +16,12 @@ import {
 } from '../lib/mapToolsPrefs'
 import './MapToolsRadial.css'
 
+const DRAG_THRESHOLD_PX = 10
+
 function ToolPanel({ id, title, children, onClose, defaultPos }) {
   const nodeRef = useRef(null)
   const saved = loadPanelPositions()[id]
   const [collapsed, setCollapsed] = useState(() => loadPanelCollapsed(id))
-  // Prefer on-screen defaults; ignore saved coords that look off-map
   const startPos = (() => {
     const fallback = defaultPos || { x: 16, y: 72 }
     if (!saved || typeof saved.x !== 'number' || typeof saved.y !== 'number') return fallback
@@ -142,11 +142,68 @@ function ChromePanel({ activeView, chromePrefs, onToggle, onClose }) {
   )
 }
 
+function ZoomPanel({ map, onClose }) {
+  const [zoom, setZoom] = useState(() => (map ? map.getZoom() : 2))
+  const [bearing, setBearing] = useState(() => (map ? map.getBearing() : 0))
+
+  useEffect(() => {
+    if (!map) return undefined
+    const onMove = () => {
+      setZoom(map.getZoom())
+      setBearing(map.getBearing())
+    }
+    map.on('move', onMove)
+    onMove()
+    return () => map.off('move', onMove)
+  }, [map])
+
+  if (!map) {
+    return (
+      <ToolPanel id="zoom" title="Zoom" onClose={onClose} defaultPos={{ x: 16, y: 64 }}>
+        <p className="map-tools-panel-hint">Map is still loading…</p>
+      </ToolPanel>
+    )
+  }
+
+  return (
+    <ToolPanel id="zoom" title="Zoom & compass" onClose={onClose} defaultPos={{ x: 16, y: 64 }}>
+      <div className="map-tools-zoom-panel">
+        <div className="map-tools-zoom-row">
+          <button type="button" className="map-tools-preset-btn map-tools-zoom-btn" onClick={() => map.zoomIn()} aria-label="Zoom in">+</button>
+          <button type="button" className="map-tools-preset-btn map-tools-zoom-btn" onClick={() => map.zoomOut()} aria-label="Zoom out">−</button>
+          <button
+            type="button"
+            className="map-tools-preset-btn map-tools-zoom-btn"
+            onClick={() => map.easeTo({ bearing: 0, pitch: 0 })}
+            aria-label="Reset north"
+            title="Reset north"
+          >
+            N
+          </button>
+        </div>
+        <label className="map-tools-zoom-slider-label">
+          Level {zoom.toFixed(1)}
+          <input
+            type="range"
+            min={0}
+            max={22}
+            step={0.5}
+            value={zoom}
+            onChange={(e) => map.setZoom(parseFloat(e.target.value))}
+            className="map-tools-zoom-range"
+          />
+        </label>
+        <p className="map-tools-panel-hint">Bearing {bearing.toFixed(0)}°. Collapse or close this panel anytime — or dock zoom in Chrome.</p>
+      </div>
+    </ToolPanel>
+  )
+}
+
 /**
- * Draggable FAB → radial map tools menu. Per-mode tools open collapsible panels
- * or toggle chrome visibility (persisted via supermap_map_tools_* keys).
+ * Draggable FAB → radial map tools menu. Touch-safe open/expand on mobile + desktop.
  */
 export default function MapToolsRadial({
+  map = null,
   activeView,
   chromePrefs,
   onChromeChange,
@@ -159,7 +216,9 @@ export default function MapToolsRadial({
   const fabRef = useRef(null)
   const [open, setOpen] = useState(false)
   const [panels, setPanels] = useState(() => loadOpenPanels())
-  const draggedRef = useRef(false)
+  const dragDistanceRef = useRef(0)
+  const dragOriginRef = useRef({ x: 0, y: 0 })
+  const touchToggledRef = useRef(false)
   const [fabPos] = useState(() => loadFabPosition() || { x: 0, y: 0 })
 
   const tools = getToolsForView(activeView)
@@ -169,21 +228,22 @@ export default function MapToolsRadial({
     const onKey = (e) => {
       if (e.key === 'Escape') setOpen(false)
     }
-    const onPointer = (e) => {
+    // Use click/pointerup (not capture pointerdown) so tool button clicks still fire
+    const onOutside = (e) => {
       const root = e.target?.closest?.('.map-tools-fab-wrap')
-      if (!root) setOpen(false)
+      const panel = e.target?.closest?.('.map-tools-panel')
+      const chip = e.target?.closest?.('.map-tools-presets-chip')
+      if (!root && !panel && !chip) setOpen(false)
     }
     window.addEventListener('keydown', onKey)
-    // capture so map clicks close the menu
-    window.addEventListener('pointerdown', onPointer, true)
+    window.addEventListener('pointerup', onOutside)
     return () => {
       window.removeEventListener('keydown', onKey)
-      window.removeEventListener('pointerdown', onPointer, true)
+      window.removeEventListener('pointerup', onOutside)
     }
   }, [open])
 
   useEffect(() => {
-    // Close radial when switching map modes; reset mode-specific panels
     setOpen(false)
     setPanels((prev) => {
       const next = { ...prev }
@@ -192,18 +252,6 @@ export default function MapToolsRadial({
       saveOpenPanels(next)
       return next
     })
-    // Defer auto-open so remount after basemap switch still shows the panel
-    if (activeView === 'geolocate-map') {
-      const t = setTimeout(() => {
-        setPanels((prev) => {
-          const next = { ...prev, geolocatePresets: true }
-          saveOpenPanels(next)
-          return next
-        })
-      }, 50)
-      return () => clearTimeout(t)
-    }
-    return undefined
   }, [activeView])
 
   const setChrome = useCallback((key, value) => {
@@ -239,11 +287,7 @@ export default function MapToolsRadial({
     } else if (tool.action === 'panel' && tool.panel) {
       openPanel(tool.panel)
     } else if (tool.action === 'event' && tool.event) {
-      if (tool.event === 'supermap-toggle-tap-pin-request') {
-        window.dispatchEvent(new CustomEvent('supermap-toggle-tap-pin-request'))
-      } else {
-        window.dispatchEvent(new CustomEvent(tool.event))
-      }
+      window.dispatchEvent(new CustomEvent(tool.event))
     } else if (tool.action === 'callback') {
       if (tool.callback === 'toggleLayers') onToggleLayers?.()
       if (tool.callback === 'openOverpass') onOpenOverpass?.()
@@ -252,25 +296,40 @@ export default function MapToolsRadial({
   }
 
   const isToolActive = (tool) => {
-    if (tool.action === 'toggleChrome' && tool.chromeKey) return !!chromePrefs[tool.chromeKey]
+    if (tool.action === 'toggleChrome' && tool.chromeKey) {
+      return tool.chromeKey === 'locateStack' ? !!chromePrefs.locateStack : chromePrefs[tool.chromeKey] !== false
+    }
     if (tool.action === 'panel' && tool.panel) return !!panels[tool.panel]
     return false
   }
 
   const n = tools.length
 
+  const toggleOpen = () => {
+    if (dragDistanceRef.current > DRAG_THRESHOLD_PX) return
+    setOpen((v) => !v)
+  }
+
   return (
     <>
-      <div className="map-tools-radial-root" aria-label="Map tools">
+      <div className={`map-tools-radial-root${open ? ' is-open' : ''}`} aria-label="Map tools">
         <Draggable
           nodeRef={fabRef}
           bounds="parent"
           defaultPosition={fabPos}
-          onStart={() => { draggedRef.current = false }}
-          onDrag={() => { draggedRef.current = true }}
+          cancel=".map-tools-radial-item"
+          onStart={(_e, data) => {
+            dragDistanceRef.current = 0
+            dragOriginRef.current = { x: data.x, y: data.y }
+          }}
+          onDrag={(_e, data) => {
+            dragDistanceRef.current = Math.hypot(
+              data.x - dragOriginRef.current.x,
+              data.y - dragOriginRef.current.y,
+            )
+          }}
           onStop={(_e, data) => {
             saveFabPosition({ x: data.x, y: data.y })
-            setTimeout(() => { draggedRef.current = false }, 0)
           }}
         >
           <div ref={fabRef} className={`map-tools-fab-wrap${open ? ' is-open' : ''}`}>
@@ -280,9 +339,17 @@ export default function MapToolsRadial({
               aria-expanded={open}
               aria-label={open ? 'Close map tools' : 'Open map tools'}
               title="Map tools (drag to move)"
+              onPointerUp={(e) => {
+                if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return
+                touchToggledRef.current = true
+                toggleOpen()
+              }}
               onClick={() => {
-                if (draggedRef.current) return
-                setOpen((v) => !v)
+                if (touchToggledRef.current) {
+                  touchToggledRef.current = false
+                  return
+                }
+                toggleOpen()
               }}
             >
               <span className="map-tools-fab-icon" aria-hidden>{open ? '×' : '⚒'}</span>
@@ -304,7 +371,10 @@ export default function MapToolsRadial({
                         '--radial-angle': `${angle}deg`,
                         '--radial-delay': `${0.03 + i * 0.03}s`,
                       }}
-                      onClick={() => handleTool(tool)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleTool(tool)
+                      }}
                       title={tool.label}
                     >
                       <span className="map-tools-radial-item-icon" aria-hidden>{tool.icon}</span>
@@ -346,6 +416,9 @@ export default function MapToolsRadial({
           }}
           onClose={() => closePanel('chrome')}
         />
+      )}
+      {panels.zoom && (
+        <ZoomPanel map={map} onClose={() => closePanel('zoom')} />
       )}
 
       {activeView === 'geolocate-map' && !panels.geolocatePresets && (

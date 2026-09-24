@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { hasConfigured, setConfigured as persistConfigured, setConfigProfile, getTabVisibility, DEFAULT_LAYER_TOGGLES, getVisualsPrefs } from './constants'
+import { loadChromePrefs, saveChromePrefs } from './lib/mapToolsPrefs'
 import HomeScreen from './components/HomeScreen'
 import CrimeDashboard from './components/CrimeDashboard'
 import MapView from './components/MapView'
@@ -106,6 +107,7 @@ function App() {
   const [showTutorial, setShowTutorial] = useState(false)
   const [deviceType, setDeviceType] = useState('desktop')
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true)
+  const [mapChromePrefs, setMapChromePrefs] = useState(() => loadChromePrefs())
   const [activeToolId, setActiveToolId] = useState(TOOLS_LIST[0]?.id ?? null)
   const [isLeftSidebarMinimized, setIsLeftSidebarMinimized] = useState(false)
   const [footerTransition, setFooterTransition] = useState(false)
@@ -355,7 +357,7 @@ function App() {
           {isMapView && (
           <>
             <MapView
-              basemapId={activeView === 'geolocate-map' ? 'osm-standard' : basemapId}
+              basemapId={activeView === 'geolocate-map' ? 'carto-voyager' : basemapId}
               overlayBasemapId={overlayBasemapId}
               overlayOpacity={overlayOpacity}
               layerToggles={layerToggles}
@@ -377,8 +379,17 @@ function App() {
                 setMapCenter(coord)
                 setWeatherCoords(coord)
               }}
+              chromePrefs={mapChromePrefs}
+              onChromeChange={(next) => {
+                setMapChromePrefs(next)
+                saveChromePrefs(next)
+              }}
+              onToggleLayers={() => setIsRightSidebarOpen((open) => !open)}
+              onOpenOverpass={() => window.dispatchEvent(new CustomEvent('supermap-open-overpass'))}
+              onOverpassResults={(geojson) => setOverpassResults(geojson)}
+              onEnableDraw={() => setLayerToggles((prev) => ({ ...prev, aoiDraw: true }))}
             />
-            {activeView === 'crime-map' && (
+            {activeView === 'crime-map' && mapChromePrefs.crimeDash !== false && (
               <CrimeDashboard
                 onFlyToCity={(city) => {
                   const q = `${city.city}, ${city.state}`
@@ -409,7 +420,7 @@ function App() {
                 }}
               />
             )}
-            {activeView !== 'explore-map' && (
+            {activeView !== 'explore-map' && mapChromePrefs.weather !== false && (
               <WeatherHUD
                 lat={weatherCoords.lat ?? userCoords.lat}
                 lon={weatherCoords.lon ?? userCoords.lon}

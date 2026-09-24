@@ -1,0 +1,269 @@
+/* Map tools FAB + radial menu — night emerald SuperMap chrome */
+
+.map-tools-radial-root {
+  position: absolute;
+  inset: 0;
+  z-index: 70;
+  pointer-events: none;
+}
+
+.map-tools-fab-wrap {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  width: 52px;
+  height: 52px;
+  pointer-events: auto;
+  z-index: 71;
+}
+
+.map-tools-fab {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--y2k-accent) 55%, var(--y2k-border));
+  background: linear-gradient(160deg, rgba(22, 36, 28, 0.98), rgba(8, 12, 10, 0.98));
+  color: var(--y2k-text);
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--y2k-accent) 10%, transparent),
+    0 10px 24px rgba(0, 0, 0, 0.45);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.map-tools-fab:active {
+  cursor: grabbing;
+  transform: scale(0.96);
+}
+
+.map-tools-fab.is-open {
+  border-color: color-mix(in srgb, var(--y2k-accent) 80%, transparent);
+  background: color-mix(in srgb, var(--y2k-accent) 18%, rgba(12, 18, 14, 0.98));
+}
+
+.map-tools-fab-icon {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.map-tools-radial {
+  --map-radial-size: min(280px, 72vw);
+  --map-radial-radius: calc(var(--map-radial-size) * 0.38);
+  position: absolute;
+  right: 50%;
+  bottom: 50%;
+  width: var(--map-radial-size);
+  height: var(--map-radial-size);
+  margin: 0 calc(var(--map-radial-size) / -2) calc(var(--map-radial-size) / -2) 0;
+  pointer-events: none;
+}
+
+.map-tools-radial-ring {
+  position: absolute;
+  inset: 18%;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--y2k-accent) 28%, transparent);
+  background:
+    radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--y2k-accent) 12%, transparent), transparent 62%),
+    rgba(8, 12, 10, 0.28);
+  animation: map-tools-ring-breathe 4.5s ease-in-out infinite;
+}
+
+.map-tools-radial-item {
+  --radial-angle: 0deg;
+  --radial-delay: 0s;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  width: 56px;
+  height: 56px;
+  margin: -28px 0 0 -28px;
+  border-radius: 50%;
+  border: 1px solid var(--y2k-border);
+  background: rgba(12, 18, 14, 0.96);
+  color: var(--y2k-text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.08rem;
+  cursor: pointer;
+  pointer-events: auto;
+  transform: rotate(var(--radial-angle)) translate(var(--map-radial-radius)) rotate(calc(-1 * var(--radial-angle)));
+  animation: map-tools-item-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--radial-delay);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+.map-tools-radial-item.is-active {
+  border-color: color-mix(in srgb, var(--y2k-accent) 70%, transparent);
+  background: color-mix(in srgb, var(--y2k-accent) 18%, rgba(12, 18, 14, 0.96));
+}
+
+.map-tools-radial-item:active {
+  filter: brightness(1.12);
+}
+
+.map-tools-radial-item-icon {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.map-tools-radial-item-label {
+  font-size: 0.5rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--y2k-text-muted);
+  max-width: 50px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-tools-radial-item.is-active .map-tools-radial-item-label {
+  color: var(--y2k-text);
+}
+
+@keyframes map-tools-item-in {
+  from {
+    opacity: 0;
+    transform: rotate(var(--radial-angle)) translate(calc(var(--map-radial-radius) * 0.3)) rotate(calc(-1 * var(--radial-angle))) scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(var(--radial-angle)) translate(var(--map-radial-radius)) rotate(calc(-1 * var(--radial-angle))) scale(1);
+  }
+}
+
+@keyframes map-tools-ring-breathe {
+  0%, 100% { opacity: 0.85; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.02); }
+}
+
+/* Collapsible / draggable tool panels */
+.map-tools-panel {
+  position: absolute;
+  z-index: 72;
+  width: min(280px, calc(100vw - 2rem));
+  max-height: min(52vh, 420px);
+  display: flex;
+  flex-direction: column;
+  background: rgba(12, 17, 14, 0.96);
+  border: 1px solid var(--y2k-border);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+  overflow: hidden;
+}
+
+.map-tools-panel.is-collapsed {
+  max-height: none;
+}
+
+.map-tools-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.55rem 0.65rem;
+  border-bottom: 1px solid var(--y2k-border);
+  cursor: grab;
+  user-select: none;
+  background: rgba(8, 12, 10, 0.6);
+}
+
+.map-tools-panel-head:active {
+  cursor: grabbing;
+}
+
+.map-tools-panel-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--y2k-text);
+}
+
+.map-tools-panel-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.map-tools-panel-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--y2k-border);
+  background: var(--y2k-surface-raised);
+  color: var(--y2k-text-muted);
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.map-tools-panel-btn:hover {
+  color: var(--y2k-text);
+  border-color: color-mix(in srgb, var(--y2k-accent) 40%, var(--y2k-border));
+}
+
+.map-tools-panel-body {
+  padding: 0.65rem;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.map-tools-panel-hint {
+  margin: 0 0 0.55rem;
+  font-size: 0.72rem;
+  color: var(--y2k-text-muted);
+  line-height: 1.35;
+}
+
+.map-tools-preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.map-tools-preset-btn {
+  width: 100%;
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.78rem;
+  color: var(--y2k-text);
+  background: var(--y2k-surface-raised);
+  border: 1px solid var(--y2k-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.map-tools-preset-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--y2k-accent) 45%, var(--y2k-border));
+  background: color-mix(in srgb, var(--y2k-accent) 10%, var(--y2k-surface-raised));
+}
+
+.map-tools-preset-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.app--device-mobile .map-tools-fab-wrap {
+  right: 0.65rem;
+  bottom: calc(4.75rem + env(safe-area-inset-bottom));
+}
+
+@media (max-width: 360px) {
+  .map-tools-radial {
+    --map-radial-size: min(250px, 82vw);
+  }
+  .map-tools-radial-item {
+    width: 50px;
+    height: 50px;
+    margin: -25px 0 0 -25px;
+  }
+}

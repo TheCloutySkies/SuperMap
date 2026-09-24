@@ -1,24 +1,41 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import WidgetCard from './WidgetCard'
+import { getApiBase } from '../../lib/homeBootstrap'
 
-const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
-  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
-  : 'http://localhost:3001'
+const API_BASE = getApiBase()
 
 function formatQuakeTime(time) {
   if (!time) return '—'
   return new Date(time).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-export default function EarthquakesWidget({ onShowOnMap }) {
-  const [events, setEvents] = useState([])
-  const [loading, setLoading] = useState(true)
+export default function EarthquakesWidget({ onShowOnMap, initialData }) {
+  const [events, setEvents] = useState(() =>
+    Array.isArray(initialData?.events) ? initialData.events.slice(0, 4) : []
+  )
+  const [loading, setLoading] = useState(() =>
+    initialData === undefined ? true : !(Array.isArray(initialData?.events) && initialData.events.length)
+  )
   const [error, setError] = useState(null)
-  const [updatedAt, setUpdatedAt] = useState(null)
+  const [updatedAt, setUpdatedAt] = useState(() => initialData?.updatedAt || null)
   const [detailEvent, setDetailEvent] = useState(null)
 
   useEffect(() => {
+    if (initialData !== undefined) {
+      if (Array.isArray(initialData?.events)) {
+        setEvents(initialData.events.slice(0, 4))
+        setUpdatedAt(initialData.updatedAt || new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }))
+        setLoading(false)
+        setError(null)
+      } else if (initialData === null) {
+        setLoading(true)
+      } else {
+        setLoading(false)
+      }
+      return
+    }
+
     let cancelled = false
     const parseUsgs = (data) => {
       const features = data?.features || []
@@ -57,7 +74,7 @@ export default function EarthquakesWidget({ onShowOnMap }) {
           .finally(() => { if (!cancelled) setLoading(false) })
       })
     return () => { cancelled = true }
-  }, [])
+  }, [initialData])
 
   return (
     <WidgetCard title="Recent earthquakes" loading={loading} error={error} updatedAt={updatedAt}>

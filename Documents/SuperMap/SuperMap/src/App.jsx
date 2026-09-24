@@ -25,6 +25,7 @@ import ModeRail from './components/ModeRail'
 import ModeSubnav from './components/ModeSubnav'
 import MobileShell from './components/MobileShell'
 import MobileLayoutPrompt from './components/MobileLayoutPrompt'
+import { osintXToBannerItems, readHomeSnapshot } from './lib/homeBootstrap'
 import { metallicss } from 'metallicss'
 import './App.css'
 
@@ -96,8 +97,8 @@ function App() {
   const [overlayOpacity, setOverlayOpacity] = useState(0.6)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResultsGeoJson, setSearchResultsGeoJson] = useState(null)
-  const [prefetchedNews, setPrefetchedNews] = useState(null)
-  const [bannerXItems, setBannerXItems] = useState([])
+  const [prefetchedNews, setPrefetchedNews] = useState(() => readHomeSnapshot()?.news || null)
+  const [bannerXItems, setBannerXItems] = useState(() => osintXToBannerItems(readHomeSnapshot()?.osintX))
   const [visualsKey, setVisualsKey] = useState(0)
   const handleVisualsChange = useCallback(() => setVisualsKey((k) => k + 1), [])
   const [eventCountry, setEventCountry] = useState('')
@@ -238,23 +239,20 @@ function App() {
   useEffect(() => {
     if (!apiBase || !configured) return
     const timeout = (ms) => ({ signal: AbortSignal.timeout(ms) })
+    // Light warm only — news/osint-x come from HomeScreen /api/home bootstrap
     const warm = [
-      fetch(`${apiBase}/api/news`, timeout(20000)).then((r) => r.json()).then((data) => { if (data?.features?.length) setPrefetchedNews(data) }).catch(() => {}),
-      fetch(`${apiBase}/api/osint-x?limit=25`, timeout(12000)).then((r) => r.json()).then((data) => {
-        const posts = Array.isArray(data) ? data : []
-        const items = posts.map((p) => {
-          const account = p.account ? `@${p.account} ` : ''
-          const text = (p.title || p.content || '').trim().slice(0, 140)
-          return text ? `${account}${text}` : null
-        }).filter(Boolean)
-        setBannerXItems(items.slice(0, 15))
-      }).catch(() => {}),
       fetch(`${apiBase}/api/osint`, timeout(15000)).catch(() => {}),
       fetch(`${apiBase}/api/config`, timeout(8000)).catch(() => {}),
       fetch(`${apiBase}/api/geocode?q=London`, timeout(8000)).catch(() => {}),
     ]
     Promise.allSettled(warm)
   }, [configured, apiBase])
+
+  const handleHomeBootstrap = useCallback((payload) => {
+    if (!payload) return
+    if (payload.news?.features?.length) setPrefetchedNews(payload.news)
+    if (Array.isArray(payload.osintX)) setBannerXItems(osintXToBannerItems(payload.osintX))
+  }, [])
 
   const visuals = getVisualsPrefs()
   const activeLayoutMode = visuals.layoutMode || 'auto'
@@ -351,6 +349,7 @@ function App() {
                 ]}
                 isMobileLayout={isMobileLayout}
                 onShowLocationOnMap={handleShowLocationOnMap}
+                onHomeBootstrap={handleHomeBootstrap}
               />
             )}
           {isMapView && (

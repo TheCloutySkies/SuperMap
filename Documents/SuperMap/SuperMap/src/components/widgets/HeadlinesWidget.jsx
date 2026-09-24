@@ -1,34 +1,58 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import WidgetCard from './WidgetCard'
+import { getApiBase } from '../../lib/homeBootstrap'
 
-const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
-  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
-  : 'http://localhost:3001'
+const API_BASE = getApiBase()
 
-export default function HeadlinesWidget() {
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
+function headlinesFromNews(news) {
+  if (!news?.features) return []
+  const excludeSources = /^BBC\b|BBC World|BBC News/i
+  return news.features
+    .map((f) => ({
+      title: f.properties?.title || f.properties?.name || 'Untitled',
+      url: f.properties?.link || f.properties?.url,
+      source: (f.properties?.source || '').trim(),
+      description: (f.properties?.description || '').trim().slice(0, 500),
+    }))
+    .filter((x) => x.title && x.title !== 'Untitled' && !excludeSources.test(x.source))
+    .slice(0, 6)
+}
+
+export default function HeadlinesWidget({ initialNews }) {
+  const [items, setItems] = useState(() => headlinesFromNews(initialNews))
+  const [loading, setLoading] = useState(() => !headlinesFromNews(initialNews).length)
   const [error, setError] = useState(null)
-  const [updatedAt, setUpdatedAt] = useState(null)
+  const [updatedAt, setUpdatedAt] = useState(() =>
+    headlinesFromNews(initialNews).length
+      ? new Date().toLocaleTimeString(undefined, { timeStyle: 'short' })
+      : null
+  )
   const [expandedIndex, setExpandedIndex] = useState(null)
 
   useEffect(() => {
+    const fromProp = headlinesFromNews(initialNews)
+    if (fromProp.length) {
+      setItems(fromProp)
+      setLoading(false)
+      setError(null)
+      setUpdatedAt(new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }))
+      return
+    }
+    // No bootstrap data yet — wait for prop update; do not hit /api/news (HomeScreen owns that)
+    if (initialNews == null) return
+    setLoading(false)
+  }, [initialNews])
+
+  // Fallback fetch only when mounted without a parent bootstrap prop (standalone)
+  useEffect(() => {
+    if (initialNews !== undefined || items.length) return
     let cancelled = false
+    setLoading(true)
     axios.get(`${API_BASE}/api/news`, { timeout: 28000 })
       .then((res) => {
         if (!cancelled && res.data?.features) {
-          const excludeSources = /^BBC\b|BBC World|BBC News/i
-          const list = res.data.features
-            .map((f) => ({
-              title: f.properties?.title || f.properties?.name || 'Untitled',
-              url: f.properties?.link || f.properties?.url,
-              source: (f.properties?.source || '').trim(),
-              description: (f.properties?.description || '').trim().slice(0, 500),
-            }))
-            .filter((x) => x.title && x.title !== 'Untitled' && !excludeSources.test(x.source))
-            .slice(0, 6)
-          setItems(list)
+          setItems(headlinesFromNews(res.data))
           setUpdatedAt(new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }))
         }
       })
@@ -40,7 +64,7 @@ export default function HeadlinesWidget() {
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [])
+  }, [initialNews, items.length])
 
   const toggleExpanded = (i) => {
     setExpandedIndex((prev) => (prev === i ? null : i))

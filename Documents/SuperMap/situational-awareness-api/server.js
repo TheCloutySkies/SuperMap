@@ -5,6 +5,7 @@ const apiRouter = require('./routes/api')
 const newsService = require('./services/news')
 const osintService = require('./services/osint')
 const osintXFeedService = require('./services/osintXFeedService')
+const { warmHomeCaches } = require('./services/homeBootstrap')
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -19,6 +20,7 @@ app.get('/', (req, res) => {
     status: 'running',
     endpoints: {
       health: '/health',
+      home: '/api/home',
       threatSummary: '/api/threat-summary',
       news: '/api/news',
       osint: '/api/osint',
@@ -103,4 +105,8 @@ app.listen(PORT, () => {
   setInterval(() => osintService.fetchNhcOsint().catch((e) => console.warn('[osint] NHC:', e.message)), DW_INTERVAL_MS)
   setTimeout(runOsintXIngest, 10000)
   setInterval(runOsintXIngest, OSINT_X_INTERVAL_MS)
+  // Warm home bootstrap caches after ingest has a head start
+  setTimeout(() => {
+    warmHomeCaches().catch((e) => console.warn('[home] warmup:', e.message))
+  }, 12000)
 })

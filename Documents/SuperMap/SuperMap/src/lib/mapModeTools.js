@@ -1,6 +1,7 @@
 /**
  * Per-map-mode tool definitions for the map tools radial menu.
- * action: 'toggleChrome' | 'panel' | 'event' | 'callback'
+ * Keep the orbit small (~6–8 items) so buttons don’t overlap.
+ * Chrome toggles (zoom/weather/coords/…) live in the Chrome panel.
  */
 
 const COMMON = [
@@ -8,17 +9,11 @@ const COMMON = [
   { id: 'measure', label: 'Measure', icon: '📏', action: 'event', event: 'supermap-toggle-measure' },
   { id: 'pin', label: 'Pin', icon: '📍', action: 'event', event: 'supermap-toggle-tap-pin-request' },
   { id: 'layers', label: 'Layers', icon: '☰', action: 'callback', callback: 'toggleLayers' },
-  { id: 'weather', label: 'Weather', icon: '☁', action: 'toggleChrome', chromeKey: 'weather' },
-  { id: 'coords', label: 'Coords', icon: '⊕', action: 'toggleChrome', chromeKey: 'coords' },
-  { id: 'zoom', label: 'Zoom', icon: '±', action: 'toggleChrome', chromeKey: 'zoom' },
+  { id: 'chrome', label: 'Chrome', icon: '👁', action: 'panel', panel: 'chrome' },
 ]
 
 export function getToolsForView(activeView) {
   const extras = []
-
-  if (activeView !== 'explore-map') {
-    extras.push({ id: 'spaceWx', label: 'Space Wx', icon: '☀', action: 'toggleChrome', chromeKey: 'spaceWx' })
-  }
 
   if (activeView === 'osint-map') {
     extras.push({ id: 'overpass', label: 'Overpass', icon: '⌘', action: 'callback', callback: 'openOverpass' })
@@ -40,7 +35,15 @@ export function getToolsForView(activeView) {
     extras.push({ id: 'presets', label: 'Presets', icon: '◎', action: 'panel', panel: 'geolocatePresets' })
   }
 
-  extras.push({ id: 'chromeStack', label: 'Buttons', icon: '⋯', action: 'toggleChrome', chromeKey: 'locateStack' })
-
   return [...COMMON, ...extras]
 }
+
+/** Labels for chrome toggles shown in the Chrome panel */
+export const CHROME_TOGGLES = [
+  { key: 'zoom', label: 'Zoom / compass' },
+  { key: 'weather', label: 'Weather HUD' },
+  { key: 'spaceWx', label: 'Space Wx (Kp)' },
+  { key: 'coords', label: 'Coordinates' },
+  { key: 'crimeDash', label: 'Crime dashboard', views: ['crime-map'] },
+  { key: 'locateStack', label: 'Classic Measure / Pin / Locate buttons' },
+]

@@ -50,8 +50,8 @@
 }
 
 .map-tools-radial {
-  --map-radial-size: min(280px, 72vw);
-  --map-radial-radius: calc(var(--map-radial-size) * 0.38);
+  --map-radial-size: min(320px, 78vw);
+  --map-radial-radius: calc(var(--map-radial-size) * 0.42);
   position: absolute;
   right: 50%;
   bottom: 50%;
@@ -250,6 +250,25 @@
 .map-tools-preset-btn:disabled {
   opacity: 0.55;
   cursor: wait;
+}
+
+.map-tools-chrome-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.map-tools-chrome-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--y2k-text);
+  cursor: pointer;
+}
+
+.map-tools-chrome-row input {
+  accent-color: var(--y2k-accent);
 }
 
 .app--device-mobile .map-tools-fab-wrap {

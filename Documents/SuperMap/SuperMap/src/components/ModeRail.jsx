@@ -1,4 +1,5 @@
 import './ModeRail.css'
+import { BRAND_LOGO_SRC, BRAND_LOGO_ALT } from '../constants'
 
 /** Mode ids. CRIME opens CrimeIntelligenceView via App handleFooterNav → CRIME_VIEW_ID (`crime`). */
 const MODES = [
@@ -15,8 +16,14 @@ const MODES = [
 export default function ModeRail({ appMode, onModeSelect }) {
   return (
     <nav className="mode-rail" aria-label="Primary modes">
-      <div className="mode-rail-brand" title="SuperMap">
-        <span className="mode-rail-brand-mark">SM</span>
+      <div className="mode-rail-brand" title={BRAND_LOGO_ALT}>
+        <img
+          className="mode-rail-brand-logo"
+          src={BRAND_LOGO_SRC}
+          alt={BRAND_LOGO_ALT}
+          width={36}
+          height={36}
+        />
       </div>
       <div className="mode-rail-list">
         {MODES.map((m) => {

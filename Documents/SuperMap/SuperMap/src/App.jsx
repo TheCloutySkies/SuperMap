@@ -9,6 +9,8 @@ import {
   CRIME_VIEW_ID,
   resolveCrimeViewId,
   isCrimeIntelligenceView,
+  BRAND_LOGO_SRC,
+  BRAND_LOGO_ALT,
 } from './constants'
 import { loadChromePrefs, saveChromePrefs } from './lib/mapToolsPrefs'
 import HomeScreen from './components/HomeScreen'
@@ -509,7 +511,7 @@ function App() {
       <header className="app-omnibar-strip">
         <div className="app-omnibar-inner">
           <a href="https://cloutyskies.org" className="app-omnibar-logo" target="_blank" rel="noopener noreferrer" aria-label="Clouty Skies">
-            <img src="/cloutyskies-logo.png" alt="" />
+            <img src={BRAND_LOGO_SRC} alt={BRAND_LOGO_ALT} />
           </a>
           <OmnibarBanner
             headlines={prefetchedNews?.features

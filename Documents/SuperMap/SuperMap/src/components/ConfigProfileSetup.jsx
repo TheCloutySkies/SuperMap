@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { setConfigured, setConfigProfile } from '../constants'
+import { setConfigured, setConfigProfile, BRAND_LOGO_SRC, BRAND_LOGO_ALT } from '../constants'
 import './ConfigProfileSetup.css'
 
 export default function ConfigProfileSetup({ onComplete }) {
@@ -18,7 +18,16 @@ export default function ConfigProfileSetup({ onComplete }) {
   return (
     <div className="config-profile">
       <div className="config-profile-card">
-        <h1 className="config-profile-title">SuperMap</h1>
+        <div className="config-profile-brand">
+          <img
+            className="config-profile-logo"
+            src={BRAND_LOGO_SRC}
+            alt={BRAND_LOGO_ALT}
+            width={96}
+            height={96}
+          />
+          <h1 className="config-profile-title">SuperMap</h1>
+        </div>
         <p className="config-profile-subtitle">Configuration Profile</p>
         <p className="config-profile-desc">
           Create a profile to personalize your OSINT & tactical workspace.

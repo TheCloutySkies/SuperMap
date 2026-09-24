@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import axios from 'axios'
 import RadialMenu from './RadialMenu'
-import { CRIME_VIEW_ID } from '../constants'
+import { CRIME_VIEW_ID, BRAND_LOGO_SRC, BRAND_LOGO_ALT } from '../constants'
 import './HomeScreen.css'
 import './widgets/widgets.css'
 import {
@@ -276,7 +276,10 @@ export default function HomeScreen({
       <div className="home-screen-frame">
         <header className="home-screen-header">
           <div className="home-screen-header-brand">
-            <h1 className="home-screen-logo">SuperMap</h1>
+            <h1 className="home-screen-logo">
+              <img src={BRAND_LOGO_SRC} alt={BRAND_LOGO_ALT} className="home-screen-logo-img" />
+              <span className="sr-only">SuperMap</span>
+            </h1>
             <span className="home-screen-date">{formatDate()}</span>
           </div>
           {!isMobileLayout && footerTabs && onFooterNav && (

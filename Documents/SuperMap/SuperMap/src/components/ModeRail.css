@@ -19,11 +19,12 @@
   flex-shrink: 0;
 }
 
-.mode-rail-brand-mark {
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  color: var(--y2k-accent);
+.mode-rail-brand-logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  display: block;
+  background: transparent;
 }
 
 .mode-rail-list {

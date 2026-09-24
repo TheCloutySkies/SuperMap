@@ -1,3 +1,7 @@
+/** Clouty Skies brand mark (transparent PNG for night UI). */
+export const BRAND_LOGO_SRC = '/cloutyskies-logo.png'
+export const BRAND_LOGO_ALT = 'Clouty Skies'
+
 /** Canonical Crime Intelligence page view id (ModeRail CRIME, Radial, Home, Omnibar). */
 export const CRIME_VIEW_ID = 'crime'
 /** Legacy ids redirected to CRIME_VIEW_ID — never open the old Maps crime-map overlay. */

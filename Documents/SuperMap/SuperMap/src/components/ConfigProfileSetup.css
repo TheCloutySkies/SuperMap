@@ -16,11 +16,28 @@
   padding: 2rem;
 }
 
+.config-profile-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.35rem;
+}
+
+.config-profile-logo {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  display: block;
+  background: transparent;
+}
+
 .config-profile-title {
   margin: 0 0 0.25rem;
   font-size: 1.5rem;
   font-weight: 600;
   color: #e6edf3;
+  text-align: center;
 }
 
 .config-profile-subtitle {

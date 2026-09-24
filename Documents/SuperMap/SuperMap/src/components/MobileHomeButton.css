@@ -1,0 +1,45 @@
+.mobile-home-btn-wrap {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1200;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  padding-bottom: max(0.65rem, env(safe-area-inset-bottom));
+}
+
+.mobile-home-btn {
+  pointer-events: auto;
+  min-width: 88px;
+  min-height: 52px;
+  padding: 0.45rem 1.1rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--y2k-accent) 45%, var(--y2k-border));
+  background: linear-gradient(180deg, rgba(22, 34, 26, 0.96), rgba(8, 12, 10, 0.98));
+  color: var(--y2k-text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.05rem;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.mobile-home-btn:active {
+  transform: scale(0.96);
+}
+
+.mobile-home-btn-icon {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.mobile-home-btn-label {
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--y2k-text-muted);
+}

@@ -28,6 +28,13 @@
   background: var(--y2k-surface-raised);
 }
 
+.app--device-mobile .weather-hud,
+.app--device-mobile .weather-hud-show-btn {
+  bottom: calc(4.5rem + env(safe-area-inset-bottom));
+  left: 0.65rem;
+  max-width: min(220px, calc(100vw - 5.5rem));
+}
+
 .weather-hud-head {
   display: flex;
   align-items: center;

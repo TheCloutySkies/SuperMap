@@ -239,13 +239,22 @@
 
 @media (max-width: 900px) {
   .sidebar-right {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1100;
     width: 100%;
     min-width: 0;
     border-left: none;
     border-top: 1px solid var(--y2k-border);
-    max-height: min(55dvh, 420px);
-    padding: 0.5rem 0.75rem 0.75rem;
-    padding-top: 0.5rem;
+    max-height: min(52dvh, 400px);
+    padding: 0.5rem 0.75rem;
+    padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.45);
+    background: rgba(8, 12, 10, 0.98);
+    overflow-y: auto;
   }
 
   .sidebar-right-mobile-header {

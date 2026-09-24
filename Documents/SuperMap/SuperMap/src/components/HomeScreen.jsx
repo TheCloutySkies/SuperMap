@@ -1,5 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
 import axios from 'axios'
+import RadialMenu from './RadialMenu'
 import './HomeScreen.css'
 import './widgets/widgets.css'
 
@@ -47,6 +48,10 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
   const [gasPricesError, setGasPricesError] = useState(null)
   const [gasPricesStates, setGasPricesStates] = useState([])
   const [selectedGasState, setSelectedGasState] = useState('')
+
+  const goHomeHub = () => {
+    onFooterNav?.('HOME')
+  }
 
   const fetchThreatSummary = (refresh = false) => {
     if (!API_BASE) return
@@ -128,7 +133,7 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
   }
 
   return (
-    <div className="home-screen">
+    <div className={`home-screen ${isMobileLayout ? 'home-screen--mobile' : ''}`}>
       <div className="home-screen-map-bg" aria-hidden />
       <div className="home-screen-frame">
         <header className="home-screen-header">
@@ -136,7 +141,7 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
             <h1 className="home-screen-logo">SuperMap</h1>
             <span className="home-screen-date">{formatDate()}</span>
           </div>
-          {footerTabs && onFooterNav && (
+          {!isMobileLayout && footerTabs && onFooterNav && (
             <nav className="home-screen-nav">
               {footerTabs.map(({ key, label }) => (
                 <button
@@ -152,12 +157,25 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
           )}
         </header>
 
+        {isMobileLayout && (
+          <section className="home-screen-radial-wrap" aria-label="Mode menu">
+            <p className="home-screen-radial-hint">Tap a mode to open it</p>
+            <RadialMenu
+              activeMode={footerMode === 'HOME' ? null : footerMode}
+              onSelectHome={goHomeHub}
+              onSelectMode={(modeId) => onFooterNav?.(modeId)}
+            />
+          </section>
+        )}
+
         <div className="home-screen-main">
           <div className="home-screen-main-left">
-            <div className="home-screen-featured">
-              <p className="home-screen-featured-title">Welcome to SuperMap</p>
-              <p className="home-screen-featured-sub">See current events, use the maps to see what&apos;s going on around you, and a huge library of OSINT resources — all at your fingertips. It&apos;s kind of like a personal Palantir if Palantir wasn&apos;t evil and ushering in a surveillance state.</p>
-            </div>
+            {!isMobileLayout && (
+              <div className="home-screen-featured">
+                <p className="home-screen-featured-title">Welcome to SuperMap</p>
+                <p className="home-screen-featured-sub">See current events, use the maps to see what&apos;s going on around you, and a huge library of OSINT resources — all at your fingertips. It&apos;s kind of like a personal Palantir if Palantir wasn&apos;t evil and ushering in a surveillance state.</p>
+              </div>
+            )}
             <section className="home-screen-section home-screen-threat">
               <div className="home-screen-threat-head">
                 <h2 className="home-screen-section-title">Today&apos;s Threat Summary</h2>
@@ -248,6 +266,7 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
                 </div>
               )}
             </section>
+            {!isMobileLayout && (
             <section className="home-screen-section">
               <h2 className="home-screen-section-title">Quick access</h2>
               <ul className="home-screen-list">
@@ -269,6 +288,7 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
                 ))}
               </ul>
             </section>
+            )}
             <section className="home-screen-section home-screen-gas-prices card-y2k" id="gas-prices">
               <h2 className="home-screen-section-title">Gas Prices (US)</h2>
               {gasPricesStates.length > 0 && (
@@ -406,6 +426,7 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
           </aside>
         </div>
 
+        {!isMobileLayout && (
         <footer className="home-screen-footer-strip">
           <div className="home-screen-footer-col">
             <h3 className="home-screen-footer-head">Quick access</h3>
@@ -434,6 +455,7 @@ export default function HomeScreen({ onNavigate, footerMode, onFooterNav, footer
             </a>
           </div>
         </footer>
+        )}
       </div>
     </div>
   )

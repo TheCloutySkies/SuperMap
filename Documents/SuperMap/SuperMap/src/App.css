@@ -344,7 +344,7 @@
   text-transform: uppercase;
   color: var(--y2k-text);
   background: rgba(12, 18, 16, 0.92);
-  border: 1px solid var(--y2k-border);
+  border: 1px solid color-mix(in srgb, var(--map-accent, var(--y2k-border)) 50%, var(--y2k-border));
   border-radius: 8px;
   cursor: pointer;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
@@ -352,8 +352,8 @@
 
 .layers-sidebar-toggle:hover {
   background: var(--y2k-surface-raised);
-  border-color: var(--y2k-border-light);
-  color: var(--y2k-accent, #2bb872);
+  border-color: var(--map-accent, var(--y2k-border-light));
+  color: var(--map-accent, #2bb872);
 }
 
 .main:not(.main--map) {

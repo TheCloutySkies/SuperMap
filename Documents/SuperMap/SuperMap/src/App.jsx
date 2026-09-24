@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { hasConfigured, setConfigured as persistConfigured, setConfigProfile, getTabVisibility, DEFAULT_LAYER_TOGGLES, getVisualsPrefs } from './constants'
+import { hasConfigured, setConfigured as persistConfigured, setConfigProfile, getTabVisibility, DEFAULT_LAYER_TOGGLES, getVisualsPrefs, getMapViewTheme, initialBasemapByView } from './constants'
 import HomeScreen from './components/HomeScreen'
 import CrimeDashboard from './components/CrimeDashboard'
 import MapView from './components/MapView'
@@ -66,7 +66,7 @@ function App() {
   const setFooterMode = setAppMode
   const [subnavOpen, setSubnavOpen] = useState(true)
   const [activeView, setActiveView] = useState('home')
-  const [basemapId, setBasemapId] = useState('arcgis-topo')
+  const [basemapByView, setBasemapByView] = useState(() => initialBasemapByView())
   const [overlayBasemapId, setOverlayBasemapId] = useState(null)
   const [layerToggles, setLayerToggles] = useState(() => ({ ...DEFAULT_LAYER_TOGGLES }))
   const [mapLoadingPending, setMapLoadingPending] = useState(0)
@@ -197,6 +197,16 @@ function App() {
   const isFeedView = ['osint-feeds', 'news-feeds', 'recent-videos', 'osint-x', 'advanced-search', 'broadcasts'].includes(activeView)
   const isSettingsView = activeView === 'settings'
   const tabVisibility = getTabVisibility()
+  const mapTheme = isMapView ? getMapViewTheme(activeView) : null
+  const basemapId = isMapView
+    ? (basemapByView[activeView] || mapTheme?.basemap || 'arcgis-topo')
+    : (basemapByView['osint-map'] || 'dark-matter')
+  const setBasemapId = useCallback((id) => {
+    const viewKey = ['osint-map', 'conflict-map', 'crime-map', 'explore-map', 'geolocate-map'].includes(activeView)
+      ? activeView
+      : 'osint-map'
+    setBasemapByView((prev) => ({ ...prev, [viewKey]: id }))
+  }, [activeView])
 
   const handleFooterNav = useCallback((mode) => {
     setAppMode(mode)
@@ -351,7 +361,7 @@ function App() {
           {isMapView && (
           <>
             <MapView
-              basemapId={activeView === 'geolocate-map' ? 'osm-standard' : basemapId}
+              basemapId={basemapId}
               overlayBasemapId={overlayBasemapId}
               overlayOpacity={overlayOpacity}
               layerToggles={layerToggles}
@@ -365,6 +375,7 @@ function App() {
               layerFilterKeyword={searchQuery}
               searchResultsGeoJson={searchResultsGeoJson}
               activeView={activeView}
+              mapTheme={mapTheme}
               eventCountry={eventCountry || null}
               eventFilterByView={eventFilterByView}
               weatherCoords={weatherCoords}
@@ -616,14 +627,20 @@ function App() {
           onToggleLayers={() => setIsRightSidebarOpen((open) => !open)}
           onGoHome={goHome}
         >
-          <main className={`main main--mobile ${footerTransition ? 'main--y2k-transition' : ''} ${isMapView ? 'main--map' : ''}`}>
+          <main
+            className={`main main--mobile ${footerTransition ? 'main--y2k-transition' : ''} ${isMapView ? 'main--map' : ''} ${isMapView ? `main--${activeView}` : ''}`}
+            style={mapTheme ? { ['--map-accent']: mapTheme.accent, ['--map-accent-soft']: mapTheme.accentSoft } : undefined}
+          >
             {mainContent}
           </main>
           {sidebar}
         </MobileShell>
       ) : (
         <>
-      <main className={`main ${footerTransition ? 'main--y2k-transition' : ''} ${isMapView ? 'main--map' : ''}`}>
+      <main
+        className={`main ${footerTransition ? 'main--y2k-transition' : ''} ${isMapView ? 'main--map' : ''} ${isMapView ? `main--${activeView}` : ''}`}
+        style={mapTheme ? { ['--map-accent']: mapTheme.accent, ['--map-accent-soft']: mapTheme.accentSoft } : undefined}
+      >
         {mainContent}
       </main>
       {isMapView && !isRightSidebarOpen && (

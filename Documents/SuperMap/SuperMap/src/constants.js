@@ -274,3 +274,55 @@ export const BASEMAPS = [
     tileSize: 256,
   },
 ]
+
+/**
+ * Per map-mode look: default basemap + accent chrome.
+ * Users can still change basemap; preference is remembered per view.
+ */
+export const MAP_VIEW_THEMES = {
+  'osint-map': {
+    shortLabel: 'OSINT',
+    tagline: 'Global intelligence',
+    accent: '#3dd68c',
+    accentSoft: 'rgba(61, 214, 140, 0.18)',
+    basemap: 'dark-matter',
+  },
+  'conflict-map': {
+    shortLabel: 'CONFLICT',
+    tagline: 'Tactical overlay',
+    accent: '#f97316',
+    accentSoft: 'rgba(249, 115, 22, 0.2)',
+    basemap: 'hybrid',
+  },
+  'crime-map': {
+    shortLabel: 'CRIME',
+    tagline: 'US crime rates',
+    accent: '#ef4444',
+    accentSoft: 'rgba(239, 68, 68, 0.18)',
+    basemap: 'carto-voyager',
+  },
+  'explore-map': {
+    shortLabel: 'EXPLORE',
+    tagline: 'Terrain & weather',
+    accent: '#38bdf8',
+    accentSoft: 'rgba(56, 189, 248, 0.2)',
+    basemap: 'topography',
+  },
+  'geolocate-map': {
+    shortLabel: 'GEOLOCATE',
+    tagline: 'POIs & Overpass',
+    accent: '#a78bfa',
+    accentSoft: 'rgba(167, 139, 250, 0.2)',
+    basemap: 'osm-standard',
+  },
+}
+
+export function getMapViewTheme(viewId) {
+  return MAP_VIEW_THEMES[viewId] || MAP_VIEW_THEMES['osint-map']
+}
+
+export function initialBasemapByView() {
+  return Object.fromEntries(
+    Object.entries(MAP_VIEW_THEMES).map(([id, theme]) => [id, theme.basemap])
+  )
+}

@@ -8,9 +8,10 @@
   align-items: center;
   gap: 0.5rem;
   background: var(--y2k-surface, rgba(22, 27, 34, 0.9));
-  border: 1px solid var(--y2k-border, #30363d);
+  border: 1px solid color-mix(in srgb, var(--map-accent, var(--y2k-border, #30363d)) 40%, var(--y2k-border, #30363d));
   border-radius: 8px;
   padding: 0.5rem;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--map-accent, transparent) 15%, transparent);
 }
 
 .map-controls--explore {

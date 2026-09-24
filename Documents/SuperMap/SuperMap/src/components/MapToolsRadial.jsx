@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Draggable from 'react-draggable'
-import { getToolsForView } from '../lib/mapModeTools'
+import { getToolsForView, CHROME_TOGGLES } from '../lib/mapModeTools'
 import { GEOLOCATE_PRESETS } from '../lib/geolocatePresets'
 import { runOverpassQuery } from '../services/layerServices'
 import {
@@ -113,6 +113,28 @@ function DrawHintPanel({ onClose, onEnableDraw }) {
   )
 }
 
+function ChromePanel({ activeView, chromePrefs, onToggle, onClose }) {
+  const toggles = CHROME_TOGGLES.filter((t) => !t.views || t.views.includes(activeView))
+  const isOn = (key) => (key === 'locateStack' ? !!chromePrefs.locateStack : chromePrefs[key] !== false)
+  return (
+    <ToolPanel id="chrome" title="Map chrome" onClose={onClose} defaultPos={{ x: 16, y: 64 }}>
+      <p className="map-tools-panel-hint">Show or hide overlays. Choices persist in localStorage.</p>
+      <div className="map-tools-chrome-list">
+        {toggles.map((t) => (
+          <label key={t.key} className="map-tools-chrome-row">
+            <input
+              type="checkbox"
+              checked={isOn(t.key)}
+              onChange={() => onToggle(t.key, !isOn(t.key))}
+            />
+            <span>{t.label}</span>
+          </label>
+        ))}
+      </div>
+    </ToolPanel>
+  )
+}
+
 /**
  * Draggable FAB → radial map tools menu. Per-mode tools open collapsible panels
  * or toggle chrome visibility (persisted via supermap_map_tools_* keys).
@@ -136,12 +158,14 @@ export default function MapToolsRadial({
   const tools = getToolsForView(activeView)
 
   useEffect(() => {
-    // Close radial when switching map modes; keep open panels that still apply
+    // Close radial when switching map modes; reset mode-specific panels
     setOpen(false)
     setPanels((prev) => {
       const next = { ...prev }
       if (activeView !== 'geolocate-map') delete next.geolocatePresets
       if (activeView !== 'explore-map') delete next.draw
+      // Auto-open presets on Geolocate so tools are discoverable
+      if (activeView === 'geolocate-map') next.geolocatePresets = true
       saveOpenPanels(next)
       return next
     })
@@ -273,6 +297,19 @@ export default function MapToolsRadial({
             onEnableDraw?.()
             closePanel('draw')
           }}
+        />
+      )}
+      {panels.chrome && (
+        <ChromePanel
+          activeView={activeView}
+          chromePrefs={chromePrefs}
+          onToggle={(key, value) => {
+            setChrome(key, value)
+            if (key === 'weather' && value) {
+              try { localStorage.setItem('supermap_weather_hidden', '0') } catch { /* ignore */ }
+            }
+          }}
+          onClose={() => closePanel('chrome')}
         />
       )}
     </>

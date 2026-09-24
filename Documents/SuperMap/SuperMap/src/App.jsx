@@ -270,6 +270,7 @@ function App() {
 
   useEffect(() => {
     if (isMobileLayout) setIsRightSidebarOpen(false)
+    else if (activeView === 'geolocate-map') setIsRightSidebarOpen(false)
   }, [isMobileLayout, activeView])
 
   useEffect(() => {
@@ -357,7 +358,7 @@ function App() {
           {isMapView && (
           <>
             <MapView
-              basemapId={activeView === 'geolocate-map' ? 'carto-voyager' : basemapId}
+              basemapId={activeView === 'geolocate-map' ? 'arcgis-topo' : basemapId}
               overlayBasemapId={overlayBasemapId}
               overlayOpacity={overlayOpacity}
               layerToggles={layerToggles}
@@ -488,8 +489,15 @@ function App() {
 
   const sidebar = (
         <RightSidebar
-        visible={isMapView && (!isMobileLayout || isRightSidebarOpen)}
-        onClose={isMobileLayout ? () => setIsRightSidebarOpen(false) : undefined}
+        visible={
+          isMapView &&
+          (isMobileLayout
+            ? isRightSidebarOpen
+            : activeView === 'geolocate-map'
+              ? isRightSidebarOpen
+              : true)
+        }
+        onClose={isMobileLayout || activeView === 'geolocate-map' ? () => setIsRightSidebarOpen(false) : undefined}
         isMapView={isMapView}
         activeView={activeView}
         basemapId={basemapId}

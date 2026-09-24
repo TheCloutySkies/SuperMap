@@ -90,7 +90,7 @@
 
 .overlay-opacity-slider {
   flex: 1;
-  accent-color: #58a6ff;
+  accent-color: var(--y2k-accent);
 }
 
 .overlay-opacity-value {
@@ -243,7 +243,7 @@
     min-width: 0;
     border-left: none;
     border-top: 1px solid var(--y2k-border);
-    max-height: 50vh;
+    max-height: min(55dvh, 420px);
     padding: 0.5rem 0.75rem 0.75rem;
     padding-top: 0.5rem;
   }

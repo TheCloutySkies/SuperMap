@@ -1,0 +1,436 @@
+[
+  {
+    "state": "Participating State/Federal",
+    "totalIncidents": 0,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 0
+  },
+  {
+    "state": "Alabama",
+    "totalIncidents": 184,
+    "raceEthnicity": 1,
+    "religion": 0,
+    "sexualOrientation": 11
+  },
+  {
+    "state": "Alaska",
+    "totalIncidents": 35,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 7
+  },
+  {
+    "state": "Arizona",
+    "totalIncidents": 278,
+    "raceEthnicity": 0,
+    "religion": 4,
+    "sexualOrientation": 48
+  },
+  {
+    "state": "Arkansas",
+    "totalIncidents": 16,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 2
+  },
+  {
+    "state": "California",
+    "totalIncidents": 2365,
+    "raceEthnicity": 1,
+    "religion": 0,
+    "sexualOrientation": 510
+  },
+  {
+    "state": "Colorado",
+    "totalIncidents": 325,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 72
+  },
+  {
+    "state": "Connecticut",
+    "totalIncidents": 137,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 5
+  },
+  {
+    "state": "Delaware",
+    "totalIncidents": 20,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 0
+  },
+  {
+    "state": "District of Columbia",
+    "totalIncidents": 196,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 29
+  },
+  {
+    "state": "Florida",
+    "totalIncidents": 225,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 32
+  },
+  {
+    "state": "Georgia",
+    "totalIncidents": 113,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 25
+  },
+  {
+    "state": "Guam",
+    "totalIncidents": 9,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 0
+  },
+  {
+    "state": "Hawaii",
+    "totalIncidents": 47,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 7
+  },
+  {
+    "state": "Idaho",
+    "totalIncidents": 77,
+    "raceEthnicity": 0,
+    "religion": 1,
+    "sexualOrientation": 5
+  },
+  {
+    "state": "Illinois",
+    "totalIncidents": 443,
+    "raceEthnicity": 0,
+    "religion": 1,
+    "sexualOrientation": 14
+  },
+  {
+    "state": "Indiana",
+    "totalIncidents": 164,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 12
+  },
+  {
+    "state": "Iowa",
+    "totalIncidents": 74,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 6
+  },
+  {
+    "state": "Kansas",
+    "totalIncidents": 122,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 10
+  },
+  {
+    "state": "Kentucky",
+    "totalIncidents": 184,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 5
+  },
+  {
+    "state": "Louisiana",
+    "totalIncidents": 93,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 24
+  },
+  {
+    "state": "Maine",
+    "totalIncidents": 58,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 0
+  },
+  {
+    "state": "Maryland",
+    "totalIncidents": 342,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 42
+  },
+  {
+    "state": "Massachusetts",
+    "totalIncidents": 539,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 79
+  },
+  {
+    "state": "Michigan",
+    "totalIncidents": 563,
+    "raceEthnicity": 0,
+    "religion": 3,
+    "sexualOrientation": 90
+  },
+  {
+    "state": "Minnesota",
+    "totalIncidents": 269,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 39
+  },
+  {
+    "state": "Mississippi",
+    "totalIncidents": 9,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 0
+  },
+  {
+    "state": "Missouri",
+    "totalIncidents": 285,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 21
+  },
+  {
+    "state": "Montana",
+    "totalIncidents": 13,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 4
+  },
+  {
+    "state": "Nebraska",
+    "totalIncidents": 51,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 5
+  },
+  {
+    "state": "Nevada",
+    "totalIncidents": 185,
+    "raceEthnicity": 0,
+    "religion": 1,
+    "sexualOrientation": 21
+  },
+  {
+    "state": "New Hampshire",
+    "totalIncidents": 33,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 1
+  },
+  {
+    "state": "New Jersey",
+    "totalIncidents": 1325,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 11
+  },
+  {
+    "state": "New Mexico",
+    "totalIncidents": 53,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 6
+  },
+  {
+    "state": "New York",
+    "totalIncidents": 1048,
+    "raceEthnicity": 1,
+    "religion": 0,
+    "sexualOrientation": 88
+  },
+  {
+    "state": "North Carolina",
+    "totalIncidents": 326,
+    "raceEthnicity": 0,
+    "religion": 2,
+    "sexualOrientation": 28
+  },
+  {
+    "state": "North Dakota",
+    "totalIncidents": 23,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 4
+  },
+  {
+    "state": "Ohio",
+    "totalIncidents": 408,
+    "raceEthnicity": 0,
+    "religion": 2,
+    "sexualOrientation": 32
+  },
+  {
+    "state": "Oklahoma",
+    "totalIncidents": 102,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 9
+  },
+  {
+    "state": "Oregon",
+    "totalIncidents": 402,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 80
+  },
+  {
+    "state": "Pennsylvania",
+    "totalIncidents": 306,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 32
+  },
+  {
+    "state": "Rhode Island",
+    "totalIncidents": 24,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 1
+  },
+  {
+    "state": "South Carolina",
+    "totalIncidents": 138,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 13
+  },
+  {
+    "state": "South Dakota",
+    "totalIncidents": 29,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 3
+  },
+  {
+    "state": "Tennessee",
+    "totalIncidents": 104,
+    "raceEthnicity": 0,
+    "religion": 1,
+    "sexualOrientation": 9
+  },
+  {
+    "state": "Texas",
+    "totalIncidents": 515,
+    "raceEthnicity": 1,
+    "religion": 0,
+    "sexualOrientation": 63
+  },
+  {
+    "state": "Utah",
+    "totalIncidents": 93,
+    "raceEthnicity": 2,
+    "religion": 1,
+    "sexualOrientation": 6
+  },
+  {
+    "state": "Vermont",
+    "totalIncidents": 38,
+    "raceEthnicity": 0,
+    "religion": 1,
+    "sexualOrientation": 9
+  },
+  {
+    "state": "Virginia",
+    "totalIncidents": 377,
+    "raceEthnicity": 0,
+    "religion": 1,
+    "sexualOrientation": 22
+  },
+  {
+    "state": "Washington",
+    "totalIncidents": 578,
+    "raceEthnicity": 0,
+    "religion": 1,
+    "sexualOrientation": 73
+  },
+  {
+    "state": "West Virginia",
+    "totalIncidents": 69,
+    "raceEthnicity": 0,
+    "religion": 1,
+    "sexualOrientation": 7
+  },
+  {
+    "state": "Wisconsin",
+    "totalIncidents": 134,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 12
+  },
+  {
+    "state": "Wyoming",
+    "totalIncidents": 28,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 1
+  },
+  {
+    "state": "Federal",
+    "totalIncidents": 0,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 0
+  },
+  {
+    "state": "Federal Bureau of Investigation, Field Offices",
+    "totalIncidents": 82,
+    "raceEthnicity": 1,
+    "religion": 1,
+    "sexualOrientation": 8
+  },
+  {
+    "state": "Pentagon Force Protection Agency",
+    "totalIncidents": 1,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 0
+  },
+  {
+    "state": "United States Air Force, Security Police",
+    "totalIncidents": 10,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 0
+  },
+  {
+    "state": "United States Army",
+    "totalIncidents": 1,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 0
+  },
+  {
+    "state": "United States Department of Veterans Affairs Police Service",
+    "totalIncidents": 10,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 0
+  },
+  {
+    "state": "United States Forest Service",
+    "totalIncidents": 1,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 0
+  },
+  {
+    "state": "United States Treasury Inspector General for Tax Administration",
+    "totalIncidents": 4,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 0
+  },
+  {
+    "state": "1 The figures shown include additional offenses collected in the National Incident-Based Reporting System. See the downloadable Methodology file for further information.",
+    "totalIncidents": 0,
+    "raceEthnicity": 0,
+    "religion": 0,
+    "sexualOrientation": 0
+  }
+]

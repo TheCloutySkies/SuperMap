@@ -3,4 +3,7 @@ node_modules/
 *.log
 .DS_Store
 config/user-config.json
-data/
+# Local runtime data (SQLite, caches) — keep crime static pack versioned
+data/*
+!data/crime/
+!data/crime/**

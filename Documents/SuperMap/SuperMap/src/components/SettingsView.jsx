@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
 import axios from 'axios'
-import { useAuth } from '../contexts/AuthContext'
 import {
   getTabVisibility,
   setTabVisibility,
@@ -13,21 +12,18 @@ import './SettingsView.css'
 const TAB_LABELS = {
   osintMap: 'OSINT Map',
   conflictMap: 'Conflict Map',
+  crimeMap: 'Crime Map',
   exploreMap: 'Explore',
   osintFeeds: 'OSINT Feeds',
   newsFeeds: 'News Feeds',
   osintX: 'OSINT (X)',
-  places: 'My Places',
-  saved: 'Saved',
-  updates: 'Updates',
   broadcasts: 'Broadcasts',
 }
 
 export default function SettingsView({ apiBase, onVisualsChange }) {
-  const { user, deleteAccount } = useAuth()
   const [activeSection, setActiveSection] = useState('visuals')
-  const [tabPrefs, setTabPrefs] = useState(() => getTabVisibility(user?.id || null))
-  const [visuals, setVisuals] = useState(() => getVisualsPrefs(user?.id || null))
+  const [tabPrefs, setTabPrefs] = useState(() => getTabVisibility())
+  const [visuals, setVisuals] = useState(() => getVisualsPrefs())
   const [osintXHandles, setOsintXHandles] = useState([])
   const [defaultOsintXHandles, setDefaultOsintXHandles] = useState([])
   const [subreddits, setSubreddits] = useState([])
@@ -36,18 +32,12 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
   const [configSaving, setConfigSaving] = useState(false)
   const [newHandle, setNewHandle] = useState('')
   const [newSubreddit, setNewSubreddit] = useState('')
-  const [deletingAccount, setDeletingAccount] = useState(false)
 
-  useEffect(() => setTabVisibility(tabPrefs, user?.id || null), [tabPrefs, user?.id])
+  useEffect(() => setTabVisibility(tabPrefs), [tabPrefs])
   useEffect(() => {
-    setVisualsPrefs(visuals, user?.id || null)
+    setVisualsPrefs(visuals)
     onVisualsChange?.()
-  }, [visuals, onVisualsChange, user?.id])
-
-  useEffect(() => {
-    setTabPrefs(getTabVisibility(user?.id || null))
-    setVisuals(getVisualsPrefs(user?.id || null))
-  }, [user?.id])
+  }, [visuals, onVisualsChange])
 
   const fetchConfig = useCallback(() => {
     if (!apiBase) {
@@ -147,7 +137,6 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
     { id: 'xhandles', label: 'X (Twitter) handles' },
     { id: 'subreddits', label: 'Subreddits' },
     { id: 'stocktickers', label: 'Stock tickers' },
-    { id: 'account', label: 'Account' },
   ]
 
   return (
@@ -176,14 +165,7 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
             <h2>Visuals</h2>
             <div className="settings-field">
               <label>Theme</label>
-              <select
-                value={visuals.theme || 'dark'}
-                onChange={(e) => setVisuals((v) => ({ ...v, theme: e.target.value }))}
-                className="settings-select"
-              >
-                <option value="dark">Dark</option>
-                <option value="light">Light</option>
-              </select>
+              <p className="settings-hint">Night ops (charcoal + emerald) is always on.</p>
             </div>
             <div className="settings-field">
               <label>
@@ -384,37 +366,6 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
                   ))}
                 </ul>
               </>
-            )}
-          </section>
-        )}
-
-        {activeSection === 'account' && (
-          <section className="settings-view-section">
-            <h2>Account</h2>
-            <p className="settings-hint">Danger zone: delete your account data from the database.</p>
-            {!user ? (
-              <p className="settings-loading">Sign in to manage account actions.</p>
-            ) : (
-              <button
-                type="button"
-                className="settings-delete-account-btn"
-                disabled={deletingAccount}
-                onClick={async () => {
-                  const ok = window.confirm('Delete your account and all your saved data? This cannot be undone.')
-                  if (!ok) return
-                  setDeletingAccount(true)
-                  try {
-                    await deleteAccount()
-                    window.location.reload()
-                  } catch (err) {
-                    window.alert(err?.message || 'Could not delete account')
-                  } finally {
-                    setDeletingAccount(false)
-                  }
-                }}
-              >
-                {deletingAccount ? 'Deleting…' : 'Delete account (wipe all user data)'}
-              </button>
             )}
           </section>
         )}

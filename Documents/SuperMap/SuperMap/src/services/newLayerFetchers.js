@@ -53,8 +53,10 @@ export async function fetchMilitaryAircraft() {
 export async function fetchUkraineFrontline() {
   try {
     const data = await fetchJsonWithTimeout('https://deepstatemap.live/api/history/last', 15000)
-    if (data?.type === 'FeatureCollection') return data
-    if (data?.geojson) return data.geojson
+    // DeepState returns { id, map: FeatureCollection, datetime }
+    const fc = data?.map || data?.geojson || data
+    if (fc?.type === 'FeatureCollection') return fc
+    if (Array.isArray(fc?.features)) return { type: 'FeatureCollection', features: fc.features }
     if (Array.isArray(data?.features)) return { type: 'FeatureCollection', features: data.features }
     return { type: 'FeatureCollection', features: [] }
   } catch (err) {

@@ -5,6 +5,7 @@ import './SettingsModal.css'
 const TAB_LABELS = {
   osintMap: 'OSINT Map',
   conflictMap: 'Conflict Map',
+  crimeMap: 'Crime Map',
   osintFeeds: 'OSINT Feeds',
   newsFeeds: 'News Feeds',
 }

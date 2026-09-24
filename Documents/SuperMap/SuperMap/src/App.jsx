@@ -1,11 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { hasConfigured, setConfigured as persistConfigured, setConfigProfile, getTabVisibility, DEFAULT_LAYER_TOGGLES, getVisualsPrefs } from './constants'
-import { AuthProvider } from './contexts/AuthContext'
-import { SavedArticlesProvider } from './contexts/SavedArticlesContext'
-import { SavedXPostsProvider } from './contexts/SavedXPostsContext'
-import { SavedPlacesProvider } from './contexts/SavedPlacesContext'
-import { SavedReportsProvider } from './contexts/SavedReportsContext'
 import HomeScreen from './components/HomeScreen'
+import CrimeDashboard from './components/CrimeDashboard'
 import MapView from './components/MapView'
 import FeedsView from './components/FeedsView'
 import RightSidebar from './components/RightSidebar'
@@ -13,12 +9,6 @@ import Omnibar from './components/Omnibar'
 import PlaceSearch from './components/PlaceSearch'
 import WeatherHUD from './components/WeatherHUD'
 import OsintXView from './components/OsintXView'
-import UserUpdatesView from './components/UserUpdatesView'
-import MyPlacesView from './components/MyPlacesView'
-import MyReportsView from './components/MyReportsView'
-import MyCommentsView from './components/MyCommentsView'
-import MyAccountView from './components/MyAccountView'
-import CommunityView from './components/CommunityView'
 import BroadcastsView from './components/BroadcastsView'
 import SettingsView from './components/SettingsView'
 import ResourcesView, { RESOURCE_SECTIONS } from './components/ResourcesView'
@@ -26,16 +16,14 @@ import ToolsView from './components/ToolsView'
 import { TOOLS_LIST } from './components/toolsList'
 import SearchResultsView from './components/SearchResultsView'
 import { getWidgetMatches } from './components/widgetSearchIndex'
-import SavedArticlesView from './components/SavedArticlesView'
-import HeaderAuth from './components/HeaderAuth'
-import AuthModal from './components/AuthModal'
 import ReportMakerView from './components/ReportMakerView'
 import QuickTutorialModal from './components/QuickTutorialModal'
 import AmbientBackground from './components/AmbientBackground'
 import AmbientBgLight from './components/AmbientBgLight'
 import OmnibarBanner from './components/OmnibarBanner'
+import ModeRail from './components/ModeRail'
+import ModeSubnav from './components/ModeSubnav'
 import { metallicss } from 'metallicss'
-import { supabase } from './lib/supabase'
 import './App.css'
 
 function initMetallicss() {
@@ -48,32 +36,33 @@ function initMetallicss() {
   })
 }
 
-const FOOTER_MODES = { HOME: 'HOME', MAPS: 'MAPS', FEEDS: 'FEEDS', COMMUNITY: 'COMMUNITY', TOOLS: 'TOOLS', RESOURCES: 'RESOURCES', REPORTS: 'REPORTS', SETTINGS: 'SETTINGS' }
+const APP_MODES = { HOME: 'HOME', MAPS: 'MAPS', FEEDS: 'FEEDS', TOOLS: 'TOOLS', RESOURCES: 'RESOURCES', REPORTS: 'REPORTS', SETTINGS: 'SETTINGS' }
+/** @deprecated alias — keep for gradual rename */
+const FOOTER_MODES = APP_MODES
+
 
 const MAP_VIEWS = [
   { id: 'osint-map', label: 'OSINT Map', tabKey: 'osintMap' },
   { id: 'conflict-map', label: 'Conflict Map', tabKey: 'conflictMap' },
+  { id: 'crime-map', label: 'Crime Map', tabKey: 'crimeMap' },
   { id: 'explore-map', label: 'Explore', tabKey: 'exploreMap' },
   { id: 'geolocate-map', label: 'Geolocate', tabKey: 'geolocateMap' },
 ]
 
 const FEED_VIEWS = [
-  // Feeds first (high-frequency, "main" content)
   { id: 'news-feeds', label: 'News Feeds', tabKey: 'newsFeeds' },
   { id: 'osint-feeds', label: 'OSINT Feeds', tabKey: 'osintFeeds' },
   { id: 'recent-videos', label: 'Recent Videos', tabKey: 'recentVideos' },
   { id: 'osint-x', label: 'OSINT (X/Twitter)', tabKey: 'osintX' },
   { id: 'broadcasts', label: 'Broadcasts', tabKey: 'broadcasts' },
-
-  // Personal / account-driven views last
-  { id: 'my-places', label: 'My Places', tabKey: 'places' },
-  { id: 'saved', label: 'Saved', tabKey: 'saved' },
-  { id: 'updates', label: 'Updates', tabKey: 'updates' },
 ]
 
 function App() {
   const [configured, setConfigured] = useState(() => hasConfigured())
-  const [footerMode, setFooterMode] = useState(FOOTER_MODES.HOME)
+  const [appMode, setAppMode] = useState(APP_MODES.HOME)
+  const footerMode = appMode
+  const setFooterMode = setAppMode
+  const [subnavOpen, setSubnavOpen] = useState(true)
   const [activeView, setActiveView] = useState('home')
   const [basemapId, setBasemapId] = useState('arcgis-topo')
   const [overlayBasemapId, setOverlayBasemapId] = useState(null)
@@ -111,19 +100,15 @@ function App() {
   const handleVisualsChange = useCallback(() => setVisualsKey((k) => k + 1), [])
   const [eventCountry, setEventCountry] = useState('')
   const [eventFilterByView, setEventFilterByView] = useState(false)
-  const [showAuthModal, setShowAuthModal] = useState(false)
   const [showTutorial, setShowTutorial] = useState(false)
   const [deviceType, setDeviceType] = useState('desktop')
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true)
   const [activeToolId, setActiveToolId] = useState(TOOLS_LIST[0]?.id ?? null)
   const [isLeftSidebarMinimized, setIsLeftSidebarMinimized] = useState(false)
-  const [settingsUserId, setSettingsUserId] = useState(null)
   const [footerTransition, setFooterTransition] = useState(false)
   const prevFooterModeRef = useRef(null)
   const resourcesScrollRef = useRef({})
 
-  // Detect phone/small-screen: viewport ≤900px, or touch-primary device, or mobile UA.
-  // Layout switches via .app--device-mobile (and Settings can force mobile/desktop).
   useEffect(() => {
     const detectDevice = () => {
       if (typeof window === 'undefined') {
@@ -142,29 +127,12 @@ function App() {
   }, [])
 
   useEffect(() => {
-    // Keep sidebar behavior intuitive when switching between desktop and mobile layouts.
     if (deviceType === 'mobile') {
       setIsRightSidebarOpen(false)
     } else {
       setIsRightSidebarOpen(true)
     }
   }, [deviceType])
-
-  useEffect(() => {
-    if (!supabase) return
-    let mounted = true
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return
-      setSettingsUserId(data?.session?.user?.id || null)
-    })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSettingsUserId(session?.user?.id || null)
-    })
-    return () => {
-      mounted = false
-      subscription.unsubscribe()
-    }
-  }, [])
 
   useEffect(() => {
     if (!navigator.geolocation) return
@@ -206,7 +174,7 @@ function App() {
         if (lng != null && lat != null) setFlyToTarget({ lng, lat, zoom: 10 })
       })
       .catch(() => {})
-  }, [])
+  }, [apiBase])
 
   const handlePinnedToMap = useCallback((feature) => {
     if (!feature?.geometry?.coordinates?.length) return
@@ -226,37 +194,45 @@ function App() {
     } catch {}
   }, [])
 
-  const isMapView = ['osint-map', 'conflict-map', 'explore-map', 'geolocate-map'].includes(activeView)
-  const isFeedView = ['osint-feeds', 'news-feeds', 'recent-videos', 'osint-x', 'my-places', 'my-reports', 'my-comments', 'advanced-search', 'saved', 'updates', 'broadcasts'].includes(activeView)
+  const isMapView = ['osint-map', 'conflict-map', 'crime-map', 'explore-map', 'geolocate-map'].includes(activeView)
+  const isFeedView = ['osint-feeds', 'news-feeds', 'recent-videos', 'osint-x', 'advanced-search', 'broadcasts'].includes(activeView)
   const isSettingsView = activeView === 'settings'
-  const tabVisibility = getTabVisibility(settingsUserId)
+  const tabVisibility = getTabVisibility()
 
   const handleFooterNav = useCallback((mode) => {
-    setFooterMode(mode)
-    if (mode === FOOTER_MODES.HOME) setActiveView('home')
-    else if (mode === FOOTER_MODES.MAPS) setActiveView('osint-map')
-    else if (mode === FOOTER_MODES.FEEDS) setActiveView('news-feeds')
-    else if (mode === FOOTER_MODES.COMMUNITY) setActiveView('community')
-    else if (mode === FOOTER_MODES.TOOLS) setActiveView('tools')
-    else if (mode === FOOTER_MODES.RESOURCES) setActiveView('resources')
-    else if (mode === FOOTER_MODES.REPORTS) setActiveView('report-maker')
-    else if (mode === FOOTER_MODES.SETTINGS) setActiveView('settings')
+    setAppMode(mode)
+    setSubnavOpen(true)
+    if (mode === APP_MODES.HOME) setActiveView('home')
+    else if (mode === APP_MODES.MAPS) setActiveView('osint-map')
+    else if (mode === APP_MODES.FEEDS) setActiveView('news-feeds')
+    else if (mode === APP_MODES.TOOLS) setActiveView('tools')
+    else if (mode === APP_MODES.RESOURCES) setActiveView('resources')
+    else if (mode === APP_MODES.REPORTS) setActiveView('report-maker')
+    else if (mode === APP_MODES.SETTINGS) setActiveView('settings')
   }, [])
 
   const setActiveViewWithMode = useCallback((viewId) => {
     setActiveView(viewId)
-    if (['osint-map', 'conflict-map'].includes(viewId)) setFooterMode(FOOTER_MODES.MAPS)
-    else if (['osint-feeds', 'osint-x', 'my-places', 'my-reports', 'my-comments', 'advanced-search', 'news-feeds', 'saved', 'updates', 'broadcasts'].includes(viewId)) setFooterMode(FOOTER_MODES.FEEDS)
-    else if (viewId === 'community') setFooterMode(FOOTER_MODES.COMMUNITY)
-    else if (viewId === 'my-account') setFooterMode(FOOTER_MODES.SETTINGS)
-    else if (viewId === 'home') setFooterMode(FOOTER_MODES.HOME)
-    else if (viewId === 'tools') setFooterMode(FOOTER_MODES.TOOLS)
-    else if (viewId === 'resources') setFooterMode(FOOTER_MODES.RESOURCES)
-    else if (viewId === 'report-maker') setFooterMode(FOOTER_MODES.REPORTS)
-    else if (viewId === 'settings') setFooterMode(FOOTER_MODES.SETTINGS)
+    setSubnavOpen(true)
+    if (['osint-map', 'conflict-map', 'crime-map', 'explore-map', 'geolocate-map'].includes(viewId)) setAppMode(APP_MODES.MAPS)
+    else if (['osint-feeds', 'osint-x', 'advanced-search', 'news-feeds', 'broadcasts', 'recent-videos'].includes(viewId)) setAppMode(APP_MODES.FEEDS)
+    else if (viewId === 'home') setAppMode(APP_MODES.HOME)
+    else if (viewId === 'tools') setAppMode(APP_MODES.TOOLS)
+    else if (viewId === 'resources') setAppMode(APP_MODES.RESOURCES)
+    else if (viewId === 'report-maker') setAppMode(APP_MODES.REPORTS)
+    else if (viewId === 'settings') setAppMode(APP_MODES.SETTINGS)
   }, [])
 
-  // Warm up all APIs and functions immediately on startup
+  useEffect(() => {
+    if (activeView !== 'crime-map') return
+    setLayerToggles((prev) => ({
+      ...prev,
+      crimeStateRates: true,
+      crimeCityHighlight: prev.crimeCityHighlight ?? true,
+    }))
+    setFlyToTarget({ lng: -98.5, lat: 39.8, zoom: 3.4 })
+  }, [activeView])
+
   useEffect(() => {
     if (!apiBase || !configured) return
     const timeout = (ms) => ({ signal: AbortSignal.timeout(ms) })
@@ -278,7 +254,7 @@ function App() {
     Promise.allSettled(warm)
   }, [configured, apiBase])
 
-  const visuals = getVisualsPrefs(settingsUserId)
+  const visuals = getVisualsPrefs()
   const activeLayoutMode = visuals.layoutMode || 'auto'
   const resolvedDeviceType = activeLayoutMode === 'auto' ? deviceType : activeLayoutMode
   const appClass = ['app', `app--theme-${visuals.theme || 'dark'}`, visuals.compact ? 'app--compact' : '', `app--font-${visuals.fontSize || 'normal'}`, `app--device-${resolvedDeviceType}`].filter(Boolean).join(' ')
@@ -302,11 +278,7 @@ function App() {
   }, [footerMode])
 
   return (
-    <AuthProvider>
-      <SavedArticlesProvider>
-        <SavedXPostsProvider>
-          <SavedPlacesProvider>
-            <SavedReportsProvider>
+    <>
     <div className={appClass}>
       <AmbientBackground />
       <AmbientBgLight />
@@ -334,113 +306,96 @@ function App() {
             onKeywordChange={setSearchQuery}
             onSearchResults={setSearchResultsGeoJson}
             onNavigateToMap={() => setActiveViewWithMode('osint-map')}
-            onNavigateToSearchResults={(q) => { setSearchQuery(q || searchQuery); setActiveView('search-results'); setFooterMode(FOOTER_MODES.FEEDS) }}
-            onNavigateToFeeds={(q) => { setSearchQuery(q || ''); setActiveView('osint-feeds'); setFooterMode(FOOTER_MODES.FEEDS) }}
-            placeholder="Search map, events, and feeds…"
+            onNavigateToSearchResults={(q) => { setSearchQuery(q || searchQuery); setActiveView('search-results'); setAppMode(APP_MODES.FEEDS) }}
+            onNavigateToFeeds={(q) => { setSearchQuery(q || ''); setActiveView('osint-feeds'); setAppMode(APP_MODES.FEEDS) }}
+            onCommandNavigate={setActiveViewWithMode}
+            placeholder="Search or jump (Ctrl+K)…"
           />
           {isMapView && !isMobileLayout && (
             <PlaceSearch onFlyTo={handleFlyTo} />
           )}
           <div className="app-omnibar-right">
             <span className="app-omnibar-copyright" aria-hidden>© {new Date().getFullYear()} TheCloutySkies</span>
-            {activeView !== 'home' && (
-              <div className="app-omnibar-auth-wrap">
-                <HeaderAuth onOpenAuth={() => setShowAuthModal(true)} onNavigateAccount={setActiveViewWithMode} />
-              </div>
-            )}
           </div>
         </div>
       </header>
       <div className="app-body">
-      {activeView !== 'home' && activeView !== 'settings' && activeView !== 'search-results' && activeView !== 'report-maker' && activeView !== 'my-account' && activeView !== 'community' && (
-        <aside className={`sidebar sidebar-left ${isLeftSidebarMinimized ? 'sidebar-left--minimized' : ''}`}>
-          <div className="sidebar-head">
-            <h1 className="sidebar-title">SuperMap</h1>
-            <button
-              type="button"
-              className="sidebar-minimize-btn"
-              onClick={() => setIsLeftSidebarMinimized((m) => !m)}
-              aria-label={isLeftSidebarMinimized ? 'Expand sidebar' : 'Minimize sidebar'}
-              title={isLeftSidebarMinimized ? 'Expand sidebar' : 'Minimize sidebar'}
-            >
-              {isLeftSidebarMinimized ? '→' : '←'}
-            </button>
-          </div>
-          {!isLeftSidebarMinimized && (
-            <nav className="nav">
-              {activeView === 'resources' ? (
-                <div className="sidebar-resources-nav">
-                  {RESOURCE_SECTIONS.map((s) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      className="sidebar-resources-link"
-                      onClick={() => resourcesScrollRef.current?.scrollToSection?.(s.id)}
-                    >
-                      {s.title}
-                    </button>
-                  ))}
-                </div>
-              ) : activeView === 'tools' ? (
-                <div className="sidebar-tools-nav">
-                  {TOOLS_LIST.map((t) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      className={`sidebar-tools-link ${activeToolId === t.id ? 'active' : ''}`}
-                      onClick={() => setActiveToolId(t.id)}
-                    >
-                      {t.title}
-                    </button>
-                  ))}
-                </div>
-              ) : footerMode === FOOTER_MODES.MAPS ? (
-                MAP_VIEWS.map((v) => (
-                  <TabButton
-                    key={v.id}
-                    viewId={v.id}
-                    label={v.label}
-                    visible={tabVisibility[v.tabKey]}
-                    activeView={activeView}
-                    setActiveView={setActiveViewWithMode}
-                  />
-                ))
-              ) : footerMode === FOOTER_MODES.FEEDS ? (
-                FEED_VIEWS.map((v) => (
-                  <TabButton
-                    key={v.id}
-                    viewId={v.id}
-                    label={v.label}
-                    visible={v.id === 'osint-x' ? true : tabVisibility[v.tabKey]}
-                    activeView={activeView}
-                    setActiveView={setActiveViewWithMode}
-                  />
-                ))
-              ) : null}
-            </nav>
-          )}
-        </aside>
-      )}
+      <ModeRail appMode={appMode} onModeSelect={handleFooterNav} />
+      {(() => {
+        const showSubnav =
+          subnavOpen &&
+          (appMode === APP_MODES.MAPS ||
+            appMode === APP_MODES.FEEDS ||
+            appMode === APP_MODES.TOOLS ||
+            appMode === APP_MODES.RESOURCES)
+        let subnavTitle = ''
+        let subnavItems = []
+        if (appMode === APP_MODES.MAPS) {
+          subnavTitle = 'Maps'
+          subnavItems = MAP_VIEWS
+            .filter((v) => tabVisibility[v.tabKey] !== false)
+            .map((v) => ({
+              id: v.id,
+              label: v.label,
+              active: activeView === v.id,
+              onClick: () => setActiveViewWithMode(v.id),
+            }))
+        } else if (appMode === APP_MODES.FEEDS) {
+          subnavTitle = 'Feeds'
+          subnavItems = FEED_VIEWS
+            .filter((v) => (v.id === 'osint-x' ? true : tabVisibility[v.tabKey] !== false))
+            .map((v) => ({
+              id: v.id,
+              label: v.label,
+              active: activeView === v.id,
+              onClick: () => setActiveViewWithMode(v.id),
+            }))
+        } else if (appMode === APP_MODES.TOOLS) {
+          subnavTitle = 'Tools'
+          subnavItems = TOOLS_LIST.map((t) => ({
+            id: t.id,
+            label: t.title,
+            active: activeToolId === t.id,
+            onClick: () => { setActiveViewWithMode('tools'); setActiveToolId(t.id) },
+          }))
+        } else if (appMode === APP_MODES.RESOURCES) {
+          subnavTitle = 'Resources'
+          subnavItems = RESOURCE_SECTIONS.map((s) => ({
+            id: s.id,
+            label: s.title,
+            active: false,
+            onClick: () => {
+              setActiveViewWithMode('resources')
+              setTimeout(() => resourcesScrollRef.current?.scrollToSection?.(s.id), 50)
+            },
+          }))
+        }
+        return (
+          <ModeSubnav
+            open={showSubnav}
+            title={subnavTitle}
+            items={subnavItems}
+            onClose={() => setSubnavOpen(false)}
+          />
+        )
+      })()}
 
-      <main className={`main ${footerTransition ? 'main--y2k-transition' : ''}`}>
+      <main className={`main ${footerTransition ? 'main--y2k-transition' : ''} ${isMapView ? 'main--map' : ''}`}>
         {activeView === 'home' && (
               <HomeScreen
                 onNavigate={setActiveViewWithMode}
-                footerMode={footerMode}
+                footerMode={appMode}
                 onFooterNav={handleFooterNav}
                 footerTabs={[
-                  { key: FOOTER_MODES.HOME, label: 'HOME' },
-                  { key: FOOTER_MODES.MAPS, label: 'MAPS' },
-                  { key: FOOTER_MODES.FEEDS, label: 'FEEDS' },
-                  { key: FOOTER_MODES.COMMUNITY, label: 'COMMUNITY' },
-                  { key: FOOTER_MODES.TOOLS, label: 'TOOLS' },
-                  { key: FOOTER_MODES.RESOURCES, label: 'RESOURCES' },
-                  { key: FOOTER_MODES.REPORTS, label: 'REPORT MAKER' },
-                  { key: FOOTER_MODES.SETTINGS, label: 'SETTINGS' },
+                  { key: APP_MODES.HOME, label: 'HOME' },
+                  { key: APP_MODES.MAPS, label: 'MAPS' },
+                  { key: APP_MODES.FEEDS, label: 'FEEDS' },
+                  { key: APP_MODES.TOOLS, label: 'TOOLS' },
+                  { key: APP_MODES.RESOURCES, label: 'RESOURCES' },
+                  { key: APP_MODES.REPORTS, label: 'REPORT MAKER' },
+                  { key: APP_MODES.SETTINGS, label: 'SETTINGS' },
                 ]}
                 isMobileLayout={isMobileLayout}
-                onOpenAuth={() => setShowAuthModal(true)}
-                onNavigateAccount={setActiveViewWithMode}
                 onShowLocationOnMap={handleShowLocationOnMap}
               />
             )}
@@ -481,6 +436,37 @@ function App() {
                 setWeatherCoords(coord)
               }}
             />
+            {activeView === 'crime-map' && (
+              <CrimeDashboard
+                onFlyToCity={(city) => {
+                  const q = `${city.city}, ${city.state}`
+                  fetch(`${apiBase}/api/geocode?q=${encodeURIComponent(q)}&limit=1`, { signal: AbortSignal.timeout(12000) })
+                    .then((r) => r.json())
+                    .then((rows) => {
+                      const first = Array.isArray(rows) ? rows[0] : null
+                      const lat = first?.lat != null ? Number(first.lat) : null
+                      const lng = first?.lon != null ? Number(first.lon) : null
+                      if (lng != null && lat != null) {
+                        setFlyToTarget({ lng, lat, zoom: 10, properties: { title: q, source: 'Crime city' } })
+                        if (layerToggles.crimeCityHighlight) {
+                          setSearchResultsGeoJson({
+                            type: 'FeatureCollection',
+                            features: [{
+                              type: 'Feature',
+                              properties: {
+                                title: `${city.city}, ${city.state}`,
+                                source: `Violent ${city.violentRate}/100k`,
+                              },
+                              geometry: { type: 'Point', coordinates: [lng, lat] },
+                            }],
+                          })
+                        }
+                      }
+                    })
+                    .catch(() => {})
+                }}
+              />
+            )}
             {activeView !== 'explore-map' && (
               <WeatherHUD
                 lat={weatherCoords.lat ?? userCoords.lat}
@@ -494,51 +480,16 @@ function App() {
           </>
         )}
         {activeView === 'osint-feeds' && (
-          <FeedsView title="OSINT Feeds" activeView="osint-feeds" keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} onPinnedToMap={handlePinnedToMap} onSignInRequired={() => setShowAuthModal(true)} />
+          <FeedsView title="OSINT Feeds" activeView="osint-feeds" keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} onPinnedToMap={handlePinnedToMap} />
         )}
         {activeView === 'osint-x' && (
           <OsintXView keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} onPinnedToMap={handlePinnedToMap} />
         )}
-        {activeView === 'my-places' && (
-          <div className="main-feed-view">
-            <MyPlacesView onFlyTo={handleFlyTo} onSignInRequired={() => setShowAuthModal(true)} />
-          </div>
-        )}
-        {activeView === 'my-reports' && (
-          <div className="main-feed-view">
-            <MyReportsView onOpenReportMaker={() => setActiveViewWithMode('report-maker')} onSignInRequired={() => setShowAuthModal(true)} />
-          </div>
-        )}
-        {activeView === 'my-comments' && (
-          <div className="main-feed-view">
-            <MyCommentsView onSignInRequired={() => setShowAuthModal(true)} />
-          </div>
-        )}
-        {activeView === 'community' && (
-          <div className="main-feed-view">
-            <CommunityView onSignInRequired={() => setShowAuthModal(true)} />
-          </div>
-        )}
-        {activeView === 'my-account' && (
-          <div className="main-feed-view">
-            <MyAccountView onNavigateSection={setActiveViewWithMode} onSignInRequired={() => setShowAuthModal(true)} />
-          </div>
-        )}
         {activeView === 'news-feeds' && (
-          <FeedsView title="News Feeds" activeView="news-feeds" keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} initialNews={prefetchedNews} onSignInRequired={() => setShowAuthModal(true)} />
+          <FeedsView title="News Feeds" activeView="news-feeds" keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} initialNews={prefetchedNews} />
         )}
         {activeView === 'recent-videos' && (
-          <FeedsView title="Recent Videos" activeView="recent-videos" keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} onSignInRequired={() => setShowAuthModal(true)} />
-        )}
-        {activeView === 'saved' && (
-          <div className="main-feed-view">
-            <SavedArticlesView />
-          </div>
-        )}
-        {activeView === 'updates' && (
-          <div className="main-feed-view">
-            <UserUpdatesView onSignInRequired={() => setShowAuthModal(true)} />
-          </div>
+          <FeedsView title="Recent Videos" activeView="recent-videos" keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} />
         )}
         {activeView === 'broadcasts' && (
           <div className="main-feed-view main-feed-view--broadcasts">
@@ -576,7 +527,6 @@ function App() {
         {activeView === 'settings' && (
           <SettingsView
             apiBase={apiBase}
-            settingsUserId={settingsUserId}
             onVisualsChange={handleVisualsChange}
           />
         )}
@@ -605,72 +555,7 @@ function App() {
         onSentinelTimeChange={setSentinelTime}
       />
       </div>
-
-      <footer className="footer">
-        <div className="footer-nav-wrap">
-          <div className="footer-switch">
-          <button
-            className={`footer-btn metallicss ${footerMode === FOOTER_MODES.HOME ? 'active' : ''}`}
-            onClick={() => handleFooterNav(FOOTER_MODES.HOME)}
-          >
-            HOME
-          </button>
-          <button
-            className={`footer-btn metallicss ${footerMode === FOOTER_MODES.MAPS ? 'active' : ''}`}
-            onClick={() => handleFooterNav(FOOTER_MODES.MAPS)}
-          >
-            MAPS
-          </button>
-          <button
-            className={`footer-btn metallicss ${footerMode === FOOTER_MODES.FEEDS ? 'active' : ''}`}
-            onClick={() => handleFooterNav(FOOTER_MODES.FEEDS)}
-          >
-            FEEDS
-          </button>
-          <button
-            className={`footer-btn metallicss ${footerMode === FOOTER_MODES.COMMUNITY ? 'active' : ''}`}
-            onClick={() => handleFooterNav(FOOTER_MODES.COMMUNITY)}
-          >
-            COMMUNITY
-          </button>
-          <button
-            className={`footer-btn metallicss ${footerMode === FOOTER_MODES.TOOLS ? 'active' : ''}`}
-            onClick={() => handleFooterNav(FOOTER_MODES.TOOLS)}
-          >
-            TOOLS
-          </button>
-          <button
-            className={`footer-btn metallicss ${footerMode === FOOTER_MODES.RESOURCES ? 'active' : ''}`}
-            onClick={() => handleFooterNav(FOOTER_MODES.RESOURCES)}
-          >
-            RESOURCES
-          </button>
-          <button
-            className={`footer-btn metallicss ${footerMode === FOOTER_MODES.REPORTS ? 'active' : ''}`}
-            onClick={() => handleFooterNav(FOOTER_MODES.REPORTS)}
-          >
-            REPORT MAKER
-          </button>
-          <button
-            className={`footer-btn metallicss ${footerMode === FOOTER_MODES.SETTINGS ? 'active' : ''}`}
-            onClick={() => handleFooterNav(FOOTER_MODES.SETTINGS)}
-          >
-            SETTINGS
-          </button>
-          </div>
-        </div>
-      </footer>
     </div>
-    {showAuthModal && (
-      <AuthModal
-        onClose={() => setShowAuthModal(false)}
-        onOpenSettings={() => {
-          setShowAuthModal(false)
-          setActiveView('settings')
-          setFooterMode(FOOTER_MODES.SETTINGS)
-        }}
-      />
-    )}
     {showTutorial && (
       <QuickTutorialModal
         onClose={(profileName) => {
@@ -684,11 +569,7 @@ function App() {
         }}
       />
     )}
-            </SavedReportsProvider>
-          </SavedPlacesProvider>
-        </SavedXPostsProvider>
-      </SavedArticlesProvider>
-    </AuthProvider>
+    </>
   )
 }
 

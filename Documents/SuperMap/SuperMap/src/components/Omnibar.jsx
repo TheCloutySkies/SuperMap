@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import axios from 'axios'
 import './Omnibar.css'
 
@@ -6,7 +6,25 @@ const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.
   ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
   : (import.meta.env?.DEV ? 'http://localhost:3001' : 'http://localhost:3001')
 
-/** Omnibar: search only within the app. Results link to map (fly to / show on map) or feeds (filter by keyword). */
+const DEFAULT_COMMANDS = [
+  { id: 'cmd-home', label: 'Go Home', keywords: 'home dashboard', action: 'navigate', viewId: 'home' },
+  { id: 'cmd-osint-map', label: 'OSINT Map', keywords: 'maps osint', action: 'navigate', viewId: 'osint-map' },
+  { id: 'cmd-conflict-map', label: 'Conflict Map', keywords: 'maps conflict war', action: 'navigate', viewId: 'conflict-map' },
+  { id: 'cmd-crime-map', label: 'Crime Map', keywords: 'maps crime fbi', action: 'navigate', viewId: 'crime-map' },
+  { id: 'cmd-explore-map', label: 'Explore Map', keywords: 'maps explore', action: 'navigate', viewId: 'explore-map' },
+  { id: 'cmd-geolocate', label: 'Geolocate', keywords: 'maps geolocate overpass', action: 'navigate', viewId: 'geolocate-map' },
+  { id: 'cmd-news', label: 'News Feeds', keywords: 'feeds news', action: 'navigate', viewId: 'news-feeds' },
+  { id: 'cmd-osint-feeds', label: 'OSINT Feeds', keywords: 'feeds osint', action: 'navigate', viewId: 'osint-feeds' },
+  { id: 'cmd-osint-x', label: 'OSINT (X)', keywords: 'feeds twitter x', action: 'navigate', viewId: 'osint-x' },
+  { id: 'cmd-videos', label: 'Recent Videos', keywords: 'feeds videos', action: 'navigate', viewId: 'recent-videos' },
+  { id: 'cmd-broadcasts', label: 'Broadcasts', keywords: 'feeds broadcasts streams', action: 'navigate', viewId: 'broadcasts' },
+  { id: 'cmd-tools', label: 'Tools', keywords: 'tools', action: 'navigate', viewId: 'tools' },
+  { id: 'cmd-resources', label: 'Resources', keywords: 'resources links', action: 'navigate', viewId: 'resources' },
+  { id: 'cmd-reports', label: 'Report Maker', keywords: 'report maker reports', action: 'navigate', viewId: 'report-maker' },
+  { id: 'cmd-settings', label: 'Settings', keywords: 'settings prefs', action: 'navigate', viewId: 'settings' },
+]
+
+/** Omnibar: place/event search + command jump (Ctrl/Cmd+K). */
 export default function Omnibar({
   query: controlledQuery,
   onQueryChange,
@@ -16,7 +34,9 @@ export default function Omnibar({
   onNavigateToMap,
   onNavigateToSearchResults,
   onNavigateToFeeds,
-  placeholder = 'Search map, events, and feeds…',
+  onCommandNavigate,
+  commands = DEFAULT_COMMANDS,
+  placeholder = 'Search or jump (Ctrl+K)…',
 }) {
   const [internalQuery, setInternalQuery] = useState('')
   const [places, setPlaces] = useState([])
@@ -24,7 +44,9 @@ export default function Omnibar({
   const [mapGeoJson, setMapGeoJson] = useState(null)
   const [loading, setLoading] = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
+  const [commandMode, setCommandMode] = useState(false)
   const debounceRef = useRef(null)
+  const inputRef = useRef(null)
 
   const isControlled = controlledQuery !== undefined
   const query = (isControlled ? controlledQuery : internalQuery) || ''
@@ -36,14 +58,61 @@ export default function Omnibar({
     debounceRef.current = setTimeout(() => onKeywordChange?.(String(value || '').trim()), 200)
   }
 
+  const commandMatches = useMemo(() => {
+    const q = String(query).trim().toLowerCase()
+    if (!q && !commandMode) return []
+    const list = commands || DEFAULT_COMMANDS
+    if (!q) return list.slice(0, 8)
+    return list
+      .filter((c) => `${c.label} ${c.keywords || ''}`.toLowerCase().includes(q))
+      .slice(0, 8)
+  }, [query, commands, commandMode])
+
+  const openCommandPalette = useCallback(() => {
+    setCommandMode(true)
+    setShowDropdown(true)
+    inputRef.current?.focus()
+  }, [])
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        openCommandPalette()
+      }
+      if (e.key === 'Escape') {
+        setShowDropdown(false)
+        setCommandMode(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [openCommandPalette])
+
   const handleInputChange = (e) => {
     setQueryValue(e.target.value)
+    setCommandMode(true)
+    setShowDropdown(true)
   }
 
-  /** Search within app only: geocode (places) + backend events. All results are in-app actions. */
+  const runCommand = (cmd) => {
+    if (!cmd) return
+    if (cmd.action === 'navigate' && cmd.viewId) {
+      onCommandNavigate?.(cmd.viewId)
+    }
+    setShowDropdown(false)
+    setCommandMode(false)
+  }
+
   const searchInApp = () => {
     const q = String(query).trim()
     if (!q) return
+    // If exact/close command match, prefer jump
+    const exact = commandMatches.find((c) => c.label.toLowerCase() === q.toLowerCase())
+    if (exact && onCommandNavigate) {
+      runCommand(exact)
+      return
+    }
     setLoading(true)
     setPlaces([])
     setMapResults([])
@@ -70,6 +139,7 @@ export default function Omnibar({
         const merged = { type: 'FeatureCollection', features: [...placeFeatures, ...features] }
         setMapGeoJson(merged)
         onSearchResults?.(merged)
+        setCommandMode(false)
         setShowDropdown(true)
         const firstPlace = placeFeatures[0]
         const firstEvent = features.find((f) => f.geometry?.coordinates?.length >= 2)
@@ -126,22 +196,49 @@ export default function Omnibar({
 
   const hasAny = places.length > 0 || mapResults.length > 0
   const totalCount = places.length + mapResults.length
+  const showCommands = commandMode && commandMatches.length > 0
 
   return (
     <div className="omnibar-global-wrap">
       <div className="omnibar omnibar-global">
         <span className="omnibar-icon" aria-hidden>⌕</span>
         <input
+          ref={inputRef}
           type="search"
           value={query}
           onChange={handleInputChange}
-          onFocus={() => hasAny && setShowDropdown(true)}
+          onFocus={() => {
+            if (hasAny || commandMatches.length) setShowDropdown(true)
+          }}
           onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
-          onKeyDown={(e) => e.key === 'Enter' && searchInApp()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              if (commandMode && commandMatches[0] && String(query).trim()) {
+                // Prefer first command if query looks like a jump
+                const q = String(query).trim().toLowerCase()
+                const cmdHit = commandMatches.find((c) => c.label.toLowerCase().startsWith(q) || q.length >= 3)
+                if (cmdHit && !hasAny) {
+                  e.preventDefault()
+                  runCommand(cmdHit)
+                  return
+                }
+              }
+              searchInApp()
+            }
+          }}
           placeholder={placeholder}
           className="omnibar-input"
           autoComplete="off"
+          aria-label="Search or jump"
         />
+        <button
+          type="button"
+          className="omnibar-search-btn omnibar-cmd-btn"
+          onClick={openCommandPalette}
+          title="Command jump (Ctrl/Cmd+K)"
+        >
+          ⌘K
+        </button>
         <button
           type="button"
           className="omnibar-search-btn omnibar-search-btn--primary metallicss"
@@ -152,63 +249,86 @@ export default function Omnibar({
           {loading ? '…' : 'Search'}
         </button>
       </div>
-      {showDropdown && hasAny && (
+      {showDropdown && (showCommands || hasAny) && (
         <div className="omnibar-results">
-          <div className="omnibar-results-actions omnibar-results-actions--top">
-            {onNavigateToSearchResults && (
-              <button type="button" className="omnibar-result omnibar-result--view-all" onMouseDown={viewAllResults}>
-                View all {totalCount} result{totalCount !== 1 ? 's' : ''} →
-              </button>
-            )}
-          </div>
-          {places.length > 0 && (
+          {showCommands && (
             <>
-              <div className="omnibar-results-head">Places</div>
-              {places.slice(0, 5).map((feature, i) => (
+              <div className="omnibar-results-head">Jump to</div>
+              {commandMatches.map((cmd) => (
                 <button
-                  key={feature.id || i}
+                  key={cmd.id}
                   type="button"
                   className="omnibar-result"
-                  onMouseDown={() => handleSelectPlace(feature)}
+                  onMouseDown={() => runCommand(cmd)}
                 >
-                  <span className="omnibar-result-type">Place</span>
-                  <span className="omnibar-result-title">{feature.properties?.title || 'Place'}</span>
-                  <span className="omnibar-result-action">Fly to</span>
+                  <span className="omnibar-result-type">Go</span>
+                  <span className="omnibar-result-title">{cmd.label}</span>
+                  <span className="omnibar-result-action">Open</span>
                 </button>
               ))}
             </>
           )}
-          {mapResults.length > 0 && (
+          {hasAny && (
             <>
-              <div className="omnibar-results-head">Map results</div>
-              {mapResults.slice(0, 8).map((feature, i) => (
-                <button
-                  key={feature.id || i}
-                  type="button"
-                  className="omnibar-result"
-                  onMouseDown={() => handleSelectMapResult(feature)}
-                >
-                  <span className="omnibar-result-type">{feature.properties?.type || 'Result'}</span>
-                  <span className="omnibar-result-title">{feature.properties?.title || 'Untitled'}</span>
-                  <span className="omnibar-result-action">Show on map</span>
-                </button>
-              ))}
+              <div className="omnibar-results-actions omnibar-results-actions--top">
+                {onNavigateToSearchResults && (
+                  <button type="button" className="omnibar-result omnibar-result--view-all" onMouseDown={viewAllResults}>
+                    View all {totalCount} result{totalCount !== 1 ? 's' : ''} →
+                  </button>
+                )}
+              </div>
+              {places.length > 0 && (
+                <>
+                  <div className="omnibar-results-head">Places</div>
+                  {places.slice(0, 5).map((feature, i) => (
+                    <button
+                      key={feature.id || i}
+                      type="button"
+                      className="omnibar-result"
+                      onMouseDown={() => handleSelectPlace(feature)}
+                    >
+                      <span className="omnibar-result-type">Place</span>
+                      <span className="omnibar-result-title">{feature.properties?.title || 'Place'}</span>
+                      <span className="omnibar-result-action">Fly to</span>
+                    </button>
+                  ))}
+                </>
+              )}
+              {mapResults.length > 0 && (
+                <>
+                  <div className="omnibar-results-head">Map results</div>
+                  {mapResults.slice(0, 8).map((feature, i) => (
+                    <button
+                      key={feature.id || i}
+                      type="button"
+                      className="omnibar-result"
+                      onMouseDown={() => handleSelectMapResult(feature)}
+                    >
+                      <span className="omnibar-result-type">{feature.properties?.type || 'Result'}</span>
+                      <span className="omnibar-result-title">{feature.properties?.title || 'Untitled'}</span>
+                      <span className="omnibar-result-action">Show on map</span>
+                    </button>
+                  ))}
+                </>
+              )}
+              <div className="omnibar-results-actions">
+                {onNavigateToSearchResults && (
+                  <button type="button" className="omnibar-result" onMouseDown={viewAllResults}>
+                    View all results
+                  </button>
+                )}
+                {onNavigateToFeeds && (
+                  <button type="button" className="omnibar-result" onMouseDown={goToFeeds}>
+                    Filter feeds by “{String(query).trim()}”
+                  </button>
+                )}
+              </div>
             </>
           )}
-          <div className="omnibar-results-actions">
-            {onNavigateToSearchResults && (
-              <button type="button" className="omnibar-result omnibar-result--see-all" onMouseDown={viewAllResults}>
-                View full results page →
-              </button>
-            )}
-            {onNavigateToFeeds && String(query).trim() && (
-              <button type="button" className="omnibar-result omnibar-result--feeds" onMouseDown={goToFeeds}>
-                Search in Feeds for “{String(query).trim().slice(0, 24)}{String(query).trim().length > 24 ? '…' : ''}” →
-              </button>
-            )}
-          </div>
         </div>
       )}
     </div>
   )
 }
+
+export { DEFAULT_COMMANDS }

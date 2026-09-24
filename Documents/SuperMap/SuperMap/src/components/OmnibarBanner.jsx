@@ -4,7 +4,7 @@ import './OmnibarBanner.css'
 const FALLBACK_ITEMS = [
   'OSINT • SuperMap — Open-source intel & tactical dashboard',
   'Track events, news, and layers on the map',
-  'Use the footer to switch HOME, MAPS, FEEDS, COMMUNITY, RESOURCES, SETTINGS',
+  'Use the footer to switch HOME, MAPS, FEEDS, TOOLS, RESOURCES, SETTINGS',
   'Search the map and feeds from the bar above',
   'Drawing & targeting tools available on the map when Layers → AOI Draw is on',
 ]

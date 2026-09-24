@@ -1,7 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
 import axios from 'axios'
-import { useAuth } from '../contexts/AuthContext'
-import { useSavedArticles } from '../contexts/SavedArticlesContext'
 import './FeedsView.css'
 
 const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
@@ -179,7 +177,7 @@ function geoJsonToItems(data) {
   return out
 }
 
-export default function FeedsView({ title, activeView, keywordFilter = '', onClearFilter, initialNews, onPinnedToMap, onSignInRequired }) {
+export default function FeedsView({ title, activeView, keywordFilter = '', onClearFilter, initialNews, onPinnedToMap }) {
   const initialItems = initialNews ? geoJsonToItems(initialNews) : []
   const isNewsOnly = activeView === 'news-feeds'
   const isOsintOnly = activeView === 'osint-feeds'
@@ -192,9 +190,6 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
   const [osintLoading, setOsintLoading] = useState(true)
   const [videoLoading, setVideoLoading] = useState(false)
   const [videoTagFilter, setVideoTagFilter] = useState('all')
-  const { user, isConfigured: authConfigured } = useAuth()
-  const { add: saveArticle, remove: unsaveArticle, isSaved } = useSavedArticles()
-  const [savingId, setSavingId] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
   const [sourceFilter, setSourceFilter] = useState('all')
   const [sortBy, setSortBy] = useState('newest')
@@ -648,25 +643,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
             </div>
           ) : (
             <div className="feeds-masonry feeds-masonry--news">
-              {filteredAndSortedNews.map((item, i) => {
-                const link = item.link || item.url
-                const saved = authConfigured && isSaved(link)
-                const handleSave = (e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  if (!authConfigured) return
-                  if (!user) {
-                    onSignInRequired?.()
-                    return
-                  }
-                  if (saved) {
-                    unsaveArticle(link)
-                    return
-                  }
-                  setSavingId(link)
-                  saveArticle(item).finally(() => setSavingId(null))
-                }
-                return (
+              {filteredAndSortedNews.map((item, i) => (
                   <div key={item._key || item.link || item.id || i} className="feeds-news-card-wrap">
                     <a
                       href={item.link}
@@ -692,20 +669,8 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
                         </span>
                       </div>
                     </a>
-                    {authConfigured && (
-                      <button
-                        type="button"
-                        className={`feeds-save-btn ${saved ? 'saved' : ''}`}
-                        onClick={handleSave}
-                        disabled={savingId === link}
-                        title={saved ? 'Unsave' : 'Save article'}
-                      >
-                        {savingId === link ? '…' : saved ? '✓ Saved' : 'Save'}
-                      </button>
-                    )}
                   </div>
-                )
-              })}
+              ))}
             </div>
           )}
         </div>
@@ -752,30 +717,14 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
                         <th>Source</th>
                         <th>Alert</th>
                         <th>Content</th>
-                        {authConfigured && <th>Save</th>}
                         {onPinnedToMap && <th>Map</th>}
                       </tr>
                     </thead>
                     <tbody>
                       {pinError && (
-                        <tr><td colSpan={4 + (authConfigured ? 1 : 0) + (onPinnedToMap ? 1 : 0)} className="feeds-pin-error">{pinError}</td></tr>
+                        <tr><td colSpan={4 + (onPinnedToMap ? 1 : 0)} className="feeds-pin-error">{pinError}</td></tr>
                       )}
-                      {filteredAndSortedOsint.map((item, i) => {
-                        const link = item.link || item.url
-                        const saved = authConfigured && isSaved(link)
-                        const handleSave = (e) => {
-                          if (!user) {
-                            onSignInRequired?.()
-                            return
-                          }
-                          if (saved) {
-                            unsaveArticle(link)
-                            return
-                          }
-                          setSavingId(link)
-                          saveArticle(item).finally(() => setSavingId(null))
-                        }
-                        return (
+                      {filteredAndSortedOsint.map((item, i) => (
                         <tr
                           key={item._key || item.link || item.id || i}
                           className={`feeds-osint-row feeds-osint-alert-${item.alertLevel || 'medium'}`}
@@ -793,19 +742,6 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
                               <div className="feeds-osint-raw">{item.contentSnippet.slice(0, 200)}</div>
                             )}
                           </td>
-                          {authConfigured && (
-                            <td className="feeds-osint-save">
-                              <button
-                                type="button"
-                                className={`feeds-pin-to-map-btn feeds-save-btn-inline ${saved ? 'saved' : ''}`}
-                                onClick={handleSave}
-                                disabled={savingId === link}
-                                title={saved ? 'Unsave' : 'Save article'}
-                              >
-                                {savingId === link ? '…' : saved ? '✓' : 'Save'}
-                              </button>
-                            </td>
-                          )}
                           {onPinnedToMap && (
                             <td className="feeds-osint-pin">
                               <button
@@ -820,7 +756,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
                             </td>
                           )}
                         </tr>
-                      )})}
+                      ))}
                     </tbody>
                   </table>
                 </div>

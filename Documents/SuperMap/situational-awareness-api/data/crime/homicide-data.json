@@ -1,0 +1,731 @@
+{
+  "weaponBreakdown": [
+    {
+      "weapon": "Total firearms:",
+      "count": 11717,
+      "pct": 42.6
+    },
+    {
+      "weapon": "Handguns",
+      "count": 6246,
+      "pct": 22.7
+    },
+    {
+      "weapon": "Firearms, type not stated",
+      "count": 4565,
+      "pct": 16.6
+    },
+    {
+      "weapon": "Knives or cutting instruments",
+      "count": 1566,
+      "pct": 5.7
+    },
+    {
+      "weapon": "Other weapons or weapons not stated",
+      "count": 1174,
+      "pct": 4.3
+    },
+    {
+      "weapon": "Personal weapons (hands, fists, feet, etc.)1,2",
+      "count": 633,
+      "pct": 2.3
+    },
+    {
+      "weapon": "Rifles",
+      "count": 401,
+      "pct": 1.5
+    },
+    {
+      "weapon": "Other guns",
+      "count": 356,
+      "pct": 1.3
+    },
+    {
+      "weapon": "Blunt objects (clubs, hammers, etc.)",
+      "count": 283,
+      "pct": 1
+    },
+    {
+      "weapon": "Narcotics",
+      "count": 226,
+      "pct": 0.8
+    },
+    {
+      "weapon": "Shotguns",
+      "count": 149,
+      "pct": 0.5
+    },
+    {
+      "weapon": "Asphyxiation",
+      "count": 96,
+      "pct": 0.3
+    },
+    {
+      "weapon": "Fire",
+      "count": 83,
+      "pct": 0.3
+    },
+    {
+      "weapon": "Poison",
+      "count": 8,
+      "pct": 0
+    },
+    {
+      "weapon": "Strangulation2",
+      "count": 6,
+      "pct": 0
+    },
+    {
+      "weapon": "Explosives",
+      "count": 2,
+      "pct": 0
+    },
+    {
+      "weapon": "Drowning2",
+      "count": 1,
+      "pct": 0
+    }
+  ],
+  "circumstanceBreakdown": [
+    {
+      "circumstance": "Other than felony type total:",
+      "count": 7581
+    },
+    {
+      "circumstance": "Unknown",
+      "count": 7011
+    },
+    {
+      "circumstance": "Other arguments",
+      "count": 4658
+    },
+    {
+      "circumstance": "Other-not specified",
+      "count": 2441
+    },
+    {
+      "circumstance": "Felony type total:",
+      "count": 1184
+    },
+    {
+      "circumstance": "Narcotic drug laws",
+      "count": 416
+    },
+    {
+      "circumstance": "Robbery",
+      "count": 264
+    },
+    {
+      "circumstance": "Other-not specified",
+      "count": 259
+    },
+    {
+      "circumstance": "Gangland killings",
+      "count": 259
+    },
+    {
+      "circumstance": "Institutional killings",
+      "count": 103
+    },
+    {
+      "circumstance": "Burglary",
+      "count": 78
+    },
+    {
+      "circumstance": "Juvenile gang killings",
+      "count": 78
+    },
+    {
+      "circumstance": "Arson",
+      "count": 63
+    },
+    {
+      "circumstance": "Motor vehicle theft",
+      "count": 52
+    },
+    {
+      "circumstance": "Larceny-theft",
+      "count": 43
+    },
+    {
+      "circumstance": "Suspected felony type1",
+      "count": 19
+    },
+    {
+      "circumstance": "Argument over money or property1",
+      "count": 16
+    },
+    {
+      "circumstance": "Domestic violence",
+      "count": 12
+    },
+    {
+      "circumstance": "Child killed by babysitter",
+      "count": 8
+    },
+    {
+      "circumstance": "Rape",
+      "count": 7
+    },
+    {
+      "circumstance": "Brawl due to influence of alcohol1",
+      "count": 5
+    },
+    {
+      "circumstance": "Other sex offenses",
+      "count": 1
+    },
+    {
+      "circumstance": "Gambling",
+      "count": 1
+    },
+    {
+      "circumstance": "Brawl due to influence of narcotics1",
+      "count": 1
+    }
+  ],
+  "victimAge": [
+    {
+      "range": "Percent distribution3",
+      "count": 100
+    },
+    {
+      "range": "Under 184",
+      "count": 1468
+    },
+    {
+      "range": "Under 224",
+      "count": 3228
+    },
+    {
+      "range": "18 and over4",
+      "count": 14116
+    },
+    {
+      "range": "Infant (under 1)",
+      "count": 128
+    },
+    {
+      "range": "5 to 8",
+      "count": 85
+    },
+    {
+      "range": "9 to 12",
+      "count": 91
+    },
+    {
+      "range": "13 to 16",
+      "count": 597
+    },
+    {
+      "range": "17 to 19",
+      "count": 1278
+    },
+    {
+      "range": "20 to 24",
+      "count": 2062
+    },
+    {
+      "range": "25 to 29",
+      "count": 1886
+    },
+    {
+      "range": "30 to 34",
+      "count": 1936
+    },
+    {
+      "range": "35 to 39",
+      "count": 1782
+    },
+    {
+      "range": "40 to 44",
+      "count": 1453
+    },
+    {
+      "range": "45 to 49",
+      "count": 1080
+    },
+    {
+      "range": "50 to 54",
+      "count": 840
+    },
+    {
+      "range": "55 to 59",
+      "count": 646
+    },
+    {
+      "range": "60 to 64",
+      "count": 532
+    },
+    {
+      "range": "65 to 69",
+      "count": 369
+    },
+    {
+      "range": "70 to 74",
+      "count": 242
+    },
+    {
+      "range": "75 and over",
+      "count": 381
+    },
+    {
+      "range": "Unknown",
+      "count": 211
+    }
+  ],
+  "victimSex": [
+    {
+      "sex": "Male",
+      "count": 12144
+    },
+    {
+      "sex": "Female",
+      "count": 3538
+    },
+    {
+      "sex": "Unknown",
+      "count": 113
+    }
+  ],
+  "victimRace": [
+    {
+      "race": "White",
+      "total": 6753,
+      "male": 4786,
+      "female": 1953
+    },
+    {
+      "race": "Black",
+      "total": 8158,
+      "male": 6794,
+      "female": 1355
+    },
+    {
+      "race": "Other",
+      "total": 464,
+      "male": 322,
+      "female": 142
+    },
+    {
+      "race": "Unknown",
+      "total": 420,
+      "male": 242,
+      "female": 88
+    }
+  ],
+  "relationship": [
+    {
+      "relationship": "Unknown",
+      "count": 7301
+    },
+    {
+      "relationship": "Acquaintance",
+      "count": 3363
+    },
+    {
+      "relationship": "Stranger",
+      "count": 1575
+    },
+    {
+      "relationship": "Girlfriend",
+      "count": 563
+    },
+    {
+      "relationship": "Wife",
+      "count": 552
+    },
+    {
+      "relationship": "Friend",
+      "count": 427
+    },
+    {
+      "relationship": "Other family",
+      "count": 399
+    },
+    {
+      "relationship": "Father",
+      "count": 249
+    },
+    {
+      "relationship": "Son",
+      "count": 241
+    },
+    {
+      "relationship": "Mother",
+      "count": 226
+    },
+    {
+      "relationship": "Boyfriend",
+      "count": 202
+    },
+    {
+      "relationship": "Daughter",
+      "count": 177
+    },
+    {
+      "relationship": "Neighbor",
+      "count": 164
+    },
+    {
+      "relationship": "Brother",
+      "count": 155
+    },
+    {
+      "relationship": "Husband",
+      "count": 135
+    },
+    {
+      "relationship": "Sister",
+      "count": 54
+    },
+    {
+      "relationship": "Employer",
+      "count": 8
+    },
+    {
+      "relationship": "Employee",
+      "count": 4
+    }
+  ],
+  "yearlyWeapons": [
+    {
+      "year": 2020,
+      "firearm": 14483,
+      "knife": 1806,
+      "hands": 726,
+      "other": 1047
+    },
+    {
+      "year": 2021,
+      "firearm": 13077,
+      "knife": 1223,
+      "hands": 586,
+      "other": 1251
+    },
+    {
+      "year": 2022,
+      "firearm": 15505,
+      "knife": 1720,
+      "hands": 752,
+      "other": 1441
+    },
+    {
+      "year": 2023,
+      "firearm": 14069,
+      "knife": 1638,
+      "hands": 744,
+      "other": 1302
+    },
+    {
+      "year": 2024,
+      "firearm": 11717,
+      "knife": 1566,
+      "hands": 633,
+      "other": 1174
+    }
+  ],
+  "victimEthnicity": [
+    {
+      "ethnicity": "Hispanic or Latino",
+      "total": 2372,
+      "male": 1903,
+      "female": 467
+    },
+    {
+      "ethnicity": "Not Hispanic or Latino",
+      "total": 9314,
+      "male": 7121,
+      "female": 2173
+    },
+    {
+      "ethnicity": "Unknown",
+      "total": 1364,
+      "male": 1026,
+      "female": 304
+    }
+  ],
+  "totalVictims": {
+    "total": 15795,
+    "male": 12144,
+    "female": 3538,
+    "unknown": 113
+  },
+  "offenderRace": [
+    {
+      "race": "White",
+      "total": 6048,
+      "pct": 31.2
+    },
+    {
+      "race": "Black",
+      "total": 8357,
+      "pct": 43.1
+    },
+    {
+      "race": "Other",
+      "total": 404,
+      "pct": 2.1
+    },
+    {
+      "race": "Unknown",
+      "total": 4570,
+      "pct": 23.6
+    }
+  ],
+  "offenderEthnicity": [
+    {
+      "ethnicity": "Hispanic or Latino",
+      "total": 2249,
+      "pct": 14.1
+    },
+    {
+      "ethnicity": "Not Hispanic or Latino",
+      "total": 7998,
+      "pct": 50
+    },
+    {
+      "ethnicity": "Unknown",
+      "total": 5746,
+      "pct": 35.9
+    }
+  ],
+  "totalOffenders": {
+    "total": 19379,
+    "male": 13469,
+    "female": 1902,
+    "unknown": 4008
+  },
+  "offenderAge": [
+    {
+      "range": "Under 18",
+      "total": 1551,
+      "pct": 8
+    },
+    {
+      "range": "18-24",
+      "total": 4263,
+      "pct": 22
+    },
+    {
+      "range": "25-29",
+      "total": 2321,
+      "pct": 12
+    },
+    {
+      "range": "30-34",
+      "total": 1988,
+      "pct": 10.3
+    },
+    {
+      "range": "35-39",
+      "total": 1467,
+      "pct": 7.6
+    },
+    {
+      "range": "40+",
+      "total": 3374,
+      "pct": 17.4
+    },
+    {
+      "range": "Unknown",
+      "total": 4632,
+      "pct": 23.9
+    }
+  ],
+  "victimOffenderRace": {
+    "whiteVictim": {
+      "total": 3840,
+      "byWhite": 2968,
+      "byBlack": 684,
+      "byOther": 75,
+      "unknown": 113
+    },
+    "blackVictim": {
+      "total": 3683,
+      "byWhite": 334,
+      "byBlack": 3137,
+      "byOther": 14,
+      "unknown": 198
+    },
+    "otherVictim": {
+      "total": 262,
+      "byWhite": 72,
+      "byBlack": 50,
+      "byOther": 131,
+      "unknown": 9
+    },
+    "unknownVictim": {
+      "total": 194,
+      "byWhite": 71,
+      "byBlack": 56,
+      "byOther": 11,
+      "unknown": 56
+    }
+  },
+  "weaponTrends": [
+    {
+      "year": 2020,
+      "total": 18934,
+      "firearms": 14483,
+      "handguns": 8649,
+      "rifles": 490,
+      "shotguns": 215,
+      "knives": 1806,
+      "blunt": 426,
+      "hands": 726,
+      "narcotics": 171
+    },
+    {
+      "year": 2021,
+      "total": 16779,
+      "firearms": 13077,
+      "handguns": 6771,
+      "rifles": 464,
+      "shotguns": 173,
+      "knives": 1223,
+      "blunt": 290,
+      "hands": 586,
+      "narcotics": 178
+    },
+    {
+      "year": 2022,
+      "total": 20306,
+      "firearms": 15505,
+      "handguns": 8343,
+      "rifles": 570,
+      "shotguns": 198,
+      "knives": 1720,
+      "blunt": 404,
+      "hands": 752,
+      "narcotics": 225
+    },
+    {
+      "year": 2023,
+      "total": 18624,
+      "firearms": 14069,
+      "handguns": 7451,
+      "rifles": 533,
+      "shotguns": 170,
+      "knives": 1638,
+      "blunt": 340,
+      "hands": 744,
+      "narcotics": 299
+    },
+    {
+      "year": 2024,
+      "total": 15795,
+      "firearms": 11717,
+      "handguns": 6246,
+      "rifles": 401,
+      "shotguns": 149,
+      "knives": 1566,
+      "blunt": 283,
+      "hands": 633,
+      "narcotics": 226
+    }
+  ],
+  "justifiableHomicides": {
+    "lawEnforcement": [
+      {
+        "year": 2020,
+        "total": 341,
+        "firearms": 334
+      },
+      {
+        "year": 2021,
+        "total": 223,
+        "firearms": 217
+      },
+      {
+        "year": 2022,
+        "total": 365,
+        "firearms": 352
+      },
+      {
+        "year": 2023,
+        "total": 359,
+        "firearms": 349
+      },
+      {
+        "year": 2024,
+        "total": 356,
+        "firearms": 344
+      }
+    ],
+    "privateCitizen": [
+      {
+        "year": 2020,
+        "total": 460,
+        "firearms": 393
+      },
+      {
+        "year": 2021,
+        "total": 421,
+        "firearms": 376
+      },
+      {
+        "year": 2022,
+        "total": 534,
+        "firearms": 474
+      },
+      {
+        "year": 2023,
+        "total": 525,
+        "firearms": 478
+      },
+      {
+        "year": 2024,
+        "total": 432,
+        "firearms": 382
+      }
+    ]
+  },
+  "circumstanceTrends": [
+    {
+      "year": 2020,
+      "total": 18934,
+      "felonyType": 2187,
+      "otherThanFelony": 8336,
+      "robbery": 567,
+      "narcoticDrugLaws": 682,
+      "domesticViolence": 112
+    },
+    {
+      "year": 2021,
+      "total": 16779,
+      "felonyType": 1314,
+      "otherThanFelony": 7119,
+      "robbery": 265,
+      "narcoticDrugLaws": 474,
+      "domesticViolence": 4
+    },
+    {
+      "year": 2022,
+      "total": 20306,
+      "felonyType": 1676,
+      "otherThanFelony": 8916,
+      "robbery": 410,
+      "narcoticDrugLaws": 509,
+      "domesticViolence": 30
+    },
+    {
+      "year": 2023,
+      "total": 18624,
+      "felonyType": 1467,
+      "otherThanFelony": 8482,
+      "robbery": 346,
+      "narcoticDrugLaws": 513,
+      "domesticViolence": 10
+    },
+    {
+      "year": 2024,
+      "total": 15795,
+      "felonyType": 1184,
+      "otherThanFelony": 7581,
+      "robbery": 264,
+      "narcoticDrugLaws": 416,
+      "domesticViolence": 12
+    }
+  ]
+}

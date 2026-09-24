@@ -6,6 +6,10 @@ import react from '@vitejs/plugin-react-swc'
 export default defineConfig({
   plugins: [react()],
   server: {
+    host: '0.0.0.0',
+    port: 5173,
+    // Allow cloud-agent tunnels / preview hosts to hit the Vite dev server
+    allowedHosts: true,
     proxy: {
       // In dev, /api/* goes to the situational-awareness-api (port 3001)
       '/api': {

@@ -10,20 +10,20 @@
 .osint-x-header {
   margin-bottom: 1.25rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid #30363d;
+  border-bottom: 1px solid var(--y2k-border);
 }
 
 .osint-x-title {
   margin: 0 0 0.25rem;
   font-size: 1.35rem;
   font-weight: 600;
-  color: #e6edf3;
+  color: var(--y2k-text);
 }
 
 .osint-x-subtitle {
   margin: 0 0 0.75rem;
   font-size: 0.875rem;
-  color: #8b949e;
+  color: var(--y2k-text-muted);
 }
 
 .osint-x-map-hint {
@@ -33,7 +33,7 @@
 }
 
 .osint-x-map-hint strong {
-  color: #8b949e;
+  color: var(--y2k-text-muted);
 }
 
 .osint-x-toolbar {
@@ -47,17 +47,17 @@
   padding: 0.45rem 0.9rem;
   font-size: 0.875rem;
   font-weight: 500;
-  color: #e6edf3;
-  background: #21262d;
-  border: 1px solid #30363d;
+  color: var(--y2k-text);
+  background: var(--y2k-surface-raised);
+  border: 1px solid var(--y2k-border);
   border-radius: 6px;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
 
 .osint-x-refresh:hover:not(:disabled) {
-  background: #30363d;
-  border-color: #8b949e;
+  background: var(--y2k-border);
+  border-color: var(--y2k-text-muted);
 }
 
 .osint-x-refresh:disabled {
@@ -68,9 +68,9 @@
 .osint-x-clear-filter {
   padding: 0.35rem 0.65rem;
   font-size: 0.8rem;
-  color: #58a6ff;
+  color: var(--y2k-accent);
   background: transparent;
-  border: 1px solid #30363d;
+  border: 1px solid var(--y2k-border);
   border-radius: 6px;
   cursor: pointer;
 }
@@ -83,7 +83,7 @@
 .osint-x-error {
   margin: 1rem 0;
   font-size: 0.9rem;
-  color: #8b949e;
+  color: var(--y2k-text-muted);
 }
 
 .osint-x-error {
@@ -93,7 +93,7 @@
 .osint-x-empty {
   padding: 2rem;
   text-align: center;
-  color: #8b949e;
+  color: var(--y2k-text-muted);
   font-size: 0.9rem;
 }
 
@@ -112,8 +112,8 @@
 
 .osint-x-card {
   padding: 1rem 1.25rem;
-  background: #161b22;
-  border: 1px solid #30363d;
+  background: var(--y2k-surface);
+  border: 1px solid var(--y2k-border);
   border-radius: 8px;
   transition: border-color 0.15s;
 }
@@ -138,7 +138,7 @@
 
 .osint-x-time {
   font-size: 0.8rem;
-  color: #8b949e;
+  color: var(--y2k-text-muted);
 }
 
 .osint-x-priority {
@@ -155,12 +155,12 @@
 }
 
 .osint-x-priority--medium {
-  background: #30363d;
-  color: #8b949e;
+  background: var(--y2k-border);
+  color: var(--y2k-text-muted);
 }
 
 .osint-x-priority--low {
-  background: #21262d;
+  background: var(--y2k-surface-raised);
   color: #6e7681;
 }
 
@@ -174,8 +174,8 @@
 .osint-x-tag {
   font-size: 0.75rem;
   padding: 0.2rem 0.5rem;
-  background: #21262d;
-  color: #8b949e;
+  background: var(--y2k-surface-raised);
+  color: var(--y2k-text-muted);
   border-radius: 4px;
 }
 
@@ -183,7 +183,7 @@
   margin: 0 0 0.5rem;
   font-size: 0.9rem;
   line-height: 1.45;
-  color: #e6edf3;
+  color: var(--y2k-text);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -192,7 +192,7 @@
   display: inline-block;
   font-size: 0.85rem;
   font-weight: 500;
-  color: #58a6ff;
+  color: var(--y2k-accent);
   text-decoration: none;
 }
 
@@ -221,7 +221,7 @@
   display: block;
   border-radius: 8px;
   overflow: hidden;
-  border: 1px solid #30363d;
+  border: 1px solid var(--y2k-border);
   max-width: 100%;
   padding: 0;
   background: transparent;
@@ -251,7 +251,7 @@
 
 .osint-x-media-open-post {
   font-size: 0.8rem;
-  color: #58a6ff;
+  color: var(--y2k-accent);
   text-decoration: none;
 }
 .osint-x-media-open-post:hover {
@@ -277,8 +277,8 @@
 .osint-x-video-wrap {
   border-radius: 8px;
   overflow: hidden;
-  border: 1px solid #30363d;
-  background: #0d1117;
+  border: 1px solid var(--y2k-border);
+  background: var(--y2k-bg);
   max-width: 560px;
 }
 
@@ -302,36 +302,36 @@
   text-align: left;
   padding: 0.45rem 0.65rem;
   font-size: 0.8rem;
-  color: #8b949e;
-  background: #0d1117;
+  color: var(--y2k-text-muted);
+  background: var(--y2k-bg);
   border: 0;
-  border-top: 1px solid #30363d;
+  border-top: 1px solid var(--y2k-border);
   cursor: pointer;
 }
 
 .osint-x-video-fallback:hover {
-  color: #e6edf3;
+  color: var(--y2k-text);
 }
 
 .osint-x-video-fallback--standalone {
-  border: 1px solid #30363d;
+  border: 1px solid var(--y2k-border);
   border-radius: 6px;
   width: fit-content;
-  background: #161b22;
+  background: var(--y2k-surface);
 }
 
 .osint-x-video-expand {
   margin-top: 0.25rem;
   padding: 0.35rem 0.6rem;
   font-size: 0.8rem;
-  background: #21262d;
-  border: 1px solid #30363d;
+  background: var(--y2k-surface-raised);
+  border: 1px solid var(--y2k-border);
   border-radius: 6px;
   color: #c9d1d9;
   cursor: pointer;
 }
 .osint-x-video-expand:hover {
-  background: #30363d;
+  background: var(--y2k-border);
   color: #fff;
 }
 
@@ -339,7 +339,7 @@
   display: inline-block;
   margin-top: 0.25rem;
   font-size: 0.8rem;
-  color: #58a6ff;
+  color: var(--y2k-accent);
   text-decoration: none;
 }
 .osint-x-video-open-post:hover {
@@ -360,7 +360,7 @@
 .osint-x-image-dialog-caption {
   margin: 0.35rem 0 0.5rem;
   font-size: 0.85rem;
-  color: #8b949e;
+  color: var(--y2k-text-muted);
   line-height: 1.4;
   max-height: 4em;
   overflow-y: auto;
@@ -371,15 +371,15 @@
   align-items: center;
   gap: 0.35rem;
   font-size: 0.85rem;
-  color: #8b949e;
+  color: var(--y2k-text-muted);
 }
 
 .osint-x-select {
   padding: 0.35rem 0.5rem;
   font-size: 0.85rem;
-  color: #e6edf3;
-  background: #21262d;
-  border: 1px solid #30363d;
+  color: var(--y2k-text);
+  background: var(--y2k-surface-raised);
+  border: 1px solid var(--y2k-border);
   border-radius: 6px;
 }
 
@@ -400,7 +400,7 @@
 .osint-x-pin-btn {
   padding: 0.35rem 0.65rem;
   font-size: 0.8rem;
-  color: #e6edf3;
+  color: var(--y2k-text);
   background: #238636;
   border: 1px solid #2ea043;
   border-radius: 6px;
@@ -429,11 +429,11 @@
 
 .osint-x-video-dialog {
   width: min(640px, 100%);
-  background: #161b22;
-  border: 1px solid #30363d;
+  background: var(--y2k-surface);
+  border: 1px solid var(--y2k-border);
   border-radius: 10px;
   padding: 1rem;
-  color: #e6edf3;
+  color: var(--y2k-text);
 }
 
 .osint-x-video-dialog h3 {
@@ -456,12 +456,12 @@
 .osint-x-video-dialog-fallback-msg {
   margin: 0.35rem 0 0.5rem;
   font-size: 0.8rem;
-  color: #8b949e;
+  color: var(--y2k-text-muted);
 }
 
 .osint-x-video-dialog p {
   margin: 0 0 0.8rem;
-  color: #8b949e;
+  color: var(--y2k-text-muted);
   font-size: 0.9rem;
 }
 

@@ -18,13 +18,14 @@ const { normalizeToEvent, ingestEvent, eventToFeature } = require('../services/i
 const crypto = require('crypto')
 const path = require('path')
 const fs = require('fs')
-const nodemailer = require('nodemailer')
-const { createClient } = require('@supabase/supabase-js')
 const Parser = require('rss-parser')
 const { getAllCameras } = require('../camera-discovery/storage/saveCamera')
 const { loadSeedCameras } = require('../camera-discovery/storage/cameraSeeds')
+const crimeRouter = require('./crime')
 
 const searchCache = new NodeCache({ stdTTL: 15 })
+
+router.use('/crime', crimeRouter)
 const geocodeCache = new NodeCache({ stdTTL: 24 * 60 * 60, checkperiod: 120 })
 const weatherNearbyCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 })
 const weatherHourlyCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 })
@@ -38,52 +39,16 @@ const conflictMetricsCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 }
 const gasPricesCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 60 })
 const MAPBOX_TOKEN = process.env.MAPBOX_TOKEN || ''
 const GEOAPIFY_KEY = process.env.GEOAPIFY_KEY || ''
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || ''
 
 function feedsDebugEnabled() {
   const v = String(process.env.DEBUG_FEEDS || '').trim().toLowerCase()
   return v === '1' || v === 'true' || v === 'yes'
 }
 
-function communityDebugEnabled() {
-  const v = String(process.env.DEBUG_COMMUNITY || '').trim().toLowerCase()
-  return v === '1' || v === 'true' || v === 'yes'
-}
 
-const supabaseAdmin = (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY)
-  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY)
-  : null
 
-const mailer = (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
-  ? nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: false,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  })
-  : null
 
-function requireForumBackend(res) {
-  if (!supabaseAdmin) {
-    res.status(503).json({ error: 'Forum backend not configured: set SUPABASE_URL and SUPABASE_SERVICE_KEY' })
-    return false
-  }
-  return true
-}
 
-async function getAuthUserId(req) {
-  if (!supabaseAdmin) return null
-  const auth = req.headers.authorization || ''
-  if (!auth.toLowerCase().startsWith('bearer ')) return null
-  const token = auth.slice(7).trim()
-  if (!token) return null
-  const { data, error } = await supabaseAdmin.auth.getUser(token)
-  if (error || !data?.user?.id) return null
-  return data.user.id
-}
 
 function normalizeOpenMeteoGeocode(r) {
   const lat = Number(r?.latitude)
@@ -781,18 +746,6 @@ router.get('/search', (req, res) => {
   res.json(geo)
 })
 
-/** Flock cameras (RapidAPI). GET /api/flock/cameras?city=SanDiego */
-router.get('/flock/cameras', async (req, res) => {
-  const city = (req.query.city || 'SanDiego').trim()
-  try {
-    const geo = await rapidApi.fetchFlockCameras(city)
-    res.json(geo)
-  } catch (err) {
-    console.error('[API /flock/cameras]', err.message)
-    res.status(500).json({ error: 'Failed to fetch Flock cameras' })
-  }
-})
-
 /** Yahoo Finance screener. GET /api/finance/screener?list=day_gainers */
 router.get('/finance/screener', async (req, res) => {
   if (!rapidApi.requireKey(res)) return
@@ -915,22 +868,6 @@ router.get('/weather/nearby', async (req, res) => {
   }
 })
 
-/** ADS-B aircraft via backend RapidAPI key. GET /api/adsb?lat=..&lon=.. */
-router.get('/adsb', async (req, res) => {
-  if (!rapidApi.requireKey(res)) return
-  const lat = req.query.lat != null ? parseFloat(req.query.lat) : NaN
-  const lon = req.query.lon != null ? parseFloat(req.query.lon) : NaN
-  if (Number.isNaN(lat) || Number.isNaN(lon)) return res.status(400).json({ error: 'lat and lon required' })
-  try {
-    const { body, error } = await rapidApi.fetchAdsbAircraft(lat, lon)
-    if (error) return res.status(200).json(body || { type: 'FeatureCollection', features: [] })
-    res.json(body || { type: 'FeatureCollection', features: [] })
-  } catch (err) {
-    console.error('[API /adsb]', err.message)
-    res.status(500).json({ error: err.message })
-  }
-})
-
 /** adsb.lol API proxy (see https://api.adsb.lol/docs). GET /api/adsb-lol/airport/:icao */
 router.get('/adsb-lol/airport/:icao', async (req, res) => {
   const icao = (req.params.icao || '').trim().toUpperCase()
@@ -964,50 +901,6 @@ router.get('/adsb/mil', async (_req, res) => {
   } catch (err) {
     console.warn('[API /adsb/mil]', err.message)
     res.status(502).json({ error: 'Failed to fetch mil aircraft feed' })
-  }
-})
-
-/** GeoConfirmed.org map pins (KML → GeoJSON). GET /api/geoconfirmed?bbox=w,s,e,n */
-router.get('/geoconfirmed', async (req, res) => {
-  const GEOCONFIRMED_KML = 'https://geoconfirmed.org/api/map/ExportAsKml/World'
-  let bbox = null
-  if (req.query.bbox) {
-    const parts = String(req.query.bbox).split(',').map((n) => parseFloat(n.trim()))
-    if (parts.length >= 4 && parts.every((n) => !Number.isNaN(n))) bbox = parts
-  }
-  try {
-    const { data: kml } = await axios.get(GEOCONFIRMED_KML, { timeout: 20000, responseType: 'text' })
-    const features = []
-    const placemarkRe = /<Placemark[^>]*>([\s\S]*?)<\/Placemark>/gi
-    let m
-    while ((m = placemarkRe.exec(kml)) !== null) {
-      const block = m[1]
-      const nameMatch = block.match(/<name[^>]*>([\s\S]*?)<\/name>/i)
-      const name = (nameMatch && nameMatch[1].replace(/<[^>]+>/g, '').trim()) || ''
-      const coordMatch = block.match(/<coordinates[^>]*>([\s\S]*?)<\/coordinates>/i)
-      if (!coordMatch) continue
-      const coordStr = coordMatch[1].trim().split(/[\s]+/)[0] || ''
-      const parts = coordStr.split(',')
-      const lon = parseFloat(parts[0])
-      const lat = parseFloat(parts[1])
-      if (Number.isNaN(lon) || Number.isNaN(lat)) continue
-      if (bbox && bbox.length >= 4) {
-        const [w, s, e, n] = bbox
-        if (lon < w || lon > e || lat < s || lat > n) continue
-      }
-      const descMatch = block.match(/<description[^>]*>([\s\S]*?)<\/description>/i)
-      const description = (descMatch && descMatch[1].replace(/<[^>]+>/g, '').trim().slice(0, 300)) || ''
-      features.push({
-        type: 'Feature',
-        properties: { name, title: name, source: 'GeoConfirmed', description, link: 'https://geoconfirmed.org' },
-        geometry: { type: 'Point', coordinates: [lon, lat] },
-      })
-    }
-    res.setHeader('Content-Type', 'application/json')
-    res.json({ type: 'FeatureCollection', features })
-  } catch (err) {
-    console.warn('[API /geoconfirmed]', err.message)
-    res.status(502).json({ error: 'Failed to fetch GeoConfirmed data' })
   }
 })
 
@@ -1283,235 +1176,6 @@ router.get('/clusters', (req, res) => {
     console.error('[API /clusters]', err.message)
     res.status(500).json({ error: 'Failed to compute clusters' })
   }
-})
-
-router.get('/forum/categories', async (_req, res) => {
-  if (!requireForumBackend(res)) return
-  const t0 = Date.now()
-  const { data, error } = await supabaseAdmin
-    .from('forum_categories')
-    .select('*')
-    .order('name', { ascending: true })
-  if (error) return res.status(500).json({ error: error.message })
-  if (communityDebugEnabled()) console.log('[COMMUNITY API /forum/categories] OUTPUT', { count: data?.length || 0, ms: Date.now() - t0 })
-  res.json(data || [])
-})
-
-router.get('/forum/communities', async (req, res) => {
-  if (!requireForumBackend(res)) return
-  const t0 = Date.now()
-  const categoryId = String(req.query.category_id || '').trim()
-  let query = supabaseAdmin
-    .from('forum_communities')
-    .select('id,name,description,category_id,creator_user_id,created_at')
-    .order('created_at', { ascending: false })
-  if (categoryId) query = query.eq('category_id', categoryId)
-  const { data, error } = await query
-  if (error) return res.status(500).json({ error: error.message })
-  if (communityDebugEnabled()) console.log('[COMMUNITY API /forum/communities] OUTPUT', { categoryId: categoryId || null, count: data?.length || 0, ms: Date.now() - t0 })
-  res.json(data || [])
-})
-
-router.post('/forum/community', async (req, res) => {
-  if (!requireForumBackend(res)) return
-  const userId = await getAuthUserId(req)
-  if (!userId) return res.status(401).json({ error: 'Authentication required' })
-  const name = String(req.body?.name || '').trim().slice(0, 120)
-  const description = String(req.body?.description || '').trim().slice(0, 1200)
-  const categoryId = String(req.body?.category_id || '').trim()
-  if (!name || !categoryId) return res.status(400).json({ error: 'name and category_id are required' })
-  const { data, error } = await supabaseAdmin
-    .from('forum_communities')
-    .insert([{ name, description, category_id: categoryId, creator_user_id: userId }])
-    .select('*')
-    .limit(1)
-  if (error) return res.status(500).json({ error: error.message })
-  res.json(data?.[0] || null)
-})
-
-router.get('/forum/posts', async (req, res) => {
-  if (!requireForumBackend(res)) return
-  const t0 = Date.now()
-  const communityId = String(req.query.community_id || '').trim()
-  const category = String(req.query.category || '').trim()
-  let query = supabaseAdmin
-    .from('forum_posts')
-    .select('id,user_id,community_id,category,title,content,created_at,upvotes,latitude,longitude')
-    .order('created_at', { ascending: false })
-  if (communityId) query = query.eq('community_id', communityId)
-  if (category) query = query.eq('category', category)
-  const { data, error } = await query
-  if (error) return res.status(500).json({ error: error.message })
-  if (communityDebugEnabled()) console.log('[COMMUNITY API /forum/posts] OUTPUT', { communityId: communityId || null, category: category || null, count: data?.length || 0, ms: Date.now() - t0 })
-  res.json(data || [])
-})
-
-router.get('/forum/post/:id', async (req, res) => {
-  if (!requireForumBackend(res)) return
-  const t0 = Date.now()
-  const id = String(req.params.id || '').trim()
-  if (!id) return res.status(400).json({ error: 'post id required' })
-  const { data: postData, error: postError } = await supabaseAdmin
-    .from('forum_posts')
-    .select('*')
-    .eq('id', id)
-    .limit(1)
-  if (postError) return res.status(500).json({ error: postError.message })
-  const post = postData?.[0] || null
-  if (!post) return res.status(404).json({ error: 'Post not found' })
-  const { data: comments, error: commentError } = await supabaseAdmin
-    .from('forum_comments')
-    .select('*')
-    .eq('post_id', id)
-    .order('created_at', { ascending: true })
-  if (commentError) return res.status(500).json({ error: commentError.message })
-  const { data: links } = await supabaseAdmin
-    .from('post_saved_links')
-    .select('*')
-    .eq('post_id', id)
-  if (communityDebugEnabled()) console.log('[COMMUNITY API /forum/post/:id] OUTPUT', { found: !!post, comments: comments?.length || 0, links: links?.length || 0, ms: Date.now() - t0 })
-  res.json({ post, comments: comments || [], links: links || [] })
-})
-
-router.post('/forum/post', async (req, res) => {
-  if (!requireForumBackend(res)) return
-  const userId = await getAuthUserId(req)
-  if (!userId) return res.status(401).json({ error: 'Authentication required' })
-  const title = String(req.body?.title || '').trim().slice(0, 240)
-  const content = String(req.body?.content || '').trim()
-  const communityId = String(req.body?.community_id || '').trim() || null
-  const category = String(req.body?.category || '').trim() || null
-  const latitude = req.body?.latitude != null ? Number(req.body.latitude) : null
-  const longitude = req.body?.longitude != null ? Number(req.body.longitude) : null
-  const linkedSaved = Array.isArray(req.body?.linked_saved_post_ids) ? req.body.linked_saved_post_ids : []
-  if (!title || !content) return res.status(400).json({ error: 'title and content are required' })
-  const insertRow = {
-    user_id: userId,
-    title,
-    content,
-    community_id: communityId,
-    category,
-    latitude: Number.isFinite(latitude) ? latitude : null,
-    longitude: Number.isFinite(longitude) ? longitude : null,
-  }
-  const { data, error } = await supabaseAdmin
-    .from('forum_posts')
-    .insert([insertRow])
-    .select('*')
-    .limit(1)
-  if (error) return res.status(500).json({ error: error.message })
-  const post = data?.[0] || null
-  if (post && linkedSaved.length) {
-    const links = linkedSaved
-      .filter((id) => id != null && String(id).trim())
-      .map((id) => ({
-        post_id: post.id,
-        saved_post_id: String(id).trim(),
-        user_id: userId,
-      }))
-    if (links.length) {
-      const { error: linkError } = await supabaseAdmin.from('post_saved_links').insert(links)
-      if (linkError) return res.status(500).json({ error: linkError.message, post })
-    }
-  }
-  res.json(post)
-})
-
-router.post('/forum/comment', async (req, res) => {
-  if (!requireForumBackend(res)) return
-  const userId = await getAuthUserId(req)
-  if (!userId) return res.status(401).json({ error: 'Authentication required' })
-  const postId = String(req.body?.post_id || '').trim()
-  const content = String(req.body?.content || '').trim().slice(0, 4000)
-  const parentId = String(req.body?.parent_id || '').trim() || null
-  if (!postId || !content) return res.status(400).json({ error: 'post_id and content are required' })
-  const { data, error } = await supabaseAdmin
-    .from('forum_comments')
-    .insert([{ post_id: postId, user_id: userId, content, parent_id: parentId }])
-    .select('*')
-    .limit(1)
-  if (error) return res.status(500).json({ error: error.message })
-  res.json(data?.[0] || null)
-})
-
-router.post('/forum/profile', async (req, res) => {
-  if (!requireForumBackend(res)) return
-  const userId = await getAuthUserId(req)
-  if (!userId) return res.status(401).json({ error: 'Authentication required' })
-  const displayName = String(req.body?.display_name || '').trim().slice(0, 80)
-  const avatarUrl = String(req.body?.avatar_url || '').trim().slice(0, 600)
-  const bio = String(req.body?.bio || '').trim().slice(0, 1200)
-  const { data, error } = await supabaseAdmin
-    .from('user_profiles')
-    .upsert([{
-      user_id: userId,
-      display_name: displayName,
-      avatar_url: avatarUrl || null,
-      bio,
-      updated_at: new Date().toISOString(),
-    }], { onConflict: 'user_id', ignoreDuplicates: false })
-    .select('*')
-    .limit(1)
-  if (error) return res.status(500).json({ error: error.message })
-  res.json(data?.[0] || null)
-})
-
-router.post('/category-request', async (req, res) => {
-  if (!requireForumBackend(res)) return
-  const userId = await getAuthUserId(req)
-  if (!userId) return res.status(401).json({ error: 'Authentication required' })
-  const categoryName = String(req.body?.category_name || '').trim().slice(0, 120)
-  const description = String(req.body?.description || '').trim().slice(0, 1200)
-  if (!categoryName) return res.status(400).json({ error: 'category_name is required' })
-  const { data, error } = await supabaseAdmin
-    .from('category_requests')
-    .insert([{ user_id: userId, category_name: categoryName, description, status: 'pending' }])
-    .select('*')
-    .limit(1)
-  if (error) return res.status(500).json({ error: error.message })
-  if (mailer && ADMIN_EMAIL) {
-    try {
-      await mailer.sendMail({
-        from: process.env.SMTP_FROM || process.env.SMTP_USER,
-        to: ADMIN_EMAIL,
-        subject: `SuperMap category request: ${categoryName}`,
-        text: `User: ${userId}\nCategory: ${categoryName}\nDescription: ${description || '(none)'}`,
-      })
-    } catch (mailError) {
-      console.warn('[API /category-request] email warning:', mailError.message)
-    }
-  }
-  res.json(data?.[0] || null)
-})
-
-router.post('/category-approve', async (req, res) => {
-  if (!requireForumBackend(res)) return
-  const adminToken = String(req.headers['x-admin-token'] || '')
-  if (!process.env.FORUM_ADMIN_TOKEN || adminToken !== process.env.FORUM_ADMIN_TOKEN) {
-    return res.status(403).json({ error: 'Forbidden' })
-  }
-  const requestId = String(req.body?.request_id || '').trim()
-  if (!requestId) return res.status(400).json({ error: 'request_id required' })
-  const { data: requestRows, error: requestError } = await supabaseAdmin
-    .from('category_requests')
-    .select('*')
-    .eq('id', requestId)
-    .limit(1)
-  if (requestError) return res.status(500).json({ error: requestError.message })
-  const request = requestRows?.[0]
-  if (!request) return res.status(404).json({ error: 'Request not found' })
-  const { data: categoryRows, error: categoryError } = await supabaseAdmin
-    .from('forum_categories')
-    .upsert([{ name: request.category_name }], { onConflict: 'name', ignoreDuplicates: false })
-    .select('*')
-    .limit(1)
-  if (categoryError) return res.status(500).json({ error: categoryError.message })
-  const { error: updateError } = await supabaseAdmin
-    .from('category_requests')
-    .update({ status: 'approved' })
-    .eq('id', requestId)
-  if (updateError) return res.status(500).json({ error: updateError.message })
-  res.json({ approved: true, category: categoryRows?.[0] || null })
 })
 
 /** Valid range/interval for Yahoo chart. interval chosen by range. */

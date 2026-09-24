@@ -14,7 +14,6 @@ const OVERPASS_HEADERS = {
   'Content-Type': 'application/x-www-form-urlencoded',
   'User-Agent': 'SuperMap/1.0 (https://github.com/TheCloutySkies/SuperMap)',
 }
-const ACLED_API_KEY = import.meta.env.VITE_ACLED_API_KEY || ''
 
 const OVERPASS_CACHE_TTL_MS = 20_000
 const overpassCache = new Map()
@@ -31,16 +30,6 @@ function getCachedOverpass(key) {
 }
 function setCachedOverpass(key, value) {
   overpassCache.set(key, { t: Date.now(), v: value })
-}
-
-function getRapidApiKey() {
-  try {
-    const raw = localStorage.getItem('supermap_rapidapiKeys')
-    const keys = raw ? JSON.parse(raw) : {}
-    return keys.default || keys.rapidapi || ''
-  } catch {
-    return ''
-  }
 }
 
 export async function fetchOverpassPower(bbox) {
@@ -97,56 +86,6 @@ export async function fetchOverpassPower(bbox) {
   const fc = { type: 'FeatureCollection', features }
   setCachedOverpass(cacheKey, fc)
   return fc
-}
-
-export async function fetchAdsbRapidApi(lat, lon) {
-  if (API_BASE) {
-    try {
-      const res = await fetch(`${API_BASE}/api/adsb?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`)
-      if (res.ok) {
-        const data = await res.json()
-        if (data?.type === 'FeatureCollection' && Array.isArray(data.features)) {
-          return data
-        }
-      }
-    } catch (err) {
-      console.warn('[SuperMap ADS-B API]', err.message)
-    }
-  }
-
-  const key = getRapidApiKey()
-  if (!key) {
-    console.log('[SuperMap ADS-B] RapidAPI key required. Add in Settings > Advanced.')
-    return { type: 'FeatureCollection', features: [] }
-  }
-  const url = `https://aircraftscatter.p.rapidapi.com/lat/${lat}/lon/${lon}/`
-  try {
-    const res = await fetch(url, {
-      headers: {
-        'x-rapidapi-host': 'aircraftscatter.p.rapidapi.com',
-        'x-rapidapi-key': key,
-      },
-    })
-    if (!res.ok) return { type: 'FeatureCollection', features: [] }
-    const data = await res.json()
-    if (!Array.isArray(data)) return { type: 'FeatureCollection', features: [] }
-    const features = data
-      .filter((a) => a.lat != null && a.lon != null)
-      .map((a) => ({
-        type: 'Feature',
-        properties: a,
-        geometry: { type: 'Point', coordinates: [parseFloat(a.lon), parseFloat(a.lat)] },
-      }))
-    return { type: 'FeatureCollection', features }
-  } catch (err) {
-    console.error('[SuperMap ADS-B]', err)
-    return { type: 'FeatureCollection', features: [] }
-  }
-}
-
-export function fetchAdsbPlaceholder() {
-  console.log('[SuperMap ADS-B] Add RapidAPI key in Settings for aircraftscatter.')
-  return { type: 'FeatureCollection', features: [] }
 }
 
 export async function runOverpassQuery(query) {
@@ -220,9 +159,9 @@ export async function fetchOverpassCellTowers(bbox) {
 }
 
 export async function fetchNasaFirmsArea(bbox) {
-  const [w, s, e, n] = bbox
-  const area = `${w},${s},${e},${n}`
-  const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${FIRMS_MAP_KEY}/VIIRS_NOAA20_NRT/${area}/1`
+  // Free FIRMS map keys often only allow the `world` area slug (custom bboxes return header-only).
+  // Fetch world NRT then filter to the visible bbox client-side.
+  const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${FIRMS_MAP_KEY}/VIIRS_NOAA20_NRT/world/1`
   const res = await fetch(url)
   if (!res.ok) return { type: 'FeatureCollection', features: [] }
   const text = await res.text()
@@ -232,11 +171,13 @@ export async function fetchNasaFirmsArea(bbox) {
   const latIdx = headers.indexOf('latitude')
   const lonIdx = headers.indexOf('longitude')
   if (latIdx === -1 || lonIdx === -1) return { type: 'FeatureCollection', features: [] }
+  const [w, s, e, n] = bbox || [-180, -90, 180, 90]
   const features = lines.slice(1).map((line) => {
     const vals = line.split(',')
     const lat = parseFloat(vals[latIdx])
     const lon = parseFloat(vals[lonIdx])
     if (Number.isNaN(lat) || Number.isNaN(lon)) return null
+    if (lon < w || lon > e || lat < s || lat > n) return null
     return {
       type: 'Feature',
       properties: {},
@@ -244,63 +185,6 @@ export async function fetchNasaFirmsArea(bbox) {
     }
   }).filter(Boolean)
   return { type: 'FeatureCollection', features }
-}
-
-/** Geoconfirmed.org: volunteer OSINT geolocated content. Uses backend proxy to avoid CORS. */
-export async function fetchGeoconfirmed(bbox) {
-  const url = API_BASE
-    ? `${API_BASE}/api/geoconfirmed${bbox && bbox.length >= 4 ? `?bbox=${bbox.join(',')}` : ''}`
-    : 'https://geoconfirmed.org/api/map/ExportAsKml/World'
-  try {
-    if (API_BASE) {
-      const res = await fetch(url)
-      if (!res.ok) return { type: 'FeatureCollection', features: [] }
-      return res.json()
-    }
-    const res = await fetch(url, { mode: 'cors' })
-    if (!res.ok) return { type: 'FeatureCollection', features: [] }
-    const text = await res.text()
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(text, 'text/xml')
-    const features = []
-    const placemarks = doc.getElementsByTagName('Placemark')
-    for (let i = 0; i < placemarks.length; i++) {
-      const pm = placemarks[i]
-      const nameEl = pm.getElementsByTagName('name')[0]
-      const name = nameEl?.textContent?.trim() || ''
-      const point = pm.getElementsByTagName('Point')[0]
-      if (!point) continue
-      const coordsEl = point.getElementsByTagName('coordinates')[0]
-      if (!coordsEl) continue
-      const coordStr = coordsEl.textContent?.trim() || ''
-      const parts = coordStr.split(',')
-      const lon = parseFloat(parts[0])
-      const lat = parseFloat(parts[1])
-      if (Number.isNaN(lon) || Number.isNaN(lat)) continue
-      if (bbox && bbox.length >= 4) {
-        const [w, s, e, n] = bbox
-        if (lon < w || lon > e || lat < s || lat > n) continue
-      }
-      const descEl = pm.getElementsByTagName('description')[0]
-      const description = descEl?.textContent?.trim() || ''
-      features.push({
-        type: 'Feature',
-        id: `geoconfirmed-${i}`,
-        properties: {
-          name,
-          title: name,
-          source: 'GeoConfirmed',
-          description: description.slice(0, 300),
-          link: 'https://geoconfirmed.org',
-        },
-        geometry: { type: 'Point', coordinates: [lon, lat] },
-      })
-    }
-    return { type: 'FeatureCollection', features }
-  } catch (err) {
-    console.warn('[SuperMap Geoconfirmed]', err.message)
-    return { type: 'FeatureCollection', features: [] }
-  }
 }
 
 export async function fetchGdacsEvents(bbox) {
@@ -362,95 +246,6 @@ export async function fetchUsgsEarthquakes(bbox) {
   return res.json()
 }
 
-export async function fetchFlockCameras(city = 'SanDiego') {
-  if (API_BASE) {
-    try {
-      const res = await fetch(`${API_BASE}/api/flock/cameras?city=${encodeURIComponent(city)}`)
-      if (res.ok) {
-        const data = await res.json()
-        if (data?.type === 'FeatureCollection' && Array.isArray(data.features)) return data
-      }
-    } catch (err) {
-      console.warn('[SuperMap Flock] API:', err.message)
-    }
-  }
-  const key = getRapidApiKey()
-  const url = `https://flock-camera-location.p.rapidapi.com/city/${encodeURIComponent(city)}`
-  if (key) {
-    try {
-      const res = await fetch(url, {
-        headers: {
-          'x-rapidapi-host': 'flock-camera-location.p.rapidapi.com',
-          'x-rapidapi-key': key,
-        },
-      })
-      if (!res.ok) return { type: 'FeatureCollection', features: [] }
-      const data = await res.json()
-      const arr = Array.isArray(data) ? data : data?.data || data?.features || []
-      const features = arr
-        .filter((c) => c.latitude != null && c.longitude != null)
-        .map((c) => ({
-          type: 'Feature',
-          properties: c,
-          geometry: {
-            type: 'Point',
-            coordinates: [parseFloat(c.longitude), parseFloat(c.latitude)],
-          },
-        }))
-      if (features.length > 0) return { type: 'FeatureCollection', features }
-    } catch (err) {
-      console.warn('[SuperMap Flock]', err.message)
-    }
-  }
-  return { type: 'FeatureCollection', features: [] }
-}
-
-const FLOCK_TILES_BASE = 'https://ringmast4r.github.io/FLOCK/data/tiles'
-const FLOCK_ZOOM = 6
-
-function lonToTileX(lon, zoom) {
-  const n = 2 ** zoom
-  return Math.floor(((lon + 180) / 360) * n)
-}
-function latToTileY(lat, zoom) {
-  const latRad = (lat * Math.PI) / 180
-  const n = 2 ** zoom
-  return Math.floor(((1 - Math.asinh(Math.tan(latRad)) / Math.PI) / 2) * n)
-}
-
-/** FLOCK surveillance cameras from ringmast4r/FLOCK tile data (zoom 6). See https://github.com/ringmast4r/FLOCK */
-export async function fetchFlockTiles(bbox) {
-  if (!bbox || bbox.length < 4) return { type: 'FeatureCollection', features: [] }
-  const [w, s, e, n] = bbox
-  const xMin = Math.max(0, lonToTileX(w, FLOCK_ZOOM))
-  const xMax = Math.min(2 ** FLOCK_ZOOM - 1, lonToTileX(e, FLOCK_ZOOM))
-  const yMin = Math.max(0, latToTileY(n, FLOCK_ZOOM))
-  const yMax = Math.min(2 ** FLOCK_ZOOM - 1, latToTileY(s, FLOCK_ZOOM))
-  const allFeatures = []
-  const seen = new Set()
-  for (let x = xMin; x <= xMax; x++) {
-    for (let y = yMin; y <= yMax; y++) {
-      try {
-        const url = `${FLOCK_TILES_BASE}/${FLOCK_ZOOM}/${x}/${y}.json`
-        const res = await fetch(url)
-        if (!res.ok) continue
-        const tile = await res.json()
-        const features = tile?.features || []
-        for (const f of features) {
-          if (f.type !== 'Feature' || !f.geometry?.coordinates) continue
-          const key = f.geometry.coordinates.join(',')
-          if (seen.has(key)) continue
-          seen.add(key)
-          allFeatures.push(f)
-        }
-      } catch (_) {
-        // skip failed tiles
-      }
-    }
-  }
-  return { type: 'FeatureCollection', features: allFeatures }
-}
-
 /** ATLAS data centers from ringmast4r/Data-Center-Map---Global (6,266+ locations). See https://github.com/ringmast4r/Data-Center-Map---Global */
 const DATACENTERS_API_URL = 'https://data-center-map.com/api/all'
 const DATACENTERS_JSON_URL = 'https://raw.githubusercontent.com/ringmast4r/Data-Center-Map---Global/main/datacenters_cleaned.json'
@@ -493,7 +288,9 @@ export async function fetchDatacenters(bbox) {
           if (contentType.includes('application/json')) {
             try {
               const json = await apiRes.json()
-              raw = Array.isArray(json) ? json : json?.data ?? json?.features ?? null
+              raw = Array.isArray(json)
+                ? json
+                : (json?.results ?? json?.data ?? json?.features ?? null)
             } catch (_) {}
           }
         }
@@ -543,48 +340,6 @@ export async function fetchDatacenters(bbox) {
   }
 }
 
-/** Fallback: backend /api/cameras (e.g. Windy webcams) when Flock has no key or returns empty */
-export async function fetchCamerasFromApi(lat, lon, bbox = null) {
-  if (!API_BASE) return { type: 'FeatureCollection', features: [] }
-  try {
-    const params = new URLSearchParams()
-    if (bbox && bbox.length >= 4) {
-      const [minLon, minLat, maxLon, maxLat] = bbox
-      params.set('minLat', String(minLat))
-      params.set('maxLat', String(maxLat))
-      params.set('minLon', String(minLon))
-      params.set('maxLon', String(maxLon))
-    } else if (lat != null && lon != null) {
-      params.set('lat', lat)
-      params.set('lon', lon)
-      params.set('radius', '100')
-    }
-    const res = await fetch(`${API_BASE}/api/cameras?${params}`)
-    if (!res.ok) return { type: 'FeatureCollection', features: [] }
-    const data = await res.json()
-    if (data?.type === 'FeatureCollection' && Array.isArray(data.features)) {
-      return data
-    }
-    if (Array.isArray(data)) {
-      const features = data
-        .filter((c) => (c.latitude != null && c.longitude != null) || (c.lat != null && c.lon != null))
-        .map((c) => ({
-          type: 'Feature',
-          properties: c,
-          geometry: {
-            type: 'Point',
-            coordinates: [parseFloat(c.longitude ?? c.lon), parseFloat(c.latitude ?? c.lat)],
-          },
-        }))
-      return { type: 'FeatureCollection', features }
-    }
-  } catch (err) {
-    console.warn('[SuperMap Cameras API]', err.message)
-  }
-  return { type: 'FeatureCollection', features: [] }
-}
-
-/** US power outages (ArcGIS). For worldwide power infrastructure use Power Grid layer (Overpass). */
 export async function fetchUtilityOutages() {
   const url =
     'https://services.arcgis.com/BLN4oKB0N1YSgvY8/arcgis/rest/services/Power_Outages_(View)/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=geojson'
@@ -617,25 +372,6 @@ export async function fetchLiveuamapRss() {
     console.error('[SuperMap Liveuamap]', err)
     return []
   }
-}
-
-export async function fetchAcled(bbox) {
-  if (!ACLED_API_KEY) return { type: 'FeatureCollection', features: [] }
-  const [w, s, e, n] = bbox
-  const url = `https://api.acleddata.com/acled/read/?key=${ACLED_API_KEY}&limit=1000&bbox=${w},${s},${e},${n}`
-  const res = await fetch(url)
-  if (!res.ok) return { type: 'FeatureCollection', features: [] }
-  const data = await res.json()
-  if (!data.data?.length) return { type: 'FeatureCollection', features: [] }
-  const features = data.data.map((d) => ({
-    type: 'Feature',
-    properties: d,
-    geometry: {
-      type: 'Point',
-      coordinates: [parseFloat(d.longitude) || 0, parseFloat(d.latitude) || 0],
-    },
-  }))
-  return { type: 'FeatureCollection', features }
 }
 
 /** ODINT — Observatory for Digital Infrastructure & Network Transparency. 14 recon regions (ringmast4r/ODINT). */

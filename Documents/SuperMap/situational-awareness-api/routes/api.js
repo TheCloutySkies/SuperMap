@@ -387,6 +387,8 @@ router.get('/threat-summary', async (req, res) => {
       timestamp: result.timestamp || new Date().toISOString(),
       bullets: result.bullets,
       fallback: result.fallback,
+      high_risk_count: result.high_risk_count || 0,
+      top_risks: Array.isArray(result.top_risks) ? result.top_risks : [],
     }
     threatSummaryCache.set(cacheKey, payload)
     writePersistedThreatSummary(payload)
@@ -511,6 +513,7 @@ function mapOsintXRows(rows, cutoff) {
       } catch (_) {}
       const tags = getEventTagNames(r.id)
       const priority = raw.priority || 'medium'
+      const risk_score = raw.risk_score != null ? Number(raw.risk_score) : null
       return {
         id: r.id,
         source: 'x',
@@ -519,6 +522,8 @@ function mapOsintXRows(rows, cutoff) {
         content: r.description,
         timestamp: r.timestamp,
         tags,
+        risk_score: Number.isFinite(risk_score) ? risk_score : null,
+        risk_label: raw.risk_label || undefined,
         priority,
         url: raw.link || raw.url,
         images: Array.isArray(raw.images) ? raw.images : [],

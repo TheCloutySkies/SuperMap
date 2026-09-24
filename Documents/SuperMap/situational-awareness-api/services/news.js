@@ -2,6 +2,7 @@ const Parser = require('rss-parser')
 const axios = require('axios')
 const { geotagArticles } = require('./geotagger')
 const { normalizeToEvent, ingestEvent, eventToFeature } = require('./ingest')
+const { assessItemsBatch } = require('./riskScoring')
 
 const REQUEST_HEADERS = { 'User-Agent': 'SuperMap/1.0 (OSINT dashboard; https://github.com/supermap)' }
 const parser = new Parser({ timeout: 8000, headers: REQUEST_HEADERS })
@@ -448,7 +449,23 @@ async function getNews() {
   }
 
   const events = []
-  for (const item of geotagged) {
+  let assessments = []
+  try {
+    assessments = await assessItemsBatch(
+      geotagged.map((item) => ({
+        title: item.title,
+        description: item.contentSnippet || item.content || '',
+        source: item.source,
+        score: item.score || item.ups,
+      })),
+      { preferAi: true, maxAiItems: 16 },
+    )
+  } catch (_) {
+    assessments = []
+  }
+
+  for (let i = 0; i < geotagged.length; i++) {
+    const item = geotagged[i]
     const event = normalizeToEvent(
       {
         ...item,
@@ -463,7 +480,10 @@ async function getNews() {
       event.lon = item.coordinates[0]
       event.lat = item.coordinates[1]
     }
-    ingestEvent(event)
+    ingestEvent(event, {
+      extraTags: String(item.source || '').toLowerCase().includes('reddit') ? ['reddit', 'news'] : ['news'],
+      assessment: assessments[i] || undefined,
+    })
     events.push(event)
   }
 

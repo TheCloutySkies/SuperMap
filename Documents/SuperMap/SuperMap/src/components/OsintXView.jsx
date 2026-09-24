@@ -347,13 +347,21 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
               <div className="osint-x-card-meta">
                 <span className="osint-x-account">@{post.account}</span>
                 <span className="osint-x-time">{relativeTime(post.timestamp)}</span>
+                {post.risk_score != null && Number(post.risk_score) >= 2 && (
+                  <span
+                    className={`osint-x-risk osint-x-risk--${Number(post.risk_score)}`}
+                    title={post.risk_label || `Risk ${post.risk_score}/5`}
+                  >
+                    {post.risk_score}/5
+                  </span>
+                )}
                 {post.priority && post.priority !== 'medium' && (
                   <span className={`osint-x-priority osint-x-priority--${post.priority}`}>{post.priority}</span>
                 )}
               </div>
               {(post.tags || []).length > 0 && (
                 <div className="osint-x-tags">
-                  {(post.tags || []).filter((t) => t !== 'x' && t !== 'osint').map((tag) => (
+                  {(post.tags || []).filter((t) => t !== 'x' && t !== 'osint' && !/^risk-[1-5]$/i.test(t)).map((tag) => (
                     <span key={tag} className="osint-x-tag">{tag}</span>
                   ))}
                 </div>

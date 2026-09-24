@@ -215,6 +215,17 @@
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.home-screen-threat-high-count {
+  font-size: 0.75rem;
+  color: #f0883e;
+  border: 1px solid #bd561d;
+  background: #2a1810;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  font-weight: 500;
 }
 
 .home-screen-threat-defcon {

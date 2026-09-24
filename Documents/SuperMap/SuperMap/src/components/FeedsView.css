@@ -382,6 +382,25 @@
   flex: 0 0 auto;
 }
 
+.feeds-risk-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 0.12rem 0.35rem;
+  border-radius: 3px;
+  color: #c9d1d9;
+  background: #21262d;
+  border: 1px solid #30363d;
+  flex: 0 0 auto;
+}
+
+.feeds-risk-badge--2 { color: #8b949e; }
+.feeds-risk-badge--3 { color: #d29922; border-color: #9e6a03; background: #2a2111; }
+.feeds-risk-badge--4 { color: #f0883e; border-color: #bd561d; background: #2a1810; }
+.feeds-risk-badge--5 { color: #f85149; border-color: #da3633; background: #2a1215; }
+
 .feeds-news-card-date {
   font-size: 0.75rem;
   color: var(--y2k-text-muted);

@@ -61,6 +61,24 @@ function insertOrIgnore(row) {
   return stmt.run(row)
 }
 
+/**
+ * Merge fields into events.raw_data JSON (e.g. risk_score). No-op if row missing.
+ */
+function mergeEventRawData(eventId, patch) {
+  if (!eventId || !patch || typeof patch !== 'object') return false
+  const row = db.prepare('SELECT raw_data FROM events WHERE id = ?').get(eventId)
+  if (!row) return false
+  let raw = {}
+  try {
+    raw = row.raw_data ? JSON.parse(row.raw_data) : {}
+  } catch (_) {
+    raw = {}
+  }
+  const merged = { ...raw, ...patch }
+  db.prepare('UPDATE events SET raw_data = ? WHERE id = ?').run(JSON.stringify(merged), eventId)
+  return true
+}
+
 function ensureTag(name) {
   if (!name || typeof name !== 'string') return
   const n = name.trim().toLowerCase()
@@ -270,6 +288,7 @@ function getDb() {
 module.exports = {
   getDb,
   insertOrIgnore,
+  mergeEventRawData,
   ensureTag,
   ensureEntity,
   linkEventTag,

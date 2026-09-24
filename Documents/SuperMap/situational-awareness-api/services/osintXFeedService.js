@@ -8,8 +8,8 @@
 const axios = require('axios')
 const { getOsintXFeeds } = require('../config/userConfig')
 const { normalizeToEvent, ingestEvent } = require('./ingest')
-const { tagOsintPost } = require('./osintTagger')
 const { geotagArticle } = require('./geotagger')
+const { assessItemsBatch } = require('./riskScoring')
 
 const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 }
 
@@ -166,7 +166,7 @@ async function fetchOsintXFeeds({ limitFeeds = 0, skipGeotag = false } = {}) {
     settled.push(...part)
   }
 
-  const results = []
+  const pending = []
   const byHandle = {}
   for (let i = 0; i < settled.length; i++) {
     const s = settled[i]
@@ -194,24 +194,50 @@ async function fetchOsintXFeeds({ limitFeeds = 0, skipGeotag = false } = {}) {
           }
         } catch (_) { /* geotag optional */ }
       }
-      const tags = tagOsintPost({ title: item.title, content: item.content })
-      const event = normalizeToOsintEvent(item)
-      ingestEvent(event, { extraTags: ['x', 'osint', ...tags] })
-      results.push({
-        id: event.id,
-        source: 'x',
-        account: item.account,
+      pending.push(item)
+    }
+  }
+
+  // AI/heuristic risk scoring for the batch (graceful degrade inside assessItemsBatch)
+  let assessments = []
+  try {
+    assessments = await assessItemsBatch(
+      pending.map((item) => ({
         title: item.title,
         content: item.content,
-        timestamp: event.timestamp,
-        tags: ['x', 'osint', ...tags],
-        priority: item.priority,
-        url: item.url,
-        images: item.images || [],
-        videos: item.videos || [],
-        provider: 'fxtwitter',
-      })
-    }
+        source: 'x',
+      })),
+      { preferAi: true, maxAiItems: 16 },
+    )
+  } catch (_) {
+    assessments = []
+  }
+
+  const results = []
+  for (let i = 0; i < pending.length; i++) {
+    const item = pending[i]
+    const assessment = assessments[i] || null
+    const event = normalizeToOsintEvent(item)
+    const ingested = ingestEvent(event, {
+      extraTags: ['x', 'osint'],
+      assessment: assessment || undefined,
+    })
+    results.push({
+      id: event.id,
+      source: 'x',
+      account: item.account,
+      title: item.title,
+      content: item.content,
+      timestamp: event.timestamp,
+      tags: ingested.tags,
+      risk_score: ingested.risk_score,
+      risk_label: ingested.risk_label,
+      priority: item.priority,
+      url: item.url,
+      images: item.images || [],
+      videos: item.videos || [],
+      provider: 'fxtwitter',
+    })
   }
   const ok = Object.entries(byHandle).filter(([, v]) => v.ok && v.count > 0)
   const fail = Object.entries(byHandle).filter(([, v]) => !v.ok || v.count === 0)

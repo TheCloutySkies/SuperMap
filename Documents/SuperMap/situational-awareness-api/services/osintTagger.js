@@ -1,6 +1,8 @@
 /**
  * Auto-tagging for OSINT posts (X, RSS, etc.).
  * Tags are stored with the event for search and filtering.
+ * Prefer riskScoring.assessItem* for full tags + 1–5 risk scores;
+ * this module remains the fast keyword baseline.
  */
 
 const KEYWORDS = [
@@ -10,6 +12,7 @@ const KEYWORDS = [
   ['blast', 'explosion'],
   ['cyber', 'cyberattack'],
   ['hack', 'cyberattack'],
+  ['ransomware', 'cyberattack'],
   ['satellite', 'satellite'],
   ['military', 'military'],
   ['earthquake', 'earthquake'],
@@ -22,6 +25,13 @@ const KEYWORDS = [
   ['power outage', 'power'],
   ['blackout', 'power'],
   ['grid', 'infrastructure'],
+  ['nuclear', 'nuclear'],
+  ['evacuat', 'evacuation'],
+  ['ceasefire', 'conflict'],
+  ['shelling', 'conflict'],
+  ['airstrike', 'strike'],
+  ['hostage', 'security'],
+  ['sanction', 'geopolitics'],
 ]
 
 function tagOsintPost(post) {

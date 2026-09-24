@@ -105,3 +105,16 @@ The API enforces its own safeguards so it **never exceeds** these: it will not c
 | **Render**             | Groq        | Set `GROQ_API_KEY` in Render env; leave Ollama vars unset |
 
 If neither Ollama nor Groq is configured (or both fail), the API still responds: it returns a **title-only** threat summary and sets `fallback: true`.
+
+---
+
+## Feed item risk scores (1–5)
+
+News, OSINT X, and Reddit/article ingest also assign a **risk_score** (see `services/riskScoring.js`). Heuristics always run; Groq/Ollama may refine tags in batches using a **separate** lighter budget:
+
+```env
+# GROQ_TAG_MAX_CALLS_PER_24H=48
+# GROQ_TAG_MIN_INTERVAL_MS=30000
+```
+
+Threat summary ranks items with scores 4–5 first so the brief tracks the most dangerous developments.

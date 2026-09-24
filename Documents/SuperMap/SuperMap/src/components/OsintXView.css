@@ -164,6 +164,41 @@
   color: #6e7681;
 }
 
+.osint-x-risk {
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+  color: #c9d1d9;
+  background: #21262d;
+  border: 1px solid #30363d;
+}
+
+.osint-x-risk--2 {
+  color: #8b949e;
+  border-color: #484f58;
+}
+
+.osint-x-risk--3 {
+  color: #d29922;
+  border-color: #9e6a03;
+  background: #2a2111;
+}
+
+.osint-x-risk--4 {
+  color: #f0883e;
+  border-color: #bd561d;
+  background: #2a1810;
+}
+
+.osint-x-risk--5 {
+  color: #f85149;
+  border-color: #da3633;
+  background: #2a1215;
+}
+
 .osint-x-tags {
   display: flex;
   flex-wrap: wrap;

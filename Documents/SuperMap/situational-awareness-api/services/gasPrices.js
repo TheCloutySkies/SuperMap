@@ -1,10 +1,16 @@
 /**
- * US retail gasoline prices — free sources, no user setup required.
+ * US retail regular gasoline prices — free, no user setup.
  *
- * Priority:
+ * Sources (in order):
  *  1. EIA Open Data API v2 when EIA_API_KEY is set
- *  2. EIA public weekly gasdiesel HTML page (no key)
- *  3. GasBuddy GraphQL (no key; best-effort)
+ *  2. EIA public weekly Gasoline and Diesel Fuel Update HTML (no key)
+ *
+ * Intentionally omitted:
+ *  - Hardcoded / seed national averages (misleading when live fetch fails)
+ *  - Serving previous process snapshots as current after a failed refresh
+ *  - GasBuddy ZIP spot prices presented as a US national average
+ *
+ * On total failure the API returns gasUnavailable + error — UI must show that honestly.
  */
 
 const axios = require('axios')
@@ -12,7 +18,13 @@ const axios = require('axios')
 const UNIT = 'USD/gal'
 const EIA_GASOLINE_PRODUCTS = ['EPM0U', 'EPM0R']
 const EIA_V2_BASE = 'https://api.eia.gov/v2/petroleum/pri/gnd/data/'
-const EIA_GASDIESEL_URL = 'https://www.eia.gov/petroleum/gasdiesel/'
+const EIA_GASDIESEL_URLS = [
+  'https://www.eia.gov/petroleum/gasdiesel/',
+  'https://www.eia.gov/petroleum/gasdiesel/index.php',
+]
+
+const BROWSER_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
 
 const US_GAS_STATES = [
   { code: 'AL', name: 'Alabama' }, { code: 'AK', name: 'Alaska' }, { code: 'AZ', name: 'Arizona' },
@@ -34,17 +46,6 @@ const US_GAS_STATES = [
   { code: 'WV', name: 'West Virginia' }, { code: 'WI', name: 'Wisconsin' }, { code: 'WY', name: 'Wyoming' },
 ]
 
-/** Representative ZIP per state for GasBuddy fallback. */
-const GASBUDDY_STATE_ZIPS = {
-  AL: '35203', AK: '99501', AZ: '85001', AR: '72201', CA: '90210', CO: '80202', CT: '06101', DE: '19901',
-  DC: '20001', FL: '33101', GA: '30301', HI: '96801', ID: '83701', IL: '60601', IN: '46201', IA: '50301',
-  KS: '66101', KY: '40201', LA: '70112', ME: '04101', MD: '21201', MA: '02101', MI: '48201', MN: '55401',
-  MS: '39101', MO: '63101', MT: '59101', NE: '68101', NV: '89101', NH: '03431', NJ: '07101', NM: '87101',
-  NY: '10001', NC: '28201', ND: '58102', OH: '43201', OK: '73101', OR: '97201', PA: '19101', RI: '02901',
-  SC: '29201', SD: '57101', TN: '37201', TX: '75201', UT: '84101', VT: '05401', VA: '23219', WA: '98101',
-  WV: '25301', WI: '53201', WY: '82001',
-}
-
 /** Map state → EIA PADD region key used in gasdiesel HTML. */
 const STATE_TO_PADD = {
   CT: 'padd1a', ME: 'padd1a', MA: 'padd1a', NH: 'padd1a', RI: 'padd1a', VT: 'padd1a',
@@ -57,39 +58,32 @@ const STATE_TO_PADD = {
   AK: 'padd5', AZ: 'padd5', CA: 'padd5', HI: 'padd5', NV: 'padd5', OR: 'padd5', WA: 'padd5',
 }
 
+const PADD_LABELS = {
+  padd1: 'East Coast',
+  padd1a: 'New England',
+  padd1b: 'Central Atlantic',
+  padd1c: 'Lower Atlantic',
+  padd2: 'Midwest',
+  padd3: 'Gulf Coast',
+  padd4: 'Rocky Mountain',
+  padd5: 'West Coast',
+}
+
 const STATE_NAME_TO_CODE = Object.fromEntries(US_GAS_STATES.map((s) => [s.name.toLowerCase(), s.code]))
 
-/** Last successful national/regional payload — survives transient EIA/GasBuddy outages. */
-let lastGoodNationalPayload = null
-
-/**
- * Boot seed so a cold Render instance still has displayable numbers if live
- * fetches fail on the first request. Replaced as soon as a live source succeeds.
- * Prices from EIA weekly gasdiesel (verified 2026-09-24).
- */
-const SEED_SNAPSHOT = {
-  national: 4.48,
-  unit: UNIT,
-  regions: [
-    { name: 'East Coast', price: 4.29, padd: 'padd1' },
-    { name: 'Midwest', price: 4.39, padd: 'padd2' },
-    { name: 'Gulf Coast', price: 3.97, padd: 'padd3' },
-    { name: 'Rocky Mountain', price: 4.12, padd: 'padd4' },
-    { name: 'West Coast', price: 5.35, padd: 'padd5' },
-  ],
-  states: [],
-  source: 'eia-gasdiesel-seed',
-  updatedAt: 'seed',
-}
-
-function nowUpdatedAt() {
-  return new Date().toLocaleTimeString(undefined, { timeStyle: 'short' })
-}
+/** In-process cache of last *successful live* parse only (not served after a failed refresh). */
+let liveHtmlCache = { at: 0, data: null }
+const LIVE_HTML_TTL_MS = 30 * 60 * 1000
 
 function roundPrice(n) {
   const v = Number(n)
   if (!Number.isFinite(v)) return null
-  return Number(v.toFixed(2))
+  return Number(v.toFixed(3))
+}
+
+function formatDisplayPrice(n) {
+  const v = roundPrice(n)
+  return v == null ? null : Number(v.toFixed(2))
 }
 
 function cleanHtmlText(s) {
@@ -99,6 +93,21 @@ function cleanHtmlText(s) {
     .replace(/&amp;/gi, '&')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+function extractReleaseDate(html) {
+  const m = String(html || '').match(
+    /Release Date:\s*<\/[^>]+>\s*<span[^>]*class="[^"]*date[^"]*"[^>]*>([^<]+)</i,
+  ) || String(html || '').match(/Release Date:\s*(?:<\/[^>]+>\s*)*([^<\n]+)/i)
+  if (!m) return null
+  const raw = cleanHtmlText(m[1])
+  if (!raw || /next release/i.test(raw)) return null
+  return raw
+}
+
+function isWeekHeader(cell) {
+  // EIA week headers look like 09/21/26 or 09/21/2026
+  return /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(String(cell || '').trim())
 }
 
 function paddKeyFromLabel(label) {
@@ -116,116 +125,197 @@ function paddKeyFromLabel(label) {
   return null
 }
 
+function parseTableRows(tableHtml) {
+  const trs = tableHtml.match(/<tr[\s\S]*?<\/tr>/gi) || []
+  const rows = []
+  for (const tr of trs) {
+    const cells = (tr.match(/<t[dh][^>]*>[\s\S]*?<\/t[dh]>/gi) || [])
+      .map((c) => cleanHtmlText(c.replace(/^<t[dh][^>]*>|<\/t[dh]>$/gi, '')))
+      .filter(Boolean)
+    if (cells.length) rows.push(cells)
+  }
+  return rows
+}
+
+/**
+ * Find the latest weekly price column from EIA header row.
+ * Headers: [09/07/26, 09/14/26, 09/21/26, 2 year ago, year ago, week ago]
+ * → use the last MM/DD/YY column (not the change columns).
+ */
+function findLatestWeekColumn(headerCells) {
+  let latestIdx = -1
+  let weekEnding = null
+  headerCells.forEach((cell, i) => {
+    if (isWeekHeader(cell)) {
+      latestIdx = i
+      weekEnding = cell.trim()
+    }
+  })
+  return { latestIdx, weekEnding }
+}
+
 function parseGasdieselTables(html) {
   const tables = String(html || '').match(/<table[\s\S]*?<\/table>/gi) || []
-  const parseTable = (tableHtml) => {
-    const rows = []
-    const trs = tableHtml.match(/<tr[\s\S]*?<\/tr>/gi) || []
-    for (const tr of trs) {
-      const cells = (tr.match(/<t[dh][^>]*>[\s\S]*?<\/t[dh]>/gi) || [])
-        .map((c) => cleanHtmlText(c.replace(/^<t[dh][^>]*>|<\/t[dh]>$/gi, '')))
-        .filter(Boolean)
-      if (cells.length < 2) continue
-      const name = cells[0]
-      const nums = cells.slice(1)
-        .map((c) => c.replace(/[^0-9.\-]/g, ''))
-        .filter((c) => /^-?\d+\.\d+$/.test(c))
-        .map(Number)
-      if (!name || !nums.length) continue
-      // Latest week is the 3rd price column when present (prior, prior, current).
-      const price = nums.length >= 3 ? nums[2] : nums[nums.length - 1]
-      rows.push({ name, price: roundPrice(price), history: nums })
-    }
-    return rows
+  if (!tables.length) {
+    throw new Error('EIA gasdiesel page has no tables')
   }
 
-  const regionRows = tables[0] ? parseTable(tables[0]) : []
-  const stateRows = tables[1] ? parseTable(tables[1]) : []
+  const releaseDate = extractReleaseDate(html)
+  const regionRows = parseTableRows(tables[0])
+  const stateRows = tables[1] ? parseTableRows(tables[1]) : []
+
+  // Header row with week dates is usually the second row (after "Change from")
+  const header = regionRows.find((r) => r.some(isWeekHeader)) || []
+  const { latestIdx: priceCol, weekEnding } = findLatestWeekColumn(header)
+  if (priceCol < 0) {
+    throw new Error('EIA gasdiesel table missing week-date headers')
+  }
 
   let national = null
   const padd = {}
   const regions = []
-  for (const row of regionRows) {
-    const key = paddKeyFromLabel(row.name)
+
+  for (const cells of regionRows) {
+    const name = cells[0]
+    if (!name || isWeekHeader(name) || /change from/i.test(name)) continue
+    // priceCol is index in the header array; data rows align: [name, ...values]
+    // Header may not include the name column — EIA header starts with dates.
+    // Data: ['U.S.', '4.157', '4.319', '4.478', ...]
+    // Header: ['09/07/26', '09/14/26', '09/21/26', ...]
+    // So data price index = priceCol + 1 (skip name)
+    const raw = cells[priceCol + 1]
+    const price = formatDisplayPrice(raw)
+    if (price == null) continue
+    const key = paddKeyFromLabel(name)
     if (key === 'national') {
-      national = row.price
+      national = price
       continue
     }
     if (!key || key === 'padd5_less_ca') continue
-    padd[key] = row.price
-    if (['padd1', 'padd2', 'padd3', 'padd4', 'padd5'].includes(key) && row.price != null) {
-      const short = row.name.replace(/\s*\(PADD[^)]*\)/i, '').trim()
-      regions.push({ name: short, price: row.price, padd: key })
+    padd[key] = price
+    if (['padd1', 'padd2', 'padd3', 'padd4', 'padd5'].includes(key)) {
+      regions.push({
+        name: PADD_LABELS[key] || name.replace(/\s*\(PADD[^)]*\)/i, '').trim(),
+        price,
+        padd: key,
+      })
     }
   }
 
   const statesByCode = {}
-  for (const row of stateRows) {
-    const code = STATE_NAME_TO_CODE[row.name.toLowerCase()]
-    if (code && row.price != null) statesByCode[code] = row.price
+  let inCities = false
+  for (const cells of stateRows) {
+    const name = cells[0]
+    if (!name || isWeekHeader(name) || /change from/i.test(name)) continue
+    if (/^cities$/i.test(name)) {
+      inCities = true
+      continue
+    }
+    if (inCities) continue // city series — skip for state dropdown
+    const raw = cells[priceCol + 1]
+    const price = formatDisplayPrice(raw)
+    const code = STATE_NAME_TO_CODE[name.toLowerCase()]
+    if (code && price != null) statesByCode[code] = price
   }
 
-  return { national, regions, padd, statesByCode, source: 'eia-gasdiesel-html' }
+  if (national == null && !regions.length && !Object.keys(statesByCode).length) {
+    throw new Error('EIA gasdiesel parse returned no prices')
+  }
+
+  return {
+    national,
+    regions,
+    padd,
+    statesByCode,
+    source: 'eia-weekly-gasdiesel',
+    sourceLabel: 'EIA Gasoline and Diesel Fuel Update (weekly retail)',
+    releaseDate,
+    weekEnding,
+    asOf: weekEnding || releaseDate || null,
+  }
 }
 
-let gasdieselCache = { at: 0, data: null }
-const GASDIESEL_TTL_MS = 60 * 60 * 1000 // HTML updates weekly; cache 1h
+async function fetchEiaGasdieselHtml({ force = false } = {}) {
+  if (!force && liveHtmlCache.data && Date.now() - liveHtmlCache.at < LIVE_HTML_TTL_MS) {
+    return { ...liveHtmlCache.data, _fromLiveCache: true }
+  }
 
-async function fetchEiaGasdieselHtml() {
-  if (gasdieselCache.data && Date.now() - gasdieselCache.at < GASDIESEL_TTL_MS) {
-    return gasdieselCache.data
+  let lastErr = null
+  for (const url of EIA_GASDIESEL_URLS) {
+    try {
+      const res = await axios.get(url, {
+        timeout: 20000,
+        headers: {
+          'User-Agent': BROWSER_UA,
+          Accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          Referer: 'https://www.eia.gov/',
+        },
+        responseType: 'text',
+        maxRedirects: 5,
+        validateStatus: (s) => s >= 200 && s < 400,
+      })
+      const html = typeof res.data === 'string' ? res.data : String(res.data || '')
+      const parsed = parseGasdieselTables(html)
+      liveHtmlCache = { at: Date.now(), data: parsed }
+      return parsed
+    } catch (err) {
+      lastErr = err
+      console.warn('[gasPrices] EIA HTML', url, err.message)
+    }
   }
-  const res = await axios.get(EIA_GASDIESEL_URL, {
-    timeout: 15000,
-    headers: {
-      'User-Agent': 'SuperMap/1.0 (gas prices; https://github.com/supermap)',
-      Accept: 'text/html,application/xhtml+xml',
-    },
-    responseType: 'text',
-  })
-  const parsed = parseGasdieselTables(typeof res.data === 'string' ? res.data : String(res.data || ''))
-  if (parsed.national == null && !Object.keys(parsed.statesByCode).length) {
-    throw new Error('EIA gasdiesel HTML parse returned no prices')
-  }
-  gasdieselCache = { at: Date.now(), data: parsed }
-  return parsed
+  throw lastErr || new Error('EIA gasdiesel fetch failed')
 }
 
-function payloadFromGasdiesel(parsed, stateCode) {
-  const updatedAt = nowUpdatedAt()
+function buildPayloadFromParsed(parsed, stateCode) {
   const national = parsed.national
   const regions = Array.isArray(parsed.regions) ? parsed.regions : []
   const payload = {
+    ok: true,
     national,
     unit: UNIT,
     regions,
     states: [],
-    source: parsed.source || 'eia-gasdiesel-html',
-    updatedAt,
+    source: parsed.source,
+    sourceLabel: parsed.sourceLabel,
+    releaseDate: parsed.releaseDate || null,
+    weekEnding: parsed.weekEnding || null,
+    asOf: parsed.asOf || null,
+    fetchedAt: new Date().toISOString(),
   }
+
   if (!stateCode) return payload
+
   const st = US_GAS_STATES.find((s) => s.code === stateCode)
   if (!st) return payload
+
   const direct = parsed.statesByCode?.[stateCode]
   if (direct != null) {
-    payload.states = [{ code: stateCode, name: st.name, price: direct }]
+    payload.states = [{ code: stateCode, name: st.name, price: direct, series: 'state' }]
     return payload
   }
+
   const paddKey = STATE_TO_PADD[stateCode]
-  const paddPrice = paddKey ? parsed.padd?.[paddKey] : null
+  // Prefer sub-PADD (1a/1b/1c) then parent PADD
+  const paddPrice = (paddKey && parsed.padd?.[paddKey] != null)
+    ? parsed.padd[paddKey]
+    : (paddKey && parsed.padd?.[paddKey.replace(/[abc]$/, '')])
   if (paddPrice != null) {
+    const regionKey = parsed.padd?.[paddKey] != null ? paddKey : paddKey.replace(/[abc]$/, '')
     payload.states = [{
       code: stateCode,
       name: st.name,
       price: paddPrice,
+      series: 'regional',
       useRegionalFallback: true,
-      region: paddKey,
+      region: regionKey,
+      regionLabel: PADD_LABELS[regionKey] || regionKey,
     }]
     return payload
   }
-  if (national != null) {
-    payload.states = [{ code: stateCode, name: st.name, price: national, useNationalFallback: true }]
-  }
+
+  // No silent national substitute for a selected state — leave states empty
+  payload.stateUnavailable = true
   return payload
 }
 
@@ -235,273 +325,137 @@ async function fetchEiaApi(stateCode) {
 
   let nationalVal = null
   let statePrice = null
+  let period = null
+
   const eiaV2XParams = JSON.stringify({
     frequency: 'weekly',
     data: ['value'],
     facets: {},
     start: null,
     end: null,
-    sort: [{ column: 'duoarea', direction: 'desc' }],
+    sort: [{ column: 'period', direction: 'desc' }],
     offset: 0,
     length: 5000,
   })
   const eiaV2Query = new URLSearchParams({
     frequency: 'weekly',
     'data[0]': 'value',
-    'sort[0][column]': 'duoarea',
+    'sort[0][column]': 'period',
     'sort[0][direction]': 'desc',
     offset: '0',
     length: '5000',
     api_key: EIA_KEY,
   })
   const duoareaState = stateCode ? `S${stateCode}` : null
-  const stateFacetXParams = stateCode
-    ? JSON.stringify({
-      frequency: 'weekly',
-      data: ['value'],
-      facets: { duoarea: [duoareaState] },
-      start: null,
-      end: null,
-      sort: [{ column: 'period', direction: 'desc' }],
-      offset: 0,
-      length: 100,
-    })
-    : null
-  const stateQuery = stateCode
-    ? new URLSearchParams({
-      frequency: 'weekly',
-      'data[0]': 'value',
-      'sort[0][column]': 'period',
-      'sort[0][direction]': 'desc',
-      offset: '0',
-      length: '100',
-      api_key: EIA_KEY,
-    })
-    : null
 
-  const nationalPromise = axios.get(`${EIA_V2_BASE}?${eiaV2Query.toString()}`, {
-    timeout: 22000,
+  const res = await axios.get(`${EIA_V2_BASE}?${eiaV2Query.toString()}`, {
+    timeout: 20000,
     headers: {
       'X-Params': eiaV2XParams,
       Accept: 'application/json',
-      'User-Agent': 'SuperMap/1.0 (EIA Open Data)',
+      'User-Agent': BROWSER_UA,
     },
   })
-  const statePromise = stateCode && stateFacetXParams && stateQuery
-    ? axios.get(`${EIA_V2_BASE}?${stateQuery.toString()}`, {
-      timeout: 22000,
-      headers: {
-        'X-Params': stateFacetXParams,
-        Accept: 'application/json',
-        'User-Agent': 'SuperMap/1.0 (EIA Open Data)',
-      },
-    })
-    : Promise.resolve({ data: null })
-
-  const [v2Res, v2StateRes] = await Promise.all([nationalPromise, statePromise])
-  const v2Rows = Array.isArray(v2Res.data?.response?.data ?? v2Res.data?.data)
-    ? (v2Res.data?.response?.data ?? v2Res.data?.data)
+  const v2Rows = Array.isArray(res.data?.response?.data ?? res.data?.data)
+    ? (res.data?.response?.data ?? res.data?.data)
     : []
+
   const nationalRow = v2Rows.find(
-    (r) => (r.duoarea === 'NUS' || (r['area-name'] && String(r['area-name']).toUpperCase() === 'U.S.'))
-      && EIA_GASOLINE_PRODUCTS.includes(r.product)
-  ) || v2Rows.find((r) => r.duoarea === 'NUS' || (r['area-name'] && String(r['area-name']).toUpperCase() === 'U.S.'))
+    (r) => (r.duoarea === 'NUS' || String(r['area-name'] || '').toUpperCase() === 'U.S.')
+      && EIA_GASOLINE_PRODUCTS.includes(r.product),
+  ) || v2Rows.find((r) => r.duoarea === 'NUS')
+
   if (nationalRow && (nationalRow.value != null || nationalRow.Value != null)) {
-    nationalVal = roundPrice(nationalRow.value ?? nationalRow.Value)
+    nationalVal = formatDisplayPrice(nationalRow.value ?? nationalRow.Value)
+    period = nationalRow.period || null
   }
-  if (stateCode && v2StateRes?.data) {
-    const raw = v2StateRes.data
-    const v2StateRows = Array.isArray(raw?.response?.data ?? raw?.data)
-      ? (raw?.response?.data ?? raw?.data)
-      : []
-    const stateRow = v2StateRows.find((r) => EIA_GASOLINE_PRODUCTS.includes(r.product))
-      || v2StateRows.find((r) => r.duoarea === duoareaState)
-      || v2StateRows.find((r) => r.value != null || r.Value != null)
-    if (stateRow && (stateRow.value != null || stateRow.Value != null)) {
-      statePrice = roundPrice(stateRow.value ?? stateRow.Value)
-    }
-  }
-  if (stateCode && statePrice == null) {
+
+  if (stateCode) {
     const stateRow = v2Rows.find((r) => r.duoarea === duoareaState && EIA_GASOLINE_PRODUCTS.includes(r.product))
       || v2Rows.find((r) => r.duoarea === duoareaState)
     if (stateRow && (stateRow.value != null || stateRow.Value != null)) {
-      statePrice = roundPrice(stateRow.value ?? stateRow.Value)
+      statePrice = formatDisplayPrice(stateRow.value ?? stateRow.Value)
+      period = stateRow.period || period
     }
   }
 
   if (nationalVal == null && statePrice == null) return null
 
-  const updatedAt = nowUpdatedAt()
   const payload = {
+    ok: true,
     national: nationalVal,
     unit: UNIT,
     regions: [],
     states: [],
-    source: 'eia-api',
-    updatedAt,
+    source: 'eia-api-v2',
+    sourceLabel: 'EIA Open Data API (weekly retail gasoline)',
+    releaseDate: null,
+    weekEnding: period || null,
+    asOf: period || null,
+    fetchedAt: new Date().toISOString(),
   }
+
   if (stateCode) {
     const st = US_GAS_STATES.find((s) => s.code === stateCode)
-    if (st) {
-      if (statePrice != null) {
-        payload.states = [{ code: stateCode, name: st.name, price: statePrice }]
-      } else if (nationalVal != null) {
-        payload.states = [{ code: stateCode, name: st.name, price: nationalVal, useNationalFallback: true }]
-      }
+    if (st && statePrice != null) {
+      payload.states = [{ code: stateCode, name: st.name, price: statePrice, series: 'state' }]
+    } else if (st) {
+      payload.stateUnavailable = true
     }
   }
   return payload
 }
 
-function parseGasBuddyTrends(data) {
-  const loc = data?.data?.locationBySearchTerm
-  const trends = loc?.trends ?? loc?.trend
-  const arr = Array.isArray(trends) ? trends : (trends ? [trends] : [])
-  const first = arr[0]
-  if (!first) return null
-  const price = first.today != null ? Number(first.today)
-    : (first.todayLow != null ? Number(first.todayLow) : null)
-  if (price == null || Number.isNaN(price)) return null
-  return { price: roundPrice(price), areaName: first.areaName || '' }
-}
-
-async function fetchGasBuddyPrice(searchTerm) {
-  const body = {
-    operationName: 'LocationBySearchTerm',
-    variables: { fuel: 1, maxAge: 0, search: String(searchTerm || '') },
-    query: `query LocationBySearchTerm($search: String, $fuel: Int, $maxAge: Int) {
-  locationBySearchTerm(search: $search, fuel: $fuel, maxAge: $maxAge) {
-    trends { areaName country today todayLow }
-  }
-}`,
-  }
-  const urls = ['https://www.gasbuddy.com/graphql', 'https://gasbuddy.com/graphql']
-  const opts = {
-    timeout: 10000,
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      Origin: 'https://www.gasbuddy.com',
-      Referer: 'https://www.gasbuddy.com/',
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      'apollographql-client-name': 'web',
-    },
-    validateStatus: () => true,
-  }
-  for (const url of urls) {
-    try {
-      const res = await axios.post(url, body, opts)
-      if (typeof res.data === 'string' && /bad request/i.test(res.data)) continue
-      if (res.data?.errors?.length) {
-        console.warn('[gasPrices] GasBuddy GraphQL:', res.data.errors[0]?.message || res.data.errors)
-        continue
-      }
-      const parsed = parseGasBuddyTrends(res.data)
-      if (parsed) return { ...parsed, areaName: parsed.areaName || searchTerm }
-    } catch (err) {
-      console.warn('[gasPrices] GasBuddy', url, err.message)
-    }
-  }
-  return null
-}
-
-/**
- * Resolve gas prices for optional state / zip.
- * Always tries free EIA HTML when API key missing or API returns empty.
- */
-async function getGasPrices({ stateCode = '', zip = '' } = {}) {
-  const code = String(stateCode || '').trim().toUpperCase().slice(0, 2)
-  const zipCode = String(zip || '').trim().slice(0, 10)
-  const updatedAt = nowUpdatedAt()
-
-  const rememberGood = (payload) => {
-    if (!payload || payload.gasUnavailable) return payload
-    if (payload.national != null || (payload.regions && payload.regions.length)) {
-      lastGoodNationalPayload = {
-        ...payload,
-        // Drop state-specific rows from the shared snapshot
-        states: [],
-      }
-    }
-    return payload
-  }
-
-  // 1) EIA API when key present
-  try {
-    const apiPayload = await fetchEiaApi(code)
-    if (apiPayload && (apiPayload.national != null || (apiPayload.states && apiPayload.states.length))) {
-      return rememberGood(apiPayload)
-    }
-  } catch (err) {
-    console.warn('[gasPrices] EIA API:', err.message)
-  }
-
-  // 2) EIA public HTML (no key) — primary free path
-  try {
-    const parsed = await fetchEiaGasdieselHtml()
-    const payload = payloadFromGasdiesel(parsed, code || null)
-    if (payload.national != null || (payload.states && payload.states.length)) {
-      return rememberGood(payload)
-    }
-  } catch (err) {
-    console.warn('[gasPrices] EIA gasdiesel HTML:', err.message)
-  }
-
-  // 3) GasBuddy best-effort
-  const defaultZip = (process.env.GASBUDDY_DEFAULT_ZIP || '10001').trim()
-  const searchTerm = code && GASBUDDY_STATE_ZIPS[code]
-    ? GASBUDDY_STATE_ZIPS[code]
-    : (zipCode || defaultZip)
-  try {
-    const gasbuddy = await fetchGasBuddyPrice(searchTerm)
-    if (gasbuddy) {
-      const st = code ? US_GAS_STATES.find((s) => s.code === code) : null
-      return rememberGood({
-        national: gasbuddy.price,
-        unit: UNIT,
-        regions: [],
-        states: code && st ? [{ code, name: st.name, price: gasbuddy.price }] : [],
-        source: 'gasbuddy',
-        updatedAt,
-      })
-    }
-  } catch (err) {
-    console.warn('[gasPrices] GasBuddy:', err.message)
-  }
-
-  // 4) Last successful national/regional snapshot (process memory), else boot seed
-  const snapBase = lastGoodNationalPayload?.national != null
-    ? lastGoodNationalPayload
-    : SEED_SNAPSHOT
-  if (snapBase?.national != null) {
-    const snap = {
-      ...snapBase,
-      updatedAt,
-      _stale: true,
-      source: `${snapBase.source || 'cache'}-stale`,
-      states: [],
-    }
-    if (code) {
-      const st = US_GAS_STATES.find((s) => s.code === code)
-      const fromRegions = (snap.regions || []).find((r) => r.padd === STATE_TO_PADD[code])
-      if (st && fromRegions) {
-        snap.states = [{ code, name: st.name, price: fromRegions.price, useRegionalFallback: true, region: fromRegions.padd }]
-      } else if (st) {
-        snap.states = [{ code, name: st.name, price: snap.national, useNationalFallback: true }]
-      }
-    }
-    return snap
-  }
-
+function unavailable(error, detail = null) {
   return {
+    ok: false,
     national: null,
     unit: UNIT,
     regions: [],
     states: [],
     gasUnavailable: true,
-    source: 'none',
-    updatedAt,
+    error: error || 'Gas price data unavailable',
+    detail,
+    source: null,
+    sourceLabel: null,
+    asOf: null,
+    weekEnding: null,
+    releaseDate: null,
+    fetchedAt: new Date().toISOString(),
   }
+}
+
+/**
+ * Resolve gas prices. Never invents or resurrects stale national averages.
+ */
+async function getGasPrices({ stateCode = '', zip: _zip = '' } = {}) {
+  const code = String(stateCode || '').trim().toUpperCase().slice(0, 2)
+  const errors = []
+
+  // 1) Official EIA API when key present
+  try {
+    const apiPayload = await fetchEiaApi(code)
+    if (apiPayload && (apiPayload.national != null || (apiPayload.states && apiPayload.states.length))) {
+      return apiPayload
+    }
+  } catch (err) {
+    errors.push(`eia-api: ${err.message}`)
+    console.warn('[gasPrices] EIA API:', err.message)
+  }
+
+  // 2) Public weekly HTML (no key) — primary free path
+  try {
+    const parsed = await fetchEiaGasdieselHtml()
+    return buildPayloadFromParsed(parsed, code || null)
+  } catch (err) {
+    errors.push(`eia-html: ${err.message}`)
+    console.warn('[gasPrices] EIA gasdiesel HTML:', err.message)
+  }
+
+  return unavailable(
+    'Could not load live EIA weekly retail gasoline prices.',
+    errors.join('; ') || null,
+  )
 }
 
 module.exports = {
@@ -509,4 +463,5 @@ module.exports = {
   getGasPrices,
   fetchEiaGasdieselHtml,
   parseGasdieselTables,
+  unavailable,
 }

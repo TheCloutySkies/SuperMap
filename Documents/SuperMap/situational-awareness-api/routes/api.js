@@ -1737,33 +1737,39 @@ router.get('/gas-prices/states', (_req, res) => {
 })
 
 /**
- * US gas prices: EIA API (if EIA_API_KEY) → EIA public gasdiesel HTML (no key) → GasBuddy.
- * No user setup required for live national + regional + major-state prices.
+ * US gas prices from EIA weekly retail (HTML, no key) or EIA API if EIA_API_KEY is set.
+ * Failures return gasUnavailable — never a fabricated national average.
  */
 router.get('/gas-prices', async (req, res) => {
   setHomeCacheHeaders(res)
   const stateCode = (req.query.state || '').trim().toUpperCase().slice(0, 2)
   const zip = (req.query.zip || '').trim().slice(0, 10)
+  const force = String(req.query.refresh || '') === '1'
   const cacheKey = stateCode ? `gas-prices:${stateCode}` : zip ? `gas-prices:zip:${zip}` : 'gas-prices'
-  const cached = gasPricesCache.get(cacheKey)
-  if (cached) return res.json({ ...cached, _cached: true })
+
+  if (!force) {
+    const cached = gasPricesCache.get(cacheKey)
+    // Only serve successful live payloads from cache — never cache misses / unavailable
+    if (cached && cached.ok && !cached.gasUnavailable && (cached.national != null || cached.states?.length)) {
+      return res.json({ ...cached, _cached: true })
+    }
+  }
 
   try {
     const payload = await gasPricesService.getGasPrices({ stateCode, zip })
-    gasPricesCache.set(cacheKey, payload)
+    if (payload && payload.ok && !payload.gasUnavailable) {
+      gasPricesCache.set(cacheKey, payload)
+    } else {
+      gasPricesCache.del(cacheKey)
+    }
     res.json(payload)
   } catch (err) {
     console.error('[API /gas-prices]', err.message)
-    const fallback = {
-      national: null,
-      unit: 'USD/gal',
-      regions: [],
-      states: [],
-      gasUnavailable: true,
-      updatedAt: new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }),
-    }
-    gasPricesCache.set(cacheKey, fallback)
-    res.json(fallback)
+    gasPricesCache.del(cacheKey)
+    res.status(503).json(gasPricesService.unavailable(
+      'Gas price service error',
+      err.message,
+    ))
   }
 })
 

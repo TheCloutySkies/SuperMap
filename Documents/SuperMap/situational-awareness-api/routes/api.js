@@ -468,17 +468,34 @@ router.get('/home-images', async (req, res) => {
   }
   try {
     const { buildHomeImages } = require('../services/homeBootstrap')
-    const images = await buildHomeImages({ max: Math.min(parseInt(req.query.limit, 10) || 24, 48) })
+    const images = await buildHomeImages({
+      max: Math.min(parseInt(req.query.limit, 10) || 24, 48),
+      force,
+    })
     res.json({
       images,
       count: images.length,
-      provider: 'fxtwitter',
+      provider: images[0]?.provider || 'fxtwitter',
       refreshed: force,
       updatedAt: new Date().toISOString(),
     })
   } catch (err) {
     console.error('[API /home-images]', err.message)
     res.status(500).json({ images: [], count: 0, error: err.message })
+  }
+})
+
+/** Ingest health for OSINT X continuous refresh. GET /api/osint-x/status */
+router.get('/osint-x/status', (req, res) => {
+  try {
+    const { getIngestStatus } = require('../services/osintXFeedService')
+    res.json({
+      provider: 'fxtwitter',
+      ...getIngestStatus(),
+      now: new Date().toISOString(),
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
   }
 })
 
@@ -1912,3 +1929,8 @@ router.get('/conflict-metrics', (req, res) => {
 })
 
 module.exports = router
+module.exports.invalidateHomeBootstrapCache = function invalidateHomeBootstrapCache() {
+  try {
+    homeBootstrapCache.del('home')
+  } catch (_) { /* ignore */ }
+}

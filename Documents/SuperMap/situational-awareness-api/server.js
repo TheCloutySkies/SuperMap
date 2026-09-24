@@ -5,7 +5,7 @@ const apiRouter = require('./routes/api')
 const newsService = require('./services/news')
 const osintService = require('./services/osint')
 const osintXFeedService = require('./services/osintXFeedService')
-const { warmHomeCaches } = require('./services/homeBootstrap')
+const { warmHomeCaches, refreshHomeImagesBackground } = require('./services/homeBootstrap')
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -59,7 +59,8 @@ const INGEST_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
 const DW_INTERVAL_MS = 10 * 60 * 1000
 const CISA_INTERVAL_MS = 15 * 60 * 1000
 const BELLINGCAT_INTERVAL_MS = 30 * 60 * 1000
-const OSINT_X_INTERVAL_MS = 1 * 60 * 1000 // 1 minute (FxTwitter profile timelines)
+const OSINT_X_INTERVAL_MS = 2 * 60 * 1000 // 2 minutes — rotating batch covers all handles ~every 6–8 min
+const HOME_IMAGES_REFRESH_MS = 3 * 60 * 1000 // 3 minutes — keep homepage gallery fresh
 
 function runIngest(isWarmup = false) {
   newsService.getNews()
@@ -74,11 +75,22 @@ function runOsintWarmup() {
 }
 
 function runOsintXIngest() {
-  // Skip geotag on the interval path so ingest stays under a minute and does not
-  // starve /api/osint-x?refresh=1. Map geotag still runs for other OSINT sources.
-  osintXFeedService.fetchOsintXFeeds({ skipGeotag: true })
-    .then((posts) => {
-      if (posts.length > 0) console.log('[osint-x] Ingested', posts.length, 'posts')
+  // Rotating batch + overlap guard: continuous updates without starving the API.
+  osintXFeedService.fetchOsintXFeedsRotated({ batchSize: 8 })
+    .then((result) => {
+      if (result?.skipped) {
+        if (result.reason === 'inflight') console.log('[osint-x] skip tick (previous still running)')
+        return
+      }
+      if (result?.count > 0) {
+        console.log('[osint-x] Ingested', result.count, 'posts from', (result.handles || []).join(','))
+      }
+      // Invalidate home bootstrap + refresh gallery so homepage does not stick on old images.
+      try {
+        const api = require('./routes/api')
+        if (typeof api.invalidateHomeBootstrapCache === 'function') api.invalidateHomeBootstrapCache()
+      } catch (_) { /* optional */ }
+      refreshHomeImagesBackground().catch((e) => console.warn('[home] after-x:', e.message))
     })
     .catch((e) => console.warn('[osint-x]', e.message))
 }
@@ -105,10 +117,14 @@ app.listen(PORT, () => {
   setInterval(() => osintService.fetchVolcanoRss().catch((e) => console.warn('[osint] Volcano RSS:', e.message)), BELLINGCAT_INTERVAL_MS)
   setInterval(() => osintService.fetchPtwcTsunami().catch((e) => console.warn('[osint] PTWC:', e.message)), DW_INTERVAL_MS)
   setInterval(() => osintService.fetchNhcOsint().catch((e) => console.warn('[osint] NHC:', e.message)), DW_INTERVAL_MS)
-  setTimeout(runOsintXIngest, 10000)
+  setTimeout(runOsintXIngest, 8000)
   setInterval(runOsintXIngest, OSINT_X_INTERVAL_MS)
   // Warm home bootstrap caches after ingest has a head start
   setTimeout(() => {
     warmHomeCaches().catch((e) => console.warn('[home] warmup:', e.message))
   }, 12000)
+  // Periodic gallery refresh even if X ingest produced no new posts
+  setInterval(() => {
+    refreshHomeImagesBackground().catch((e) => console.warn('[home] images tick:', e.message))
+  }, HOME_IMAGES_REFRESH_MS)
 })

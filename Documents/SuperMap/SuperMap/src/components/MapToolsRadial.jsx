@@ -158,6 +158,24 @@ export default function MapToolsRadial({
   const tools = getToolsForView(activeView)
 
   useEffect(() => {
+    if (!open) return undefined
+    const onKey = (e) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    const onPointer = (e) => {
+      const root = e.target?.closest?.('.map-tools-fab-wrap')
+      if (!root) setOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    // capture so map clicks close the menu
+    window.addEventListener('pointerdown', onPointer, true)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointerdown', onPointer, true)
+    }
+  }, [open])
+
+  useEffect(() => {
     // Close radial when switching map modes; reset mode-specific panels
     setOpen(false)
     setPanels((prev) => {

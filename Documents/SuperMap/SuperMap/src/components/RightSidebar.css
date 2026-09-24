@@ -1,11 +1,128 @@
 .sidebar-right {
   width: 260px;
   min-width: 260px;
+  max-width: 280px;
   background: var(--y2k-surface);
   border-left: 1px solid var(--y2k-border);
-  padding: 1rem 1.25rem;
+  padding: 0.75rem 1rem 1rem;
   overflow-y: auto;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sidebar-right-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0 0 0.65rem;
+  margin-bottom: 0.65rem;
+  border-bottom: 1px solid var(--y2k-border);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--y2k-surface);
+}
+
+.sidebar-right-header-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--y2k-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sidebar-right-close {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--y2k-text);
+  background: var(--y2k-surface-raised);
+  border: 1px solid var(--y2k-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.sidebar-right-close:hover {
+  background: var(--y2k-metallic-top);
+  border-color: var(--y2k-border-light);
+}
+
+/* Desktop: stay a narrow column; never expand into a bottom sheet */
+@media (max-width: 900px) {
+  .app:not(.app--device-mobile) .sidebar-right {
+    width: 240px;
+    min-width: 220px;
+    max-width: 260px;
+  }
+}
+
+.app--device-mobile .sidebar-right,
+.app-body--mobile .sidebar-right {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1100;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  border-left: none;
+  border-top: 1px solid var(--y2k-border);
+  max-height: min(52dvh, 400px);
+  padding: 0.5rem 0.75rem;
+  padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.45);
+  background: rgba(8, 12, 10, 0.98);
+  overflow-y: auto;
+}
+
+.app--device-mobile .sidebar-right-header,
+.app-body--mobile .sidebar-right-header {
+  padding: 0.4rem 0 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.app--device-mobile .sidebar-right-close,
+.app-body--mobile .sidebar-right-close {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 1.5rem;
+  border-radius: 8px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app--device-mobile .sidebar-right .right-sidebar-section,
+.app-body--mobile .sidebar-right .right-sidebar-section {
+  margin-bottom: 1rem;
+}
+
+.app--device-mobile .sidebar-right .toggle-option,
+.app-body--mobile .sidebar-right .toggle-option {
+  min-height: 44px;
+  padding: 0.25rem 0;
+}
+
+.app--device-mobile .sidebar-right .basemap-option,
+.app-body--mobile .sidebar-right .basemap-option {
+  min-height: 44px;
+}
+
+.sidebar-right-mobile-header {
+  display: none;
 }
 
 .right-sidebar-title {
@@ -231,88 +348,6 @@
   color: #fff;
   background: var(--y2k-accent);
   border-color: var(--y2k-accent);
-}
-
-.sidebar-right-mobile-header {
-  display: none;
-}
-
-@media (max-width: 900px) {
-  .sidebar-right {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 1100;
-    width: 100%;
-    min-width: 0;
-    border-left: none;
-    border-top: 1px solid var(--y2k-border);
-    max-height: min(52dvh, 400px);
-    padding: 0.5rem 0.75rem;
-    padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
-    border-radius: 14px 14px 0 0;
-    box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.45);
-    background: rgba(8, 12, 10, 0.98);
-    overflow-y: auto;
-  }
-
-  .sidebar-right-mobile-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    padding: 0.4rem 0 0.5rem;
-    margin-bottom: 0.5rem;
-    border-bottom: 1px solid var(--y2k-border);
-    flex-shrink: 0;
-  }
-
-  .sidebar-right-mobile-title {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--y2k-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
-  .sidebar-right-close {
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    min-height: 44px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-    font-weight: 300;
-    line-height: 1;
-    color: var(--y2k-text);
-    background: var(--y2k-surface-raised);
-    border: 1px solid var(--y2k-border);
-    border-radius: 8px;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  .sidebar-right-close:hover {
-    background: var(--y2k-metallic-top);
-    border-color: var(--y2k-border-light);
-  }
-
-  .sidebar-right .right-sidebar-section {
-    margin-bottom: 1rem;
-  }
-
-  .sidebar-right .toggle-option {
-    min-height: 44px;
-    padding: 0.25rem 0;
-  }
-
-  .sidebar-right .basemap-option {
-    min-height: 44px;
-  }
 }
 
 .geolocate-presets {

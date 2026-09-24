@@ -330,6 +330,31 @@
   overflow: hidden;
 }
 
+/* Reopen control when layers panel is collapsed (desktop maps) */
+.layers-sidebar-toggle {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  z-index: 40;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--y2k-text);
+  background: rgba(12, 18, 16, 0.92);
+  border: 1px solid var(--y2k-border);
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.layers-sidebar-toggle:hover {
+  background: var(--y2k-surface-raised);
+  border-color: var(--y2k-border-light);
+  color: var(--y2k-accent, #2bb872);
+}
+
 .main:not(.main--map) {
   overflow: hidden;
 }

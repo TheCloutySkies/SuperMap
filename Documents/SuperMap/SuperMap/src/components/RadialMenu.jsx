@@ -2,7 +2,7 @@ import './RadialMenu.css'
 
 export const RADIAL_ORBIT_ITEMS = [
   { id: 'MAPS', label: 'Maps', icon: '◎' },
-  { id: 'CRIME', label: 'Crime', icon: '📉', viewId: 'crime-map' },
+  { id: 'CRIME', label: 'Crime', icon: '📉', viewId: 'crime' },
   { id: 'FEEDS', label: 'Feeds', icon: '☰' },
   { id: 'TOOLS', label: 'Tools', icon: '⚒' },
   { id: 'RESOURCES', label: 'Resources', icon: '▣' },

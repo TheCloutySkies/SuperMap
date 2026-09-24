@@ -25,7 +25,7 @@ const DOOMSDAY_CLOCK_URL = 'https://thebulletin.org/doomsday-clock/#nav_menu'
 const QUICK_LINKS = [
   { id: 'osint-map', label: 'OSINT Map', desc: 'View news, intel, and events on the map', icon: '🗺️', path: 'osint-map' },
   { id: 'conflict-map', label: 'Conflict Map', desc: 'Tactical and conflict layers', icon: '⚔️', path: 'conflict-map' },
-  { id: 'crime-map', label: 'Crime Map', desc: 'FBI UCR state rates, rankings, and city search', icon: '📉', path: 'crime-map' },
+  { id: 'crime', label: 'Crime Intelligence', desc: 'National snapshot, state & city detail, Ask Crime', icon: '📉', path: 'crime' },
   { id: 'news-feeds', label: 'News Feeds', desc: 'Wikipedia, Reddit, Google News, BBC', icon: '📰', path: 'news-feeds' },
   { id: 'osint-feeds', label: 'OSINT Feeds', desc: 'Bellingcat, CISA, DW, tactical intel', icon: '📡', path: 'osint-feeds' },
   { id: 'osint-x', label: 'OSINT (X)', desc: 'Posts from OSINT X/Twitter accounts via FxTwitter', icon: '𝕏', path: 'osint-x' },

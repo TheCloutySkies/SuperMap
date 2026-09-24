@@ -3,6 +3,7 @@ import { hasConfigured, setConfigured as persistConfigured, setConfigProfile, ge
 import { loadChromePrefs, saveChromePrefs } from './lib/mapToolsPrefs'
 import HomeScreen from './components/HomeScreen'
 import CrimeDashboard from './components/CrimeDashboard'
+import CrimeIntelligenceView from './components/CrimeIntelligenceView'
 import MapView from './components/MapView'
 import FeedsView from './components/FeedsView'
 import RightSidebar from './components/RightSidebar'
@@ -40,7 +41,7 @@ function initMetallicss() {
   })
 }
 
-const APP_MODES = { HOME: 'HOME', MAPS: 'MAPS', FEEDS: 'FEEDS', TOOLS: 'TOOLS', RESOURCES: 'RESOURCES', REPORTS: 'REPORTS', SETTINGS: 'SETTINGS' }
+const APP_MODES = { HOME: 'HOME', MAPS: 'MAPS', CRIME: 'CRIME', FEEDS: 'FEEDS', TOOLS: 'TOOLS', RESOURCES: 'RESOURCES', REPORTS: 'REPORTS', SETTINGS: 'SETTINGS' }
 /** @deprecated alias — keep for gradual rename */
 const FOOTER_MODES = APP_MODES
 
@@ -48,7 +49,6 @@ const FOOTER_MODES = APP_MODES
 const MAP_VIEWS = [
   { id: 'osint-map', label: 'OSINT Map', tabKey: 'osintMap' },
   { id: 'conflict-map', label: 'Conflict Map', tabKey: 'conflictMap' },
-  { id: 'crime-map', label: 'Crime Map', tabKey: 'crimeMap' },
   { id: 'explore-map', label: 'Explore', tabKey: 'exploreMap' },
   { id: 'geolocate-map', label: 'Geolocate', tabKey: 'geolocateMap' },
 ]
@@ -200,6 +200,7 @@ function App() {
   }, [])
 
   const isMapView = ['osint-map', 'conflict-map', 'crime-map', 'explore-map', 'geolocate-map'].includes(activeView)
+  const isCrimeView = activeView === 'crime' || activeView === 'crime-intel'
   const isFeedView = ['osint-feeds', 'news-feeds', 'recent-videos', 'osint-x', 'advanced-search', 'broadcasts'].includes(activeView)
   const isSettingsView = activeView === 'settings'
   const tabVisibility = getTabVisibility()
@@ -209,6 +210,7 @@ function App() {
     setSubnavOpen(true)
     if (mode === APP_MODES.HOME) setActiveView('home')
     else if (mode === APP_MODES.MAPS) setActiveView('osint-map')
+    else if (mode === APP_MODES.CRIME) setActiveView('crime')
     else if (mode === APP_MODES.FEEDS) setActiveView('news-feeds')
     else if (mode === APP_MODES.TOOLS) setActiveView('tools')
     else if (mode === APP_MODES.RESOURCES) setActiveView('resources')
@@ -217,15 +219,18 @@ function App() {
   }, [])
 
   const setActiveViewWithMode = useCallback((viewId) => {
-    setActiveView(viewId)
+    // Legacy crime-map entry points land on the dedicated Crime Intelligence page
+    const resolved = (viewId === 'crime-map' || viewId === 'crime-intel') ? 'crime' : viewId
+    setActiveView(resolved)
     setSubnavOpen(true)
-    if (['osint-map', 'conflict-map', 'crime-map', 'explore-map', 'geolocate-map'].includes(viewId)) setAppMode(APP_MODES.MAPS)
-    else if (['osint-feeds', 'osint-x', 'advanced-search', 'news-feeds', 'broadcasts', 'recent-videos'].includes(viewId)) setAppMode(APP_MODES.FEEDS)
-    else if (viewId === 'home') setAppMode(APP_MODES.HOME)
-    else if (viewId === 'tools') setAppMode(APP_MODES.TOOLS)
-    else if (viewId === 'resources') setAppMode(APP_MODES.RESOURCES)
-    else if (viewId === 'report-maker') setAppMode(APP_MODES.REPORTS)
-    else if (viewId === 'settings') setAppMode(APP_MODES.SETTINGS)
+    if (resolved === 'crime') setAppMode(APP_MODES.CRIME)
+    else if (['osint-map', 'conflict-map', 'crime-map', 'explore-map', 'geolocate-map'].includes(resolved)) setAppMode(APP_MODES.MAPS)
+    else if (['osint-feeds', 'osint-x', 'advanced-search', 'news-feeds', 'broadcasts', 'recent-videos'].includes(resolved)) setAppMode(APP_MODES.FEEDS)
+    else if (resolved === 'home') setAppMode(APP_MODES.HOME)
+    else if (resolved === 'tools') setAppMode(APP_MODES.TOOLS)
+    else if (resolved === 'resources') setAppMode(APP_MODES.RESOURCES)
+    else if (resolved === 'report-maker') setAppMode(APP_MODES.REPORTS)
+    else if (resolved === 'settings') setAppMode(APP_MODES.SETTINGS)
   }, [])
 
   useEffect(() => {
@@ -301,6 +306,7 @@ function App() {
   let mobilePageTitle = 'SuperMap'
   let mobileChipItems = []
   if (appMode === APP_MODES.MAPS) mobilePageTitle = 'Maps'
+  else if (appMode === APP_MODES.CRIME) mobilePageTitle = 'Crime'
   else if (appMode === APP_MODES.FEEDS) {
     mobilePageTitle = 'Feeds'
     mobileChipItems = FEED_VIEWS
@@ -344,6 +350,7 @@ function App() {
                 footerTabs={[
                   { key: APP_MODES.HOME, label: 'HOME' },
                   { key: APP_MODES.MAPS, label: 'MAPS' },
+                  { key: APP_MODES.CRIME, label: 'CRIME' },
                   { key: APP_MODES.FEEDS, label: 'FEEDS' },
                   { key: APP_MODES.TOOLS, label: 'TOOLS' },
                   { key: APP_MODES.RESOURCES, label: 'RESOURCES' },
@@ -433,6 +440,11 @@ function App() {
               />
             )}
           </>
+        )}
+        {isCrimeView && (
+          <div className="main-content-scroll main-content-scroll--crime">
+            <CrimeIntelligenceView />
+          </div>
         )}
         {activeView === 'osint-feeds' && (
           <FeedsView title="OSINT Feeds" activeView="osint-feeds" keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} onPinnedToMap={handlePinnedToMap} />

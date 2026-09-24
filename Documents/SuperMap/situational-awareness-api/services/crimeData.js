@@ -170,16 +170,97 @@ function searchCities({ q = '', state = '', limit = 50, offset = 0 } = {}) {
   })
 }
 
+function dataDirExists() {
+  return fs.existsSync(DATA_DIR)
+}
+
+/** Optional CSV enrichment (2024 PlainCrime city rows) keyed by city|state lower. */
+let csvByKey = null
+let csvBySlug = null
+
+function slugifyCity(city, state) {
+  return `${String(city || '').trim()}-${String(state || '').trim()}`
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
+function ensureCsvIndex() {
+  if (csvByKey) return
+  csvByKey = new Map()
+  csvBySlug = new Map()
+  const full = dataPath('plaincrime-city-crime.csv')
+  if (!fs.existsSync(full)) return
+  const raw = fs.readFileSync(full, 'utf8')
+  const lines = raw.split(/\r?\n/).filter((line) => line && !line.startsWith('#'))
+  if (lines.length < 2) return
+  const header = lines[0].split(',').map((h) => h.trim().replace(/^"|"$/g, ''))
+  const idx = (name) => header.findIndex((h) => h.toLowerCase() === name.toLowerCase())
+  const iCity = ['city_name', 'city', 'City'].map(idx).find((i) => i >= 0)
+  const iState = ['state_abbr', 'state', 'State'].map(idx).find((i) => i >= 0)
+  if (iCity == null || iState == null || iCity < 0 || iState < 0) return
+
+  let summaryByAbbr = null
+  try {
+    summaryByAbbr = new Map(loadJson('state-summary.json').map((s) => [String(s.abbr || '').toUpperCase(), s.name]))
+  } catch (_) {
+    summaryByAbbr = new Map()
+  }
+
+  for (let li = 1; li < lines.length; li++) {
+    const cols = lines[li].split(',')
+    if (cols.length < header.length) continue
+    const row = {}
+    for (let i = 0; i < header.length; i++) row[header[i]] = cols[i]?.trim().replace(/^"|"$/g, '')
+    const city = row.city_name || row.city || row.City || cols[iCity]
+    const stateAbbr = (row.state_abbr || row.state || row.State || cols[iState] || '').toUpperCase()
+    const stateName = summaryByAbbr.get(stateAbbr) || stateAbbr
+    if (!city || !stateAbbr) continue
+    const normalized = {
+      ...row,
+      city,
+      state: stateName,
+      stateAbbr,
+      population: row.population != null ? Number(row.population) : undefined,
+      violent_crime: row.violent_crime != null ? Number(row.violent_crime) : undefined,
+      murder: row.murder != null ? Number(row.murder) : undefined,
+      rape: row.rape != null ? Number(row.rape) : undefined,
+      robbery: row.robbery != null ? Number(row.robbery) : undefined,
+      aggravated_assault: row.aggravated_assault != null ? Number(row.aggravated_assault) : undefined,
+      property_crime: row.property_crime != null ? Number(row.property_crime) : undefined,
+      burglary: row.burglary != null ? Number(row.burglary) : undefined,
+      larceny: row.larceny != null ? Number(row.larceny) : undefined,
+      motor_vehicle_theft: row.motor_vehicle_theft != null ? Number(row.motor_vehicle_theft) : undefined,
+      arson: row.arson != null ? Number(row.arson) : undefined,
+      year: row.year != null ? Number(row.year) : undefined,
+    }
+    const key = `${String(city).toLowerCase()}|${String(stateName).toLowerCase()}`
+    const keyAbbr = `${String(city).toLowerCase()}|${stateAbbr.toLowerCase()}`
+    const slug = slugifyCity(city, stateName)
+    csvByKey.set(key, normalized)
+    csvByKey.set(keyAbbr, normalized)
+    csvBySlug.set(slug, normalized)
+  }
+}
+
+function getCityCsvExtras(slugOrCity, state) {
+  ensureCsvIndex()
+  if (!csvBySlug) return null
+  if (state) {
+    const key = `${String(slugOrCity).toLowerCase()}|${String(state).toLowerCase()}`
+    return csvByKey.get(key) || null
+  }
+  const slug = String(slugOrCity || '').toLowerCase()
+  return csvBySlug.get(slug) || null
+}
+
 function getCityBySlug(slug) {
   const cities = loadJson('city-index.json')
   const needle = String(slug || '').trim().toLowerCase()
   const city = cities.find((c) => String(c.slug || '').toLowerCase() === needle)
   if (!city) return null
-  return withMeta(city)
-}
-
-function dataDirExists() {
-  return fs.existsSync(DATA_DIR)
+  const csv = getCityCsvExtras(city.slug) || getCityCsvExtras(city.city, city.state)
+  return withMeta({ ...city, csv2024: csv || undefined })
 }
 
 module.exports = {
@@ -195,5 +276,6 @@ module.exports = {
   getArrests,
   getHomicide,
   getHateCrime,
+  getCityCsvExtras,
   loadJson,
 }

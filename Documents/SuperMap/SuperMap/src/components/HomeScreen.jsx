@@ -500,16 +500,6 @@ export default function HomeScreen({
         {!isMobileLayout && (
         <footer className="home-screen-footer-strip">
           <div className="home-screen-footer-col">
-            <h3 className="home-screen-footer-head">Quick access</h3>
-            <ul className="home-screen-footer-list">
-              {QUICK_LINKS.slice(0, 4).map((link) => (
-                <li key={link.id}>
-                  <button type="button" className="home-screen-footer-link" onClick={() => handleCardClick(link.path)}>{link.label}</button>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="home-screen-footer-col">
             <h3 className="home-screen-footer-head">Navigate</h3>
             <ul className="home-screen-footer-list">
               {footerTabs?.map(({ key, label }) => (

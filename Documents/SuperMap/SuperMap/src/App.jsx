@@ -22,7 +22,6 @@ import AmbientBackground from './components/AmbientBackground'
 import AmbientBgLight from './components/AmbientBgLight'
 import OmnibarBanner from './components/OmnibarBanner'
 import ModeRail from './components/ModeRail'
-import ModeSubnav from './components/ModeSubnav'
 import MobileShell from './components/MobileShell'
 import MobileLayoutPrompt from './components/MobileLayoutPrompt'
 import { osintXToBannerItems, readHomeSnapshot } from './lib/homeBootstrap'
@@ -545,19 +544,18 @@ function App() {
       </header>
       )}
       <div className={`app-body ${isMobileLayout ? 'app-body--mobile' : ''}`}>
-      {!isMobileLayout && <ModeRail appMode={appMode} onModeSelect={handleFooterNav} />}
       {!isMobileLayout && (() => {
-        const showSubnav =
+        const showFlyout =
           subnavOpen &&
           (appMode === APP_MODES.MAPS ||
             appMode === APP_MODES.FEEDS ||
             appMode === APP_MODES.TOOLS ||
             appMode === APP_MODES.RESOURCES)
-        let subnavTitle = ''
-        let subnavItems = []
+        let flyoutTitle = ''
+        let flyoutItems = []
         if (appMode === APP_MODES.MAPS) {
-          subnavTitle = 'Maps'
-          subnavItems = MAP_VIEWS
+          flyoutTitle = 'Maps'
+          flyoutItems = MAP_VIEWS
             .filter((v) => tabVisibility[v.tabKey] !== false)
             .map((v) => ({
               id: v.id,
@@ -566,8 +564,8 @@ function App() {
               onClick: () => setActiveViewWithMode(v.id),
             }))
         } else if (appMode === APP_MODES.FEEDS) {
-          subnavTitle = 'Feeds'
-          subnavItems = FEED_VIEWS
+          flyoutTitle = 'Feeds'
+          flyoutItems = FEED_VIEWS
             .filter((v) => (v.id === 'osint-x' ? true : tabVisibility[v.tabKey] !== false))
             .map((v) => ({
               id: v.id,
@@ -576,16 +574,16 @@ function App() {
               onClick: () => setActiveViewWithMode(v.id),
             }))
         } else if (appMode === APP_MODES.TOOLS) {
-          subnavTitle = 'Tools'
-          subnavItems = TOOLS_LIST.map((t) => ({
+          flyoutTitle = 'Tools'
+          flyoutItems = TOOLS_LIST.map((t) => ({
             id: t.id,
             label: t.title,
             active: activeToolId === t.id,
             onClick: () => { setActiveViewWithMode('tools'); setActiveToolId(t.id) },
           }))
         } else if (appMode === APP_MODES.RESOURCES) {
-          subnavTitle = 'Resources'
-          subnavItems = RESOURCE_SECTIONS.map((s) => ({
+          flyoutTitle = 'Resources'
+          flyoutItems = RESOURCE_SECTIONS.map((s) => ({
             id: s.id,
             label: s.title,
             active: false,
@@ -596,11 +594,15 @@ function App() {
           }))
         }
         return (
-          <ModeSubnav
-            open={showSubnav}
-            title={subnavTitle}
-            items={subnavItems}
-            onClose={() => setSubnavOpen(false)}
+          <ModeRail
+            appMode={appMode}
+            onModeSelect={handleFooterNav}
+            flyout={{
+              open: showFlyout,
+              title: flyoutTitle,
+              items: flyoutItems,
+              onClose: () => setSubnavOpen(false),
+            }}
           />
         )
       })()}

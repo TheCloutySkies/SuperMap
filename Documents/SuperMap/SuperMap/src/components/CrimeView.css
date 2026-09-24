@@ -6,6 +6,8 @@
   width: 100%;
   height: 100%;
   overflow: hidden;
+  position: relative;
+  z-index: 1;
 }
 
 .crime-section-panel {
@@ -15,8 +17,10 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  z-index: 5;
+  position: relative;
+  z-index: 20;
   border-right: 1px solid var(--y2k-border, #2a3344);
+  background: rgba(10, 14, 12, 0.97);
 }
 
 .crime-section-panel .crime-dashboard {
@@ -29,7 +33,8 @@
   border-radius: 0;
   border: 0;
   box-shadow: none;
-  background: rgba(10, 14, 12, 0.97);
+  background: transparent;
+  z-index: 1;
 }
 
 .crime-section-panel .crime-dashboard-header h2 {
@@ -62,6 +67,8 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  z-index: 1;
+  isolation: isolate;
 }
 
 .crime-section-map .map-view-wrapper {
@@ -71,13 +78,30 @@
   height: 100%;
 }
 
+/* Keep map chrome inside the map column (not over the analytics panel) */
+.crime-section-map .map-controls {
+  left: auto;
+  right: 1rem;
+}
+
+.crime-section-map .coordinates-display-wrap {
+  left: auto;
+  right: 1rem;
+}
+
+.crime-section-map .weather-hud,
+.crime-section-map .weather-hud-show-btn {
+  left: auto;
+  right: 1rem;
+}
+
 @media (max-width: 900px) {
   .crime-section {
     flex-direction: column;
   }
 
   .crime-section-panel {
-    flex: 0 0 46%;
+    flex: 0 0 42%;
     max-width: none;
     min-width: 0;
     width: 100%;
@@ -86,6 +110,18 @@
   }
 
   .crime-section-map {
-    flex: 1 1 54%;
+    flex: 1 1 58%;
+  }
+
+  .crime-section-map .map-controls {
+    left: 0.5rem;
+    right: auto;
+  }
+
+  .crime-section-map .coordinates-display-wrap,
+  .crime-section-map .weather-hud,
+  .crime-section-map .weather-hud-show-btn {
+    left: 0.5rem;
+    right: auto;
   }
 }

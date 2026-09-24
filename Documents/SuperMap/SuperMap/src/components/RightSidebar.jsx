@@ -208,12 +208,20 @@ export default function RightSidebar({
 
   return (
     <aside className="sidebar sidebar-right">
-      {onClose && (
-        <div className="sidebar-right-mobile-header">
-          <span className="sidebar-right-mobile-title">Layers</span>
-          <button type="button" className="sidebar-right-close" onClick={onClose} aria-label="Close layers" title="Close">−</button>
-        </div>
-      )}
+      <div className="sidebar-right-header">
+        <span className="sidebar-right-header-title">Layers</span>
+        {onClose && (
+          <button
+            type="button"
+            className="sidebar-right-close"
+            onClick={onClose}
+            aria-label="Collapse layers panel"
+            title="Collapse"
+          >
+            ×
+          </button>
+        )}
+      </div>
       {isMapView && !isGeolocateMap && (
         <section className="right-sidebar-section">
           <h3>Base layer</h3>

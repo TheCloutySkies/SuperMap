@@ -104,7 +104,7 @@ function App() {
   const [eventFilterByView, setEventFilterByView] = useState(false)
   const [showTutorial, setShowTutorial] = useState(false)
   const [deviceType, setDeviceType] = useState('desktop')
-  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true)
+  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false)
   const [activeToolId, setActiveToolId] = useState(TOOLS_LIST[0]?.id ?? null)
   const [isLeftSidebarMinimized, setIsLeftSidebarMinimized] = useState(false)
   const [footerTransition, setFooterTransition] = useState(false)
@@ -129,11 +129,8 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (deviceType === 'mobile') {
-      setIsRightSidebarOpen(false)
-    } else {
-      setIsRightSidebarOpen(true)
-    }
+    // Layers panel starts closed so the map stays full-bleed; user opens via Layers control.
+    setIsRightSidebarOpen(false)
   }, [deviceType])
 
   useEffect(() => {
@@ -476,8 +473,8 @@ function App() {
 
   const sidebar = (
         <RightSidebar
-        visible={isMapView && (!isMobileLayout || isRightSidebarOpen)}
-        onClose={isMobileLayout ? () => setIsRightSidebarOpen(false) : undefined}
+        visible={isMapView && isRightSidebarOpen}
+        onClose={() => setIsRightSidebarOpen(false)}
         isMapView={isMapView}
         activeView={activeView}
         basemapId={basemapId}
@@ -629,6 +626,17 @@ function App() {
       <main className={`main ${footerTransition ? 'main--y2k-transition' : ''} ${isMapView ? 'main--map' : ''}`}>
         {mainContent}
       </main>
+      {isMapView && !isRightSidebarOpen && (
+        <button
+          type="button"
+          className="layers-sidebar-toggle"
+          onClick={() => setIsRightSidebarOpen(true)}
+          aria-label="Open layers panel"
+          title="Layers & basemap"
+        >
+          Layers
+        </button>
+      )}
       {sidebar}
         </>
       )}

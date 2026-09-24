@@ -516,6 +516,13 @@
   margin-left: auto;
 }
 
+.home-screen-gas-prices-source {
+  margin: 0.65rem 0 0;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  color: var(--y2k-text-muted);
+}
+
 .home-screen-gas-prices-regions {
   list-style: none;
   margin: 0;

@@ -1,0 +1,48 @@
+.mobile-map-chrome {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--y2k-border);
+  background: rgba(8, 12, 10, 0.96);
+  padding-top: max(0.35rem, env(safe-area-inset-top));
+}
+
+.mobile-map-chrome-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0.75rem 0.15rem;
+}
+
+.mobile-map-chrome-title {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  color: var(--y2k-text);
+}
+
+.mobile-map-chrome-layers {
+  min-height: 36px;
+  padding: 0.3rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid var(--y2k-border);
+  background: var(--y2k-surface);
+  color: var(--y2k-text);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.mobile-map-chrome-search {
+  padding: 0.25rem 0.65rem 0.35rem;
+}
+
+.mobile-map-chrome-search .place-search,
+.mobile-map-chrome-search .omnibar-global-wrap {
+  width: 100%;
+  max-width: none;
+}
+
+.mobile-map-chrome .mobile-chip-bar {
+  border-bottom: none;
+  background: transparent;
+  padding-top: 0.2rem;
+}

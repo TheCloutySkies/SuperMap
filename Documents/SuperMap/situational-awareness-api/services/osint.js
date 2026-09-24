@@ -284,8 +284,152 @@ async function fetchTheWarZone() {
   }
 }
 
+/**
+ * Shared RSS → geotag → ingest helper for additional free no-key feeds.
+ */
+async function ingestRssSource({ url, source, eventType = 'conflict', tags = ['osint'], label = source }) {
+  try {
+    const feed = await parser.parseURL(url)
+    const items = (feed.items || []).map((item) => ({
+      source,
+      title: item.title || '',
+      link: item.link || item.guid || '',
+      pubDate: item.pubDate || '',
+      contentSnippet: (item.contentSnippet || (item.content || '').replace(/<[^>]+>/g, ' ')).slice(0, 500),
+    }))
+    for (const item of items) {
+      const tagged = await geotagArticle({ ...item })
+      const event = normalizeToEvent(
+        {
+          ...tagged,
+          coordinates: tagged.coordinates,
+          lat: tagged.coordinates?.[1],
+          lon: tagged.coordinates?.[0],
+          country: tagged.country,
+          confidence: tagged.confidence,
+        },
+        eventType,
+        source
+      )
+      ingestEvent(event, { extraTags: tags })
+    }
+    return items.length
+  } catch (err) {
+    console.warn(`[osint] ${label}:`, err.message)
+    return 0
+  }
+}
+
+async function fetchWHO() {
+  return ingestRssSource({
+    url: 'https://www.who.int/rss-feeds/news-english.xml',
+    source: 'who',
+    eventType: 'disaster',
+    tags: ['osint', 'health', 'outbreak'],
+    label: 'WHO',
+  })
+}
+
+async function fetchBreakingDefense() {
+  return ingestRssSource({
+    url: 'https://breakingdefense.com/feed/',
+    source: 'breakingdefense',
+    eventType: 'conflict',
+    tags: ['osint', 'defense', 'policy'],
+    label: 'Breaking Defense',
+  })
+}
+
+async function fetchDefenseScoop() {
+  return ingestRssSource({
+    url: 'https://www.defensescoop.com/feed/',
+    source: 'defensescoop',
+    eventType: 'conflict',
+    tags: ['osint', 'defense', 'tech'],
+    label: 'DefenseScoop',
+  })
+}
+
+async function fetchStimson() {
+  return ingestRssSource({
+    url: 'https://www.stimson.org/feed/',
+    source: 'stimson',
+    eventType: 'conflict',
+    tags: ['osint', 'policy', 'analysis'],
+    label: 'Stimson',
+  })
+}
+
+async function fetchGdacsRss() {
+  return ingestRssSource({
+    url: 'https://www.gdacs.org/xml/rss.xml',
+    source: 'gdacs-rss',
+    eventType: 'disaster',
+    tags: ['osint', 'disaster', 'alert'],
+    label: 'GDACS RSS',
+  })
+}
+
+async function fetchVolcanoRss() {
+  return ingestRssSource({
+    url: 'https://volcano.si.edu/news/WeeklyVolcanoRSS.xml',
+    source: 'smithsonian-volcano',
+    eventType: 'disaster',
+    tags: ['osint', 'volcano', 'hazard'],
+    label: 'Smithsonian Volcano',
+  })
+}
+
+async function fetchPtwcTsunami() {
+  // Atom feed from NWS National Tsunami Warning Center
+  return ingestRssSource({
+    url: 'https://www.tsunami.gov/events/xml/PAAQAtom.xml',
+    source: 'ptwc',
+    eventType: 'disaster',
+    tags: ['osint', 'tsunami', 'hazard'],
+    label: 'PTWC Tsunami',
+  })
+}
+
+async function fetchNhcOsint() {
+  // Ingest NHC basins as OSINT text events; map layer uses hazards.getNhcTropical for coords
+  const basins = [
+    { url: 'https://www.nhc.noaa.gov/index-at.xml', name: 'NHC Atlantic' },
+    { url: 'https://www.nhc.noaa.gov/index-ep.xml', name: 'NHC East Pacific' },
+    { url: 'https://www.nhc.noaa.gov/index-cp.xml', name: 'NHC Central Pacific' },
+  ]
+  let total = 0
+  for (const b of basins) {
+    total += await ingestRssSource({
+      url: b.url,
+      source: 'nhc',
+      eventType: 'disaster',
+      tags: ['osint', 'hurricane', 'tropical', 'hazard'],
+      label: b.name,
+    })
+  }
+  return total
+}
+
 // --- Unified OSINT API: return from DB (scheduled jobs populate it) ---
-const OSINT_SOURCES = ['bellingcat', 'cisa', 'dw', 'isw', 'defenseone', 'warontherocks', 'defensenews', 'thewarzone']
+const OSINT_SOURCES = [
+  'bellingcat',
+  'cisa',
+  'dw',
+  'isw',
+  'defenseone',
+  'warontherocks',
+  'defensenews',
+  'thewarzone',
+  'who',
+  'breakingdefense',
+  'defensescoop',
+  'stimson',
+  'gdacs-rss',
+  'smithsonian-volcano',
+  'ptwc',
+  'nhc',
+]
 
 function getOsintFromDb(limit = 100) {
   const rows = getEvents(limit, null, null, null, null, OSINT_SOURCES)
@@ -294,7 +438,10 @@ function getOsintFromDb(limit = 100) {
 }
 
 async function fetchAllOsint() {
-  const [b, c, d, i, o, w, n, z] = await Promise.all([
+  const [
+    b, c, d, i, o, w, n, z,
+    who, bd, ds, st, gd, vo, pt, nhc,
+  ] = await Promise.all([
     fetchBellingcat(),
     fetchCISA(),
     fetchDW(),
@@ -303,8 +450,33 @@ async function fetchAllOsint() {
     fetchWarOnTheRocks(),
     fetchDefenseNews(),
     fetchTheWarZone(),
+    fetchWHO(),
+    fetchBreakingDefense(),
+    fetchDefenseScoop(),
+    fetchStimson(),
+    fetchGdacsRss(),
+    fetchVolcanoRss(),
+    fetchPtwcTsunami(),
+    fetchNhcOsint(),
   ])
-  return { bellingcat: b, cisa: c, dw: d, isw: i, defenseone: o, warontherocks: w, defensenews: n, thewarzone: z }
+  return {
+    bellingcat: b,
+    cisa: c,
+    dw: d,
+    isw: i,
+    defenseone: o,
+    warontherocks: w,
+    defensenews: n,
+    thewarzone: z,
+    who,
+    breakingdefense: bd,
+    defensescoop: ds,
+    stimson: st,
+    gdacsRss: gd,
+    volcanoRss: vo,
+    ptwc: pt,
+    nhc,
+  }
 }
 
 module.exports = {
@@ -318,6 +490,14 @@ module.exports = {
   fetchWarOnTheRocks,
   fetchDefenseNews,
   fetchTheWarZone,
+  fetchWHO,
+  fetchBreakingDefense,
+  fetchDefenseScoop,
+  fetchStimson,
+  fetchGdacsRss,
+  fetchVolcanoRss,
+  fetchPtwcTsunami,
+  fetchNhcOsint,
   fetchAllOsint,
   getOsintFromDb,
   OSINT_SOURCES,

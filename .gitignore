@@ -1,6 +1,8 @@
 # Keep this repository scoped to the SuperMap project directory.
 *
 !.gitignore
+!.github/
+!.github/**
 !Documents/
 Documents/*
 !Documents/SuperMap/

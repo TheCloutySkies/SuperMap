@@ -5,6 +5,7 @@ const apiRouter = require('./routes/api')
 const newsService = require('./services/news')
 const osintService = require('./services/osint')
 const osintXFeedService = require('./services/osintXFeedService')
+const { warmHomeCaches } = require('./services/homeBootstrap')
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -19,6 +20,7 @@ app.get('/', (req, res) => {
     status: 'running',
     endpoints: {
       health: '/health',
+      home: '/api/home',
       threatSummary: '/api/threat-summary',
       news: '/api/news',
       osint: '/api/osint',
@@ -39,6 +41,10 @@ app.get('/', (req, res) => {
       crimeStats: '/api/crime/stats',
       crimeStates: '/api/crime/states?year=',
       crimeCities: '/api/crime/cities?q=&state=&limit=&offset=',
+      nwsAlerts: '/api/hazards/nws?bbox=',
+      emscEarthquakes: '/api/hazards/emsc?bbox=&minmag=',
+      usgsVolcanoes: '/api/hazards/volcanoes?bbox=',
+      nhcTropical: '/api/hazards/nhc?bbox=',
       config: 'GET/POST /api/config (user X handles, subreddits)',
     },
   })
@@ -89,6 +95,18 @@ app.listen(PORT, () => {
   setInterval(() => osintService.fetchWarOnTheRocks().catch((e) => console.warn('[osint] War on the Rocks:', e.message)), BELLINGCAT_INTERVAL_MS)
   setInterval(() => osintService.fetchDefenseNews().catch((e) => console.warn('[osint] Defense News:', e.message)), CISA_INTERVAL_MS)
   setInterval(() => osintService.fetchTheWarZone().catch((e) => console.warn('[osint] The War Zone:', e.message)), CISA_INTERVAL_MS)
+  setInterval(() => osintService.fetchWHO().catch((e) => console.warn('[osint] WHO:', e.message)), CISA_INTERVAL_MS)
+  setInterval(() => osintService.fetchBreakingDefense().catch((e) => console.warn('[osint] Breaking Defense:', e.message)), CISA_INTERVAL_MS)
+  setInterval(() => osintService.fetchDefenseScoop().catch((e) => console.warn('[osint] DefenseScoop:', e.message)), CISA_INTERVAL_MS)
+  setInterval(() => osintService.fetchStimson().catch((e) => console.warn('[osint] Stimson:', e.message)), BELLINGCAT_INTERVAL_MS)
+  setInterval(() => osintService.fetchGdacsRss().catch((e) => console.warn('[osint] GDACS RSS:', e.message)), DW_INTERVAL_MS)
+  setInterval(() => osintService.fetchVolcanoRss().catch((e) => console.warn('[osint] Volcano RSS:', e.message)), BELLINGCAT_INTERVAL_MS)
+  setInterval(() => osintService.fetchPtwcTsunami().catch((e) => console.warn('[osint] PTWC:', e.message)), DW_INTERVAL_MS)
+  setInterval(() => osintService.fetchNhcOsint().catch((e) => console.warn('[osint] NHC:', e.message)), DW_INTERVAL_MS)
   setTimeout(runOsintXIngest, 10000)
   setInterval(runOsintXIngest, OSINT_X_INTERVAL_MS)
+  // Warm home bootstrap caches after ingest has a head start
+  setTimeout(() => {
+    warmHomeCaches().catch((e) => console.warn('[home] warmup:', e.message))
+  }, 12000)
 })

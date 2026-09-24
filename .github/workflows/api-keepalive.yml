@@ -1,0 +1,33 @@
+# Keep Render free-tier API awake so HomeScreen data loads without cold starts.
+name: API keepalive
+
+on:
+  schedule:
+    # Every 10 minutes
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping situational-awareness API health
+        run: |
+          set -e
+          URL="${API_HEALTH_URL:-https://supermap-api.onrender.com/health}"
+          echo "Pinging $URL"
+          # Retry a few times — Render cold start can take >60s after long idle
+          for i in 1 2 3 4 5; do
+            if curl -fsS --connect-timeout 30 --max-time 120 "$URL"; then
+              echo
+              echo "OK (attempt $i)"
+              exit 0
+            fi
+            echo "Attempt $i failed; retrying..."
+            sleep 15
+          done
+          echo "Keepalive ping failed after retries"
+          exit 1
+        env:
+          API_HEALTH_URL: https://supermap-api.onrender.com/health

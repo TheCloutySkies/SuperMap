@@ -164,7 +164,7 @@ function pickVideoUrlFromItem(item) {
   return null
 }
 
-// RSS feeds (with parser)
+// RSS feeds (with parser) — only free, no-key sources that respond without auth
 const FEEDS = [
   { url: 'https://feeds.bbci.co.uk/news/world/rss.xml', name: 'BBC World' },
   { url: 'https://news.google.com/rss', name: 'Google News' },
@@ -177,14 +177,41 @@ const FEEDS = [
   // POLITICO (rss.politico.com) removed: ENOTFOUND / DNS unreachable
   { url: 'https://www.foreignaffairs.com/rss.xml', name: 'Foreign Affairs' },
   { url: 'https://www.crisisgroup.org/rss', name: 'International Crisis Group' },
+  // Additional free no-setup feeds (verified reachable)
+  { url: 'https://news.un.org/feed/subscribe/en/news/all/rss.xml', name: 'UN News' },
+  { url: 'https://www.hrw.org/rss/news', name: 'Human Rights Watch' },
+  { url: 'https://www.france24.com/en/rss', name: 'France 24' },
+  { url: 'https://www.euronews.com/rss?format=mrss&level=vertical&name=news', name: 'Euronews' },
+  { url: 'https://theintercept.com/feed/?rss', name: 'The Intercept' },
+  { url: 'https://www.occrp.org/en/feed', name: 'OCCRP' },
+  { url: 'https://www.atlanticcouncil.org/feed/', name: 'Atlantic Council' },
+  // Reuters blocks direct RSS; Google News site: filter is free and stable
+  { url: 'https://news.google.com/rss/search?q=site:reuters.com+when:2d&hl=en-US&gl=US&ceid=US:en', name: 'Reuters (Google News)' },
 ]
 
 /** Video feeds: Reddit only for now. Set to [] so getVideoFeedItems() uses only getRedditVideoItems(). */
 const VIDEO_FEEDS = []
 
+async function parseFeedXml(xml) {
+  return parser.parseString(xml)
+}
+
 async function fetchFeed(feed) {
   try {
-    const result = await parser.parseURL(feed.url)
+    // Prefer axios so gzip / redirects (e.g. UN News) decompress cleanly for rss-parser.
+    let result
+    try {
+      const res = await axios.get(feed.url, {
+        timeout: 10000,
+        headers: { ...REQUEST_HEADERS, Accept: 'application/rss+xml, application/xml, text/xml, */*' },
+        responseType: 'text',
+        decompress: true,
+      })
+      const body = typeof res.data === 'string' ? res.data : String(res.data || '')
+      result = await parseFeedXml(body)
+    } catch (axiosErr) {
+      result = await parser.parseURL(feed.url)
+    }
     const rows = (result.items || []).map((item) => {
       const link = item.link || item.guid || ''
       const videoUrl = pickVideoUrlFromItem(item)
@@ -198,7 +225,7 @@ async function fetchFeed(feed) {
         videoUrl: videoUrl || undefined,
       }
     })
-    if (feed.name === 'Google News') {
+    if (feed.name === 'Google News' || feed.name.startsWith('Reuters')) {
       return rows.filter(isRelevantGoogleNewsItem)
     }
     return rows.filter((r) => !isGloballyDeniedItem(r))

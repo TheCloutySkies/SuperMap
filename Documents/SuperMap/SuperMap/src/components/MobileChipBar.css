@@ -1,0 +1,35 @@
+.mobile-chip-bar {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding: 0.45rem 0.65rem;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  border-bottom: 1px solid var(--y2k-border);
+  background: color-mix(in srgb, var(--y2k-bg) 88%, transparent);
+  flex: 0 0 auto;
+}
+
+.mobile-chip-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.mobile-chip {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--y2k-border);
+  background: var(--y2k-surface);
+  color: var(--y2k-text-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.mobile-chip.is-active {
+  color: var(--y2k-text);
+  border-color: color-mix(in srgb, var(--y2k-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--y2k-accent) 16%, var(--y2k-surface));
+}

@@ -50,8 +50,8 @@
 }
 
 .map-tools-radial {
-  --map-radial-size: min(280px, 72vw);
-  --map-radial-radius: calc(var(--map-radial-size) * 0.38);
+  --map-radial-size: min(320px, 78vw);
+  --map-radial-radius: calc(var(--map-radial-size) * 0.42);
   position: absolute;
   right: 50%;
   bottom: 50%;
@@ -63,13 +63,13 @@
 
 .map-tools-radial-ring {
   position: absolute;
-  inset: 18%;
+  inset: 22%;
   border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--y2k-accent) 28%, transparent);
-  background:
-    radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--y2k-accent) 12%, transparent), transparent 62%),
-    rgba(8, 12, 10, 0.28);
+  border: 1px solid color-mix(in srgb, var(--y2k-accent) 22%, transparent);
+  background: transparent;
+  box-shadow: inset 0 0 24px color-mix(in srgb, var(--y2k-accent) 8%, transparent);
   animation: map-tools-ring-breathe 4.5s ease-in-out infinite;
+  pointer-events: none;
 }
 
 .map-tools-radial-item {
@@ -250,6 +250,49 @@
 .map-tools-preset-btn:disabled {
   opacity: 0.55;
   cursor: wait;
+}
+
+.map-tools-chrome-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.map-tools-chrome-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--y2k-text);
+  cursor: pointer;
+}
+
+.map-tools-chrome-row input {
+  accent-color: var(--y2k-accent);
+}
+
+.map-tools-presets-chip {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 72;
+  pointer-events: auto;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--y2k-text);
+  background: rgba(12, 17, 14, 0.96);
+  border: 1px solid color-mix(in srgb, var(--y2k-accent) 45%, var(--y2k-border));
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+.map-tools-presets-chip:hover {
+  border-color: var(--y2k-accent);
+  background: color-mix(in srgb, var(--y2k-accent) 12%, rgba(12, 17, 14, 0.96));
 }
 
 .app--device-mobile .map-tools-fab-wrap {

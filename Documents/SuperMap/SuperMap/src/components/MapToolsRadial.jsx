@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Draggable from 'react-draggable'
-import { getToolsForView } from '../lib/mapModeTools'
+import { getToolsForView, CHROME_TOGGLES } from '../lib/mapModeTools'
 import { GEOLOCATE_PRESETS } from '../lib/geolocatePresets'
 import { runOverpassQuery } from '../services/layerServices'
 import {
@@ -21,7 +21,14 @@ function ToolPanel({ id, title, children, onClose, defaultPos }) {
   const nodeRef = useRef(null)
   const saved = loadPanelPositions()[id]
   const [collapsed, setCollapsed] = useState(() => loadPanelCollapsed(id))
-  const [pos] = useState(() => saved || defaultPos || { x: 16, y: 72 })
+  // Prefer on-screen defaults; ignore saved coords that look off-map
+  const startPos = (() => {
+    const fallback = defaultPos || { x: 16, y: 72 }
+    if (!saved || typeof saved.x !== 'number' || typeof saved.y !== 'number') return fallback
+    if (saved.x < -40 || saved.y < -40 || saved.x > 900 || saved.y > 700) return fallback
+    return saved
+  })()
+  const [pos] = useState(() => startPos)
 
   const toggleCollapse = () => {
     setCollapsed((prev) => {
@@ -113,6 +120,28 @@ function DrawHintPanel({ onClose, onEnableDraw }) {
   )
 }
 
+function ChromePanel({ activeView, chromePrefs, onToggle, onClose }) {
+  const toggles = CHROME_TOGGLES.filter((t) => !t.views || t.views.includes(activeView))
+  const isOn = (key) => (key === 'locateStack' ? !!chromePrefs.locateStack : chromePrefs[key] !== false)
+  return (
+    <ToolPanel id="chrome" title="Map chrome" onClose={onClose} defaultPos={{ x: 16, y: 64 }}>
+      <p className="map-tools-panel-hint">Show or hide overlays. Choices persist in localStorage.</p>
+      <div className="map-tools-chrome-list">
+        {toggles.map((t) => (
+          <label key={t.key} className="map-tools-chrome-row">
+            <input
+              type="checkbox"
+              checked={isOn(t.key)}
+              onChange={() => onToggle(t.key, !isOn(t.key))}
+            />
+            <span>{t.label}</span>
+          </label>
+        ))}
+      </div>
+    </ToolPanel>
+  )
+}
+
 /**
  * Draggable FAB → radial map tools menu. Per-mode tools open collapsible panels
  * or toggle chrome visibility (persisted via supermap_map_tools_* keys).
@@ -136,7 +165,25 @@ export default function MapToolsRadial({
   const tools = getToolsForView(activeView)
 
   useEffect(() => {
-    // Close radial when switching map modes; keep open panels that still apply
+    if (!open) return undefined
+    const onKey = (e) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    const onPointer = (e) => {
+      const root = e.target?.closest?.('.map-tools-fab-wrap')
+      if (!root) setOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    // capture so map clicks close the menu
+    window.addEventListener('pointerdown', onPointer, true)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointerdown', onPointer, true)
+    }
+  }, [open])
+
+  useEffect(() => {
+    // Close radial when switching map modes; reset mode-specific panels
     setOpen(false)
     setPanels((prev) => {
       const next = { ...prev }
@@ -145,6 +192,18 @@ export default function MapToolsRadial({
       saveOpenPanels(next)
       return next
     })
+    // Defer auto-open so remount after basemap switch still shows the panel
+    if (activeView === 'geolocate-map') {
+      const t = setTimeout(() => {
+        setPanels((prev) => {
+          const next = { ...prev, geolocatePresets: true }
+          saveOpenPanels(next)
+          return next
+        })
+      }, 50)
+      return () => clearTimeout(t)
+    }
+    return undefined
   }, [activeView])
 
   const setChrome = useCallback((key, value) => {
@@ -274,6 +333,29 @@ export default function MapToolsRadial({
             closePanel('draw')
           }}
         />
+      )}
+      {panels.chrome && (
+        <ChromePanel
+          activeView={activeView}
+          chromePrefs={chromePrefs}
+          onToggle={(key, value) => {
+            setChrome(key, value)
+            if (key === 'weather' && value) {
+              try { localStorage.setItem('supermap_weather_hidden', '0') } catch { /* ignore */ }
+            }
+          }}
+          onClose={() => closePanel('chrome')}
+        />
+      )}
+
+      {activeView === 'geolocate-map' && !panels.geolocatePresets && (
+        <button
+          type="button"
+          className="map-tools-presets-chip"
+          onClick={() => openPanel('geolocatePresets')}
+        >
+          Open presets
+        </button>
       )}
     </>
   )

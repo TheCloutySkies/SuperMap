@@ -6,7 +6,8 @@
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "seed:sex-offenders": "node scripts/seed-sex-offenders.js"
   },
   "dependencies": {
     "@turf/turf": "^7.3.4",

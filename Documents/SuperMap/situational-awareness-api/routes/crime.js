@@ -1,5 +1,6 @@
 const express = require('express')
 const crimeData = require('../services/crimeData')
+const sexOffenders = require('../services/sexOffenders')
 const { askCrime } = require('../services/crimeAsk')
 
 const router = express.Router()
@@ -52,6 +53,20 @@ router.get('/arrests', (_req, res) => handle(res, () => crimeData.getArrests()))
 router.get('/homicide', (_req, res) => handle(res, () => crimeData.getHomicide()))
 
 router.get('/hate-crime', (_req, res) => handle(res, () => crimeData.getHateCrime()))
+
+/**
+ * Sex offenders — served from on-disk pack only (no live CommunityGuard calls).
+ * Seed: node scripts/seed-sex-offenders.js
+ */
+router.get('/sex-offenders/status', (_req, res) => handle(res, () => sexOffenders.getPackStatus()))
+
+router.get('/sex-offenders/markers', (req, res) => {
+  handle(res, () => sexOffenders.getMarkers({ metro: req.query.metro }))
+})
+
+router.get('/sex-offenders/:id', (req, res) => {
+  handle(res, () => sexOffenders.getOffenderById(req.params.id))
+})
 
 /**
  * POST /api/crime/ask

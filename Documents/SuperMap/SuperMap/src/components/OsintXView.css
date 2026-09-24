@@ -389,6 +389,12 @@
   margin: 0.5rem 0 0;
 }
 
+.osint-x-load-error {
+  font-size: 0.85rem;
+  color: var(--y2k-text-muted, #9aa3ad);
+  margin: 0.5rem 0 0;
+}
+
 .osint-x-card-actions {
   display: flex;
   flex-wrap: wrap;

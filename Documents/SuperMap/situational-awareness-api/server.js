@@ -74,7 +74,9 @@ function runOsintWarmup() {
 }
 
 function runOsintXIngest() {
-  osintXFeedService.fetchOsintXFeeds()
+  // Skip geotag on the interval path so ingest stays under a minute and does not
+  // starve /api/osint-x?refresh=1. Map geotag still runs for other OSINT sources.
+  osintXFeedService.fetchOsintXFeeds({ skipGeotag: true })
     .then((posts) => {
       if (posts.length > 0) console.log('[osint-x] Ingested', posts.length, 'posts')
     })

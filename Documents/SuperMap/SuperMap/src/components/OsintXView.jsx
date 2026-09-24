@@ -1,10 +1,9 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import axios from 'axios'
+import { getApiBase, readHomeSnapshot, writeHomeSnapshot } from '../lib/homeBootstrap'
 import './OsintXView.css'
 
-const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
-  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
-  : 'http://localhost:3001'
+const API_BASE = getApiBase()
 
 function relativeTime(ts) {
   if (!ts) return '—'
@@ -42,6 +41,15 @@ function isCrossOriginVideoNoCors(url) {
   }
 }
 
+function readSnapshotPosts() {
+  try {
+    const snap = readHomeSnapshot()
+    return Array.isArray(snap?.osintX) ? snap.osintX : []
+  } catch {
+    return []
+  }
+}
+
 const SORT_OPTIONS = [
   { value: 'time', label: 'Time (newest)' },
   { value: 'time-asc', label: 'Time (oldest)' },
@@ -52,9 +60,11 @@ const SORT_OPTIONS = [
 const REPORT_X_POSTS_KEY = 'supermap_report_x_posts'
 
 export default function OsintXView({ keywordFilter = '', onClearFilter, onPinnedToMap }) {
-  const [posts, setPosts] = useState([])
-  const [loading, setLoading] = useState(true)
+  const snapshotPosts = useRef(typeof window !== 'undefined' ? readSnapshotPosts() : [])
+  const [posts, setPosts] = useState(() => snapshotPosts.current)
+  const [loading, setLoading] = useState(() => snapshotPosts.current.length === 0)
   const [refreshing, setRefreshing] = useState(false)
+  const [loadError, setLoadError] = useState(null)
   const [sortBy, setSortBy] = useState('time')
   const [filterTag, setFilterTag] = useState('')
   const [filterCreator, setFilterCreator] = useState('')
@@ -63,6 +73,7 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
   const [videoDialog, setVideoDialog] = useState(null)
   const [imageDialog, setImageDialog] = useState(null)
   const [imageDownloading, setImageDownloading] = useState(false)
+  const fetchGen = useRef(0)
 
   const openImageDialog = (post, src) => {
     setImageDialog({
@@ -94,38 +105,99 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
     }
   }
 
-  const fetchPosts = (force = false) => {
+  const applyPosts = (next) => {
+    if (!Array.isArray(next)) return
+    setPosts(next)
+    setLoadError(null)
+    try {
+      const prev = readHomeSnapshot() || {}
+      writeHomeSnapshot({ ...prev, osintX: next.slice(0, 100) })
+    } catch { /* optional cache */ }
+  }
+
+  const fetchPosts = async (force = false) => {
     if (!API_BASE) {
       setPosts([])
       setLoading(false)
       setRefreshing(false)
+      setLoadError('No API URL configured (VITE_API_URL).')
       return
     }
+    const gen = ++fetchGen.current
     const params = { limit: 150 }
     if (force) params.refresh = '1'
-    axios
-      .get(`${API_BASE}/api/osint-x`, {
+    // Soft load: allow up to 45s. Force: API budgets ~22s so 50s is ample.
+    const timeout = force ? 50000 : 45000
+    try {
+      const res = await axios.get(`${API_BASE}/api/osint-x`, {
         params,
-        timeout: force ? 90000 : 30000,
-        headers: force ? { 'Cache-Control': 'no-cache' } : undefined,
+        timeout,
+        headers: force ? { 'Cache-Control': 'no-cache', Pragma: 'no-cache' } : undefined,
       })
-      .then((res) => setPosts(Array.isArray(res.data) ? res.data : []))
-      .catch(() => {
-        if (!force) setPosts([])
+      if (gen !== fetchGen.current) return
+      const next = Array.isArray(res.data) ? res.data : []
+      if (next.length > 0) {
+        applyPosts(next)
+        return
+      }
+      if (!force) {
+        // Empty DB — try one soft force pull, but keep snapshot if that fails
+        setRefreshing(true)
+        try {
+          const retry = await axios.get(`${API_BASE}/api/osint-x`, {
+            params: { limit: 150, refresh: '1' },
+            timeout: 50000,
+            headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+          })
+          if (gen !== fetchGen.current) return
+          const retryPosts = Array.isArray(retry.data) ? retry.data : []
+          if (retryPosts.length > 0) {
+            applyPosts(retryPosts)
+            return
+          }
+          setLoadError('FxTwitter returned no posts yet. Retry in a minute.')
+        } catch (err) {
+          if (gen !== fetchGen.current) return
+          setLoadError(err.code === 'ECONNABORTED'
+            ? 'Timed out loading OSINT X. The API may be cold — tap Retry.'
+            : (err.message || 'Failed to load OSINT X.'))
+        }
+        return
+      }
+      setLoadError('No posts in the last 48h. Tap Retry to pull FxTwitter again.')
+    } catch (err) {
+      if (gen !== fetchGen.current) return
+      // Never wipe existing posts on failure — avoids empty ↔ refresh loop.
+      const timedOut = err.code === 'ECONNABORTED'
+      setPosts((prev) => {
+        if (prev.length === 0) {
+          setLoadError(timedOut
+            ? 'Timed out reaching the API. Tap Retry (cold starts can take a minute).'
+            : (err.response?.data?.error || err.message || 'Failed to load OSINT X.'))
+        } else {
+          setLoadError(timedOut
+            ? 'Refresh timed out — still showing last loaded posts.'
+            : `Refresh failed — still showing last loaded posts. (${err.message || 'error'})`)
+        }
+        return prev
       })
-      .finally(() => {
+    } finally {
+      if (gen === fetchGen.current) {
         setLoading(false)
         setRefreshing(false)
-      })
+      }
+    }
   }
 
   useEffect(() => {
-    setLoading(true)
+    if (snapshotPosts.current.length) setLoading(false)
     fetchPosts(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleRefresh = () => {
     setRefreshing(true)
+    setLoadError(null)
     fetchPosts(true)
   }
 
@@ -245,15 +317,25 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
           )}
         </div>
         {pinError && <p className="osint-x-pin-error">{pinError}</p>}
+        {loadError && !loading && <p className="osint-x-load-error" role="status">{loadError}</p>}
       </header>
 
-      {loading && !refreshing ? (
+      {loading && !refreshing && posts.length === 0 ? (
         <p className="osint-x-loading">Loading OSINT X feed…</p>
       ) : !API_BASE ? (
         <p className="osint-x-error">Connect to the situational-awareness API (VITE_API_URL) to load this feed.</p>
       ) : filtered.length === 0 ? (
         <div className="osint-x-empty">
-          <p>{q ? 'No posts match the current search.' : 'No posts yet. The feed updates every 2 minutes. Try Refresh.'}</p>
+          <p>
+            {q
+              ? 'No posts match the current search.'
+              : (loadError || 'No posts in the last 48 hours yet.')}
+          </p>
+          {!q && (
+            <button type="button" className="osint-x-refresh" onClick={handleRefresh} disabled={refreshing}>
+              {refreshing ? 'Refreshing…' : 'Retry'}
+            </button>
+          )}
           {q && onClearFilter && (
             <button type="button" className="osint-x-clear-filter" onClick={onClearFilter}>Clear search</button>
           )}

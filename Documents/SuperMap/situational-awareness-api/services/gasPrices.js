@@ -59,6 +59,29 @@ const STATE_TO_PADD = {
 
 const STATE_NAME_TO_CODE = Object.fromEntries(US_GAS_STATES.map((s) => [s.name.toLowerCase(), s.code]))
 
+/** Last successful national/regional payload — survives transient EIA/GasBuddy outages. */
+let lastGoodNationalPayload = null
+
+/**
+ * Boot seed so a cold Render instance still has displayable numbers if live
+ * fetches fail on the first request. Replaced as soon as a live source succeeds.
+ * Prices from EIA weekly gasdiesel (verified 2026-09-24).
+ */
+const SEED_SNAPSHOT = {
+  national: 4.48,
+  unit: UNIT,
+  regions: [
+    { name: 'East Coast', price: 4.29, padd: 'padd1' },
+    { name: 'Midwest', price: 4.39, padd: 'padd2' },
+    { name: 'Gulf Coast', price: 3.97, padd: 'padd3' },
+    { name: 'Rocky Mountain', price: 4.12, padd: 'padd4' },
+    { name: 'West Coast', price: 5.35, padd: 'padd5' },
+  ],
+  states: [],
+  source: 'eia-gasdiesel-seed',
+  updatedAt: 'seed',
+}
+
 function nowUpdatedAt() {
   return new Date().toLocaleTimeString(undefined, { timeStyle: 'short' })
 }
@@ -391,11 +414,23 @@ async function getGasPrices({ stateCode = '', zip = '' } = {}) {
   const zipCode = String(zip || '').trim().slice(0, 10)
   const updatedAt = nowUpdatedAt()
 
+  const rememberGood = (payload) => {
+    if (!payload || payload.gasUnavailable) return payload
+    if (payload.national != null || (payload.regions && payload.regions.length)) {
+      lastGoodNationalPayload = {
+        ...payload,
+        // Drop state-specific rows from the shared snapshot
+        states: [],
+      }
+    }
+    return payload
+  }
+
   // 1) EIA API when key present
   try {
     const apiPayload = await fetchEiaApi(code)
     if (apiPayload && (apiPayload.national != null || (apiPayload.states && apiPayload.states.length))) {
-      return apiPayload
+      return rememberGood(apiPayload)
     }
   } catch (err) {
     console.warn('[gasPrices] EIA API:', err.message)
@@ -406,7 +441,7 @@ async function getGasPrices({ stateCode = '', zip = '' } = {}) {
     const parsed = await fetchEiaGasdieselHtml()
     const payload = payloadFromGasdiesel(parsed, code || null)
     if (payload.national != null || (payload.states && payload.states.length)) {
-      return payload
+      return rememberGood(payload)
     }
   } catch (err) {
     console.warn('[gasPrices] EIA gasdiesel HTML:', err.message)
@@ -421,17 +456,41 @@ async function getGasPrices({ stateCode = '', zip = '' } = {}) {
     const gasbuddy = await fetchGasBuddyPrice(searchTerm)
     if (gasbuddy) {
       const st = code ? US_GAS_STATES.find((s) => s.code === code) : null
-      return {
+      return rememberGood({
         national: gasbuddy.price,
         unit: UNIT,
         regions: [],
         states: code && st ? [{ code, name: st.name, price: gasbuddy.price }] : [],
         source: 'gasbuddy',
         updatedAt,
-      }
+      })
     }
   } catch (err) {
     console.warn('[gasPrices] GasBuddy:', err.message)
+  }
+
+  // 4) Last successful national/regional snapshot (process memory), else boot seed
+  const snapBase = lastGoodNationalPayload?.national != null
+    ? lastGoodNationalPayload
+    : SEED_SNAPSHOT
+  if (snapBase?.national != null) {
+    const snap = {
+      ...snapBase,
+      updatedAt,
+      _stale: true,
+      source: `${snapBase.source || 'cache'}-stale`,
+      states: [],
+    }
+    if (code) {
+      const st = US_GAS_STATES.find((s) => s.code === code)
+      const fromRegions = (snap.regions || []).find((r) => r.padd === STATE_TO_PADD[code])
+      if (st && fromRegions) {
+        snap.states = [{ code, name: st.name, price: fromRegions.price, useRegionalFallback: true, region: fromRegions.padd }]
+      } else if (st) {
+        snap.states = [{ code, name: st.name, price: snap.national, useNationalFallback: true }]
+      }
+    }
+    return snap
   }
 
   return {

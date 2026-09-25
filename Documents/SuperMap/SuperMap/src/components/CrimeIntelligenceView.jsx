@@ -583,6 +583,9 @@ export default function CrimeIntelligenceView() {
   const [stateMetric, setStateMetric] = useState('violentRate')
   const [stateYear, setStateYear] = useState(null)
   const [stateAdvanced, setStateAdvanced] = useState(false)
+  const [stateExpanded, setStateExpanded] = useState(false)
+  const [stateLimit, setStateLimit] = useState(10)
+  const [stateSort, setStateSort] = useState('name') // 'name' | 'violent'
 
   const [selectedCitySlug, setSelectedCitySlug] = useState(null)
   const [cityDetail, setCityDetail] = useState(null)
@@ -668,9 +671,19 @@ export default function CrimeIntelligenceView() {
     homicideRate: Number(national?.homicideRate) || nationalHomicideAvg,
   }), [national, nationalViolentAvg, nationalPropertyAvg, nationalHomicideAvg])
 
-  const sortedStates = useMemo(
-    () => [...states].sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))),
-    [states],
+  const sortedStates = useMemo(() => {
+    const list = [...states]
+    if (stateSort === 'violent') {
+      list.sort((a, b) => (Number(b.violentRate) || 0) - (Number(a.violentRate) || 0))
+    } else {
+      list.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+    }
+    return list
+  }, [states, stateSort])
+
+  const visibleStates = useMemo(
+    () => sortedStates.slice(0, stateLimit),
+    [sortedStates, stateLimit],
   )
 
   const featuredCities = useMemo(() => {
@@ -765,16 +778,20 @@ export default function CrimeIntelligenceView() {
 
   const goSegment = useCallback((id) => {
     setSegment(id)
+    if (id !== 'states') {
+      setStateExpanded(false)
+    }
     requestAnimationFrame(() => {
       panelRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' })
     })
   }, [])
 
-  const loadState = useCallback(async (abbr, { open = true } = {}) => {
+  const loadState = useCallback(async (abbr, { open = true, expand = true } = {}) => {
     const a = String(abbr || '').toUpperCase()
     if (!a) return
     setSelectedAbbr(a)
     setStateAdvanced(false)
+    if (expand) setStateExpanded(true)
     if (open) goSegment('states')
     setStateLoading(true)
     try {
@@ -786,6 +803,7 @@ export default function CrimeIntelligenceView() {
       else if (data?.year) setStateYear(Number(data.year))
       requestAnimationFrame(() => {
         document.getElementById('ci-state-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        panelRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' })
       })
     } catch (err) {
       setError(err.message || 'State load failed')
@@ -793,6 +811,17 @@ export default function CrimeIntelligenceView() {
       setStateLoading(false)
     }
   }, [goSegment])
+
+  const exitStateExpand = useCallback(() => {
+    setStateExpanded(false)
+    setStateAdvanced(false)
+    setStateDetail(null)
+    setSelectedAbbr('')
+    requestAnimationFrame(() => {
+      document.getElementById('ci-state-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      panelRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' })
+    })
+  }, [])
 
   const openCity = useCallback(async (slug, { open = true } = {}) => {
     if (!slug) return
@@ -885,18 +914,14 @@ export default function CrimeIntelligenceView() {
     return null
   }, [offenderMetros, offenderMetro])
 
-  // Default first state once list loads (picker, not expanded dump)
-  useEffect(() => {
-    if (!selectedAbbr && sortedStates.length) {
-      setSelectedAbbr(sortedStates[0].abbr)
-    }
-  }, [sortedStates, selectedAbbr])
+  // Keep States list as the default — do not auto-open a state.
+  // Expanded full-view only via box click / map tap.
 
   useEffect(() => {
-    if (segment === 'states' && selectedAbbr && !stateDetail && !stateLoading) {
-      loadState(selectedAbbr, { open: false })
+    if (segment === 'states' && selectedAbbr && stateExpanded && !stateDetail && !stateLoading) {
+      loadState(selectedAbbr, { open: false, expand: true })
     }
-  }, [segment, selectedAbbr, stateDetail, stateLoading, loadState])
+  }, [segment, selectedAbbr, stateExpanded, stateDetail, stateLoading, loadState])
 
   const askCrime = useCallback(async (e) => {
     e?.preventDefault?.()
@@ -1107,98 +1132,166 @@ export default function CrimeIntelligenceView() {
 
         {segment === 'states' && !loading && (
           <section id="ci-state-panel" className="ci-panel ci-enter" aria-labelledby="ci-states-title">
-            <div className="ci-section-head">
-              <h2 id="ci-states-title">States</h2>
-              <p>Pick one state — levels vs current national rates. No endless list.</p>
-            </div>
+            {!stateExpanded ? (
+              <>
+                <div className="ci-section-head">
+                  <h2 id="ci-states-title">States</h2>
+                  <p>Tap a state box for full database stats. Limit how many show at once.</p>
+                </div>
 
-            <label className="ci-select-wrap">
-              <span>State</span>
-              <select
-                value={selectedAbbr}
-                onChange={(e) => loadState(e.target.value, { open: false })}
-                aria-label="Select state"
-              >
-                {sortedStates.map((s) => (
-                  <option key={s.abbr} value={s.abbr}>{s.name} ({s.abbr})</option>
-                ))}
-              </select>
-            </label>
-
-            {stateLoading && <p className="ci-muted">Loading state…</p>}
-
-            {stateDetail && !stateLoading && (
-              <div className="ci-detail ci-detail--open">
-                <header className="ci-detail-head">
-                  <h3>{stateDetail.name} <span className="ci-muted">({stateDetail.abbr})</span></h3>
-                  <span className="ci-muted">{stateYear || stateDetail.year}</span>
-                </header>
-
-                <div className="ci-level-strip">
-                  <div className="ci-level-card">
-                    <span className="ci-stat-label">Violent</span>
-                    <span className="ci-stat-value">{fmt(activeStateYearPoint?.violentRate, 1)}</span>
-                    <LevelBadge level={stateLevels?.violent} />
+                <div className="ci-state-controls" role="group" aria-label="State list controls">
+                  <div className="ci-limit-row">
+                    <span className="ci-control-label">Show</span>
+                    {[10, 25, 50].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        className={`ci-metric-chip ${stateLimit === n ? 'is-active' : ''}`}
+                        aria-pressed={stateLimit === n}
+                        onClick={() => setStateLimit(n)}
+                      >
+                        {n}
+                      </button>
+                    ))}
                   </div>
-                  <div className="ci-level-card">
-                    <span className="ci-stat-label">Property</span>
-                    <span className="ci-stat-value">{fmt(activeStateYearPoint?.propertyRate, 1)}</span>
-                    <LevelBadge level={stateLevels?.property} />
-                  </div>
-                  <div className="ci-level-card">
-                    <span className="ci-stat-label">Homicide</span>
-                    <span className="ci-stat-value">{fmt(activeStateYearPoint?.homicideRate, 2)}</span>
-                    <LevelBadge level={stateLevels?.homicide} />
+                  <div className="ci-limit-row">
+                    <span className="ci-control-label">Sort</span>
+                    <button
+                      type="button"
+                      className={`ci-metric-chip ${stateSort === 'name' ? 'is-active' : ''}`}
+                      aria-pressed={stateSort === 'name'}
+                      onClick={() => setStateSort('name')}
+                    >
+                      Name
+                    </button>
+                    <button
+                      type="button"
+                      className={`ci-metric-chip ${stateSort === 'violent' ? 'is-active' : ''}`}
+                      aria-pressed={stateSort === 'violent'}
+                      onClick={() => setStateSort('violent')}
+                    >
+                      Violent rate
+                    </button>
                   </div>
                 </div>
 
-                <MetricPicker
-                  options={stateMetricOptions.map((m) => ({ id: m.id, label: m.label }))}
-                  value={stateMetric}
-                  onChange={setStateMetric}
-                />
-                <TrendChart
-                  series={stateSeries}
-                  year={stateYear}
-                  onYearChange={setStateYear}
-                  valueKey="rate"
-                />
+                <p className="ci-muted">
+                  Showing {Math.min(visibleStates.length, stateLimit)} of {sortedStates.length} states
+                </p>
 
-                <button
-                  type="button"
-                  className={`ci-advanced-btn ${stateAdvanced ? 'is-open' : ''}`}
-                  onClick={() => setStateAdvanced((v) => !v)}
-                >
-                  {stateAdvanced ? 'Hide advanced' : 'Advanced'}
-                </button>
+                <div className="ci-state-box-grid">
+                  {visibleStates.map((s) => {
+                    const level = levelFromRatio(s.violentRate, nationalNow.violentRate)
+                    return (
+                      <button
+                        key={s.abbr}
+                        type="button"
+                        className="ci-state-box"
+                        onClick={() => loadState(s.abbr, { open: false, expand: true })}
+                      >
+                        <span className="ci-state-box-name">{s.name}</span>
+                        <span className="ci-state-box-abbr">{s.abbr}</span>
+                        <span className="ci-state-box-rate">{fmt(s.violentRate, 1)} / 100k</span>
+                        <LevelBadge level={level} />
+                      </button>
+                    )
+                  })}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="ci-state-expand-bar">
+                  <button
+                    type="button"
+                    className="ci-exit-btn"
+                    onClick={exitStateExpand}
+                    aria-label="Exit state view"
+                  >
+                    ← Exit
+                  </button>
+                  <p className="ci-muted">Full state database view</p>
+                </div>
 
-                {stateAdvanced && (
-                  <div className="ci-advanced-body ci-enter">
-                    <dl className="ci-dl">
-                      <div><dt>Population</dt><dd>{fmt(activeStateYearPoint?.population ?? stateDetail.population, 0)}</dd></div>
-                      <div><dt>Violent count</dt><dd>{fmt(activeStateYearPoint?.violentCrime ?? stateDetail.violentCrime, 0)}</dd></div>
-                      <div><dt>Property count</dt><dd>{fmt(activeStateYearPoint?.propertyCrime ?? stateDetail.propertyCrime, 0)}</dd></div>
-                      <div><dt>Homicide count</dt><dd>{fmt(activeStateYearPoint?.homicide ?? stateDetail.homicide, 0)}</dd></div>
-                      <div>
-                        <dt>YoY violent</dt>
-                        <dd>
-                          {activeStateYearPoint?.violentChange != null
-                            ? `${activeStateYearPoint.violentChange > 0 ? '+' : ''}${fmt(activeStateYearPoint.violentChange, 1)}%`
-                            : '—'}
-                        </dd>
+                {stateLoading && <p className="ci-muted">Loading state…</p>}
+
+                {stateDetail && !stateLoading && (
+                  <div className="ci-detail ci-detail--open ci-detail--full">
+                    <header className="ci-detail-head">
+                      <h2 id="ci-states-title">{stateDetail.name} <span className="ci-muted">({stateDetail.abbr})</span></h2>
+                      <span className="ci-muted">{stateYear || stateDetail.year}</span>
+                    </header>
+
+                    <div className="ci-level-strip">
+                      <div className="ci-level-card">
+                        <span className="ci-stat-label">Violent</span>
+                        <span className="ci-stat-value">{fmt(activeStateYearPoint?.violentRate, 1)}</span>
+                        <LevelBadge level={stateLevels?.violent} />
                       </div>
-                      <div>
-                        <dt>YoY property</dt>
-                        <dd>
-                          {activeStateYearPoint?.propertyChange != null
-                            ? `${activeStateYearPoint.propertyChange > 0 ? '+' : ''}${fmt(activeStateYearPoint.propertyChange, 1)}%`
-                            : '—'}
-                        </dd>
+                      <div className="ci-level-card">
+                        <span className="ci-stat-label">Property</span>
+                        <span className="ci-stat-value">{fmt(activeStateYearPoint?.propertyRate, 1)}</span>
+                        <LevelBadge level={stateLevels?.property} />
                       </div>
-                    </dl>
+                      <div className="ci-level-card">
+                        <span className="ci-stat-label">Homicide</span>
+                        <span className="ci-stat-value">{fmt(activeStateYearPoint?.homicideRate, 2)}</span>
+                        <LevelBadge level={stateLevels?.homicide} />
+                      </div>
+                    </div>
+
+                    <MetricPicker
+                      options={stateMetricOptions.map((m) => ({ id: m.id, label: m.label }))}
+                      value={stateMetric}
+                      onChange={setStateMetric}
+                    />
+                    <TrendChart
+                      series={stateSeries}
+                      year={stateYear}
+                      onYearChange={setStateYear}
+                      valueKey="rate"
+                    />
+
+                    <button
+                      type="button"
+                      className={`ci-advanced-btn ${stateAdvanced ? 'is-open' : ''}`}
+                      onClick={() => setStateAdvanced((v) => !v)}
+                    >
+                      {stateAdvanced ? 'Hide advanced' : 'Advanced'}
+                    </button>
+
+                    {stateAdvanced && (
+                      <div className="ci-advanced-body ci-enter">
+                        <dl className="ci-dl">
+                          <div><dt>Population</dt><dd>{fmt(activeStateYearPoint?.population ?? stateDetail.population, 0)}</dd></div>
+                          <div><dt>Violent count</dt><dd>{fmt(activeStateYearPoint?.violentCrime ?? stateDetail.violentCrime, 0)}</dd></div>
+                          <div><dt>Property count</dt><dd>{fmt(activeStateYearPoint?.propertyCrime ?? stateDetail.propertyCrime, 0)}</dd></div>
+                          <div><dt>Homicide count</dt><dd>{fmt(activeStateYearPoint?.homicide ?? stateDetail.homicide, 0)}</dd></div>
+                          <div>
+                            <dt>YoY violent</dt>
+                            <dd>
+                              {activeStateYearPoint?.violentChange != null
+                                ? `${activeStateYearPoint.violentChange > 0 ? '+' : ''}${fmt(activeStateYearPoint.violentChange, 1)}%`
+                                : '—'}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>YoY property</dt>
+                            <dd>
+                              {activeStateYearPoint?.propertyChange != null
+                                ? `${activeStateYearPoint.propertyChange > 0 ? '+' : ''}${fmt(activeStateYearPoint.propertyChange, 1)}%`
+                                : '—'}
+                            </dd>
+                          </div>
+                        </dl>
+                      </div>
+                    )}
+
+                    <button type="button" className="ci-exit-btn ci-exit-btn--footer" onClick={exitStateExpand}>
+                      ← Exit to state list
+                    </button>
                   </div>
                 )}
-              </div>
+              </>
             )}
           </section>
         )}

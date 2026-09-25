@@ -26,7 +26,7 @@ const DOOMSDAY_CLOCK_URL = 'https://thebulletin.org/doomsday-clock/#nav_menu'
 const QUICK_LINKS = [
   { id: 'osint-map', label: 'OSINT Map', desc: 'View news, intel, and events on the map', icon: '🗺️', path: 'osint-map' },
   { id: 'conflict-map', label: 'Conflict Map', desc: 'Tactical and conflict layers', icon: '⚔️', path: 'conflict-map' },
-  { id: CRIME_VIEW_ID, label: 'Crime Intelligence', desc: 'National snapshot, state & city detail, Ask Crime', icon: '📉', path: CRIME_VIEW_ID },
+  { id: CRIME_VIEW_ID, label: 'Crime Intelligence', desc: 'National snapshot, state & city detail, ask ThiellBot', icon: '📉', path: CRIME_VIEW_ID },
   { id: 'news-feeds', label: 'News Feeds', desc: 'Wikipedia, Reddit, Google News, BBC', icon: '📰', path: 'news-feeds' },
   { id: 'osint-feeds', label: 'OSINT Feeds', desc: 'Bellingcat, CISA, DW, tactical intel', icon: '📡', path: 'osint-feeds' },
   { id: 'osint-x', label: 'OSINT (X)', desc: 'Posts from OSINT X/Twitter accounts via FxTwitter', icon: '𝕏', path: 'osint-x' },
@@ -307,7 +307,7 @@ export default function HomeScreen({
           <div className="home-screen-header-brand">
             <h1 className="home-screen-logo">
               <img src={BRAND_LOGO_SRC} alt={BRAND_LOGO_ALT} className="home-screen-logo-img" />
-              <span className="sr-only">SuperMap</span>
+              <span className="sr-only">Good Palantir</span>
             </h1>
             <span className="home-screen-date">{formatDate()}</span>
           </div>
@@ -336,13 +336,13 @@ export default function HomeScreen({
           <div className="home-screen-main-left">
             {!isMobileLayout && (
               <div className="home-screen-featured">
-                <p className="home-screen-featured-title">Welcome to SuperMap</p>
-                <p className="home-screen-featured-sub">See current events, use the maps to see what&apos;s going on around you, and a huge library of OSINT resources — all at your fingertips. It&apos;s kind of like a personal Palantir if Palantir wasn&apos;t evil and ushering in a surveillance state.</p>
+                <p className="home-screen-featured-title">Welcome to Good Palantir</p>
+                <p className="home-screen-featured-sub">See current events, use the maps to see what&apos;s going on around you, and a huge library of OSINT resources, all at your fingertips. It&apos;s kind of like a personal Palantir if Palantir wasn&apos;t evil and ushering in a surveillance state.</p>
               </div>
             )}
             <section className="home-screen-section home-screen-threat">
               <div className="home-screen-threat-head">
-                <h2 className="home-screen-section-title">Today&apos;s Threat Summary</h2>
+                <h2 className="home-screen-section-title">Today&apos;s Threat Summary <span className="home-screen-threat-byline">by ThiellBot</span></h2>
                 <a href={DOOMSDAY_CLOCK_URL} target="_blank" rel="noopener noreferrer" className="home-screen-threat-info" title="About the Doomsday Clock (Bulletin of the Atomic Scientists)" aria-label="About the Doomsday Clock">ℹ️</a>
               </div>
               {threatSummaryLoading && (
@@ -647,7 +647,7 @@ export default function HomeScreen({
           <div className="home-screen-footer-col">
             <h3 className="home-screen-footer-head">Source</h3>
             <a href="https://github.com/TheCloutySkies/SuperMap" target="_blank" rel="noopener noreferrer" className="home-screen-footer-link home-screen-footer-link--anchor">
-              SuperMap on GitHub
+              Good Palantir on GitHub
             </a>
           </div>
         </footer>

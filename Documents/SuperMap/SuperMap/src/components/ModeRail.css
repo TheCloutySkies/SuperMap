@@ -12,19 +12,34 @@
 
 .mode-rail-brand {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 48px;
+  gap: 0.15rem;
+  min-height: 48px;
+  padding: 0.35rem 0.2rem;
   border-bottom: 1px solid var(--y2k-border);
   flex-shrink: 0;
 }
 
 .mode-rail-brand-logo {
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   object-fit: contain;
   display: block;
   background: transparent;
+}
+
+.mode-rail-brand-text {
+  font-size: 0.48rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+  text-align: center;
+  color: var(--y2k-text-muted);
+  max-width: 100%;
+  overflow: hidden;
+  text-wrap: balance;
 }
 
 .mode-rail-list {

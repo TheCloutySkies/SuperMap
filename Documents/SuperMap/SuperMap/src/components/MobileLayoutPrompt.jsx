@@ -44,7 +44,7 @@ export default function MobileLayoutPrompt({ onChoice }) {
       <div className="mobile-layout-prompt-card">
         <h2 id="mobile-layout-prompt-title" className="mobile-layout-prompt-title">Layout</h2>
         <p className="mobile-layout-prompt-copy">
-          This screen works better with the mobile SuperMap hub. Choose a layout — you can change it anytime in Settings.
+          This screen works better with the mobile Good Palantir hub. Choose a layout — you can change it anytime in Settings.
         </p>
         <div className="mobile-layout-prompt-actions">
           <button type="button" className="mobile-layout-prompt-btn mobile-layout-prompt-btn--primary" onClick={() => choose('mobile')}>

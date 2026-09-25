@@ -12,20 +12,20 @@ export const RADIAL_ORBIT_ITEMS = [
 ]
 
 /**
- * Circular menu: center Clouty Skies / SuperMap (Home), orbit items equally spaced.
+ * Circular menu: center Clouty Skies / Good Palantir (Home), orbit items equally spaced.
  * onSelectMode(item) — item may include viewId for direct views (e.g. Crime).
  */
 export default function RadialMenu({ onSelectHome, onSelectMode, activeMode, activeView }) {
   const n = RADIAL_ORBIT_ITEMS.length
 
   return (
-    <nav className="radial-menu" aria-label="SuperMap modes">
+    <nav className="radial-menu" aria-label="Good Palantir modes">
       <div className="radial-menu-ring" aria-hidden />
       <button
         type="button"
         className="radial-menu-center"
         onClick={onSelectHome}
-        aria-label="SuperMap Home"
+        aria-label="Good Palantir Home"
       >
         <img
           className="radial-menu-center-logo"

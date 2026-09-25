@@ -2,6 +2,12 @@
 export const BRAND_LOGO_SRC = '/cloutyskies-logo.png'
 export const BRAND_LOGO_ALT = 'Clouty Skies'
 
+/** User-visible product name (repo/package folders stay SuperMap). */
+export const PRODUCT_NAME = 'Good Palantir'
+
+/** User-visible name for AI ask/chat/threat-summary assistant. */
+export const AI_ASSISTANT_NAME = 'ThiellBot'
+
 /** Canonical Crime Intelligence page view id (ModeRail CRIME, Radial, Home, Omnibar). */
 export const CRIME_VIEW_ID = 'crime'
 /** Legacy ids redirected to CRIME_VIEW_ID — never open the old Maps crime-map overlay. */

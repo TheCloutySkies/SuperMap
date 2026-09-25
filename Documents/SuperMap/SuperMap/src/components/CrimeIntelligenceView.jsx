@@ -14,7 +14,7 @@ const SEGMENTS = [
   { id: 'cities', label: 'Cities' },
   { id: 'map', label: 'Map' },
   { id: 'offenders', label: 'Offenders' },
-  { id: 'ask', label: 'Ask' },
+  { id: 'ask', label: 'ThiellBot' },
 ]
 
 const CRIME_METRIC_OPTIONS = [
@@ -605,7 +605,7 @@ export default function CrimeIntelligenceView() {
   const [askMessages, setAskMessages] = useState([
     {
       role: 'assistant',
-      text: 'Ask about a U.S. state or city — e.g. “How does Texas compare on violent crime?” or “Memphis rates”. Answers use PlainCrime + FBI UCR data.',
+      text: 'I\'m ThiellBot. Ask about a U.S. state or city — e.g. “How does Texas compare on violent crime?” or “Memphis rates”. Answers use PlainCrime + FBI UCR data.',
       provider: 'system',
     },
   ])
@@ -1437,13 +1437,16 @@ export default function CrimeIntelligenceView() {
         {segment === 'ask' && (
           <section className="ci-panel ci-enter" aria-labelledby="ci-ask-title">
             <div className="ci-section-head">
-              <h2 id="ci-ask-title">Ask Crime</h2>
-              <p>Natural-language questions over the crime pack.</p>
+              <h2 id="ci-ask-title">ThiellBot</h2>
+              <p>Ask ThiellBot natural-language questions over the crime pack.</p>
             </div>
             <div className="ci-ask-panel">
               <div className="ci-ask-thread" aria-live="polite">
                 {askMessages.map((m, i) => (
                   <div key={i} className={`ci-ask-msg ci-ask-msg--${m.role}`}>
+                    {m.role === 'assistant' && (
+                      <span className="ci-ask-name">ThiellBot</span>
+                    )}
                     <p>{typeof m.text === 'string' ? m.text : fmtScalar(m.text)}</p>
                     {m.provider && m.role === 'assistant' && m.provider !== 'system' && (
                       <span className="ci-ask-provider">via {String(m.provider)}</span>
@@ -1456,8 +1459,8 @@ export default function CrimeIntelligenceView() {
                   type="search"
                   value={askInput}
                   onChange={(e) => setAskInput(e.target.value)}
-                  placeholder="Ask about a state, city, or national trend…"
-                  aria-label="Ask Crime question"
+                  placeholder="Ask ThiellBot about a state, city, or national trend…"
+                  aria-label="Ask ThiellBot a question"
                   disabled={askBusy}
                 />
                 <button type="submit" disabled={askBusy || !askInput.trim()}>

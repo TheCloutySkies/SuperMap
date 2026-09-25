@@ -684,6 +684,16 @@
   border: 1px solid var(--ci-border);
 }
 
+.ci-ask-name {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ci-accent, #6ed9a0);
+}
+
 .ci-ask-provider {
   display: block;
   margin-top: 0.35rem;

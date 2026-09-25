@@ -304,7 +304,7 @@ function App() {
       onClick: () => setActiveViewWithMode(v.id),
     }))
 
-  let mobilePageTitle = 'SuperMap'
+  let mobilePageTitle = 'Good Palantir'
   let mobileChipItems = []
   if (appMode === APP_MODES.MAPS) mobilePageTitle = 'Maps'
   else if (appMode === APP_MODES.CRIME) mobilePageTitle = 'Crime'

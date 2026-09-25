@@ -13,6 +13,7 @@ const SEGMENTS = [
   { id: 'states', label: 'States' },
   { id: 'cities', label: 'Cities' },
   { id: 'map', label: 'Map' },
+  { id: 'offenders', label: 'Offenders' },
   { id: 'ask', label: 'Ask' },
 ]
 
@@ -333,6 +334,188 @@ function UsCrimeMap({ features, cities, selectedAbbr, selectedCitySlug, onSelect
   )
 }
 
+function SexOffendersMap({
+  features,
+  markers,
+  selectedId,
+  center,
+  radiusDeg = 0.35,
+  onSelect,
+}) {
+  const width = 720
+  const height = 420
+  const focus = center && Number.isFinite(center.lat) && Number.isFinite(center.lon)
+  const bounds = focus
+    ? {
+      minLon: center.lon - radiusDeg * 1.4,
+      maxLon: center.lon + radiusDeg * 1.4,
+      minLat: center.lat - radiusDeg,
+      maxLat: center.lat + radiusDeg,
+    }
+    : { minLon: -125, maxLon: -66, minLat: 24.5, maxLat: 49.5 }
+
+  const projLocal = ([lon, lat]) => {
+    const x = ((lon - bounds.minLon) / (bounds.maxLon - bounds.minLon)) * width
+    const y = ((bounds.maxLat - lat) / (bounds.maxLat - bounds.minLat)) * height
+    return [x, y]
+  }
+
+  const ringToLocal = (ring) => {
+    if (!ring?.length) return ''
+    return `${ring
+      .map((coord, i) => {
+        const [x, y] = projLocal(coord)
+        return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`
+      })
+      .join(' ')} Z`
+  }
+
+  const geomPaths = (geometry) => {
+    if (!geometry) return []
+    if (geometry.type === 'Polygon') return [ringToLocal(geometry.coordinates[0])]
+    if (geometry.type === 'MultiPolygon') {
+      return geometry.coordinates.map((poly) => ringToLocal(poly[0])).filter(Boolean)
+    }
+    return []
+  }
+
+  return (
+    <svg
+      className="ci-choropleth ci-offender-map"
+      viewBox={`0 0 ${width} ${height}`}
+      role="img"
+      aria-label="Sex offender map — tap a marker for that person only"
+    >
+      {(features || []).map((f, i) => {
+        const abbr = f.properties?.abbr
+        if (abbr === 'AK' || abbr === 'HI') return null
+        const paths = geomPaths(f.geometry)
+        return paths.map((d, pi) => (
+          <path
+            key={`bg-${abbr || i}-${pi}`}
+            d={d}
+            className="ci-state-path ci-state-path--mute"
+            fill="#0d2218"
+            stroke="rgba(100, 200, 150, 0.18)"
+            strokeWidth={0.6}
+          />
+        ))
+      })}
+      {(markers || []).map((m) => {
+        const lat = Number(m.lat)
+        const lon = Number(m.lon)
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
+        if (lat < bounds.minLat || lat > bounds.maxLat || lon < bounds.minLon || lon > bounds.maxLon) {
+          return null
+        }
+        const [x, y] = projLocal([lon, lat])
+        const active = selectedId != null && Number(selectedId) === Number(m.id)
+        return (
+          <g
+            key={m.id}
+            className={`ci-offender-dot ${active ? 'is-active' : ''}`}
+            transform={`translate(${x}, ${y})`}
+            onClick={(e) => {
+              e.stopPropagation()
+              onSelect?.(m.id)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                e.stopPropagation()
+                onSelect?.(m.id)
+              }
+            }}
+            tabIndex={0}
+            role="button"
+            aria-label={`Registered person ${m.id}`}
+          >
+            <circle r={active ? 7 : 3.2} />
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
+function OffenderSummary({ person, onClear }) {
+  if (!person) return null
+  const addr = [person.address_line1, person.city, person.state_id || person.source_state, person.zip_code]
+    .filter(Boolean)
+    .join(', ')
+  const aliases = Array.isArray(person.aliases)
+    ? person.aliases.map((a) => [a.first_name, a.middle_name, a.last_name].filter(Boolean).join(' ')).filter(Boolean)
+    : []
+  const offenses = Array.isArray(person.offense_details) ? person.offense_details : []
+
+  return (
+    <article className="ci-offender-card ci-enter" id="ci-offender-summary">
+      <header className="ci-detail-head">
+        <h3>{person.full_name || `${person.first_name || ''} ${person.last_name || ''}`.trim() || `ID ${person.id}`}</h3>
+        <button type="button" className="ci-advanced-btn" onClick={onClear}>Clear</button>
+      </header>
+      <div className="ci-offender-layout">
+        {person.offender_image_url ? (
+          <img
+            className="ci-offender-photo"
+            src={person.offender_image_url}
+            alt=""
+            referrerPolicy="no-referrer"
+            loading="lazy"
+          />
+        ) : (
+          <div className="ci-offender-photo ci-offender-photo--empty" aria-hidden>No photo</div>
+        )}
+        <dl className="ci-dl">
+          <div><dt>Age / sex</dt><dd>{fmtScalar(person.age, 0)} · {person.sex || '—'}</dd></div>
+          <div><dt>Risk / tier</dt><dd>{person.risk_level || person.tier_level || '—'}</dd></div>
+          <div><dt>Status</dt><dd>{person.status || person.designation || '—'}</dd></div>
+          <div><dt>State</dt><dd>{person.state_id || person.source_state || '—'}</dd></div>
+          <div><dt>Registry ID</dt><dd>{person.registration_id || '—'}</dd></div>
+          <div><dt>Address</dt><dd>{addr || '—'}</dd></div>
+          {person.date_of_birth && <div><dt>DOB</dt><dd>{String(person.date_of_birth)}</dd></div>}
+          {person.race && <div><dt>Race</dt><dd>{String(person.race)}</dd></div>}
+          {(person.height || person.weight) && (
+            <div><dt>Height / weight</dt><dd>{person.height || '—'} / {person.weight || '—'}</dd></div>
+          )}
+        </dl>
+      </div>
+      {aliases.length > 0 && (
+        <p className="ci-muted">Aliases: {aliases.slice(0, 8).join('; ')}</p>
+      )}
+      {person.offense && <p><strong>Offense:</strong> {String(person.offense)}</p>}
+      {offenses.length > 0 && (
+        <ul className="ci-simple-list">
+          {offenses.slice(0, 12).map((o, i) => (
+            <li key={i}>
+              <span>{typeof o === 'string' ? o : (o.description || o.offense || oLabel(o))}</span>
+              <strong>{o.date || o.conviction_date || ''}</strong>
+            </li>
+          ))}
+        </ul>
+      )}
+      {(person.tracking_url || person.tip_submission_url) && (
+        <p className="ci-offender-links">
+          {person.tracking_url && (
+            <a href={person.tracking_url} target="_blank" rel="noopener noreferrer">Registry record</a>
+          )}
+          {person.tip_submission_url && (
+            <a href={person.tip_submission_url} target="_blank" rel="noopener noreferrer">Submit tip</a>
+          )}
+        </p>
+      )}
+      <p className="ci-muted ci-fineprint">
+        Public registry data via CommunityGuardAPI / NSOPW. For lawful awareness only.
+      </p>
+    </article>
+  )
+}
+
+function oLabel(o) {
+  if (o == null || typeof o !== 'object') return '—'
+  return String(o.name || o.label || o.type || 'Offense')
+}
+
 function ArrestOffenseTable({ rows }) {
   const list = Array.isArray(rows) ? rows : []
   if (!list.length) return <p className="ci-muted">No arrest offense totals.</p>
@@ -407,6 +590,15 @@ export default function CrimeIntelligenceView() {
   const [cityResults, setCityResults] = useState([])
   const [cityLoading, setCityLoading] = useState(false)
   const [cityAdvanced, setCityAdvanced] = useState(false)
+
+  const [offenderMetro, setOffenderMetro] = useState('washington-dc')
+  const [offenderMarkers, setOffenderMarkers] = useState([])
+  const [offenderMetros, setOffenderMetros] = useState([])
+  const [offenderMeta, setOffenderMeta] = useState(null)
+  const [offenderLoading, setOffenderLoading] = useState(false)
+  const [selectedOffenderId, setSelectedOffenderId] = useState(null)
+  const [offenderPerson, setOffenderPerson] = useState(null)
+  const [offenderPersonLoading, setOffenderPersonLoading] = useState(false)
 
   const [askInput, setAskInput] = useState('')
   const [askBusy, setAskBusy] = useState(false)
@@ -641,6 +833,57 @@ export default function CrimeIntelligenceView() {
     }, 280)
     return () => clearTimeout(t)
   }, [cityQ, searchCities])
+
+  // Sex offenders: load markers from on-disk pack only (no live upstream calls).
+  useEffect(() => {
+    if (segment !== 'offenders') return undefined
+    let cancelled = false
+    setOffenderLoading(true)
+    const qs = offenderMetro ? `?metro=${encodeURIComponent(offenderMetro)}` : ''
+    getJson(`/api/crime/sex-offenders/markers${qs}`)
+      .then((payload) => {
+        if (cancelled) return
+        setOffenderMarkers(Array.isArray(payload.data) ? payload.data : [])
+        setOffenderMeta(payload.meta || null)
+        setOffenderMetros(Array.isArray(payload.meta?.metros) ? payload.meta.metros : [])
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message || 'Offender pack load failed')
+      })
+      .finally(() => {
+        if (!cancelled) setOffenderLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [segment, offenderMetro])
+
+  const selectOffender = useCallback(async (id) => {
+    if (id == null) return
+    setSelectedOffenderId(id)
+    setOffenderPerson(null)
+    setOffenderPersonLoading(true)
+    try {
+      const payload = await getJson(`/api/crime/sex-offenders/${encodeURIComponent(id)}`)
+      setOffenderPerson(payload.data)
+      requestAnimationFrame(() => {
+        document.getElementById('ci-offender-summary')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      })
+    } catch (err) {
+      setError(err.message || 'Could not load person')
+    } finally {
+      setOffenderPersonLoading(false)
+    }
+  }, [])
+
+  const clearOffender = useCallback(() => {
+    setSelectedOffenderId(null)
+    setOffenderPerson(null)
+  }, [])
+
+  const offenderCenter = useMemo(() => {
+    const m = offenderMetros.find((x) => x.id === offenderMetro)
+    if (m) return { lat: m.lat, lon: m.lon }
+    return null
+  }, [offenderMetros, offenderMetro])
 
   // Default first state once list loads (picker, not expanded dump)
   useEffect(() => {
@@ -1126,6 +1369,68 @@ export default function CrimeIntelligenceView() {
                 <span style={{ background: levelColor('extreme') }} />Extreme
               </div>
             </div>
+          </section>
+        )}
+
+        {segment === 'offenders' && (
+          <section className="ci-panel ci-enter" aria-labelledby="ci-offenders-title">
+            <div className="ci-section-head">
+              <h2 id="ci-offenders-title">Sex offenders</h2>
+              <p>
+                Metro pack cached on the server — no live API calls while browsing.
+                Tap a marker to open that person only under the map.
+              </p>
+            </div>
+
+            <label className="ci-select-wrap">
+              <span>Metro (10 mi seed radius)</span>
+              <select
+                value={offenderMetro}
+                onChange={(e) => {
+                  clearOffender()
+                  setOffenderMetro(e.target.value)
+                }}
+                aria-label="Select metro"
+              >
+                {(offenderMetros.length
+                  ? offenderMetros
+                  : [{ id: 'washington-dc', name: 'Washington, DC' }]
+                ).map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}{m.count != null ? ` (${m.count})` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {offenderLoading && <p className="ci-muted">Loading markers…</p>}
+            {!offenderLoading && offenderMeta && (
+              <p className="ci-muted">
+                {fmt(offenderMeta.count, 0)} markers
+                {offenderMeta.seededAt ? ` · seeded ${String(offenderMeta.seededAt).slice(0, 10)}` : ''}
+                {offenderMeta.radiusMiles != null ? ` · ${offenderMeta.radiusMiles} mi` : ''}
+              </p>
+            )}
+
+            <div className={`ci-map-wrap ${selectedOffenderId ? 'has-selection' : ''}`}>
+              <SexOffendersMap
+                features={mapFeatures}
+                markers={offenderMarkers}
+                selectedId={selectedOffenderId}
+                center={offenderCenter}
+                onSelect={selectOffender}
+              />
+            </div>
+
+            {!selectedOffenderId && !offenderPersonLoading && (
+              <p className="ci-muted ci-offender-hint">
+                No names or addresses shown until you select a marker.
+              </p>
+            )}
+            {offenderPersonLoading && <p className="ci-muted">Loading person…</p>}
+            {offenderPerson && (
+              <OffenderSummary person={offenderPerson} onClear={clearOffender} />
+            )}
           </section>
         )}
 

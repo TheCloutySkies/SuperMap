@@ -7,3 +7,5 @@ config/user-config.json
 data/*
 !data/crime/
 !data/crime/**
+!data/sex-offenders/
+!data/sex-offenders/**

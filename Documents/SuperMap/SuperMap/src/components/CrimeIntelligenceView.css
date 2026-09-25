@@ -344,6 +344,115 @@
   border: 0;
 }
 
+.ci-state-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin-bottom: 0.75rem;
+  align-items: center;
+}
+
+.ci-limit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.ci-control-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ci-muted);
+  margin-right: 0.15rem;
+}
+
+.ci-state-box-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.55rem;
+  margin-top: 0.5rem;
+}
+
+.ci-state-box {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  text-align: left;
+  padding: 0.75rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid var(--ci-border);
+  background: var(--ci-panel);
+  color: var(--ci-text);
+  cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.ci-state-box:hover {
+  border-color: rgba(110, 217, 160, 0.45);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+}
+
+.ci-state-box-name {
+  font-weight: 650;
+  font-size: 0.9rem;
+  line-height: 1.2;
+}
+
+.ci-state-box-abbr {
+  font-size: 0.68rem;
+  color: var(--ci-muted);
+  letter-spacing: 0.04em;
+}
+
+.ci-state-box-rate {
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ci-accent-bright);
+  margin-top: 0.15rem;
+}
+
+.ci-state-expand-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.ci-exit-btn {
+  appearance: none;
+  border: 1px solid rgba(110, 217, 160, 0.4);
+  background: var(--ci-accent-soft);
+  color: var(--ci-accent-bright);
+  font-weight: 650;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+
+.ci-exit-btn:hover {
+  background: rgba(61, 154, 106, 0.28);
+  transform: translateY(-1px);
+}
+
+.ci-exit-btn--footer {
+  margin-top: 1rem;
+}
+
+.ci-detail--full {
+  animation: ciFadeUp 0.38s ease both;
+}
+
+.ci-detail--full .ci-detail-head h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
 .ci-select-wrap {
   display: flex;
   flex-direction: column;

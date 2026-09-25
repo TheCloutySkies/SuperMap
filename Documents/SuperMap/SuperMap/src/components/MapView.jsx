@@ -1654,14 +1654,17 @@ export default function MapView({
       } else helpers.removeSurveillanceCapabilities()
 
       if (toggles.flockCameras) {
-        // Full US set is cached client-side; skip re-fetch if source already present.
-        if (!map.getSource('intel-flock-cameras')) {
-          onLoading?.(true)
-          fetchFlockCameras()
-            .then((geoJson) => helpers.addFlockCameras(geoJson))
-            .catch(() => helpers.addFlockCameras({ type: 'FeatureCollection', features: [] }))
-            .finally(() => onLoading?.(false))
-        }
+        onLoading?.(true)
+        fetchFlockCameras()
+          .then((geoJson) => {
+            if (!mapRef.current || !mapReadyRef.current) return
+            helpers.addFlockCameras(geoJson)
+          })
+          .catch(() => {
+            if (!mapRef.current || !mapReadyRef.current) return
+            helpers.addFlockCameras({ type: 'FeatureCollection', features: [] })
+          })
+          .finally(() => onLoading?.(false))
       } else helpers.removeFlockCameras()
 
       if (toggles.crimeStateRates) {
@@ -2067,7 +2070,15 @@ export default function MapView({
 
     map.on('styledata', onStyleData)
     return () => map.off('styledata', onStyleData)
-  }, [layerToggles, doFetch, onLoadingChange])
+  }, [layerToggles, doFetch, onLoadingChange, activeView])
+
+  // Ensure Flock cameras load when entering the dedicated view (activeView drives the layer).
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReadyRef.current || activeView !== 'flock-map') return
+    if (!map.isStyleLoaded()) return
+    doFetch(map, { ...DEFAULT_LAYER_TOGGLES, flockCameras: true }, onLoadingChange)
+  }, [activeView, mapInstance, doFetch, onLoadingChange])
 
   useEffect(() => {
     const map = mapRef.current

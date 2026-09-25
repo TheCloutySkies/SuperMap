@@ -130,6 +130,7 @@ function App() {
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true)
   const [mapChromePrefs, setMapChromePrefs] = useState(() => loadChromePrefs())
   const [activeToolId, setActiveToolId] = useState(TOOLS_LIST[0]?.id ?? null)
+  const [crimeFocusSegment, setCrimeFocusSegment] = useState(null)
   const [isLeftSidebarMinimized, setIsLeftSidebarMinimized] = useState(false)
   const [footerTransition, setFooterTransition] = useState(false)
   const prevFooterModeRef = useRef(null)
@@ -253,6 +254,35 @@ function App() {
     else if (resolved === 'report-maker') setAppMode(APP_MODES.REPORTS)
     else if (resolved === 'settings') setAppMode(APP_MODES.SETTINGS)
   }, [])
+
+  /** Omnibar jump: string viewId or rich target (crime section, tool, resource, widget). */
+  const handleOmnibarNavigate = useCallback((target) => {
+    if (target == null) return
+    if (typeof target === 'string') {
+      setActiveViewWithMode(target)
+      return
+    }
+    const viewId = target.viewId
+    if (!viewId) return
+
+    if (target.toolId) setActiveToolId(target.toolId)
+    if (target.crimeSegment) setCrimeFocusSegment(target.crimeSegment)
+
+    setActiveViewWithMode(viewId)
+
+    if (target.widgetId) {
+      const id = target.widgetId
+      setTimeout(() => {
+        document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 150)
+    }
+    if (target.resourceSectionId) {
+      const sectionId = target.resourceSectionId
+      setTimeout(() => {
+        resourcesScrollRef.current?.scrollToSection?.(sectionId)
+      }, 80)
+    }
+  }, [setActiveViewWithMode])
 
   useEffect(() => {
     if (!apiBase || !configured) return
@@ -423,7 +453,7 @@ function App() {
         )}
         {isCrimeView && (
           <div className="main-content-scroll main-content-scroll--crime">
-            <CrimeIntelligenceView />
+            <CrimeIntelligenceView focusSegment={crimeFocusSegment} />
           </div>
         )}
         {activeView === 'osint-feeds' && (
@@ -544,7 +574,7 @@ function App() {
             onNavigateToMap={() => setActiveViewWithMode('osint-map')}
             onNavigateToSearchResults={(q) => { setSearchQuery(q || searchQuery); setActiveView('search-results'); setAppMode(APP_MODES.FEEDS) }}
             onNavigateToFeeds={(q) => { setSearchQuery(q || ''); setActiveView('osint-feeds'); setAppMode(APP_MODES.FEEDS) }}
-            onCommandNavigate={setActiveViewWithMode}
+            onCommandNavigate={handleOmnibarNavigate}
             placeholder="Search or jump (Ctrl+K)…"
           />
           {isMapView && (

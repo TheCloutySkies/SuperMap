@@ -58,7 +58,6 @@ const OSINT_LAYER_SECTIONS = [
       { key: 'fccTowers', label: 'FCC / Towers', hint: 'Backend or Overpass cell towers' },
       { key: 'odintRegions', label: 'ODINT Recon Regions', hint: 'Digital infrastructure recon (ringmast4r/ODINT)' },
       { key: 'surveillanceCapabilities', label: 'Surveillance Capabilities (US)', hint: 'EFF Atlas + contracts (ringmast4r)' },
-      { key: 'flockCameras', label: 'Flock / ALPR Cameras (US)', hint: 'DeFlock Maps · FoggedLens/deflockhopper_maps' },
     ],
   },
   {
@@ -166,6 +165,7 @@ export default function RightSidebar({
   const isCrimeMap = activeView === 'crime-map'
   const isExploreMap = activeView === 'explore-map'
   const isGeolocateMap = activeView === 'geolocate-map'
+  const isFlockMap = activeView === 'flock-map'
   const sections = isCrimeMap
     ? CRIME_LAYER_SECTIONS
     : isConflictMap
@@ -323,7 +323,17 @@ export default function RightSidebar({
         </>
       )}
 
-      {isMapView && !isConflictMap && !isExploreMap && !isGeolocateMap && (
+      {isMapView && isFlockMap && (
+        <section className="right-sidebar-section">
+          <h3>Flock Cameras</h3>
+          <p className="layers-hint">
+            ALPR camera locations for the United States. Pan and zoom to explore an area.
+            Data: DeFlock Maps (FoggedLens/deflockhopper_maps) · OSM-derived.
+          </p>
+        </section>
+      )}
+
+      {isMapView && !isConflictMap && !isExploreMap && !isGeolocateMap && !isFlockMap && (
         <>
           <section className="right-sidebar-section">
             <button

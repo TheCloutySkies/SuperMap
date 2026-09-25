@@ -13,6 +13,7 @@ const TAB_LABELS = {
   osintMap: 'OSINT Map',
   conflictMap: 'Conflict Map',
   exploreMap: 'Explore',
+  flockMap: 'Flock Cameras',
   osintFeeds: 'OSINT Feeds',
   newsFeeds: 'News Feeds',
   osintX: 'OSINT (X)',

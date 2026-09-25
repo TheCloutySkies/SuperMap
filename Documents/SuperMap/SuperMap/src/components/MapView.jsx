@@ -3,7 +3,7 @@ import maplibregl from 'maplibre-gl'
 import MapboxDraw from '@mapbox/mapbox-gl-draw'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css'
-import { BASEMAPS, STORAGE_KEYS } from '../constants'
+import { BASEMAPS, STORAGE_KEYS, DEFAULT_LAYER_TOGGLES } from '../constants'
 import { getAoiFeatures, setAoiFeatures, getSavedPoints, setSavedPoints } from '../constants'
 import { MAPLIBRE_DRAW_STYLES } from '../lib/mapboxDrawStyles'
 import {
@@ -1385,10 +1385,16 @@ export default function MapView({
   }, [upsertSavedPointsLayer])
 
   const doFetch = useCallback(
-    (map, toggles, onLoading) => {
+    (map, togglesIn, onLoading) => {
       if (!map || !map.getStyle) return
       // Geolocate uses Overpass presets only; Explore should still load layer toggles.
       if (activeViewRef.current === 'geolocate-map') return
+      // Dedicated Flock map: cameras only (ignore leftover OSINT toggles).
+      // Other maps never load flock — that lives only on flock-map.
+      const toggles =
+        activeViewRef.current === 'flock-map'
+          ? { ...DEFAULT_LAYER_TOGGLES, flockCameras: true }
+          : { ...togglesIn, flockCameras: false }
       const getRadarWanted = () => layerTogglesRef.current?.noaaRadar === true
       const helpers = addOrUpdateLayer(map, toggles, onLoading, getRadarWanted)
       const bbox = () => {
@@ -1648,14 +1654,17 @@ export default function MapView({
       } else helpers.removeSurveillanceCapabilities()
 
       if (toggles.flockCameras) {
-        // Full US set is cached client-side; skip re-fetch if source already present.
-        if (!map.getSource('intel-flock-cameras')) {
-          onLoading?.(true)
-          fetchFlockCameras()
-            .then((geoJson) => helpers.addFlockCameras(geoJson))
-            .catch(() => helpers.addFlockCameras({ type: 'FeatureCollection', features: [] }))
-            .finally(() => onLoading?.(false))
-        }
+        onLoading?.(true)
+        fetchFlockCameras()
+          .then((geoJson) => {
+            if (!mapRef.current || !mapReadyRef.current) return
+            helpers.addFlockCameras(geoJson)
+          })
+          .catch(() => {
+            if (!mapRef.current || !mapReadyRef.current) return
+            helpers.addFlockCameras({ type: 'FeatureCollection', features: [] })
+          })
+          .finally(() => onLoading?.(false))
       } else helpers.removeFlockCameras()
 
       if (toggles.crimeStateRates) {
@@ -2061,7 +2070,15 @@ export default function MapView({
 
     map.on('styledata', onStyleData)
     return () => map.off('styledata', onStyleData)
-  }, [layerToggles, doFetch, onLoadingChange])
+  }, [layerToggles, doFetch, onLoadingChange, activeView])
+
+  // Ensure Flock cameras load when entering the dedicated view (activeView drives the layer).
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReadyRef.current || activeView !== 'flock-map') return
+    if (!map.isStyleLoaded()) return
+    doFetch(map, { ...DEFAULT_LAYER_TOGGLES, flockCameras: true }, onLoadingChange)
+  }, [activeView, mapInstance, doFetch, onLoadingChange])
 
   useEffect(() => {
     const map = mapRef.current
@@ -2207,6 +2224,15 @@ export default function MapView({
     try {
       const b = map.getBounds()
       window.__supermapOverpassBbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]
+    } catch (_) {}
+  }, [activeView, mapInstance])
+
+  // Frame the continental US when opening the dedicated Flock Cameras map.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReadyRef.current || activeView !== 'flock-map') return
+    try {
+      map.flyTo({ center: [-98.35, 39.5], zoom: 4, duration: 1000 })
     } catch (_) {}
   }, [activeView, mapInstance])
 
@@ -2376,6 +2402,13 @@ export default function MapView({
     }
 
     if (activeView === 'crime-map') {
+      helpers.addMappedNews(emptyFC())
+      helpers.addMappedOsint(emptyFC())
+      helpers.removeMappedConflictEvents()
+      return
+    }
+
+    if (activeView === 'flock-map') {
       helpers.addMappedNews(emptyFC())
       helpers.addMappedOsint(emptyFC())
       helpers.removeMappedConflictEvents()

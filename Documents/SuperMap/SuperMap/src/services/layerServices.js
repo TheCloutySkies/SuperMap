@@ -315,11 +315,17 @@ export async function fetchDatacenters(bbox) {
     if (datacentersCache.length === 0) return datacentersFallbackInBbox(w, s, e, n)
     const features = []
     for (const dc of datacentersCache) {
-      const lon = dc.lon ?? dc.longitude ?? dc.city_coords?.[0]
-      const lat = dc.lat ?? dc.latitude ?? dc.city_coords?.[1]
+      // Prefer explicit lon/lat. ATLAS city_coords is [lat, lon] (not GeoJSON order).
+      let lon = dc.lon ?? dc.longitude
+      let lat = dc.lat ?? dc.latitude
+      if ((lon == null || lat == null) && Array.isArray(dc.city_coords) && dc.city_coords.length >= 2) {
+        lat = dc.city_coords[0]
+        lon = dc.city_coords[1]
+      }
       if (lat == null || lon == null) continue
       const latN = Number(lat)
       const lonN = Number(lon)
+      if (!Number.isFinite(latN) || !Number.isFinite(lonN)) continue
       if (lonN < w || lonN > e || latN < s || latN > n) continue
       features.push({
         type: 'Feature',
@@ -402,6 +408,21 @@ const SURVEILLANCE_CSV_URL = 'https://raw.githubusercontent.com/ringmast4r/surve
 const CITY_COORDS_URL = 'https://raw.githubusercontent.com/ringmast4r/surveillance-capabilities-map/main/city_coords.json'
 let surveillanceCache = null
 /** EFF Atlas of Surveillance (ringmast4r/surveillance-capabilities-map). US only. */
+function normalizeCityStateKey(city, state) {
+  const c = String(city || '').trim().toUpperCase()
+  const st = String(state || '').trim().toUpperCase().slice(0, 2)
+  if (!c || !st) return ''
+  return `${c}|${st}`
+}
+
+/** city_coords.json keys look like "ATLANTA,GA" (no space); values are [lat, lon]. */
+function cityCoordsKeyFromRaw(rawKey) {
+  return String(rawKey || '')
+    .trim()
+    .toUpperCase()
+    .replace(/,\s*/g, '|')
+}
+
 export async function fetchSurveillanceCapabilities(bbox) {
   if (!bbox || bbox.length < 4) return { type: 'FeatureCollection', features: [] }
   const [w, s, e, n] = bbox
@@ -422,17 +443,21 @@ export async function fetchSurveillanceCapabilities(bbox) {
           } catch (_) {}
           if (Array.isArray(coordsData)) {
             coordsData.forEach((c) => {
-              const key = `${(c.city || c.City || '').trim()}|${(c.state || c.State || '').trim().toUpperCase().slice(0, 2)}`
-              if (key === '|') return
+              const key = normalizeCityStateKey(c.city || c.City, c.state || c.State)
+              if (!key) return
               const lon = c.lon ?? c.longitude
               const lat = c.lat ?? c.latitude
               if (lat != null && lon != null) coordsLookup.set(key, [Number(lon), Number(lat)])
             })
           } else if (coordsData && typeof coordsData === 'object') {
             Object.entries(coordsData).forEach(([k, v]) => {
-              const key = k.replace(/, /g, '|').toUpperCase()
+              const key = cityCoordsKeyFromRaw(k)
+              if (!key.includes('|')) return
               if (Array.isArray(v) && v.length >= 2) {
-                coordsLookup.set(key, [Number(v[0]), Number(v[1])])
+                // Values are [lat, lon] — store GeoJSON [lon, lat]
+                const lat = Number(v[0])
+                const lon = Number(v[1])
+                if (Number.isFinite(lat) && Number.isFinite(lon)) coordsLookup.set(key, [lon, lat])
               } else if (v && typeof v === 'object' && (v.lat != null || v.latitude != null) && (v.lon != null || v.longitude != null)) {
                 const lon = v.lon ?? v.longitude
                 const lat = v.lat ?? v.latitude
@@ -444,24 +469,25 @@ export async function fetchSurveillanceCapabilities(bbox) {
       } catch (_) {}
       const features = []
       const seen = new Set()
-      for (const line of rows.slice(0, 3000)) {
+      // CSV columns: AOSNUMBER, NEWAOSNUMBER, City, County, State, Agency, ...
+      for (const line of rows.slice(0, 8000)) {
         const parts = []
         let rest = line
-        for (let i = 0; i < 5 && rest; i++) {
+        for (let i = 0; i < 6 && rest; i++) {
           const m = rest.match(/^"([^"]*(?:""[^"]*)*)"\s*,?\s*(.*)$/s) || rest.match(/^([^,]*),?\s*(.*)$/s)
           if (m) {
             parts.push((m[1] || '').replace(/""/g, '"').trim())
             rest = (m[2] || '').trim()
           }
         }
-        const city = (parts[1] || '').trim()
-        const state = (parts[3] || '').trim().toUpperCase().slice(0, 2)
+        const city = (parts[2] || '').trim()
+        const state = (parts[4] || '').trim().toUpperCase().slice(0, 2)
         if (!city || !state) continue
-        const key = `${city}|${state}`
+        const key = normalizeCityStateKey(city, state)
         const coord = coordsLookup.get(key)
         if (!coord || seen.has(key)) continue
         seen.add(key)
-        const agency = (parts[4] || '').trim()
+        const agency = (parts[5] || '').trim()
         features.push({
           type: 'Feature',
           properties: { city, state, agency },

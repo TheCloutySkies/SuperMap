@@ -364,3 +364,40 @@
     margin: -24px 0 0 -24px;
   }
 }
+
+.map-tools-radial-item.is-drag-place {
+  cursor: grab;
+  touch-action: none;
+}
+
+.map-tools-radial-item.is-drag-place:active {
+  cursor: grabbing;
+}
+
+.map-tools-drag-ghost {
+  position: fixed;
+  z-index: 4000;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(12, 18, 14, 0.94);
+  border: 1px solid color-mix(in srgb, var(--y2k-accent) 55%, var(--y2k-border));
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+.map-tools-drag-ghost-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.map-tools-drag-ghost-label {
+  font-size: 0.65rem;
+  color: var(--y2k-text-muted, #8b949e);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}

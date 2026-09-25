@@ -8,7 +8,6 @@ export const MAP_TOOLS_PANEL_POS_KEY = 'supermap_map_tools_panel_pos'
 export const DEFAULT_CHROME = {
   zoom: false, // zoom lives in collapsible tools panel; optional docked chrome
   weather: true,
-  spaceWx: true,
   coords: true,
   crimeDash: true,
   locateStack: false, // Measure/Pin/Locate live in radial by default

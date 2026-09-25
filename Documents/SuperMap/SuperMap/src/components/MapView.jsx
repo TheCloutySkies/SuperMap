@@ -45,6 +45,89 @@ MapboxDraw.constants.classes.CONTROL_GROUP = 'maplibregl-ctrl-group'
 MapboxDraw.constants.classes.ATTRIBUTION = 'maplibregl-ctrl-attrib'
 
 const MIN_POWER_ZOOM = 14
+const FLOCK_MARKER_URL = '/assets/flock-camera-marker.png'
+const FLOCK_ICON_ID = 'flock-camera-marker'
+
+/** Layer emoji markers (documented in PR): hurricane 🌀, volcano 🌋, news 📰, quake 💥, mil ✈, FCC 📡 */
+const LAYER_EMOJI = {
+  hurricane: '🌀',
+  volcano: '🌋',
+  news: '📰',
+  earthquake: '💥',
+  milAircraft: '✈',
+  fccTower: '📡',
+  osint: '🔎',
+}
+
+const EMOJI_ICON_IDS = {
+  hurricane: 'emoji-hurricane',
+  volcano: 'emoji-volcano',
+  news: 'emoji-news',
+  earthquake: 'emoji-earthquake',
+  milAircraft: 'emoji-mil-aircraft',
+  fccTower: 'emoji-fcc-tower',
+  osint: 'emoji-osint',
+}
+
+function emojiToImageData(emoji, size = 64) {
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+  ctx.clearRect(0, 0, size, size)
+  ctx.font = `${Math.floor(size * 0.72)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(emoji, size / 2, size / 2 + size * 0.04)
+  return ctx.getImageData(0, 0, size, size)
+}
+
+function ensureEmojiIcons(map) {
+  if (!map || typeof map.addImage !== 'function') return
+  Object.entries(EMOJI_ICON_IDS).forEach(([key, id]) => {
+    if (map.hasImage(id)) return
+    const emoji = LAYER_EMOJI[key]
+    const data = emojiToImageData(emoji, 64)
+    if (!data) return
+    try {
+      map.addImage(id, data, { pixelRatio: 2 })
+    } catch (_) { /* ignore duplicate */ }
+  })
+}
+
+function emojiIconLayer(id, source, iconId, { size = 0.9, filter = null, minzoom = undefined, maxzoom = undefined } = {}) {
+  const layer = {
+    id,
+    type: 'symbol',
+    source,
+    layout: {
+      'icon-image': iconId,
+      'icon-size': size,
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+      'icon-anchor': 'center',
+    },
+  }
+  if (filter) layer.filter = filter
+  if (minzoom != null) layer.minzoom = minzoom
+  if (maxzoom != null) layer.maxzoom = maxzoom
+  return layer
+}
+
+async function ensureMapImage(map, id, url) {
+  if (!map || map.hasImage?.(id)) return true
+  try {
+    const result = await map.loadImage(url)
+    const image = result?.data ?? result
+    if (!image) return false
+    if (!map.hasImage(id)) map.addImage(id, image)
+    return true
+  } catch (err) {
+    console.warn('[SuperMap] map image load failed', id, err?.message || err)
+    return false
+  }
+}
 
 const CLICKABLE_POINT_LAYERS = [
   'intel-power-points',
@@ -63,6 +146,7 @@ const CLICKABLE_POINT_LAYERS = [
   'intel-odint-layer',
   'intel-surveillance-capabilities-layer',
   'intel-flock-cameras-layer',
+  'intel-flock-cameras-icon',
   'intel-mil-aircraft-layer',
   'intel-ioda-layer',
   'mapped-news-layer',
@@ -209,21 +293,13 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
   }
 
   const addUsgs = (geoJson) => {
+    ensureEmojiIcons(map)
     if (map.getSource('intel-usgs')) {
       map.getSource('intel-usgs').setData(geoJson)
       return
     }
     map.addSource('intel-usgs', { type: 'geojson', data: geoJson })
-    map.addLayer({
-      id: 'intel-usgs-layer',
-      type: 'circle',
-      source: 'intel-usgs',
-      paint: {
-        'circle-radius': ['interpolate', ['linear'], ['coalesce', ['to-number', ['get', 'mag']], 0], 0, 4, 7, 16],
-        'circle-color': '#a855f7',
-        'circle-opacity': 0.9,
-      },
-    })
+    map.addLayer(emojiIconLayer('intel-usgs-layer', 'intel-usgs', EMOJI_ICON_IDS.earthquake, { size: 0.85 }))
   }
 
   const removeUsgs = () => {
@@ -232,23 +308,13 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
   }
 
   const addEmsc = (geoJson) => {
+    ensureEmojiIcons(map)
     if (map.getSource('intel-emsc')) {
       map.getSource('intel-emsc').setData(geoJson)
       return
     }
     map.addSource('intel-emsc', { type: 'geojson', data: geoJson })
-    map.addLayer({
-      id: 'intel-emsc-layer',
-      type: 'circle',
-      source: 'intel-emsc',
-      paint: {
-        'circle-radius': ['interpolate', ['linear'], ['coalesce', ['to-number', ['get', 'mag']], 0], 0, 4, 7, 16],
-        'circle-color': '#06b6d4',
-        'circle-opacity': 0.9,
-        'circle-stroke-width': 1,
-        'circle-stroke-color': '#fff',
-      },
-    })
+    map.addLayer(emojiIconLayer('intel-emsc-layer', 'intel-emsc', EMOJI_ICON_IDS.earthquake, { size: 0.85 }))
   }
 
   const removeEmsc = () => {
@@ -310,23 +376,13 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
   }
 
   const addVolcanoes = (geoJson) => {
+    ensureEmojiIcons(map)
     if (map.getSource('intel-volcanoes')) {
       map.getSource('intel-volcanoes').setData(geoJson)
       return
     }
     map.addSource('intel-volcanoes', { type: 'geojson', data: geoJson })
-    map.addLayer({
-      id: 'intel-volcanoes-layer',
-      type: 'circle',
-      source: 'intel-volcanoes',
-      paint: {
-        'circle-radius': 9,
-        'circle-color': '#dc2626',
-        'circle-opacity': 0.9,
-        'circle-stroke-width': 2,
-        'circle-stroke-color': '#fef08a',
-      },
-    })
+    map.addLayer(emojiIconLayer('intel-volcanoes-layer', 'intel-volcanoes', EMOJI_ICON_IDS.volcano, { size: 1.0 }))
   }
 
   const removeVolcanoes = () => {
@@ -335,23 +391,13 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
   }
 
   const addNhc = (geoJson) => {
+    ensureEmojiIcons(map)
     if (map.getSource('intel-nhc')) {
       map.getSource('intel-nhc').setData(geoJson)
       return
     }
     map.addSource('intel-nhc', { type: 'geojson', data: geoJson })
-    map.addLayer({
-      id: 'intel-nhc-layer',
-      type: 'circle',
-      source: 'intel-nhc',
-      paint: {
-        'circle-radius': 10,
-        'circle-color': '#0ea5e9',
-        'circle-opacity': 0.9,
-        'circle-stroke-width': 2,
-        'circle-stroke-color': '#fff',
-      },
-    })
+    map.addLayer(emojiIconLayer('intel-nhc-layer', 'intel-nhc', EMOJI_ICON_IDS.hurricane, { size: 1.05 }))
   }
 
   const removeNhc = () => {
@@ -499,24 +545,15 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
   }
 
   const addFccTowers = (geoJson) => {
+    ensureEmojiIcons(map)
     const fc = geoJson || { type: 'FeatureCollection', features: [] }
     if (map.getSource('intel-fcc-towers')) {
       map.getSource('intel-fcc-towers').setData(fc)
       return
     }
     map.addSource('intel-fcc-towers', { type: 'geojson', data: fc })
-    map.addLayer({
-      id: 'intel-fcc-towers-layer',
-      type: 'circle',
-      source: 'intel-fcc-towers',
-      paint: {
-        'circle-radius': 6,
-        'circle-color': '#84cc16',
-        'circle-opacity': 0.9,
-        'circle-stroke-width': 1,
-        'circle-stroke-color': '#65a30d',
-      },
-    })
+    // FCC / towers marker: 📡 (radio/antenna) — chosen over 🗼 for clarity at small sizes
+    map.addLayer(emojiIconLayer('intel-fcc-towers-layer', 'intel-fcc-towers', EMOJI_ICON_IDS.fccTower, { size: 0.8 }))
     map.addLayer({
       id: 'intel-fcc-towers-labels',
       type: 'symbol',
@@ -525,7 +562,7 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
         'text-field': ['coalesce', ['get', 'registrationNumber'], ['get', 'asrNumber'], 'FCC'],
         'text-size': 9,
         'text-anchor': 'top',
-        'text-offset': [0, 0.5],
+        'text-offset': [0, 0.9],
       },
       paint: { 'text-color': '#e6edf3', 'text-halo-color': '#0d1117', 'text-halo-width': 1 },
     })
@@ -618,75 +655,103 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     if (map.getSource('intel-surveillance-capabilities')) map.removeSource('intel-surveillance-capabilities')
   }
 
-  /** DeFlock-style cyan ALPR markers (FoggedLens/deflockhopper_maps cameras-us). */
+  /** DeFlock-style cyan ALPR markers (FoggedLens/deflockhopper_maps cameras-us).
+   * Clusters stay as cyan circles; photo icon only on unclustered (individual) cameras. */
   const addFlockCameras = (geoJson) => {
-    if (map.getSource('intel-flock-cameras')) {
-      map.getSource('intel-flock-cameras').setData(geoJson)
+    const ensureIconLayer = () => {
+      if (!map.getSource('intel-flock-cameras')) return
+      if (!map.hasImage(FLOCK_ICON_ID)) return
+      if (map.getLayer('intel-flock-cameras-icon')) return
+      map.addLayer({
+        id: 'intel-flock-cameras-icon',
+        type: 'symbol',
+        source: 'intel-flock-cameras',
+        filter: ['!', ['has', 'point_count']],
+        layout: {
+          'icon-image': FLOCK_ICON_ID,
+          'icon-size': ['interpolate', ['linear'], ['zoom'], 12, 0.65, 16, 1.15],
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true,
+        },
+      })
+    }
+
+    const mountLayers = () => {
+      if (map.getSource('intel-flock-cameras')) {
+        map.getSource('intel-flock-cameras').setData(geoJson)
+        ensureIconLayer()
+        return
+      }
+      map.addSource('intel-flock-cameras', {
+        type: 'geojson',
+        data: geoJson,
+        cluster: true,
+        clusterRadius: 50,
+        clusterMaxZoom: 12,
+      })
+      // Density clusters — DeFlock cyan (#4DA6FF); never use photo icons here
+      map.addLayer({
+        id: 'intel-flock-cameras-clusters',
+        type: 'circle',
+        source: 'intel-flock-cameras',
+        filter: ['has', 'point_count'],
+        paint: {
+          'circle-color': '#4DA6FF',
+          'circle-opacity': 0.75,
+          'circle-radius': ['step', ['get', 'point_count'], 14, 25, 18, 100, 24, 500, 30],
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': '#93CBFF',
+        },
+      })
+      map.addLayer({
+        id: 'intel-flock-cameras-cluster-count',
+        type: 'symbol',
+        source: 'intel-flock-cameras',
+        filter: ['has', 'point_count'],
+        layout: {
+          'text-field': ['get', 'point_count_abbreviated'],
+          'text-size': 11,
+          'text-allow-overlap': true,
+        },
+        paint: { 'text-color': '#0b1220' },
+      })
+      // Fallback cyan dots only until the photo sprite finishes loading
+      map.addLayer({
+        id: 'intel-flock-cameras-layer',
+        type: 'circle',
+        source: 'intel-flock-cameras',
+        filter: ['!', ['has', 'point_count']],
+        paint: {
+          'circle-color': '#4DA6FF',
+          'circle-radius': 5,
+          'circle-opacity': 0.9,
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#93CBFF',
+        },
+      })
+      ensureIconLayer()
+      if (map.getLayer('intel-flock-cameras-icon') && map.getLayer('intel-flock-cameras-layer')) {
+        map.setLayoutProperty('intel-flock-cameras-layer', 'visibility', 'none')
+      }
+    }
+
+    if (map.hasImage(FLOCK_ICON_ID)) {
+      mountLayers()
       return
     }
-    map.addSource('intel-flock-cameras', {
-      type: 'geojson',
-      data: geoJson,
-      cluster: true,
-      clusterRadius: 50,
-      clusterMaxZoom: 12,
-    })
-    // Density clusters — DeFlock cyan (#4DA6FF)
-    map.addLayer({
-      id: 'intel-flock-cameras-clusters',
-      type: 'circle',
-      source: 'intel-flock-cameras',
-      filter: ['has', 'point_count'],
-      paint: {
-        'circle-color': '#4DA6FF',
-        'circle-opacity': 0.75,
-        'circle-radius': ['step', ['get', 'point_count'], 14, 25, 18, 100, 24, 500, 30],
-        'circle-stroke-width': 1.5,
-        'circle-stroke-color': '#93CBFF',
-      },
-    })
-    map.addLayer({
-      id: 'intel-flock-cameras-cluster-count',
-      type: 'symbol',
-      source: 'intel-flock-cameras',
-      filter: ['has', 'point_count'],
-      layout: {
-        'text-field': ['get', 'point_count_abbreviated'],
-        'text-size': 11,
-        'text-allow-overlap': true,
-      },
-      paint: { 'text-color': '#0b1220' },
-    })
-    // Soft glow under unclustered points (DeFlock signature)
-    map.addLayer({
-      id: 'intel-flock-cameras-glow',
-      type: 'circle',
-      source: 'intel-flock-cameras',
-      filter: ['!', ['has', 'point_count']],
-      paint: {
-        'circle-color': '#4DA6FF',
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 4, 12, 14],
-        'circle-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0.15, 12, 0.35],
-        'circle-blur': 0.5,
-      },
-    })
-    map.addLayer({
-      id: 'intel-flock-cameras-layer',
-      type: 'circle',
-      source: 'intel-flock-cameras',
-      filter: ['!', ['has', 'point_count']],
-      paint: {
-        'circle-color': '#4DA6FF',
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 4, 12, 6],
-        'circle-opacity': 0.95,
-        'circle-stroke-width': 2,
-        'circle-stroke-color': '#93CBFF',
-      },
+    mountLayers()
+    ensureMapImage(map, FLOCK_ICON_ID, FLOCK_MARKER_URL).then(() => {
+      if (!map.getStyle?.()) return
+      ensureIconLayer()
+      if (map.getLayer('intel-flock-cameras-icon') && map.getLayer('intel-flock-cameras-layer')) {
+        map.setLayoutProperty('intel-flock-cameras-layer', 'visibility', 'none')
+      }
     })
   }
 
   const removeFlockCameras = () => {
     ;[
+      'intel-flock-cameras-icon',
       'intel-flock-cameras-layer',
       'intel-flock-cameras-glow',
       'intel-flock-cameras-cluster-count',
@@ -779,22 +844,13 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
   }
 
   const addMappedNews = (geoJson) => {
+    ensureEmojiIcons(map)
     if (map.getSource('mapped-news')) {
       map.getSource('mapped-news').setData(geoJson)
       return
     }
     map.addSource('mapped-news', { type: 'geojson', data: geoJson })
-    map.addLayer({
-      id: 'mapped-news-layer',
-      type: 'circle',
-      source: 'mapped-news',
-      paint: {
-        'circle-radius': 10,
-        'circle-color': '#3b82f6',
-        'circle-stroke-width': 2,
-        'circle-stroke-color': '#fff',
-      },
-    })
+    map.addLayer(emojiIconLayer('mapped-news-layer', 'mapped-news', EMOJI_ICON_IDS.news, { size: 0.9 }))
     map.addLayer({
       id: 'mapped-news-labels',
       type: 'symbol',
@@ -803,7 +859,7 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
         'text-field': ['get', 'label'],
         'text-size': 11,
         'text-anchor': 'top',
-        'text-offset': [0, 0.8],
+        'text-offset': [0, 1.1],
       },
       paint: { 'text-color': '#e6edf3', 'text-halo-color': '#0d1117', 'text-halo-width': 2 },
     })
@@ -816,22 +872,13 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
   }
 
   const addMappedOsint = (geoJson) => {
+    ensureEmojiIcons(map)
     if (map.getSource('mapped-osint')) {
       map.getSource('mapped-osint').setData(geoJson)
       return
     }
     map.addSource('mapped-osint', { type: 'geojson', data: geoJson })
-    map.addLayer({
-      id: 'mapped-osint-layer',
-      type: 'circle',
-      source: 'mapped-osint',
-      paint: {
-        'circle-radius': 10,
-        'circle-color': '#dc2626',
-        'circle-stroke-width': 2,
-        'circle-stroke-color': '#fbbf24',
-      },
-    })
+    map.addLayer(emojiIconLayer('mapped-osint-layer', 'mapped-osint', EMOJI_ICON_IDS.osint, { size: 0.9 }))
     map.addLayer({
       id: 'mapped-osint-labels',
       type: 'symbol',
@@ -840,7 +887,7 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
         'text-field': ['get', 'label'],
         'text-size': 11,
         'text-anchor': 'top',
-        'text-offset': [0, 0.8],
+        'text-offset': [0, 1.1],
       },
       paint: { 'text-color': '#fef3c7', 'text-halo-color': '#0d1117', 'text-halo-width': 2 },
     })
@@ -956,23 +1003,13 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
   const addMilAircraft = (geoJson) => {
     try {
       if (!map || typeof map.getSource !== 'function') return
+      ensureEmojiIcons(map)
       if (map.getSource('intel-mil-aircraft')) {
         map.getSource('intel-mil-aircraft').setData(geoJson)
         return
       }
       map.addSource('intel-mil-aircraft', { type: 'geojson', data: geoJson })
-      map.addLayer({
-        id: 'intel-mil-aircraft-layer',
-        type: 'circle',
-        source: 'intel-mil-aircraft',
-        paint: {
-          'circle-radius': 6,
-          'circle-color': '#ef4444',
-          'circle-opacity': 0.9,
-          'circle-stroke-width': 1.5,
-          'circle-stroke-color': '#fbbf24',
-        },
-      })
+      map.addLayer(emojiIconLayer('intel-mil-aircraft-layer', 'intel-mil-aircraft', EMOJI_ICON_IDS.milAircraft, { size: 0.9 }))
       map.addLayer({
         id: 'intel-mil-aircraft-labels',
         type: 'symbol',
@@ -981,7 +1018,7 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
           'text-field': ['get', 'title'],
           'text-size': 10,
           'text-anchor': 'top',
-          'text-offset': [0, 0.7],
+          'text-offset': [0, 1.0],
         },
         paint: { 'text-color': '#fbbf24', 'text-halo-color': '#0d1117', 'text-halo-width': 2 },
       })
@@ -1824,7 +1861,7 @@ export default function MapView({
         popup.setLngLat(lngLat).setHTML(html).addTo(map)
         return
       }
-      if (feat.layer?.id === 'intel-flock-cameras-layer') {
+      if (feat.layer?.id === 'intel-flock-cameras-layer' || feat.layer?.id === 'intel-flock-cameras-icon') {
         const props = feat.properties || {}
         const title = props.brand || props.operator || 'ALPR camera'
         const rows = [
@@ -1974,6 +2011,37 @@ export default function MapView({
     }
     window.addEventListener('supermap-toggle-tap-pin', onTapPinToggle)
 
+    const dropPinAt = (lng, lat) => {
+      if (!Number.isFinite(lng) || !Number.isFinite(lat)) return
+      const current = getSavedPoints()
+      const feature = {
+        type: 'Feature',
+        id: `pt-${Date.now()}`,
+        properties: { title: 'Saved point', icon: pointIcon || '📍', source: 'General' },
+        geometry: { type: 'Point', coordinates: [lng, lat] },
+      }
+      const next = { type: 'FeatureCollection', features: [...(current.features || []), feature] }
+      setSavedPoints(next)
+      upsertSavedPointsLayer(next)
+      setPinEditorPin({
+        id: feature.id,
+        title: feature.properties.title,
+        icon: feature.properties.icon,
+        list_name: feature.properties.source,
+        lat,
+        lon: lng,
+      })
+      setPinEditorIsNew(true)
+      setPinEditorOpen(true)
+    }
+
+    const onDropPin = (ev) => {
+      const lng = Number(ev?.detail?.lng)
+      const lat = Number(ev?.detail?.lat)
+      dropPinAt(lng, lat)
+    }
+    window.addEventListener('supermap-drop-pin', onDropPin)
+
     const containerEl = containerRef.current
     const resizeObserver =
       containerEl && typeof ResizeObserver !== 'undefined'
@@ -2015,6 +2083,7 @@ export default function MapView({
       if (map.getSource('intel-saved-points')) map.removeSource('intel-saved-points')
       map.off('moveend', onMoveend)
       window.removeEventListener('supermap-toggle-tap-pin', onTapPinToggle)
+      window.removeEventListener('supermap-drop-pin', onDropPin)
       map.remove()
       mapRef.current = null
       mapReadyRef.current = false
@@ -2346,19 +2415,31 @@ export default function MapView({
     }
 
     const toNewsOsintGeoJson = (data) => {
+      const pointFromFeature = (f) => {
+        let coords = f.geometry?.coordinates
+        if (!Array.isArray(coords) || coords.length < 2) {
+          const lon = f.properties?.lon ?? f.properties?.longitude
+          const lat = f.properties?.lat ?? f.properties?.latitude
+          if (lon == null || lat == null) return null
+          coords = [Number(lon), Number(lat)]
+        }
+        if (!Number.isFinite(coords[0]) || !Number.isFinite(coords[1])) return null
+        return {
+          ...f,
+          geometry: { type: 'Point', coordinates: coords },
+          properties: {
+            ...f.properties,
+            label: (f.properties?.source || '') + ': ' + (f.properties?.title || '').slice(0, 30),
+          },
+        }
+      }
       if (data?.features && Array.isArray(data.features)) {
         return {
           type: 'FeatureCollection',
           features: data.features
-            .filter((f) => f.geometry?.coordinates?.length >= 2)
             .filter((f) => filterItem({ title: f.properties?.title, source: f.properties?.source, contentSnippet: f.properties?.description }))
-            .map((f) => ({
-              ...f,
-              properties: {
-                ...f.properties,
-                label: (f.properties?.source || '') + ': ' + (f.properties?.title || '').slice(0, 30),
-              },
-            })),
+            .map(pointFromFeature)
+            .filter(Boolean),
         }
       }
       return buildGeoJsonFromItems(Array.isArray(data) ? data : [])
@@ -2430,12 +2511,13 @@ export default function MapView({
       return
     }
 
-    const fetchNews = API_BASE
-      ? fetch(`${API_BASE}/api/news`).then((r) => r.json()).catch(emptyFC)
-      : Promise.resolve(emptyFC())
-    const fetchOsint = API_BASE
-      ? fetch(`${API_BASE}/api/osint`).then((r) => r.json()).catch(emptyFC)
-      : Promise.resolve(emptyFC())
+    const apiRoot = API_BASE || ''
+    const fetchNews = fetch(`${apiRoot}/api/news`)
+      .then((r) => (r.ok ? r.json() : emptyFC()))
+      .catch(emptyFC)
+    const fetchOsint = fetch(`${apiRoot}/api/osint`)
+      .then((r) => (r.ok ? r.json() : emptyFC()))
+      .catch(emptyFC)
 
     Promise.all([fetchNews, fetchOsint]).then(([news, osint]) => {
       newsOsintCacheRef.current = { news: news || emptyFC(), osint: osint || emptyFC() }

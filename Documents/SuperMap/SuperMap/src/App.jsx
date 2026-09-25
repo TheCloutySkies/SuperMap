@@ -62,6 +62,7 @@ const MAP_VIEWS = [
   { id: 'conflict-map', label: 'Conflict Map', tabKey: 'conflictMap' },
   { id: 'explore-map', label: 'Explore', tabKey: 'exploreMap' },
   { id: 'geolocate-map', label: 'Geolocate', tabKey: 'geolocateMap' },
+  { id: 'flock-map', label: 'Flock Cameras', tabKey: 'flockMap' },
 ]
 
 const FEED_VIEWS = [
@@ -98,6 +99,15 @@ function App() {
     const id = setTimeout(() => setMapLoadingPending(0), 20000)
     return () => clearTimeout(id)
   }, [mapLoadingPending])
+
+  // Flock Cameras is a dedicated map: force the layer on only in that view.
+  useEffect(() => {
+    setLayerToggles((prev) => {
+      const want = activeView === 'flock-map'
+      if (!!prev.flockCameras === want) return prev
+      return { ...prev, flockCameras: want }
+    })
+  }, [activeView])
 
   const [overpassResults, setOverpassResults] = useState(null)
   const [sentinelTime, setSentinelTime] = useState('24h')
@@ -210,7 +220,7 @@ function App() {
     } catch {}
   }, [])
 
-  const isMapView = ['osint-map', 'conflict-map', 'explore-map', 'geolocate-map'].includes(activeView)
+  const isMapView = ['osint-map', 'conflict-map', 'explore-map', 'geolocate-map', 'flock-map'].includes(activeView)
   const isCrimeView = isCrimeIntelligenceView(activeView)
   const isFeedView = ['osint-feeds', 'news-feeds', 'recent-videos', 'osint-x', 'advanced-search', 'broadcasts'].includes(activeView)
   const isSettingsView = activeView === 'settings'
@@ -235,7 +245,7 @@ function App() {
     setActiveView(resolved)
     setSubnavOpen(true)
     if (resolved === CRIME_VIEW_ID) setAppMode(APP_MODES.CRIME)
-    else if (['osint-map', 'conflict-map', 'explore-map', 'geolocate-map'].includes(resolved)) setAppMode(APP_MODES.MAPS)
+    else if (['osint-map', 'conflict-map', 'explore-map', 'geolocate-map', 'flock-map'].includes(resolved)) setAppMode(APP_MODES.MAPS)
     else if (['osint-feeds', 'osint-x', 'advanced-search', 'news-feeds', 'broadcasts', 'recent-videos'].includes(resolved)) setAppMode(APP_MODES.FEEDS)
     else if (resolved === 'home') setAppMode(APP_MODES.HOME)
     else if (resolved === 'tools') setAppMode(APP_MODES.TOOLS)

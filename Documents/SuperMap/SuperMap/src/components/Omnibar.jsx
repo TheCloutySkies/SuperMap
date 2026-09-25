@@ -14,6 +14,7 @@ const DEFAULT_COMMANDS = [
   { id: 'cmd-crime', label: 'Crime Intelligence', keywords: 'crime fbi ucr ask intelligence', action: 'navigate', viewId: CRIME_VIEW_ID },
   { id: 'cmd-explore-map', label: 'Explore Map', keywords: 'maps explore', action: 'navigate', viewId: 'explore-map' },
   { id: 'cmd-geolocate', label: 'Geolocate', keywords: 'maps geolocate overpass', action: 'navigate', viewId: 'geolocate-map' },
+  { id: 'cmd-flock-map', label: 'Flock Cameras', keywords: 'maps flock alpr deflock cameras', action: 'navigate', viewId: 'flock-map' },
   { id: 'cmd-news', label: 'News Feeds', keywords: 'feeds news', action: 'navigate', viewId: 'news-feeds' },
   { id: 'cmd-osint-feeds', label: 'OSINT Feeds', keywords: 'feeds osint', action: 'navigate', viewId: 'osint-feeds' },
   { id: 'cmd-osint-x', label: 'OSINT (X)', keywords: 'feeds twitter x', action: 'navigate', viewId: 'osint-x' },

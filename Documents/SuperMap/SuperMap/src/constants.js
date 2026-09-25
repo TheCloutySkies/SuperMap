@@ -68,8 +68,8 @@ export const DEFAULT_LAYER_TOGGLES = {
   dataCenters: false,
   odintRegions: false,
   surveillanceCapabilities: false,
-  /** DeFlock / FlockHopper ALPR cameras — on by default for OSINT Map. */
-  flockCameras: true,
+  /** Enabled only on the dedicated flock-map view. */
+  flockCameras: false,
   crimeStateRates: false,
   crimeCityHighlight: false,
 }
@@ -112,6 +112,7 @@ export const DEFAULT_TAB_VISIBILITY = {
   crimeMap: true,
   exploreMap: true,
   geolocateMap: true,
+  flockMap: true,
   osintFeeds: true,
   newsFeeds: true,
   osintX: true,

@@ -234,18 +234,21 @@ export default function HomeScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only bootstrap
   }, [])
 
-  // Gas prices: skip first national fetch when bootstrap already supplied *live* data; refetch on state change or stale discard
-  useEffect(() => {
+  const fetchGasPrices = (force = false) => {
     if (!API_BASE) return
-    const bootLive = gasPrices && !gasPrices.gasUnavailable && gasPrices.ok !== false && gasPrices.national != null
-    if (!selectedGasState && skipInitialGasFetch.current && bootLive) {
-      skipInitialGasFetch.current = false
-      return
-    }
-    skipInitialGasFetch.current = false
     setGasPricesLoading(true)
-    const params = selectedGasState ? { state: selectedGasState } : {}
-    axios.get(`${API_BASE}/api/gas-prices`, { params, timeout: 35000 })
+    setGasPricesError(null)
+    const params = {}
+    if (selectedGasState) params.state = selectedGasState
+    if (force) {
+      params.refresh = '1'
+      params._ = Date.now()
+    }
+    axios.get(`${API_BASE}/api/gas-prices`, {
+      params,
+      timeout: 35000,
+      headers: force ? { 'Cache-Control': 'no-cache' } : undefined,
+    })
       .then((res) => {
         const gas = normalizeGasPrices(res.data)
         setGasPrices(gas)
@@ -264,7 +267,33 @@ export default function HomeScreen({
         })
       })
       .finally(() => setGasPricesLoading(false))
+  }
+
+  // Gas prices: skip first national fetch when bootstrap already supplied *live* data; refetch on state change or stale discard
+  useEffect(() => {
+    if (!API_BASE) return
+    const bootLive = gasPrices && !gasPrices.gasUnavailable && gasPrices.ok !== false && gasPrices.national != null
+    if (!selectedGasState && skipInitialGasFetch.current && bootLive) {
+      skipInitialGasFetch.current = false
+      return
+    }
+    skipInitialGasFetch.current = false
+    fetchGasPrices(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch only on state pick; force refresh is manual
   }, [selectedGasState])
+
+  const gasNeedsRetry =
+    !gasPricesLoading && (
+      !gasPrices ||
+      Boolean(gasPricesError) ||
+      gasPrices.gasUnavailable ||
+      gasPrices.ok === false ||
+      (
+        gasPrices.national == null &&
+        !(Array.isArray(gasPrices.states) && gasPrices.states.some((s) => s?.price != null)) &&
+        !(Array.isArray(gasPrices.regions) && gasPrices.regions.length > 0)
+      )
+    )
 
   const handleCardClick = (path) => {
     if (onNavigate && path) onNavigate(path)
@@ -439,7 +468,19 @@ export default function HomeScreen({
               </ul>
             </section>
             <section className="home-screen-section home-screen-gas-prices card-y2k" id="gas-prices">
-              <h2 className="home-screen-section-title">Gas Prices (US)</h2>
+              <div className="home-screen-gas-prices-header">
+                <h2 className="home-screen-section-title">Gas Prices (US)</h2>
+                <button
+                  type="button"
+                  className={`home-screen-gas-prices-refresh btn-y2k${gasNeedsRetry ? ' home-screen-gas-prices-refresh--prominent' : ''}`}
+                  onClick={() => fetchGasPrices(true)}
+                  disabled={gasPricesLoading}
+                  title="Refresh gas prices"
+                  aria-label="Refresh gas prices"
+                >
+                  {gasPricesLoading ? 'Refreshing…' : 'Refresh'}
+                </button>
+              </div>
               {gasPricesStates.length > 0 && (
                 <div className="home-screen-gas-prices-controls">
                   <label htmlFor="gas-prices-state" className="home-screen-gas-prices-label">State</label>
@@ -461,11 +502,14 @@ export default function HomeScreen({
                 <p className="home-screen-gas-prices-loading">Loading live EIA weekly prices…</p>
               )}
               {gasPricesError && !gasPrices && (
-                <p className="home-screen-gas-prices-error">{gasPricesError}</p>
+                <p className="home-screen-gas-prices-error">
+                  {gasPricesError} Tap Refresh to try again.
+                </p>
               )}
               {!gasPricesLoading && gasPrices && (gasPrices.gasUnavailable || gasPrices.ok === false) && (
                 <p className="home-screen-gas-prices-no-data">
                   {gasPrices.error || 'Live gas prices unavailable right now. No estimate shown.'}
+                  {' '}Tap Refresh to try again.
                 </p>
               )}
               {!gasPricesLoading && gasPrices && !gasPrices.gasUnavailable && gasPrices.ok !== false && (
@@ -497,7 +541,9 @@ export default function HomeScreen({
                       <span className="home-screen-gas-prices-unit">{gasPrices.unit}</span>
                     </div>
                   ) : (
-                    <p className="home-screen-gas-prices-no-data">No price rows in the EIA response.</p>
+                    <p className="home-screen-gas-prices-no-data">
+                      No price rows in the EIA response. Tap Refresh to try again.
+                    </p>
                   )}
                   {Array.isArray(gasPrices.regions) && gasPrices.regions.length > 0 && !selectedGasState && (
                     <ul className="home-screen-gas-prices-regions">

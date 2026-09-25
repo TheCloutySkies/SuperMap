@@ -282,37 +282,26 @@ export default function HomeScreen({
             </h1>
             <span className="home-screen-date">{formatDate()}</span>
           </div>
-          {!isMobileLayout && footerTabs && onFooterNav && (
-            <nav className="home-screen-nav">
-              {footerTabs.map(({ key, label }) => (
-                <button
-                  key={key}
-                  type="button"
-                  className={`home-screen-nav-tab metallicss ${footerMode === key ? 'active' : ''}`}
-                  onClick={() => onFooterNav(key)}
-                >
-                  {label}
-                </button>
-              ))}
-            </nav>
-          )}
         </header>
 
-        <section className="home-screen-radial-wrap" aria-label="Mode menu">
-          <p className="home-screen-radial-hint">Tap a mode to open it</p>
-          <RadialMenu
-            activeMode={footerMode === 'HOME' ? null : footerMode}
-            activeView={activeView}
-            onSelectHome={goHomeHub}
-            onSelectMode={(item) => {
-              if (item?.viewId) {
-                onNavigate?.(item.viewId)
-                return
-              }
-              onFooterNav?.(item?.id || item)
-            }}
-          />
-        </section>
+        {/* Desktop: ModeRail is the sole primary mode switcher. Radial is mobile-only. */}
+        {isMobileLayout && (
+          <section className="home-screen-radial-wrap" aria-label="Mode menu">
+            <p className="home-screen-radial-hint">Tap a mode to open it</p>
+            <RadialMenu
+              activeMode={footerMode === 'HOME' ? null : footerMode}
+              activeView={activeView}
+              onSelectHome={goHomeHub}
+              onSelectMode={(item) => {
+                if (item?.viewId) {
+                  onNavigate?.(item.viewId)
+                  return
+                }
+                onFooterNav?.(item?.id || item)
+              }}
+            />
+          </section>
+        )}
 
         <div className="home-screen-main">
           <div className="home-screen-main-left">

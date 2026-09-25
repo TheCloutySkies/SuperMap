@@ -41,7 +41,7 @@ export default function MobileShell({
         />
       ) : (
         <header className="mobile-page-header">
-          <h1 className="mobile-page-title">{pageTitle || 'SuperMap'}</h1>
+          <h1 className="mobile-page-title">{pageTitle || 'Good Palantir'}</h1>
           {chipItems.length > 0 && (
             <MobileChipBar items={chipItems} ariaLabel={`${pageTitle || 'Page'} views`} />
           )}

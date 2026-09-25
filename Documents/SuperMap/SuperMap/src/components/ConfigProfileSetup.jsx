@@ -26,7 +26,7 @@ export default function ConfigProfileSetup({ onComplete }) {
             width={96}
             height={96}
           />
-          <h1 className="config-profile-title">SuperMap</h1>
+          <h1 className="config-profile-title">Good Palantir</h1>
         </div>
         <p className="config-profile-subtitle">Configuration Profile</p>
         <p className="config-profile-desc">

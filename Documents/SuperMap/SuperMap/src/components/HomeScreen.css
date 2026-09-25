@@ -444,6 +444,14 @@
   letter-spacing: 0.06em;
 }
 
+.home-screen-threat-byline {
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--y2k-accent, #3dd68c);
+  margin-left: 0.35rem;
+}
+
 /* Gas Prices (US) section */
 .home-screen-gas-prices {
   margin-top: 1.5rem;

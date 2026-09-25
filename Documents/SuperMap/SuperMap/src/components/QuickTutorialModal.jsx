@@ -30,7 +30,7 @@ export default function QuickTutorialModal({ onClose }) {
   return (
     <div className="quick-tutorial-overlay" role="dialog" aria-modal="true" aria-label="Quick tutorial">
       <div className="quick-tutorial-modal">
-        <h2>Welcome to SuperMap</h2>
+        <h2>Welcome to Good Palantir</h2>
         <p className="quick-tutorial-intro">Quick setup + tour of your tools:</p>
         <div className="quick-tutorial-profile">
           <label htmlFor="tutorial-profile-name">Profile name (optional)</label>

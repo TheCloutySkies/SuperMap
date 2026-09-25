@@ -21,6 +21,7 @@ import {
   fetchDatacenters,
   fetchOdintRegions,
   fetchSurveillanceCapabilities,
+  fetchFlockCameras,
 } from '../services/layerServices'
 import { buildTerminatorGeoJSON } from '../services/solarTerminator'
 import { fetchMilitaryAircraft, fetchUkraineFrontline, fetchInternetOutages } from '../services/newLayerFetchers'
@@ -61,6 +62,7 @@ const CLICKABLE_POINT_LAYERS = [
   'intel-datacenters-layer',
   'intel-odint-layer',
   'intel-surveillance-capabilities-layer',
+  'intel-flock-cameras-layer',
   'intel-mil-aircraft-layer',
   'intel-ioda-layer',
   'mapped-news-layer',
@@ -616,6 +618,85 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     if (map.getSource('intel-surveillance-capabilities')) map.removeSource('intel-surveillance-capabilities')
   }
 
+  /** DeFlock-style cyan ALPR markers (FoggedLens/deflockhopper_maps cameras-us). */
+  const addFlockCameras = (geoJson) => {
+    if (map.getSource('intel-flock-cameras')) {
+      map.getSource('intel-flock-cameras').setData(geoJson)
+      return
+    }
+    map.addSource('intel-flock-cameras', {
+      type: 'geojson',
+      data: geoJson,
+      cluster: true,
+      clusterRadius: 50,
+      clusterMaxZoom: 12,
+    })
+    // Density clusters — DeFlock cyan (#4DA6FF)
+    map.addLayer({
+      id: 'intel-flock-cameras-clusters',
+      type: 'circle',
+      source: 'intel-flock-cameras',
+      filter: ['has', 'point_count'],
+      paint: {
+        'circle-color': '#4DA6FF',
+        'circle-opacity': 0.75,
+        'circle-radius': ['step', ['get', 'point_count'], 14, 25, 18, 100, 24, 500, 30],
+        'circle-stroke-width': 1.5,
+        'circle-stroke-color': '#93CBFF',
+      },
+    })
+    map.addLayer({
+      id: 'intel-flock-cameras-cluster-count',
+      type: 'symbol',
+      source: 'intel-flock-cameras',
+      filter: ['has', 'point_count'],
+      layout: {
+        'text-field': ['get', 'point_count_abbreviated'],
+        'text-size': 11,
+        'text-allow-overlap': true,
+      },
+      paint: { 'text-color': '#0b1220' },
+    })
+    // Soft glow under unclustered points (DeFlock signature)
+    map.addLayer({
+      id: 'intel-flock-cameras-glow',
+      type: 'circle',
+      source: 'intel-flock-cameras',
+      filter: ['!', ['has', 'point_count']],
+      paint: {
+        'circle-color': '#4DA6FF',
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 4, 12, 14],
+        'circle-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0.15, 12, 0.35],
+        'circle-blur': 0.5,
+      },
+    })
+    map.addLayer({
+      id: 'intel-flock-cameras-layer',
+      type: 'circle',
+      source: 'intel-flock-cameras',
+      filter: ['!', ['has', 'point_count']],
+      paint: {
+        'circle-color': '#4DA6FF',
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 4, 12, 6],
+        'circle-opacity': 0.95,
+        'circle-stroke-width': 2,
+        'circle-stroke-color': '#93CBFF',
+      },
+    })
+  }
+
+  const removeFlockCameras = () => {
+    ;[
+      'intel-flock-cameras-layer',
+      'intel-flock-cameras-glow',
+      'intel-flock-cameras-cluster-count',
+      'intel-flock-cameras-clusters',
+    ].forEach((id) => {
+      if (map.getLayer(id)) map.removeLayer(id)
+    })
+    if (map.getSource('intel-flock-cameras')) map.removeSource('intel-flock-cameras')
+  }
+
   const addUtilityOutages = (geoJson) => {
     if (map.getSource('intel-outages')) {
       map.getSource('intel-outages').setData(geoJson)
@@ -1048,6 +1129,8 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     removeOdintRegions,
     addSurveillanceCapabilities,
     removeSurveillanceCapabilities,
+    addFlockCameras,
+    removeFlockCameras,
     addUtilityOutages,
     removeUtilityOutages,
     addAoiSaved,
@@ -1564,6 +1647,17 @@ export default function MapView({
           .finally(() => onLoading?.(false))
       } else helpers.removeSurveillanceCapabilities()
 
+      if (toggles.flockCameras) {
+        // Full US set is cached client-side; skip re-fetch if source already present.
+        if (!map.getSource('intel-flock-cameras')) {
+          onLoading?.(true)
+          fetchFlockCameras()
+            .then((geoJson) => helpers.addFlockCameras(geoJson))
+            .catch(() => helpers.addFlockCameras({ type: 'FeatureCollection', features: [] }))
+            .finally(() => onLoading?.(false))
+        }
+      } else helpers.removeFlockCameras()
+
       if (toggles.crimeStateRates) {
         onLoading?.(true)
         buildCrimeStateChoropleth('violentRate')
@@ -1721,6 +1815,27 @@ export default function MapView({
         popup.setLngLat(lngLat).setHTML(html).addTo(map)
         return
       }
+      if (feat.layer?.id === 'intel-flock-cameras-layer') {
+        const props = feat.properties || {}
+        const title = props.brand || props.operator || 'ALPR camera'
+        const rows = [
+          props.operator ? `<div><strong>Operator</strong>: ${props.operator}</div>` : '',
+          props.brand ? `<div><strong>Brand</strong>: ${props.brand}</div>` : '',
+          props.surveillanceZone ? `<div><strong>Zone</strong>: ${props.surveillanceZone}</div>` : '',
+          props.mountType ? `<div><strong>Mount</strong>: ${props.mountType}</div>` : '',
+          props.direction !== '' && props.direction != null
+            ? `<div><strong>Direction</strong>: ${props.directionCardinal || props.direction}°</div>`
+            : '',
+        ].filter(Boolean).join('')
+        const html = `<div class="map-popup-content">
+          <div class="map-popup-title">${title}</div>
+          ${rows}
+          <div class="map-popup-source">DeFlock / FlockHopper · OSM · FoggedLens/deflockhopper_maps</div>
+        </div>`
+        const coords = feat.geometry?.coordinates?.slice?.() || [e.lngLat.lng, e.lngLat.lat]
+        popup.setLngLat(coords).setHTML(html).addTo(map)
+        return
+      }
       const coords = feat.geometry?.type === 'Point' ? feat.geometry.coordinates.slice() : null
       if (!coords) return
       if (feat.layer.id === 'intel-saved-points-layer') {
@@ -1776,6 +1891,16 @@ export default function MapView({
       doFetch(map, layerTogglesRef.current || {}, onLoadingChange)
       refreshSavedPointsLayer()
       map.on('click', handleMapClick)
+      map.on('click', 'intel-flock-cameras-clusters', (e) => {
+        const features = map.queryRenderedFeatures(e.point, { layers: ['intel-flock-cameras-clusters'] })
+        const clusterId = features[0]?.properties?.cluster_id
+        const source = map.getSource('intel-flock-cameras')
+        if (clusterId == null || !source?.getClusterExpansionZoom) return
+        source.getClusterExpansionZoom(clusterId, (err, zoom) => {
+          if (err) return
+          map.easeTo({ center: features[0].geometry.coordinates, zoom })
+        })
+      })
       map.on('mousemove', handleMapMousemove)
       const c0 = map.getCenter()
       if (onMapCenterChangeRef.current) onMapCenterChangeRef.current({ lat: c0.lat, lon: c0.lng })

@@ -58,6 +58,7 @@ const OSINT_LAYER_SECTIONS = [
       { key: 'fccTowers', label: 'FCC / Towers', hint: 'Backend or Overpass cell towers' },
       { key: 'odintRegions', label: 'ODINT Recon Regions', hint: 'Digital infrastructure recon (ringmast4r/ODINT)' },
       { key: 'surveillanceCapabilities', label: 'Surveillance Capabilities (US)', hint: 'EFF Atlas + contracts (ringmast4r)' },
+      { key: 'flockCameras', label: 'Flock / ALPR Cameras (US)', hint: 'DeFlock Maps · FoggedLens/deflockhopper_maps' },
     ],
   },
   {

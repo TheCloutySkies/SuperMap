@@ -696,3 +696,101 @@ export async function fetchNhcTropical(bbox) {
   }
 }
 
+/**
+ * Flock / ALPR camera locations from DeFlock Maps (FoggedLens/deflockhopper_maps).
+ * Remote gzip JSON array shipped in that repo's public/cameras-us.json.gz.
+ * Attribution: DeFlock / FlockHopper — OSM-derived ALPR camera mapping.
+ * https://github.com/FoggedLens/deflockhopper_maps
+ */
+const FLOCK_CAMERAS_URLS = [
+  'https://cdn.jsdelivr.net/gh/FoggedLens/deflockhopper_maps@master/public/cameras-us.json.gz',
+  'https://raw.githubusercontent.com/FoggedLens/deflockhopper_maps/master/public/cameras-us.json.gz',
+]
+
+let flockCamerasCache = null
+let flockCamerasPromise = null
+
+async function gunzipJson(response) {
+  const type = (response.headers.get('content-type') || '').toLowerCase()
+  // jsDelivr / GitHub serve the .gz bytes with type gzip|octet-stream (not Content-Encoding).
+  const bodyIsGzip =
+    type.includes('gzip') ||
+    type.includes('octet-stream') ||
+    /\.gz(\?|$)/i.test(response.url || '')
+  if (bodyIsGzip) {
+    if (typeof DecompressionStream === 'undefined') {
+      throw new Error('DecompressionStream unavailable')
+    }
+    const stream = response.body.pipeThrough(new DecompressionStream('gzip'))
+    const text = await new Response(stream).text()
+    return JSON.parse(text)
+  }
+  return response.json()
+}
+
+function camerasArrayToFeatureCollection(rows) {
+  const features = []
+  for (const c of rows || []) {
+    const lat = Number(c.lat)
+    const lon = Number(c.lon)
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue
+    features.push({
+      type: 'Feature',
+      properties: {
+        osmId: c.osmId,
+        osmType: c.osmType,
+        name: c.brand || c.operator || 'ALPR camera',
+        brand: c.brand || '',
+        operator: c.operator || '',
+        direction: c.direction ?? '',
+        directionCardinal: c.directionCardinal || '',
+        surveillanceZone: c.surveillanceZone || '',
+        mountType: c.mountType || '',
+        source: 'DeFlock / FlockHopper',
+      },
+      geometry: { type: 'Point', coordinates: [lon, lat] },
+    })
+  }
+  return { type: 'FeatureCollection', features }
+}
+
+async function loadFlockCamerasDataset() {
+  if (flockCamerasCache) return flockCamerasCache
+  if (flockCamerasPromise) return flockCamerasPromise
+  flockCamerasPromise = (async () => {
+    let lastErr = null
+    for (const url of FLOCK_CAMERAS_URLS) {
+      try {
+        const res = await fetch(url)
+        if (!res.ok) {
+          lastErr = new Error(`HTTP ${res.status} ${url}`)
+          continue
+        }
+        const data = await gunzipJson(res)
+        const fc = Array.isArray(data)
+          ? camerasArrayToFeatureCollection(data)
+          : data?.type === 'FeatureCollection'
+            ? data
+            : { type: 'FeatureCollection', features: [] }
+        flockCamerasCache = fc
+        return fc
+      } catch (err) {
+        lastErr = err
+      }
+    }
+    flockCamerasPromise = null
+    throw lastErr || new Error('Flock cameras fetch failed')
+  })()
+  return flockCamerasPromise
+}
+
+/** Full US ALPR camera set (cached). Bbox ignored — MapLibre clusters the full set. */
+export async function fetchFlockCameras(_bbox) {
+  try {
+    return await loadFlockCamerasDataset()
+  } catch (err) {
+    console.warn('[SuperMap Flock cameras]', err?.message || err)
+    return { type: 'FeatureCollection', features: [] }
+  }
+}
+

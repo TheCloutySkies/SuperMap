@@ -560,9 +560,12 @@ function SimpleStatList({ rows, labelKey, valueKey = 'count' }) {
   )
 }
 
-export default function CrimeIntelligenceView() {
+export default function CrimeIntelligenceView({ focusSegment = null } = {}) {
   const panelRef = useRef(null)
-  const [segment, setSegment] = useState('national')
+  const [segment, setSegment] = useState(() => {
+    const s = String(focusSegment || '').trim()
+    return SEGMENTS.some((x) => x.id === s) ? s : 'national'
+  })
   const [stats, setStats] = useState(null)
   const [trends, setTrends] = useState([])
   const [states, setStates] = useState([])
@@ -785,6 +788,13 @@ export default function CrimeIntelligenceView() {
       panelRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' })
     })
   }, [])
+
+  // Omnibar / deep-link: jump to a Crime section when focusSegment changes
+  useEffect(() => {
+    const s = String(focusSegment || '').trim()
+    if (!s || !SEGMENTS.some((x) => x.id === s)) return
+    goSegment(s)
+  }, [focusSegment, goSegment])
 
   const loadState = useCallback(async (abbr, { open = true, expand = true } = {}) => {
     const a = String(abbr || '').toUpperCase()

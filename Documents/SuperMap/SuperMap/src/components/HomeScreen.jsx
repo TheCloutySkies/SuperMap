@@ -26,7 +26,7 @@ const DOOMSDAY_CLOCK_URL = 'https://thebulletin.org/doomsday-clock/#nav_menu'
 const QUICK_LINKS = [
   { id: 'osint-map', label: 'OSINT Map', desc: 'View news, intel, and events on the map', icon: '🗺️', path: 'osint-map' },
   { id: 'conflict-map', label: 'Conflict Map', desc: 'Tactical and conflict layers', icon: '⚔️', path: 'conflict-map' },
-  { id: CRIME_VIEW_ID, label: 'Crime Intelligence', desc: 'National snapshot, state & city detail, ask ThiellBot', icon: '📉', path: CRIME_VIEW_ID },
+  { id: CRIME_VIEW_ID, label: 'Crime Intelligence', desc: 'National snapshot, state & city detail, ask ThielBot', icon: '📉', path: CRIME_VIEW_ID },
   { id: 'news-feeds', label: 'News Feeds', desc: 'Wikipedia, Reddit, Google News, BBC', icon: '📰', path: 'news-feeds' },
   { id: 'osint-feeds', label: 'OSINT Feeds', desc: 'Bellingcat, CISA, DW, tactical intel', icon: '📡', path: 'osint-feeds' },
   { id: 'osint-x', label: 'OSINT (X)', desc: 'Posts from OSINT X/Twitter accounts via FxTwitter', icon: '𝕏', path: 'osint-x' },
@@ -342,7 +342,7 @@ export default function HomeScreen({
             )}
             <section className="home-screen-section home-screen-threat">
               <div className="home-screen-threat-head">
-                <h2 className="home-screen-section-title">Today&apos;s Threat Summary <span className="home-screen-threat-byline">by ThiellBot</span></h2>
+                <h2 className="home-screen-section-title">Today&apos;s Threat Summary <span className="home-screen-threat-byline">by ThielBot</span></h2>
                 <a href={DOOMSDAY_CLOCK_URL} target="_blank" rel="noopener noreferrer" className="home-screen-threat-info" title="About the Doomsday Clock (Bulletin of the Atomic Scientists)" aria-label="About the Doomsday Clock">ℹ️</a>
               </div>
               {threatSummaryLoading && (

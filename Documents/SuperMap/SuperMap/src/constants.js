@@ -6,7 +6,7 @@ export const BRAND_LOGO_ALT = 'Clouty Skies'
 export const PRODUCT_NAME = 'Good Palantir'
 
 /** User-visible name for AI ask/chat/threat-summary assistant. */
-export const AI_ASSISTANT_NAME = 'ThiellBot'
+export const AI_ASSISTANT_NAME = 'ThielBot'
 
 /** Canonical Crime Intelligence page view id (ModeRail CRIME, Radial, Home, Omnibar). */
 export const CRIME_VIEW_ID = 'crime'

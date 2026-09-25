@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { fetchSpaceWeather } from '../services/newLayerFetchers'
 import './MapControls.css'
 
 function haversineDistance(lat1, lon1, lat2, lon2) {
@@ -28,7 +27,6 @@ export default function MapControls({ map, activeView, chromePrefs = {} }) {
   const [userLocation, setUserLocation] = useState(null)
   const [tapPinMode, setTapPinMode] = useState(false)
 
-  const [spaceWx, setSpaceWx] = useState(null)
   const [measureMode, setMeasureMode] = useState(false)
   const [measurePoints, setMeasurePoints] = useState([])
   const [measureResult, setMeasureResult] = useState(null)
@@ -36,17 +34,8 @@ export default function MapControls({ map, activeView, chromePrefs = {} }) {
   const measureModeRef = useRef(false)
   const measurePointsRef = useRef([])
 
-  const showZoom = chromePrefs.zoom !== false
-  const showSpaceWx = chromePrefs.spaceWx !== false
+  const showZoom = chromePrefs.zoom === true
   const showLocateStack = chromePrefs.locateStack === true
-
-  useEffect(() => {
-    fetchSpaceWeather().then(setSpaceWx).catch(() => {})
-    const interval = setInterval(() => {
-      fetchSpaceWeather().then(setSpaceWx).catch(() => {})
-    }, 5 * 60 * 1000)
-    return () => clearInterval(interval)
-  }, [])
 
   useEffect(() => {
     if (!map) return
@@ -206,10 +195,6 @@ export default function MapControls({ map, activeView, chromePrefs = {} }) {
     setMeasureResult(null)
   }
 
-  const kpColor = spaceWx
-    ? spaceWx.kp >= 5 ? '#ef4444' : spaceWx.kp >= 4 ? '#f59e0b' : spaceWx.kp >= 3 ? '#eab308' : '#22c55e'
-    : '#8b949e'
-
   const isExplore = activeView === 'explore-map'
 
   return (
@@ -247,19 +232,6 @@ export default function MapControls({ map, activeView, chromePrefs = {} }) {
               <path fill="currentColor" d="M12 2l-4 8h3v10h2V10h3L12 2z" />
             </svg>
           </button>
-        </div>
-      )}
-
-      {!isExplore && showSpaceWx && spaceWx && (
-        <div
-          className="space-wx-badge"
-          title={`Kp ${spaceWx.kp.toFixed(1)} — ${spaceWx.label}. NOAA planetary K-index: geomagnetic activity (0–9). Affects radio & GPS.`}
-        >
-          <span className="space-wx-dot" style={{ background: kpColor }} aria-hidden />
-          <span className="space-wx-copy">
-            <span className="space-wx-text">Kp {spaceWx.kp.toFixed(1)}</span>
-            <span className="space-wx-info">Geomagnetic activity (0–9)</span>
-          </span>
         </div>
       )}
 

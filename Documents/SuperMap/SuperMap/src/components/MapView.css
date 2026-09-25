@@ -9,8 +9,9 @@
 
 .coordinates-display-wrap {
   position: absolute;
-  bottom: 2.5rem;
-  left: 1rem;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 50;
 }
 
@@ -36,6 +37,7 @@
   position: static;
   bottom: auto;
   left: auto;
+  transform: none;
 }
 
 .weather-compact-wrap {

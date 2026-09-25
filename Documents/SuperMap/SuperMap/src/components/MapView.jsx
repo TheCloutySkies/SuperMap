@@ -47,8 +47,6 @@ MapboxDraw.constants.classes.ATTRIBUTION = 'maplibregl-ctrl-attrib'
 const MIN_POWER_ZOOM = 14
 const FLOCK_MARKER_URL = '/assets/flock-camera-marker.png'
 const FLOCK_ICON_ID = 'flock-camera-marker'
-/** Photo marker only once individual cameras are visible (past cluster breakup). */
-const FLOCK_ICON_MIN_ZOOM = 13
 
 /** Layer emoji markers (documented in PR): hurricane 🌀, volcano 🌋, news 📰, quake 💥, mil ✈, FCC 📡 */
 const LAYER_EMOJI = {
@@ -61,21 +59,54 @@ const LAYER_EMOJI = {
   osint: '🔎',
 }
 
-function emojiPointLayer(id, source, emoji, { size = 18, filter = null, minzoom = undefined, maxzoom = undefined } = {}) {
+const EMOJI_ICON_IDS = {
+  hurricane: 'emoji-hurricane',
+  volcano: 'emoji-volcano',
+  news: 'emoji-news',
+  earthquake: 'emoji-earthquake',
+  milAircraft: 'emoji-mil-aircraft',
+  fccTower: 'emoji-fcc-tower',
+  osint: 'emoji-osint',
+}
+
+function emojiToImageData(emoji, size = 64) {
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+  ctx.clearRect(0, 0, size, size)
+  ctx.font = `${Math.floor(size * 0.72)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(emoji, size / 2, size / 2 + size * 0.04)
+  return ctx.getImageData(0, 0, size, size)
+}
+
+function ensureEmojiIcons(map) {
+  if (!map || typeof map.addImage !== 'function') return
+  Object.entries(EMOJI_ICON_IDS).forEach(([key, id]) => {
+    if (map.hasImage(id)) return
+    const emoji = LAYER_EMOJI[key]
+    const data = emojiToImageData(emoji, 64)
+    if (!data) return
+    try {
+      map.addImage(id, data, { pixelRatio: 2 })
+    } catch (_) { /* ignore duplicate */ }
+  })
+}
+
+function emojiIconLayer(id, source, iconId, { size = 0.9, filter = null, minzoom = undefined, maxzoom = undefined } = {}) {
   const layer = {
     id,
     type: 'symbol',
     source,
     layout: {
-      'text-field': emoji,
-      'text-size': size,
-      'text-allow-overlap': true,
-      'text-ignore-placement': true,
-      'text-anchor': 'center',
-    },
-    paint: {
-      'text-halo-color': 'rgba(13, 17, 23, 0.85)',
-      'text-halo-width': 1.25,
+      'icon-image': iconId,
+      'icon-size': size,
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+      'icon-anchor': 'center',
     },
   }
   if (filter) layer.filter = filter
@@ -262,12 +293,13 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
   }
 
   const addUsgs = (geoJson) => {
+    ensureEmojiIcons(map)
     if (map.getSource('intel-usgs')) {
       map.getSource('intel-usgs').setData(geoJson)
       return
     }
     map.addSource('intel-usgs', { type: 'geojson', data: geoJson })
-    map.addLayer(emojiPointLayer('intel-usgs-layer', 'intel-usgs', LAYER_EMOJI.earthquake, { size: 18 }))
+    map.addLayer(emojiIconLayer('intel-usgs-layer', 'intel-usgs', EMOJI_ICON_IDS.earthquake, { size: 0.85 }))
   }
 
   const removeUsgs = () => {
@@ -276,12 +308,13 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
   }
 
   const addEmsc = (geoJson) => {
+    ensureEmojiIcons(map)
     if (map.getSource('intel-emsc')) {
       map.getSource('intel-emsc').setData(geoJson)
       return
     }
     map.addSource('intel-emsc', { type: 'geojson', data: geoJson })
-    map.addLayer(emojiPointLayer('intel-emsc-layer', 'intel-emsc', LAYER_EMOJI.earthquake, { size: 18 }))
+    map.addLayer(emojiIconLayer('intel-emsc-layer', 'intel-emsc', EMOJI_ICON_IDS.earthquake, { size: 0.85 }))
   }
 
   const removeEmsc = () => {
@@ -343,12 +376,13 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
   }
 
   const addVolcanoes = (geoJson) => {
+    ensureEmojiIcons(map)
     if (map.getSource('intel-volcanoes')) {
       map.getSource('intel-volcanoes').setData(geoJson)
       return
     }
     map.addSource('intel-volcanoes', { type: 'geojson', data: geoJson })
-    map.addLayer(emojiPointLayer('intel-volcanoes-layer', 'intel-volcanoes', LAYER_EMOJI.volcano, { size: 22 }))
+    map.addLayer(emojiIconLayer('intel-volcanoes-layer', 'intel-volcanoes', EMOJI_ICON_IDS.volcano, { size: 1.0 }))
   }
 
   const removeVolcanoes = () => {
@@ -357,12 +391,13 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
   }
 
   const addNhc = (geoJson) => {
+    ensureEmojiIcons(map)
     if (map.getSource('intel-nhc')) {
       map.getSource('intel-nhc').setData(geoJson)
       return
     }
     map.addSource('intel-nhc', { type: 'geojson', data: geoJson })
-    map.addLayer(emojiPointLayer('intel-nhc-layer', 'intel-nhc', LAYER_EMOJI.hurricane, { size: 24 }))
+    map.addLayer(emojiIconLayer('intel-nhc-layer', 'intel-nhc', EMOJI_ICON_IDS.hurricane, { size: 1.05 }))
   }
 
   const removeNhc = () => {
@@ -510,6 +545,7 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
   }
 
   const addFccTowers = (geoJson) => {
+    ensureEmojiIcons(map)
     const fc = geoJson || { type: 'FeatureCollection', features: [] }
     if (map.getSource('intel-fcc-towers')) {
       map.getSource('intel-fcc-towers').setData(fc)
@@ -517,7 +553,7 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     }
     map.addSource('intel-fcc-towers', { type: 'geojson', data: fc })
     // FCC / towers marker: 📡 (radio/antenna) — chosen over 🗼 for clarity at small sizes
-    map.addLayer(emojiPointLayer('intel-fcc-towers-layer', 'intel-fcc-towers', LAYER_EMOJI.fccTower, { size: 16 }))
+    map.addLayer(emojiIconLayer('intel-fcc-towers-layer', 'intel-fcc-towers', EMOJI_ICON_IDS.fccTower, { size: 0.8 }))
     map.addLayer({
       id: 'intel-fcc-towers-labels',
       type: 'symbol',
@@ -620,7 +656,7 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
   }
 
   /** DeFlock-style cyan ALPR markers (FoggedLens/deflockhopper_maps cameras-us).
-   * Clusters stay as cyan circles; photo icon only when zoomed in past cluster breakup. */
+   * Clusters stay as cyan circles; photo icon only on unclustered (individual) cameras. */
   const addFlockCameras = (geoJson) => {
     const ensureIconLayer = () => {
       if (!map.getSource('intel-flock-cameras')) return
@@ -631,10 +667,9 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
         type: 'symbol',
         source: 'intel-flock-cameras',
         filter: ['!', ['has', 'point_count']],
-        minzoom: FLOCK_ICON_MIN_ZOOM,
         layout: {
           'icon-image': FLOCK_ICON_ID,
-          'icon-size': ['interpolate', ['linear'], ['zoom'], 13, 0.7, 16, 1.1],
+          'icon-size': ['interpolate', ['linear'], ['zoom'], 12, 0.65, 16, 1.15],
           'icon-allow-overlap': true,
           'icon-ignore-placement': true,
         },
@@ -680,35 +715,24 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
         },
         paint: { 'text-color': '#0b1220' },
       })
-      // Soft glow under unclustered points (mid zoom, before photo icon)
-      map.addLayer({
-        id: 'intel-flock-cameras-glow',
-        type: 'circle',
-        source: 'intel-flock-cameras',
-        filter: ['!', ['has', 'point_count']],
-        maxzoom: FLOCK_ICON_MIN_ZOOM,
-        paint: {
-          'circle-color': '#4DA6FF',
-          'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 4, 12, 14],
-          'circle-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0.15, 12, 0.35],
-          'circle-blur': 0.5,
-        },
-      })
+      // Fallback cyan dots only until the photo sprite finishes loading
       map.addLayer({
         id: 'intel-flock-cameras-layer',
         type: 'circle',
         source: 'intel-flock-cameras',
         filter: ['!', ['has', 'point_count']],
-        maxzoom: FLOCK_ICON_MIN_ZOOM,
         paint: {
           'circle-color': '#4DA6FF',
-          'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 4, 12, 6],
-          'circle-opacity': 0.95,
+          'circle-radius': 5,
+          'circle-opacity': 0.9,
           'circle-stroke-width': 2,
           'circle-stroke-color': '#93CBFF',
         },
       })
       ensureIconLayer()
+      if (map.getLayer('intel-flock-cameras-icon') && map.getLayer('intel-flock-cameras-layer')) {
+        map.setLayoutProperty('intel-flock-cameras-layer', 'visibility', 'none')
+      }
     }
 
     if (map.hasImage(FLOCK_ICON_ID)) {
@@ -719,6 +743,9 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     ensureMapImage(map, FLOCK_ICON_ID, FLOCK_MARKER_URL).then(() => {
       if (!map.getStyle?.()) return
       ensureIconLayer()
+      if (map.getLayer('intel-flock-cameras-icon') && map.getLayer('intel-flock-cameras-layer')) {
+        map.setLayoutProperty('intel-flock-cameras-layer', 'visibility', 'none')
+      }
     })
   }
 
@@ -817,12 +844,13 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
   }
 
   const addMappedNews = (geoJson) => {
+    ensureEmojiIcons(map)
     if (map.getSource('mapped-news')) {
       map.getSource('mapped-news').setData(geoJson)
       return
     }
     map.addSource('mapped-news', { type: 'geojson', data: geoJson })
-    map.addLayer(emojiPointLayer('mapped-news-layer', 'mapped-news', LAYER_EMOJI.news, { size: 18 }))
+    map.addLayer(emojiIconLayer('mapped-news-layer', 'mapped-news', EMOJI_ICON_IDS.news, { size: 0.9 }))
     map.addLayer({
       id: 'mapped-news-labels',
       type: 'symbol',
@@ -844,12 +872,13 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
   }
 
   const addMappedOsint = (geoJson) => {
+    ensureEmojiIcons(map)
     if (map.getSource('mapped-osint')) {
       map.getSource('mapped-osint').setData(geoJson)
       return
     }
     map.addSource('mapped-osint', { type: 'geojson', data: geoJson })
-    map.addLayer(emojiPointLayer('mapped-osint-layer', 'mapped-osint', LAYER_EMOJI.osint, { size: 18 }))
+    map.addLayer(emojiIconLayer('mapped-osint-layer', 'mapped-osint', EMOJI_ICON_IDS.osint, { size: 0.9 }))
     map.addLayer({
       id: 'mapped-osint-labels',
       type: 'symbol',
@@ -974,12 +1003,13 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
   const addMilAircraft = (geoJson) => {
     try {
       if (!map || typeof map.getSource !== 'function') return
+      ensureEmojiIcons(map)
       if (map.getSource('intel-mil-aircraft')) {
         map.getSource('intel-mil-aircraft').setData(geoJson)
         return
       }
       map.addSource('intel-mil-aircraft', { type: 'geojson', data: geoJson })
-      map.addLayer(emojiPointLayer('intel-mil-aircraft-layer', 'intel-mil-aircraft', LAYER_EMOJI.milAircraft, { size: 18 }))
+      map.addLayer(emojiIconLayer('intel-mil-aircraft-layer', 'intel-mil-aircraft', EMOJI_ICON_IDS.milAircraft, { size: 0.9 }))
       map.addLayer({
         id: 'intel-mil-aircraft-labels',
         type: 'symbol',

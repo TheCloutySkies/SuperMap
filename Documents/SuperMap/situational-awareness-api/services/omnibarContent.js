@@ -210,7 +210,11 @@ function buildNewsOsintEntries() {
 function getContentIndex({ force = false } = {}) {
   const now = Date.now()
   if (!force && cachedIndex && (now - cachedAt) < INDEX_TTL_MS) {
-    return cachedIndex
+    // If news was empty at first build, refresh once MediaStack/feeds cache warms
+    const newsCount = cachedIndex.filter((e) => e.category === 'News').length
+    if (newsCount > 0 || !newsService.getNewsCached()?.features?.length) {
+      return cachedIndex
+    }
   }
   const entries = [...buildNewsOsintEntries(), ...buildCrimeEntries()]
   cachedIndex = Object.freeze(entries)

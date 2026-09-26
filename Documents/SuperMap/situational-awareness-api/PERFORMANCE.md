@@ -21,21 +21,28 @@
 
 ### Caching
 
-4. **RSS/news**  
+4. **Durable API result cache** (`services/apiResultCache.js`)  
+   Disk-backed + memory cache for slow-changing homepage upstreams. Survives restarts; serves last-good on failure.
+   - **Stocks** (`/api/stocks`): 30m fresh / 24h stale (`?refresh=1` bypasses fresh TTL)
+   - **Gas** (`/api/gas-prices`): 6h fresh / 7d stale (EIA weekly retail)
+   - **Space** (`/api/space`): 6h fresh / 48h stale  
+   Stats: `GET /api/cache/stats`. Files under `data/api-cache/` (gitignored).
+
+5. **RSS/news**  
    `newsService.getNewsCached()` already reduces repeated fetches. Ensure TTLs match your freshness needs.
 
-5. **Connection pooling**  
+6. **Connection pooling**  
    Current stack uses SQLite (`better-sqlite3`) for local event/config storage. If you add a direct Postgres pool later, use a small pool (e.g. 5–10) and reuse it.
 
 ### Tag indexes
 
-6. **SQLite**  
+7. **SQLite**  
    `idx_events_timestamp`, `idx_events_type`, `idx_event_tags_tag` already exist. For threat-summary, `getEventsWithAnyTagInTimeRange` benefits from these. No extra indexes required for the current query pattern.
 
 ### Heavy dependencies
 
-7. **Identify slow requires**  
+8. **Identify slow requires**  
    If startup is still slow, profile with `NODE_OPTIONS='--require perf_hooks'` or a simple `Date.now()` around top-level `require()` in `server.js` and `routes/api.js`. Likely candidates: `@turf/turf`, `better-sqlite3` (first access), `rss-parser`, and any module that does network or disk on load.
 
-8. **Optional features**  
+9. **Optional features**  
    Consider loading camera-discovery, finance, or stream-proxy only when their env vars are set, to avoid pulling in large deps for every deployment.

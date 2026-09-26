@@ -66,7 +66,7 @@ const MAP_VIEWS = [
 ]
 
 const FEED_VIEWS = [
-  { id: 'news-feeds', label: 'News Feeds', tabKey: 'newsFeeds' },
+  { id: 'news-feeds', label: 'Glowie Report', tabKey: 'newsFeeds' },
   { id: 'osint-feeds', label: 'OSINT Feeds', tabKey: 'osintFeeds' },
   { id: 'recent-videos', label: 'Recent Videos', tabKey: 'recentVideos' },
   { id: 'osint-x', label: 'OSINT (X/Twitter)', tabKey: 'osintX' },
@@ -349,7 +349,7 @@ function App() {
   if (appMode === APP_MODES.MAPS) mobilePageTitle = 'Maps'
   else if (appMode === APP_MODES.CRIME) mobilePageTitle = 'Crime'
   else if (appMode === APP_MODES.FEEDS) {
-    mobilePageTitle = 'Feeds'
+    mobilePageTitle = 'Glowie'
     mobileChipItems = FEED_VIEWS
       .filter((v) => (v.id === 'osint-x' ? true : tabVisibility[v.tabKey] !== false))
       .map((v) => ({
@@ -463,7 +463,7 @@ function App() {
           <OsintXView keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} onPinnedToMap={handlePinnedToMap} />
         )}
         {activeView === 'news-feeds' && (
-          <FeedsView title="News Feeds" activeView="news-feeds" keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} initialNews={prefetchedNews} />
+          <FeedsView title="Glowie Report" activeView="news-feeds" keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} initialNews={prefetchedNews} />
         )}
         {activeView === 'recent-videos' && (
           <FeedsView title="Recent Videos" activeView="recent-videos" keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} />
@@ -608,7 +608,7 @@ function App() {
               onClick: () => setActiveViewWithMode(v.id),
             }))
         } else if (appMode === APP_MODES.FEEDS) {
-          subnavTitle = 'Feeds'
+          subnavTitle = 'Glowie'
           subnavItems = FEED_VIEWS
             .filter((v) => (v.id === 'osint-x' ? true : tabVisibility[v.tabKey] !== false))
             .map((v) => ({

@@ -671,7 +671,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
             className={`feeds-subnav-btn ${feedMode === FEED_MODE.NEWS ? 'active' : ''}`}
             onClick={() => { setFeedMode(FEED_MODE.NEWS); setSourceFilter('all') }}
           >
-            News
+            Glowie
           </button>
           <button
             type="button"
@@ -695,7 +695,10 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
           <header className="news-desk-masthead">
             <div className="news-desk-masthead-brand">
               <p className="news-desk-brand">Good Palantir</p>
-              <h1 className="news-desk-title">News Desk</h1>
+              <h1 className="news-desk-title">
+                <span className="news-desk-glowie">Glowie</span>{' '}
+                <span className="news-desk-title-rest">Report</span>
+              </h1>
               <p className="news-desk-tagline">Image-led headlines from trusted publishers, sorted by topic.</p>
             </div>
             <button

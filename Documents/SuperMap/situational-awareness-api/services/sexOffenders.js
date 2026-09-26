@@ -126,9 +126,164 @@ function toMarker(row) {
   }
 }
 
-function getMarkers({ metro } = {}) {
+const EARTH_RADIUS_MI = 3958.7613
+
+function haversineMiles(lat1, lon1, lat2, lon2) {
+  const toRad = (d) => (Number(d) * Math.PI) / 180
+  const φ1 = toRad(lat1)
+  const φ2 = toRad(lat2)
+  const Δφ = toRad(lat2 - lat1)
+  const Δλ = toRad(lon2 - lon1)
+  const a = Math.sin(Δφ / 2) ** 2
+    + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2
+  return 2 * EARTH_RADIUS_MI * Math.asin(Math.min(1, Math.sqrt(a)))
+}
+
+/**
+ * Every metro/city the pack exposes with valid coordinates.
+ * Includes errored seed attempts that still have centroids — never drop a
+ * represented city from coverage checks.
+ */
+function listPackMetros(pack) {
+  const rows = Array.isArray(pack?.metros) ? pack.metros : []
+  return rows
+    .filter((m) => m && Number.isFinite(Number(m.lat)) && Number.isFinite(Number(m.lon)))
+    .map((m) => ({
+      id: m.id,
+      name: m.name,
+      lat: Number(m.lat),
+      lon: Number(m.lon),
+      count: Number(m.count) || 0,
+      error: m.error || null,
+    }))
+}
+
+/** Metro-area coverage radius around each seeded centroid (miles). */
+function coverageRadiusMiles(pack) {
+  const seeded = Number(pack?.radiusMiles)
+  // Seed pulls ~10 mi nearby; allow a metro-area buffer so suburbs still match.
+  return Math.max(Number.isFinite(seeded) ? seeded : 10, 10) + 15
+}
+
+function nearestMetro(lat, lon, metros) {
+  let best = null
+  for (const m of metros) {
+    const miles = haversineMiles(lat, lon, m.lat, m.lon)
+    if (!best || miles < best.miles) best = { ...m, miles }
+  }
+  return best
+}
+
+/**
+ * Coverage vs every pack metro centroid (and seed radius).
+ * Covered when the user is within the metro coverage radius of any represented city.
+ */
+function checkCoverage({ lat, lon } = {}) {
+  const pack = readPack()
+  const latitude = Number(lat)
+  const longitude = Number(lon)
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    const err = new Error('lat and lon are required')
+    err.code = 'BAD_REQUEST'
+    throw err
+  }
+  const metros = listPackMetros(pack)
+  const radius = coverageRadiusMiles(pack)
+  const nearest = nearestMetro(latitude, longitude, metros)
+  const covered = Boolean(nearest && nearest.miles <= radius)
+  return {
+    data: {
+      covered,
+      lat: latitude,
+      lon: longitude,
+      coverageRadiusMiles: radius,
+      nearestMetro: nearest
+        ? {
+          id: nearest.id,
+          name: nearest.name,
+          lat: nearest.lat,
+          lon: nearest.lon,
+          count: nearest.count,
+          miles: Math.round(nearest.miles * 10) / 10,
+        }
+        : null,
+      metroCount: metros.length,
+      message: covered
+        ? null
+        : 'Your area is not in the current coverage set. Offenders are seeded for about 35 major U.S. metros only.',
+    },
+    meta: {
+      seededAt: pack.seededAt,
+      radiusMiles: pack.radiusMiles,
+      source: pack.source,
+      metros,
+    },
+  }
+}
+
+/** Markers within radiusMiles of a point, from the on-disk pack only. */
+function getNearbyMarkers({ lat, lon, radiusMiles } = {}) {
+  const pack = readPack()
+  const latitude = Number(lat)
+  const longitude = Number(lon)
+  const radius = Math.min(Math.max(Number(radiusMiles) || Number(pack.radiusMiles) || 10, 1), 50)
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    const err = new Error('lat and lon are required')
+    err.code = 'BAD_REQUEST'
+    throw err
+  }
+  const coverage = checkCoverage({ lat: latitude, lon: longitude })
+  const rows = pack.offenders || []
+  const markers = rows
+    .filter((o) => Number.isFinite(Number(o.latitude)) && Number.isFinite(Number(o.longitude)))
+    .map((o) => {
+      const miles = haversineMiles(latitude, longitude, o.latitude, o.longitude)
+      if (miles > radius) return null
+      return { ...toMarker(o), miles: Math.round(miles * 100) / 100 }
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.miles - b.miles)
+
+  return {
+    data: markers,
+    meta: {
+      count: markers.length,
+      lat: latitude,
+      lon: longitude,
+      radiusMiles: radius,
+      covered: coverage.data.covered,
+      coverage: coverage.data,
+      seededAt: pack.seededAt,
+      source: pack.source,
+      metros: listPackMetros(pack),
+    },
+  }
+}
+
+function getMarkers({ metro, pinsOnly, lat, lon, radiusMiles } = {}) {
+  if (lat != null && lon != null && String(lat) !== '' && String(lon) !== '') {
+    return getNearbyMarkers({ lat, lon, radiusMiles })
+  }
   const pack = readPack()
   const metroFilter = String(metro || '').trim().toLowerCase()
+  const metros = listPackMetros(pack)
+  if (pinsOnly === true || pinsOnly === '1' || pinsOnly === 'true') {
+    return {
+      data: [],
+      meta: {
+        count: 0,
+        pinsOnly: true,
+        seededAt: pack.seededAt,
+        radiusMiles: pack.radiusMiles,
+        coverageRadiusMiles: coverageRadiusMiles(pack),
+        metro: null,
+        metros,
+        source: pack.source,
+        remainingHint: pack.apiUsage?.remaining ?? null,
+        offenderCount: (pack.offenders || []).length,
+      },
+    }
+  }
   let rows = pack.offenders || []
   if (metroFilter) {
     rows = rows.filter((o) => {
@@ -139,21 +294,13 @@ function getMarkers({ metro } = {}) {
   const markers = rows
     .filter((o) => Number.isFinite(Number(o.latitude)) && Number.isFinite(Number(o.longitude)))
     .map(toMarker)
-  const metros = (pack.metros || [])
-    .filter((m) => !m.error)
-    .map((m) => ({
-      id: m.id,
-      name: m.name,
-      lat: m.lat,
-      lon: m.lon,
-      count: m.count,
-    }))
   return {
     data: markers,
     meta: {
       count: markers.length,
       seededAt: pack.seededAt,
       radiusMiles: pack.radiusMiles,
+      coverageRadiusMiles: coverageRadiusMiles(pack),
       metro: metroFilter || null,
       metros,
       source: pack.source,
@@ -215,6 +362,11 @@ module.exports = {
   fetchNearby,
   fetchOffenderDetail,
   getMarkers,
+  getNearbyMarkers,
+  checkCoverage,
+  listPackMetros,
+  coverageRadiusMiles,
+  haversineMiles,
   getOffenderById,
   getPackStatus,
   toMarker,

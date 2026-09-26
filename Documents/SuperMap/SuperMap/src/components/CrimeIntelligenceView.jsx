@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { buildCrimeStateChoropleth } from '../services/crimeLayers'
 import { CITY_COORDS, coordsForCity, stateAbbrFromName } from '../services/crimeCentroids'
 import { LEVEL_THRESHOLDS, levelFromRatio } from '../lib/crimeLevels'
+import SexOffendersMap from './SexOffendersMap'
 import './CrimeIntelligenceView.css'
 
 const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
@@ -334,110 +335,6 @@ function UsCrimeMap({ features, cities, selectedAbbr, selectedCitySlug, onSelect
   )
 }
 
-function SexOffendersMap({
-  features,
-  markers,
-  selectedId,
-  center,
-  radiusDeg = 0.35,
-  onSelect,
-}) {
-  const width = 720
-  const height = 420
-  const focus = center && Number.isFinite(center.lat) && Number.isFinite(center.lon)
-  const bounds = focus
-    ? {
-      minLon: center.lon - radiusDeg * 1.4,
-      maxLon: center.lon + radiusDeg * 1.4,
-      minLat: center.lat - radiusDeg,
-      maxLat: center.lat + radiusDeg,
-    }
-    : { minLon: -125, maxLon: -66, minLat: 24.5, maxLat: 49.5 }
-
-  const projLocal = ([lon, lat]) => {
-    const x = ((lon - bounds.minLon) / (bounds.maxLon - bounds.minLon)) * width
-    const y = ((bounds.maxLat - lat) / (bounds.maxLat - bounds.minLat)) * height
-    return [x, y]
-  }
-
-  const ringToLocal = (ring) => {
-    if (!ring?.length) return ''
-    return `${ring
-      .map((coord, i) => {
-        const [x, y] = projLocal(coord)
-        return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`
-      })
-      .join(' ')} Z`
-  }
-
-  const geomPaths = (geometry) => {
-    if (!geometry) return []
-    if (geometry.type === 'Polygon') return [ringToLocal(geometry.coordinates[0])]
-    if (geometry.type === 'MultiPolygon') {
-      return geometry.coordinates.map((poly) => ringToLocal(poly[0])).filter(Boolean)
-    }
-    return []
-  }
-
-  return (
-    <svg
-      className="ci-choropleth ci-offender-map"
-      viewBox={`0 0 ${width} ${height}`}
-      role="img"
-      aria-label="Sex offender map — tap a marker for that person only"
-    >
-      {(features || []).map((f, i) => {
-        const abbr = f.properties?.abbr
-        if (abbr === 'AK' || abbr === 'HI') return null
-        const paths = geomPaths(f.geometry)
-        return paths.map((d, pi) => (
-          <path
-            key={`bg-${abbr || i}-${pi}`}
-            d={d}
-            className="ci-state-path ci-state-path--mute"
-            fill="#0d2218"
-            stroke="rgba(100, 200, 150, 0.18)"
-            strokeWidth={0.6}
-          />
-        ))
-      })}
-      {(markers || []).map((m) => {
-        const lat = Number(m.lat)
-        const lon = Number(m.lon)
-        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
-        if (lat < bounds.minLat || lat > bounds.maxLat || lon < bounds.minLon || lon > bounds.maxLon) {
-          return null
-        }
-        const [x, y] = projLocal([lon, lat])
-        const active = selectedId != null && Number(selectedId) === Number(m.id)
-        return (
-          <g
-            key={m.id}
-            className={`ci-offender-dot ${active ? 'is-active' : ''}`}
-            transform={`translate(${x}, ${y})`}
-            onClick={(e) => {
-              e.stopPropagation()
-              onSelect?.(m.id)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                e.stopPropagation()
-                onSelect?.(m.id)
-              }
-            }}
-            tabIndex={0}
-            role="button"
-            aria-label={`Registered person ${m.id}`}
-          >
-            <circle r={active ? 7 : 3.2} />
-          </g>
-        )
-      })}
-    </svg>
-  )
-}
-
 function OffenderSummary({ person, onClear }) {
   if (!person) return null
   const addr = [person.address_line1, person.city, person.state_id || person.source_state, person.zip_code]
@@ -597,7 +494,7 @@ export default function CrimeIntelligenceView({ focusSegment = null } = {}) {
   const [cityLoading, setCityLoading] = useState(false)
   const [cityAdvanced, setCityAdvanced] = useState(false)
 
-  const [offenderMetro, setOffenderMetro] = useState('washington-dc')
+  const [offenderMetro, setOffenderMetro] = useState('') // '' = US country view (metro pins)
   const [offenderMarkers, setOffenderMarkers] = useState([])
   const [offenderMetros, setOffenderMetros] = useState([])
   const [offenderMeta, setOffenderMeta] = useState(null)
@@ -605,6 +502,12 @@ export default function CrimeIntelligenceView({ focusSegment = null } = {}) {
   const [selectedOffenderId, setSelectedOffenderId] = useState(null)
   const [offenderPerson, setOffenderPerson] = useState(null)
   const [offenderPersonLoading, setOffenderPersonLoading] = useState(false)
+  const [offenderUserLocation, setOffenderUserLocation] = useState(null)
+  const [offenderUserRadiusMiles, setOffenderUserRadiusMiles] = useState(10)
+  const [offenderFocusMode, setOffenderFocusMode] = useState('country') // country | metro | nearby
+  const [offenderCoverageMsg, setOffenderCoverageMsg] = useState(null)
+  const [offenderLocBusy, setOffenderLocBusy] = useState(false)
+  const [offenderMapDetail, setOffenderMapDetail] = useState(false)
 
   const [askInput, setAskInput] = useState('')
   const [askBusy, setAskBusy] = useState(false)
@@ -873,27 +776,78 @@ export default function CrimeIntelligenceView({ focusSegment = null } = {}) {
     return () => clearTimeout(t)
   }, [cityQ, searchCities])
 
-  // Sex offenders: load markers from on-disk pack only (no live upstream calls).
+  // Sex offenders: metro pins at country zoom; individuals when metro / nearby / zoomed-in.
   useEffect(() => {
     if (segment !== 'offenders') return undefined
     let cancelled = false
-    setOffenderLoading(true)
-    const qs = offenderMetro ? `?metro=${encodeURIComponent(offenderMetro)}` : ''
-    getJson(`/api/crime/sex-offenders/markers${qs}`)
-      .then((payload) => {
+
+    const load = async () => {
+      setOffenderLoading(true)
+      try {
+        if (offenderFocusMode === 'nearby' && offenderUserLocation) {
+          const params = new URLSearchParams({
+            lat: String(offenderUserLocation.lat),
+            lon: String(offenderUserLocation.lon),
+            radiusMiles: String(offenderUserRadiusMiles || 10),
+          })
+          const payload = await getJson(`/api/crime/sex-offenders/nearby?${params}`)
+          if (cancelled) return
+          setOffenderMarkers(Array.isArray(payload.data) ? payload.data : [])
+          setOffenderMeta(payload.meta || null)
+          if (Array.isArray(payload.meta?.metros)) setOffenderMetros(payload.meta.metros)
+          const cov = payload.meta?.coverage
+          if (cov && cov.covered === false) {
+            setOffenderCoverageMsg(cov.message || 'Your area is not in the current coverage set.')
+          } else if (cov?.covered) {
+            setOffenderCoverageMsg(null)
+          }
+          return
+        }
+
+        if (offenderMetro) {
+          const payload = await getJson(
+            `/api/crime/sex-offenders/markers?metro=${encodeURIComponent(offenderMetro)}`,
+          )
+          if (cancelled) return
+          setOffenderMarkers(Array.isArray(payload.data) ? payload.data : [])
+          setOffenderMeta(payload.meta || null)
+          if (Array.isArray(payload.meta?.metros)) setOffenderMetros(payload.meta.metros)
+          return
+        }
+
+        // Country overview: pins only until the map is zoomed into metro detail.
+        if (!offenderMapDetail) {
+          const payload = await getJson('/api/crime/sex-offenders/markers?pinsOnly=1')
+          if (cancelled) return
+          setOffenderMarkers([])
+          setOffenderMeta(payload.meta || null)
+          if (Array.isArray(payload.meta?.metros)) setOffenderMetros(payload.meta.metros)
+          return
+        }
+
+        // Zoomed in without a selected metro — load full pack markers (clustered on map).
+        const payload = await getJson('/api/crime/sex-offenders/markers')
         if (cancelled) return
         setOffenderMarkers(Array.isArray(payload.data) ? payload.data : [])
         setOffenderMeta(payload.meta || null)
-        setOffenderMetros(Array.isArray(payload.meta?.metros) ? payload.meta.metros : [])
-      })
-      .catch((err) => {
+        if (Array.isArray(payload.meta?.metros)) setOffenderMetros(payload.meta.metros)
+      } catch (err) {
         if (!cancelled) setError(err.message || 'Offender pack load failed')
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setOffenderLoading(false)
-      })
+      }
+    }
+
+    load()
     return () => { cancelled = true }
-  }, [segment, offenderMetro])
+  }, [
+    segment,
+    offenderMetro,
+    offenderFocusMode,
+    offenderUserLocation,
+    offenderUserRadiusMiles,
+    offenderMapDetail,
+  ])
 
   const selectOffender = useCallback(async (id) => {
     if (id == null) return
@@ -918,11 +872,75 @@ export default function CrimeIntelligenceView({ focusSegment = null } = {}) {
     setOffenderPerson(null)
   }, [])
 
-  const offenderCenter = useMemo(() => {
-    const m = offenderMetros.find((x) => x.id === offenderMetro)
-    if (m) return { lat: m.lat, lon: m.lon }
-    return null
-  }, [offenderMetros, offenderMetro])
+  const selectOffenderMetro = useCallback((metroId) => {
+    clearOffender()
+    setOffenderCoverageMsg(null)
+    setOffenderUserLocation(null)
+    setOffenderFocusMode('metro')
+    setOffenderMetro(metroId || '')
+    setOffenderMapDetail(true)
+  }, [clearOffender])
+
+  const resetOffenderCountry = useCallback(() => {
+    clearOffender()
+    setOffenderCoverageMsg(null)
+    setOffenderUserLocation(null)
+    setOffenderFocusMode('country')
+    setOffenderMetro('')
+    setOffenderMapDetail(false)
+  }, [clearOffender])
+
+  const useMyLocationForOffenders = useCallback(() => {
+    if (!navigator.geolocation) {
+      setOffenderCoverageMsg('Geolocation is not available in this browser.')
+      return
+    }
+    setOffenderLocBusy(true)
+    setOffenderCoverageMsg(null)
+    clearOffender()
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude
+        const lon = pos.coords.longitude
+        try {
+          const cov = await getJson(
+            `/api/crime/sex-offenders/coverage?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`,
+          )
+          setOffenderUserLocation({ lat, lon })
+          setOffenderFocusMode('nearby')
+          setOffenderMetro('')
+          setOffenderMapDetail(true)
+          if (!cov?.data?.covered) {
+            setOffenderCoverageMsg(
+              cov?.data?.message
+              || 'Your area is not in the current coverage set. Offenders are seeded for about 35 major U.S. metros only.',
+            )
+          } else {
+            setOffenderCoverageMsg(null)
+          }
+        } catch (err) {
+          setError(err.message || 'Coverage check failed')
+          setOffenderUserLocation({ lat, lon })
+          setOffenderFocusMode('nearby')
+          setOffenderMapDetail(true)
+        } finally {
+          setOffenderLocBusy(false)
+        }
+      },
+      (err) => {
+        setOffenderLocBusy(false)
+        setOffenderCoverageMsg(err?.message || 'Could not get your location.')
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
+    )
+  }, [clearOffender])
+
+  const onOffenderZoomDetail = useCallback((detail) => {
+    setOffenderMapDetail(Boolean(detail))
+    if (!detail && offenderFocusMode === 'country' && !offenderMetro) {
+      // Zoomed back out — keep country mode
+    }
+  }, [offenderFocusMode, offenderMetro])
 
   // Keep States list as the default — do not auto-open a state.
   // Expanded full-view only via box click / map tap.
@@ -1480,48 +1498,93 @@ export default function CrimeIntelligenceView({ focusSegment = null } = {}) {
             <div className="ci-section-head">
               <h2 id="ci-offenders-title">Sex offenders</h2>
               <p>
-                Metro pack cached on the server — no live API calls while browsing.
-                Tap a marker to open that person only under the map.
+                Interactive street map from the metro pack cached on the server — no live API calls while browsing.
+                Country view shows represented cities only; zoom or tap a pin for individuals.
+                Names and addresses stay hidden until you select a marker.
               </p>
             </div>
 
-            <label className="ci-select-wrap">
-              <span>Metro (10 mi seed radius)</span>
-              <select
-                value={offenderMetro}
-                onChange={(e) => {
-                  clearOffender()
-                  setOffenderMetro(e.target.value)
-                }}
-                aria-label="Select metro"
+            <div className="ci-offender-toolbar">
+              <label className="ci-select-wrap">
+                <span>Metro</span>
+                <select
+                  value={offenderMetro}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    if (!v) resetOffenderCountry()
+                    else selectOffenderMetro(v)
+                  }}
+                  aria-label="Select metro"
+                >
+                  <option value="">United States (city pins)</option>
+                  {(offenderMetros.length ? offenderMetros : []).map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}{m.count != null ? ` (${m.count})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="ci-select-wrap ci-radius-wrap">
+                <span>Nearby radius</span>
+                <select
+                  value={offenderUserRadiusMiles}
+                  onChange={(e) => setOffenderUserRadiusMiles(Number(e.target.value) || 10)}
+                  aria-label="Nearby search radius in miles"
+                >
+                  {[5, 10, 15, 25].map((n) => (
+                    <option key={n} value={n}>{n} mi</option>
+                  ))}
+                </select>
+              </label>
+
+              <button
+                type="button"
+                className="ci-advanced-btn"
+                onClick={useMyLocationForOffenders}
+                disabled={offenderLocBusy}
               >
-                {(offenderMetros.length
-                  ? offenderMetros
-                  : [{ id: 'washington-dc', name: 'Washington, DC' }]
-                ).map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}{m.count != null ? ` (${m.count})` : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
+                {offenderLocBusy ? 'Locating…' : 'Use my location'}
+              </button>
+
+              {(offenderFocusMode !== 'country' || offenderMetro || offenderUserLocation) && (
+                <button type="button" className="ci-advanced-btn" onClick={resetOffenderCountry}>
+                  Country view
+                </button>
+              )}
+            </div>
 
             {offenderLoading && <p className="ci-muted">Loading markers…</p>}
             {!offenderLoading && offenderMeta && (
               <p className="ci-muted">
-                {fmt(offenderMeta.count, 0)} markers
+                {offenderFocusMode === 'nearby'
+                  ? `${fmt(offenderMeta.count, 0)} within ${offenderUserRadiusMiles} mi`
+                  : offenderMetro
+                    ? `${fmt(offenderMeta.count, 0)} markers in metro`
+                    : `${fmt(offenderMeta.offenderCount ?? offenderMetros.length, 0)}${offenderMeta.offenderCount != null ? ' in pack' : ' metros'}`}
                 {offenderMeta.seededAt ? ` · seeded ${String(offenderMeta.seededAt).slice(0, 10)}` : ''}
-                {offenderMeta.radiusMiles != null ? ` · ${offenderMeta.radiusMiles} mi` : ''}
+                {offenderMetros.length ? ` · ${offenderMetros.length} metros` : ''}
               </p>
             )}
 
-            <div className={`ci-map-wrap ${selectedOffenderId ? 'has-selection' : ''}`}>
+            {offenderCoverageMsg && (
+              <p className="ci-coverage-msg" role="status">
+                {offenderCoverageMsg}
+              </p>
+            )}
+
+            <div className={`ci-map-wrap ci-map-wrap--live ${selectedOffenderId ? 'has-selection' : ''}`}>
               <SexOffendersMap
-                features={mapFeatures}
+                metros={offenderMetros}
                 markers={offenderMarkers}
                 selectedId={selectedOffenderId}
-                center={offenderCenter}
+                selectedMetroId={offenderMetro}
+                userLocation={offenderUserLocation}
+                userRadiusMiles={offenderUserRadiusMiles}
+                focusMode={offenderFocusMode}
                 onSelect={selectOffender}
+                onSelectMetro={selectOffenderMetro}
+                onZoomDetailChange={onOffenderZoomDetail}
               />
             </div>
 

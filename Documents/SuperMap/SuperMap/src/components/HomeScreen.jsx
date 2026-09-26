@@ -324,16 +324,6 @@ export default function HomeScreen({
   }, [selectedGasState])
 
   const activeGasFuel = selectGasFuel(gasPrices, gasFuel)
-  const dieselAvailable = Boolean(
-    gasPrices
-    && !gasPrices.gasUnavailable
-    && gasPrices.ok !== false
-    && (
-      gasPrices.diesel?.ok
-      || gasPrices.diesel?.national != null
-      || (Array.isArray(gasPrices.diesel?.regions) && gasPrices.diesel.regions.length > 0)
-    ),
-  )
 
   const gasNeedsRetry =
     !gasPricesLoading && (

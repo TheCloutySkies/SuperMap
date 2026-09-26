@@ -7,7 +7,7 @@ const TAB_LABELS = {
   conflictMap: 'Conflict Map',
   flockMap: 'Flock Cameras',
   osintFeeds: 'OSINT Feeds',
-  newsFeeds: 'News Feeds',
+  newsFeeds: 'Glowie Report',
 }
 
 export default function SettingsModal({ onClose }) {

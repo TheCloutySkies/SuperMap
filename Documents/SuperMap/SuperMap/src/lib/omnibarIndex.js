@@ -60,10 +60,10 @@ export const OMNIBAR_CORE_ENTRIES = Object.freeze([
   },
   {
     id: 'mode-feeds',
-    label: 'Feeds',
+    label: 'Glowie',
     category: 'Mode',
-    keywords: ['feeds', 'news', 'rss'],
-    synonyms: ['timeline'],
+    keywords: ['feeds', 'news', 'rss', 'glowie', 'glowie report'],
+    synonyms: ['timeline', 'news desk'],
     action: 'navigate',
     viewId: 'news-feeds',
     weight: 8,
@@ -232,10 +232,10 @@ export const OMNIBAR_CORE_ENTRIES = Object.freeze([
   // Feeds
   {
     id: 'feed-news',
-    label: 'News Feeds',
+    label: 'Glowie Report',
     category: 'Feeds',
-    keywords: ['news', 'headlines', 'feeds'],
-    synonyms: ['breaking'],
+    keywords: ['news', 'headlines', 'feeds', 'glowie', 'glowie report', 'news desk'],
+    synonyms: ['breaking', 'glowie', 'news desk'],
     action: 'navigate',
     viewId: 'news-feeds',
     weight: 8,

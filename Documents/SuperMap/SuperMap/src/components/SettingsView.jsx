@@ -15,7 +15,7 @@ const TAB_LABELS = {
   exploreMap: 'Explore',
   flockMap: 'Flock Cameras',
   osintFeeds: 'OSINT Feeds',
-  newsFeeds: 'News Feeds',
+  newsFeeds: 'Glowie Report',
   osintX: 'OSINT (X)',
   broadcasts: 'Broadcasts',
 }

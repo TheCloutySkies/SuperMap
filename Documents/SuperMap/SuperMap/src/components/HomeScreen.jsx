@@ -27,7 +27,7 @@ const QUICK_LINKS = [
   { id: 'osint-map', label: 'OSINT Map', desc: 'View news, intel, and events on the map', icon: '🗺️', path: 'osint-map' },
   { id: 'conflict-map', label: 'Conflict Map', desc: 'Tactical and conflict layers', icon: '⚔️', path: 'conflict-map' },
   { id: CRIME_VIEW_ID, label: 'Crime Intelligence', desc: 'National snapshot, state & city detail, ask ThielBot', icon: '📉', path: CRIME_VIEW_ID },
-  { id: 'news-feeds', label: 'News Feeds', desc: 'Wikipedia, Reddit, Google News, BBC', icon: '📰', path: 'news-feeds' },
+  { id: 'news-feeds', label: 'Glowie Report', desc: 'Image-led headlines from trusted publishers', icon: '📰', path: 'news-feeds' },
   { id: 'osint-feeds', label: 'OSINT Feeds', desc: 'Bellingcat, CISA, DW, tactical intel', icon: '📡', path: 'osint-feeds' },
   { id: 'osint-x', label: 'OSINT (X)', desc: 'Posts from OSINT X/Twitter accounts via FxTwitter', icon: '𝕏', path: 'osint-x' },
   { id: 'report-maker', label: 'Report Maker', desc: 'Build and save intelligence reports', icon: '📝', path: 'report-maker' },

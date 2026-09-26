@@ -344,7 +344,18 @@ async function getNews() {
     return !reservedKeys.has(k)
   })
   pool.sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0))
-  items = reserved.concat(pool).slice(0, 120)
+  items = reserved.concat(pool)
+  // Prefer real article images (MediaStack + RSS enclosures) so the news desk hero stays visual
+  const hasRealImage = (it) => {
+    const u = it?.image || it?.thumbnail
+    return typeof u === 'string' && u.startsWith('http') && !u.includes('google.com/s2/favicons')
+  }
+  items.sort((a, b) => {
+    const imgDelta = (hasRealImage(b) ? 1 : 0) - (hasRealImage(a) ? 1 : 0)
+    if (imgDelta !== 0) return imgDelta
+    return new Date(b.pubDate || 0) - new Date(a.pubDate || 0)
+  })
+  items = items.slice(0, 120)
 
   let geotagged = items
   try {

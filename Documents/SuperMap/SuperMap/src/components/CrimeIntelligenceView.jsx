@@ -553,7 +553,7 @@ function SimpleStatList({ rows, labelKey, valueKey = 'count' }) {
   )
 }
 
-export default function CrimeIntelligenceView({ focusSegment = null } = {}) {
+export default function CrimeIntelligenceView({ focusSegment = null, focusEntity = null } = {}) {
   const panelRef = useRef(null)
   const [segment, setSegment] = useState(() => {
     const s = String(focusSegment || '').trim()
@@ -850,6 +850,23 @@ export default function CrimeIntelligenceView({ focusSegment = null } = {}) {
       setCityLoading(false)
     }
   }, [goSegment])
+
+  // Omnibar content: select state / city / national metric
+  useEffect(() => {
+    if (!focusEntity || !focusEntity.nonce) return
+    if (focusEntity.abbr) {
+      loadState(focusEntity.abbr, { open: true, expand: true })
+      return
+    }
+    if (focusEntity.citySlug) {
+      openCity(focusEntity.citySlug, { open: true })
+      return
+    }
+    if (focusEntity.nationalMetric) {
+      goSegment('national')
+      setNationalMetric(focusEntity.nationalMetric)
+    }
+  }, [focusEntity, loadState, openCity, goSegment])
 
   const searchCities = useCallback(async (q) => {
     setCityLoading(true)

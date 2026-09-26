@@ -1,18 +1,29 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import axios from 'axios'
-import { DEFAULT_COMMANDS, searchOmnibarIndex } from '../lib/omnibarIndex'
+import {
+  DEFAULT_COMMANDS,
+  searchOmnibarIndex,
+  mergeOmnibarResults,
+  omnibarDisplayCategory,
+} from '../lib/omnibarIndex'
 import './Omnibar.css'
 
 const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
   ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
   : (import.meta.env?.DEV ? 'http://localhost:3001' : 'http://localhost:3001')
 
-const MAX_JUMP = 10
+const MAX_JUMP = 8
+const MAX_MERGED = 14
+const CONTENT_DEBOUNCE_MS = 220
 
 function resultKind(item) {
   if (item._kind === 'place') return 'Place'
   if (item._kind === 'map') return item.properties?.type || 'Result'
-  return item.category || 'Go'
+  if (item._kind === 'content' || item.category === 'News' || item.category === 'OSINT') {
+    return omnibarDisplayCategory(item)
+  }
+  if (item.crimeAbbr || item.crimeCitySlug || item.nationalMetric) return 'Crime'
+  return omnibarDisplayCategory(item)
 }
 
 function resultTitle(item) {
@@ -25,10 +36,17 @@ function resultTitle(item) {
 function resultAction(item) {
   if (item._kind === 'place') return 'Fly to'
   if (item._kind === 'map') return 'Show on map'
+  if (item.action === 'open' || item.url) return 'Open'
+  if (item.category === 'News' || item.category === 'OSINT') return 'Open'
   return 'Jump'
 }
 
-/** Omnibar: place/event search + whole-app command jump (Ctrl/Cmd+K). */
+function resultSubtitle(item) {
+  if (item.subtitle) return item.subtitle
+  return null
+}
+
+/** Omnibar: place/event search + whole-app command jump + content (news/OSINT/crime). */
 export default function Omnibar({
   query: controlledQuery,
   onQueryChange,
@@ -50,7 +68,11 @@ export default function Omnibar({
   const [showDropdown, setShowDropdown] = useState(false)
   const [commandMode, setCommandMode] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
+  const [contentHits, setContentHits] = useState([])
+  const [contentLoading, setContentLoading] = useState(false)
   const debounceRef = useRef(null)
+  const contentDebounceRef = useRef(null)
+  const contentAbortRef = useRef(null)
   const inputRef = useRef(null)
   const listRef = useRef(null)
 
@@ -67,7 +89,6 @@ export default function Omnibar({
   const jumpMatches = useMemo(() => {
     const q = String(query).trim()
     if (!q && !commandMode) return []
-    // Prefer full registry; optional `commands` override for tests/custom indexes
     if (commands?.length) {
       const qLower = q.toLowerCase()
       const list = !q
@@ -75,15 +96,76 @@ export default function Omnibar({
         : commands
           .filter((c) => `${c.label} ${c.keywords || ''} ${c.category || ''}`.toLowerCase().includes(qLower))
           .slice(0, MAX_JUMP)
-      return list.map((c) => ({ ...c, category: c.category || 'Go' }))
+      return list.map((c) => ({ ...c, category: c.category || 'Go', score: 50 }))
     }
     return searchOmnibarIndex(q, { limit: MAX_JUMP })
   }, [query, commands, commandMode])
 
+  // Debounced content search against /api/search/omnibar (cached news/osint/crime)
+  useEffect(() => {
+    const q = String(query).trim()
+    if (contentDebounceRef.current) clearTimeout(contentDebounceRef.current)
+    if (contentAbortRef.current) {
+      contentAbortRef.current.abort()
+      contentAbortRef.current = null
+    }
+
+    if (!q || !commandMode || !API_BASE) {
+      setContentHits([])
+      setContentLoading(false)
+      return undefined
+    }
+
+    contentDebounceRef.current = setTimeout(() => {
+      const controller = new AbortController()
+      contentAbortRef.current = controller
+      setContentLoading(true)
+      axios
+        .get(`${API_BASE}/api/search/omnibar`, {
+          params: { q, limit: 12 },
+          timeout: 6000,
+          signal: controller.signal,
+        })
+        .then((res) => {
+          const rows = Array.isArray(res.data?.results) ? res.data.results : []
+          setContentHits(rows)
+        })
+        .catch((err) => {
+          if (axios.isCancel?.(err) || err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED') return
+          setContentHits([])
+        })
+        .finally(() => {
+          if (contentAbortRef.current === controller) {
+            setContentLoading(false)
+            contentAbortRef.current = null
+          }
+        })
+    }, CONTENT_DEBOUNCE_MS)
+
+    return () => {
+      if (contentDebounceRef.current) clearTimeout(contentDebounceRef.current)
+    }
+  }, [query, commandMode])
+
+  const mergedMatches = useMemo(() => {
+    const q = String(query).trim()
+    if (!q && !commandMode) return []
+    if (!q) {
+      // Empty command palette: jumps only (rich categories → Jump chip)
+      return jumpMatches.map((j) => ({ ...j, category: 'Jump', _kind: 'jump' }))
+    }
+    return mergeOmnibarResults(jumpMatches, contentHits, { limit: MAX_MERGED })
+  }, [query, commandMode, jumpMatches, contentHits])
+
   const flatResults = useMemo(() => {
     const rows = []
-    if (commandMode && jumpMatches.length) {
-      for (const cmd of jumpMatches) rows.push({ ...cmd, _kind: 'jump' })
+    if (commandMode && mergedMatches.length) {
+      for (const cmd of mergedMatches) {
+        rows.push({
+          ...cmd,
+          _kind: cmd._kind || (cmd.category === 'News' || cmd.category === 'OSINT' || cmd.crimeAbbr || cmd.crimeCitySlug || cmd.nationalMetric ? 'content' : 'jump'),
+        })
+      }
     }
     if (places.length) {
       for (const f of places.slice(0, 5)) rows.push({ ...f, _kind: 'place' })
@@ -92,11 +174,11 @@ export default function Omnibar({
       for (const f of mapResults.slice(0, 8)) rows.push({ ...f, _kind: 'map' })
     }
     return rows
-  }, [commandMode, jumpMatches, places, mapResults])
+  }, [commandMode, mergedMatches, places, mapResults])
 
   useEffect(() => {
     setActiveIndex(0)
-  }, [query, commandMode, places, mapResults])
+  }, [query, commandMode, places, mapResults, contentHits])
 
   useEffect(() => {
     const el = listRef.current?.querySelector(`[data-omnibar-idx="${activeIndex}"]`)
@@ -133,7 +215,15 @@ export default function Omnibar({
 
   const runCommand = (cmd) => {
     if (!cmd) return
-    if (cmd.action === 'navigate' && (cmd.viewId || cmd._kind === 'jump')) {
+    if (cmd.action === 'open' && cmd.url) {
+      try {
+        window.open(cmd.url, '_blank', 'noopener,noreferrer')
+      } catch { /* ignore */ }
+      // Also navigate to the feed with focus when possible
+      if (cmd.viewId || cmd.focusQuery) {
+        onCommandNavigate?.(cmd)
+      }
+    } else if (cmd.action === 'navigate' || cmd.viewId || cmd._kind === 'jump' || cmd._kind === 'content') {
       onCommandNavigate?.(cmd)
     }
     setShowDropdown(false)
@@ -143,13 +233,12 @@ export default function Omnibar({
   const searchInApp = () => {
     const q = String(query).trim()
     if (!q) return
-    const exact = jumpMatches.find((c) => c.label.toLowerCase() === q.toLowerCase())
+    const exact = mergedMatches.find((c) => c.label.toLowerCase() === q.toLowerCase())
     if (exact && onCommandNavigate) {
       runCommand(exact)
       return
     }
-    // Strong jump hit: prefer navigate over geocode when score is high
-    const top = jumpMatches[0]
+    const top = mergedMatches[0]
     if (top && top.score >= 100 && onCommandNavigate && !places.length && !mapResults.length) {
       runCommand(top)
       return
@@ -226,7 +315,7 @@ export default function Omnibar({
 
   const activateRow = (item) => {
     if (!item) return
-    if (item._kind === 'jump') runCommand(item)
+    if (item._kind === 'jump' || item._kind === 'content') runCommand(item)
     else if (item._kind === 'place') handleSelectPlace(item)
     else if (item._kind === 'map') handleSelectMapResult(item)
   }
@@ -244,12 +333,12 @@ export default function Omnibar({
 
   const hasAny = places.length > 0 || mapResults.length > 0
   const totalCount = places.length + mapResults.length
-  const showCommands = commandMode && jumpMatches.length > 0
-  const showDropdownPanel = showDropdown && (showCommands || hasAny)
+  const showCommands = commandMode && mergedMatches.length > 0
+  const showDropdownPanel = showDropdown && (showCommands || hasAny || (commandMode && contentLoading && String(query).trim()))
 
   const onInputKeyDown = (e) => {
     if (!showDropdownPanel && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
-      if (jumpMatches.length || hasAny) {
+      if (mergedMatches.length || hasAny) {
         setShowDropdown(true)
         setCommandMode(true)
       }
@@ -274,9 +363,9 @@ export default function Omnibar({
         activateRow(flatResults[activeIndex])
         return
       }
-      if (commandMode && jumpMatches[0] && String(query).trim() && !hasAny) {
+      if (commandMode && mergedMatches[0] && String(query).trim() && !hasAny) {
         e.preventDefault()
-        runCommand(jumpMatches[0])
+        runCommand(mergedMatches[0])
         return
       }
       searchInApp()
@@ -284,7 +373,7 @@ export default function Omnibar({
   }
 
   let jumpOffset = 0
-  const placeOffset = showCommands ? jumpMatches.length : 0
+  const placeOffset = showCommands ? mergedMatches.length : 0
   const mapOffset = placeOffset + (places.length ? Math.min(places.length, 5) : 0)
 
   return (
@@ -297,7 +386,7 @@ export default function Omnibar({
           value={query}
           onChange={handleInputChange}
           onFocus={() => {
-            if (hasAny || jumpMatches.length || commandMode) setShowDropdown(true)
+            if (hasAny || mergedMatches.length || commandMode) setShowDropdown(true)
           }}
           onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
           onKeyDown={onInputKeyDown}
@@ -337,9 +426,13 @@ export default function Omnibar({
         >
           {showCommands && (
             <>
-              <div className="omnibar-results-head">Jump to</div>
-              {jumpMatches.map((cmd, i) => {
+              <div className="omnibar-results-head">
+                {String(query).trim() ? 'Results' : 'Jump to'}
+                {contentLoading ? <span className="omnibar-results-head-hint"> · searching…</span> : null}
+              </div>
+              {mergedMatches.map((cmd, i) => {
                 const idx = jumpOffset + i
+                const sub = resultSubtitle(cmd)
                 return (
                   <button
                     key={cmd.id}
@@ -354,13 +447,19 @@ export default function Omnibar({
                       runCommand(cmd)
                     }}
                   >
-                    <span className="omnibar-result-type">{cmd.category || 'Go'}</span>
-                    <span className="omnibar-result-title">{cmd.label}</span>
-                    <span className="omnibar-result-action">Jump</span>
+                    <span className="omnibar-result-type">{resultKind(cmd)}</span>
+                    <span className="omnibar-result-main">
+                      <span className="omnibar-result-title">{cmd.label}</span>
+                      {sub ? <span className="omnibar-result-sub">{sub}</span> : null}
+                    </span>
+                    <span className="omnibar-result-action">{resultAction(cmd)}</span>
                   </button>
                 )
               })}
             </>
+          )}
+          {!showCommands && commandMode && contentLoading && String(query).trim() && (
+            <div className="omnibar-results-hint">Searching news, OSINT, crime…</div>
           )}
           {hasAny && (
             <>
@@ -441,7 +540,7 @@ export default function Omnibar({
           )}
           {showCommands && !hasAny && (
             <div className="omnibar-results-hint" aria-hidden>
-              ↑↓ navigate · Enter jump · Esc close
+              ↑↓ navigate · Enter select · Esc close · News / OSINT / Crime / Jump
             </div>
           )}
         </div>

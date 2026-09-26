@@ -15,16 +15,16 @@ const STREET_STYLE = {
   sources: {
     basemap: {
       type: 'raster',
+      // Keyless Esri street tiles — same ArcGIS Online pattern as Maps BASEMAPS (no API key).
+      // OSM raster is blocked for many non-browser / cloud UAs; Esri World Street Map is free to use.
       tiles: [
-        'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-        'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-        'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
       ],
       tileSize: 256,
-      attribution: '© OpenStreetMap © CARTO',
+      attribution: 'Esri, OpenStreetMap contributors',
     },
   },
-  layers: [{ id: 'basemap', type: 'raster', source: 'basemap', minzoom: 0, maxzoom: 20 }],
+  layers: [{ id: 'basemap', type: 'raster', source: 'basemap', minzoom: 0, maxzoom: 19 }],
 }
 
 function circlePolygon(lon, lat, radiusMiles, steps = 64) {

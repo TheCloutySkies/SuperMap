@@ -36,16 +36,23 @@ const weatherNearbyCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 })
 const weatherHourlyCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 })
 const threatSummaryCache = new NodeCache({ stdTTL: 60 * 60, checkperiod: 300 })
 const defconCache = new NodeCache({ stdTTL: 30 * 60, checkperiod: 120 })
-const stocksCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 60 })
 const netblocksCache = new NodeCache({ stdTTL: 15 * 60, checkperiod: 120 })
 const earthquakesWidgetCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 60 })
-const spaceCache = new NodeCache({ stdTTL: 60 * 60, checkperiod: 300 })
 const conflictMetricsCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 })
-const gasPricesCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 60 })
 const homeBootstrapCache = new NodeCache({ stdTTL: 60, checkperiod: 30 })
 const MAPBOX_TOKEN = process.env.MAPBOX_TOKEN || ''
 const GEOAPIFY_KEY = process.env.GEOAPIFY_KEY || ''
 const { HOME_CACHE_CONTROL, getHomePayload } = require('../services/homeBootstrap')
+const apiResultCache = require('../services/apiResultCache')
+/** Stocks: 30m fresh / 24h stale-on-error (disk-backed). */
+const STOCKS_TTL_SEC = apiResultCache.TTL.MARKET
+const STOCKS_STALE_SEC = apiResultCache.TTL.DAILY
+/** Gas: EIA weekly retail — cache 6h fresh / 7d stale. */
+const GAS_TTL_SEC = apiResultCache.TTL.SIX_HOURS
+const GAS_STALE_SEC = apiResultCache.TTL.WEEKLY
+/** Space/APOD: 6h fresh / 48h stale. */
+const SPACE_TTL_SEC = apiResultCache.TTL.SIX_HOURS
+const SPACE_STALE_SEC = 2 * apiResultCache.TTL.DAILY
 
 /** Last-good APOD + short backoff so DEMO_KEY / 429s do not spam NASA or empty the widget. */
 let spaceApodLastGood = null
@@ -1479,7 +1486,8 @@ function formatChartTimestamps(unixtimes, range) {
   })
 }
 
-/** Homepage widgets: stocks. Uses Finnhub (candles), else Alpha Vantage (quotes), else demo. Cache 2 min (demo) / 5 min (live). */
+/** Homepage widgets: stocks. Yahoo/CoinGecko → Finnhub → Alpha Vantage → demo.
+ * Durable cache: 30m fresh, serve last-good up to 24h on upstream failure. ?refresh=1 bypasses fresh TTL. */
 router.get('/stocks', async (req, res) => {
   setHomeCacheHeaders(res)
   let symbols = userConfig.getStockTickers()
@@ -1492,8 +1500,17 @@ router.get('/stocks', async (req, res) => {
   const interval = STOCK_RANGES[range] || '1d'
   const cacheKey = 'stocks:' + range + ':' + symbols.map((s) => s.symbol).sort().join(',')
   const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
-  const cached = !forceRefresh ? stocksCache.get(cacheKey) : null
-  if (cached) return res.json({ ...cached, _cached: true })
+  if (!forceRefresh) {
+    const fresh = apiResultCache.getFresh('stocks', cacheKey)
+    if (fresh) {
+      return res.json({
+        ...fresh.value,
+        _cached: true,
+        _cacheAgeMs: fresh.ageMs,
+        _cachedAt: new Date(fresh.fetchedAt).toISOString(),
+      })
+    }
+  }
 
   const FINNHUB_KEY = (process.env.FINNHUB_API_KEY || '').trim()
   const ALPHA_KEY = (process.env.ALPHAVANTAGE_API_KEY || '').trim()
@@ -1504,9 +1521,22 @@ router.get('/stocks', async (req, res) => {
     timestamps.push(d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }))
   }
 
-  const pushPayload = (payload, ttlSec = 300) => {
-    stocksCache.set(cacheKey, payload, ttlSec)
+  const pushPayload = (payload, ttlSec = STOCKS_TTL_SEC) => {
+    apiResultCache.set('stocks', cacheKey, payload, ttlSec)
     return res.json(payload)
+  }
+
+  const serveStaleOrContinue = () => {
+    const stale = apiResultCache.getStale('stocks', cacheKey, STOCKS_STALE_SEC)
+    if (!stale) return false
+    res.json({
+      ...stale.value,
+      _cached: true,
+      _stale: true,
+      _cacheAgeMs: stale.ageMs,
+      _cachedAt: new Date(stale.fetchedAt).toISOString(),
+    })
+    return true
   }
 
   // Keyless first: Yahoo Finance chart API + CoinGecko. No API keys, accurate data.
@@ -1728,6 +1758,9 @@ router.get('/stocks', async (req, res) => {
     }
   }
 
+  // Prefer last-good quotes over demo when all upstreams fail.
+  if (serveStaleOrContinue()) return
+
   const daySeed = Math.floor(now / (24 * 60 * 60 * 1000))
   const seeded = (i, j) => {
     const x = Math.sin(daySeed * 1000 + i * 7 + j * 13) * 10000
@@ -1816,12 +1849,23 @@ router.get('/netblocks', async (req, res) => {
   res.json(payload)
 })
 
-/** NASA space: EONET (global hazards), NASA News, optional APOD. Cache 1 hour. Partial payloads on upstream failure. */
+/** NASA space: EONET (global hazards), NASA News, optional APOD.
+ * Durable cache: 6h fresh / 48h stale. Partial payloads on upstream failure. */
 router.get('/space', async (req, res) => {
   setHomeCacheHeaders(res)
   const cacheKey = 'space'
-  const cached = spaceCache.get(cacheKey)
-  if (cached) return res.json({ ...cached, _cached: true })
+  const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
+  if (!forceRefresh) {
+    const fresh = apiResultCache.getFresh('space', cacheKey)
+    if (fresh) {
+      return res.json({
+        ...fresh.value,
+        _cached: true,
+        _cacheAgeMs: fresh.ageMs,
+        _cachedAt: new Date(fresh.fetchedAt).toISOString(),
+      })
+    }
+  }
 
   const NASA_KEY = (process.env.NASA_API_KEY || '').trim() || 'DEMO_KEY'
   if (NASA_KEY === 'DEMO_KEY') {
@@ -1885,7 +1929,21 @@ router.get('/space', async (req, res) => {
     }
   }
 
-  spaceCache.set(cacheKey, out)
+  // If every upstream failed and we have nothing useful, serve durable stale.
+  if (!out.eonet && !out.nasaNews && !out.apod) {
+    const stale = apiResultCache.getStale('space', cacheKey, SPACE_STALE_SEC)
+    if (stale) {
+      return res.json({
+        ...stale.value,
+        _cached: true,
+        _stale: true,
+        _cacheAgeMs: stale.ageMs,
+        _cachedAt: new Date(stale.fetchedAt).toISOString(),
+      })
+    }
+  }
+
+  apiResultCache.set('space', cacheKey, out, SPACE_TTL_SEC)
   res.json(out)
 })
 
@@ -1977,36 +2035,49 @@ router.get('/gas-prices', async (req, res) => {
   const force = String(req.query.refresh || '') === '1'
   const cacheKey = stateCode ? `gas-prices:${stateCode}` : zip ? `gas-prices:zip:${zip}` : 'gas-prices'
 
+  const isGoodGasPayload = (cached) =>
+    cached
+    && cached.ok
+    && !cached.gasUnavailable
+    && (
+      cached.national != null
+      || cached.states?.length
+      || cached.diesel?.national != null
+      || cached.diesel?.states?.length
+      || cached.gasoline?.national != null
+    )
+
   if (!force) {
-    const cached = gasPricesCache.get(cacheKey)
+    const fresh = apiResultCache.getFresh('gas-prices', cacheKey)
     // Only serve successful live payloads from cache — never cache misses / unavailable
-    if (
-      cached
-      && cached.ok
-      && !cached.gasUnavailable
-      && (
-        cached.national != null
-        || cached.states?.length
-        || cached.diesel?.national != null
-        || cached.diesel?.states?.length
-        || cached.gasoline?.national != null
-      )
-    ) {
-      return res.json({ ...cached, _cached: true })
+    if (fresh && isGoodGasPayload(fresh.value)) {
+      return res.json({
+        ...fresh.value,
+        _cached: true,
+        _cacheAgeMs: fresh.ageMs,
+        _cachedAt: new Date(fresh.fetchedAt).toISOString(),
+      })
     }
   }
 
   try {
     const payload = await gasPricesService.getGasPrices({ stateCode, zip })
-    if (payload && payload.ok && !payload.gasUnavailable) {
-      gasPricesCache.set(cacheKey, payload)
-    } else {
-      gasPricesCache.del(cacheKey)
+    if (isGoodGasPayload(payload)) {
+      apiResultCache.set('gas-prices', cacheKey, payload, GAS_TTL_SEC)
     }
     res.json(payload)
   } catch (err) {
     console.error('[API /gas-prices]', err.message)
-    gasPricesCache.del(cacheKey)
+    const stale = apiResultCache.getStale('gas-prices', cacheKey, GAS_STALE_SEC)
+    if (stale && isGoodGasPayload(stale.value)) {
+      return res.json({
+        ...stale.value,
+        _cached: true,
+        _stale: true,
+        _cacheAgeMs: stale.ageMs,
+        _cachedAt: new Date(stale.fetchedAt).toISOString(),
+      })
+    }
     res.status(503).json(gasPricesService.unavailable(
       'Gas price service error',
       err.message,
@@ -2081,6 +2152,20 @@ router.get('/conflict-metrics', (req, res) => {
       updatedAt: new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }),
     })
   }
+})
+
+/** Durable API-result cache stats (stocks / gas / space namespaces). */
+router.get('/cache/stats', (_req, res) => {
+  res.json({
+    ok: true,
+    ttlPresetsSec: apiResultCache.TTL,
+    wired: {
+      stocks: { freshSec: STOCKS_TTL_SEC, staleSec: STOCKS_STALE_SEC },
+      'gas-prices': { freshSec: GAS_TTL_SEC, staleSec: GAS_STALE_SEC },
+      space: { freshSec: SPACE_TTL_SEC, staleSec: SPACE_STALE_SEC },
+    },
+    ...apiResultCache.stats(),
+  })
 })
 
 module.exports = router

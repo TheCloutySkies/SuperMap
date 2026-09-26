@@ -1,5 +1,6 @@
 /**
- * Weather backends: Open-Meteo suite, NWS (User-Agent SuperMapWeather), OpenWeatherMap.
+ * Weather backends: Open-Meteo suite, NWS (User-Agent SuperMapWeather),
+ * OpenWeatherMap tiles, Windy Map Forecast (WINDY_API) for wind visualization.
  * Keys stay in env — never hardcode secrets here.
  */
 
@@ -15,7 +16,6 @@ const OM = {
   airQuality: 'https://air-quality-api.open-meteo.com/v1/air-quality',
   flood: 'https://flood-api.open-meteo.com/v1/flood',
   satellite: 'https://satellite-api.open-meteo.com/v1/archive',
-  singleRuns: 'https://single-runs-api.open-meteo.com/v1/forecast',
 }
 
 const RAINVIEWER_API = 'https://api.rainviewer.com/public/weather-maps.json'
@@ -28,6 +28,11 @@ function nwsUserAgent() {
 
 function owmKey() {
   return String(process.env.OPENWEATHERMAP_API_KEY || '').trim()
+}
+
+/** Map Forecast API key (client-side windyInit). Env: WINDY_API on Render. */
+function windyKey() {
+  return String(process.env.WINDY_API || process.env.WINDY_API_KEY || '').trim()
 }
 
 function parseLatLon(query = {}) {
@@ -334,46 +339,6 @@ async function getSatelliteRadiation({ lat, lon, startDate, endDate } = {}) {
   })
 }
 
-/**
- * Open-Meteo Single Runs — return honest empty when unavailable.
- */
-async function getSingleRuns({ lat, lon, days = 7 } = {}) {
-  const d = Math.min(16, Math.max(1, Number(days) || 7))
-  const cacheKey = `runs:${lat.toFixed(3)},${lon.toFixed(3)}:${d}`
-  const hit = cacheGet(cacheKey)
-  if (hit) return { ...hit, _cached: true }
-
-  try {
-    // Single Runs requires an explicit model run id; try latest first.
-    const om = await getJson(OM.singleRuns, {
-      latitude: lat,
-      longitude: lon,
-      timezone: 'auto',
-      models: 'gfs_seamless',
-      run: 'latest',
-      hourly: 'temperature_2m,precipitation,weather_code,wind_speed_10m',
-      forecast_days: d,
-    })
-    return cacheSet(cacheKey, {
-      lat,
-      lon,
-      available: true,
-      source: 'open-meteo-single-runs',
-      openMeteo: om,
-    })
-  } catch (err) {
-    console.warn('[weather] single-runs unavailable:', err.message)
-    return cacheSet(cacheKey, {
-      lat,
-      lon,
-      available: false,
-      source: 'open-meteo-single-runs',
-      openMeteo: null,
-      error: err.message || 'Single Runs API unavailable',
-    }, 5 * 60)
-  }
-}
-
 /** NWS alerts for a point (+ optional forecast office metadata). */
 async function getAlerts({ lat, lon } = {}) {
   const cacheKey = `nws:${lat.toFixed(2)},${lon.toFixed(2)}`
@@ -469,13 +434,18 @@ async function getRadarMeta() {
       }
     : null
 
+  const windy = windyKey()
+
   return cacheSet(cacheKey, {
     rainviewer,
     openWeatherMapTiles: owmTiles,
     owmConfigured: Boolean(key),
+    windyConfigured: Boolean(windy),
+    windProvider: windy ? 'windy-map-forecast' : (owmTiles?.wind ? 'openweathermap' : null),
     layers: {
       precip: Boolean(rainviewer || owmTiles?.precipitation),
-      wind: Boolean(owmTiles?.wind),
+      // Wind visualization prefers Windy Map Forecast (WINDY_API); OWM tiles are fallback only.
+      wind: Boolean(windy || owmTiles?.wind),
       temp: Boolean(owmTiles?.temperature),
       severe: true,
       tropical: true,
@@ -483,16 +453,46 @@ async function getRadarMeta() {
   }, 5 * 60)
 }
 
+/**
+ * Client config for Windy Map Forecast API (libBoot + windyInit).
+ * Map Forecast keys are designed for browser use (domain-restricted at Windy).
+ * Never log the key. Returns configured:false when WINDY_API is unset.
+ */
+function getWindyClientConfig() {
+  const key = windyKey()
+  if (!key) {
+    return {
+      configured: false,
+      provider: 'windy-map-forecast',
+      docs: 'https://api.windy.com/map-forecast/docs',
+      env: 'WINDY_API',
+    }
+  }
+  return {
+    configured: true,
+    provider: 'windy-map-forecast',
+    key,
+    libBootUrl: 'https://api.windy.com/assets/map-forecast/libBoot.js',
+    leafletCss: 'https://unpkg.com/leaflet@1.4.0/dist/leaflet.css',
+    leafletJs: 'https://unpkg.com/leaflet@1.4.0/dist/leaflet.js',
+    docs: 'https://api.windy.com/map-forecast/docs',
+    env: 'WINDY_API',
+    defaultOverlay: 'wind',
+    particlesAnim: 'on',
+  }
+}
+
 module.exports = {
   parseLatLon,
   nwsUserAgent,
+  windyKey,
   getForecast,
   getHistorical,
   getMarine,
   getAirQuality,
   getFlood,
   getSatelliteRadiation,
-  getSingleRuns,
   getAlerts,
   getRadarMeta,
+  getWindyClientConfig,
 }

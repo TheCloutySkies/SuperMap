@@ -98,17 +98,6 @@ router.get('/satellite-radiation', wrap('satellite-radiation', async (req, res) 
   res.json(data)
 }))
 
-/** GET /api/weather/single-runs?lat&lon — may return available:false */
-router.get('/single-runs', wrap('single-runs', async (req, res) => {
-  const coords = requireLatLon(req, res)
-  if (!coords) return
-  const data = await weather.getSingleRuns({
-    ...coords,
-    days: req.query.days != null ? Number(req.query.days) : 7,
-  })
-  res.json(data)
-}))
-
 /** GET /api/weather/alerts?lat&lon — NWS with SuperMapWeather User-Agent */
 router.get('/alerts', wrap('alerts', async (req, res) => {
   const coords = requireLatLon(req, res)
@@ -117,10 +106,19 @@ router.get('/alerts', wrap('alerts', async (req, res) => {
   res.json(data)
 }))
 
-/** GET /api/weather/radar/meta — RainViewer + OWM tile helpers */
+/** GET /api/weather/radar/meta — RainViewer + OWM tile helpers + Windy flags */
 router.get('/radar/meta', wrap('radar/meta', async (_req, res) => {
   const data = await weather.getRadarMeta()
   res.json(data)
+}))
+
+/**
+ * GET /api/weather/windy/config
+ * Returns Map Forecast client bootstrap (key when WINDY_API is set).
+ * Used by Weather radar wind layer via windyInit({ key, overlay: 'wind' }).
+ */
+router.get('/windy/config', wrap('windy/config', async (_req, res) => {
+  res.json(weather.getWindyClientConfig())
 }))
 
 module.exports = router

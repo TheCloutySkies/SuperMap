@@ -664,32 +664,6 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
         </div>
       )}
 
-      {(activeView === 'news-feeds' || activeView === 'osint-feeds') && !isVideosOnly && (
-        <div className={`feeds-subnav${showNewsDesk ? ' feeds-subnav--on-desk' : ''}`}>
-          <button
-            type="button"
-            className={`feeds-subnav-btn ${feedMode === FEED_MODE.NEWS ? 'active' : ''}`}
-            onClick={() => { setFeedMode(FEED_MODE.NEWS); setSourceFilter('all') }}
-          >
-            Glowie
-          </button>
-          <button
-            type="button"
-            className={`feeds-subnav-btn ${feedMode === FEED_MODE.OSINT ? 'active' : ''}`}
-            onClick={() => { setFeedMode(FEED_MODE.OSINT); setSourceFilter('all') }}
-          >
-            OSINT
-          </button>
-          <button
-            type="button"
-            className={`feeds-subnav-btn ${feedMode === FEED_MODE.VIDEOS ? 'active' : ''}`}
-            onClick={() => { setFeedMode(FEED_MODE.VIDEOS); setVideoTagFilter('all') }}
-          >
-            Recent videos
-          </button>
-        </div>
-      )}
-
       {showNewsDesk && (
         <div className="news-desk">
           <header className="news-desk-masthead">

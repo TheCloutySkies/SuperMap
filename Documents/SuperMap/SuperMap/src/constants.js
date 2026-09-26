@@ -13,6 +13,9 @@ export const CRIME_VIEW_ID = 'crime'
 /** Legacy ids redirected to CRIME_VIEW_ID — never open the old Maps crime-map overlay. */
 export const CRIME_VIEW_ALIASES = Object.freeze(['crime-map', 'crime-intel'])
 
+/** Canonical Weather desk view id (ModeRail WEATHER, Radial, Omnibar). */
+export const WEATHER_VIEW_ID = 'weather'
+
 export function resolveCrimeViewId(viewId) {
   if (viewId === CRIME_VIEW_ID || CRIME_VIEW_ALIASES.includes(viewId)) return CRIME_VIEW_ID
   return viewId
@@ -21,6 +24,11 @@ export function resolveCrimeViewId(viewId) {
 /** True when the dedicated CrimeIntelligenceView should render. */
 export function isCrimeIntelligenceView(viewId) {
   return viewId === CRIME_VIEW_ID || viewId === 'crime-intel'
+}
+
+/** True when the dedicated WeatherView should render. */
+export function isWeatherView(viewId) {
+  return viewId === WEATHER_VIEW_ID
 }
 
 // LocalStorage keys

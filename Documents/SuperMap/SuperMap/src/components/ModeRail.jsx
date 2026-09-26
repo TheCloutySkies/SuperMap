@@ -1,12 +1,13 @@
 import './ModeRail.css'
 import { BRAND_LOGO_SRC, BRAND_LOGO_ALT, PRODUCT_NAME } from '../constants'
 
-/** Mode ids. CRIME opens CrimeIntelligenceView via App handleFooterNav → CRIME_VIEW_ID (`crime`). */
+/** Mode ids. CRIME / WEATHER open dedicated views via App handleFooterNav. */
 const MODES = [
   { id: 'HOME', label: 'Home', icon: '⌂' },
   { id: 'MAPS', label: 'Maps', icon: '◎' },
   { id: 'CRIME', label: 'Crime', icon: '📉' },
-  { id: 'FEEDS', label: 'Glowie', icon: '☰' },
+  { id: 'WEATHER', label: 'Weather', icon: '☁' },
+  { id: 'FEEDS', label: 'News', icon: '☰' },
   { id: 'TOOLS', label: 'Tools', icon: '⚒' },
   { id: 'RESOURCES', label: 'Resources', icon: '▣' },
   { id: 'REPORTS', label: 'Reports', icon: '✎' },

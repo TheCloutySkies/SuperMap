@@ -1,10 +1,11 @@
 import './RadialMenu.css'
-import { CRIME_VIEW_ID, BRAND_LOGO_SRC, BRAND_LOGO_ALT } from '../constants'
+import { CRIME_VIEW_ID, WEATHER_VIEW_ID, BRAND_LOGO_SRC, BRAND_LOGO_ALT } from '../constants'
 
 export const RADIAL_ORBIT_ITEMS = [
   { id: 'MAPS', label: 'Maps', icon: '◎' },
   { id: 'CRIME', label: 'Crime', icon: '📉', viewId: CRIME_VIEW_ID },
-  { id: 'FEEDS', label: 'Glowie', icon: '☰' },
+  { id: 'WEATHER', label: 'Weather', icon: '☁', viewId: WEATHER_VIEW_ID },
+  { id: 'FEEDS', label: 'News', icon: '☰' },
   { id: 'TOOLS', label: 'Tools', icon: '⚒' },
   { id: 'RESOURCES', label: 'Resources', icon: '▣' },
   { id: 'REPORTS', label: 'Reports', icon: '✎' },

@@ -3,7 +3,7 @@
  * Components/constants feed entries here so the registry stays maintainable.
  * Search is client-side fuzzy match — no API required for jump targets.
  */
-import { CRIME_VIEW_ID, AI_ASSISTANT_NAME } from '../constants'
+import { CRIME_VIEW_ID, WEATHER_VIEW_ID, AI_ASSISTANT_NAME } from '../constants'
 import { TOOLS_LIST } from '../components/toolsList'
 import { RESOURCE_SECTIONS } from '../components/ResourcesView'
 import { WIDGET_SEARCH_INDEX } from '../components/widgetSearchIndex'
@@ -60,13 +60,23 @@ export const OMNIBAR_CORE_ENTRIES = Object.freeze([
   },
   {
     id: 'mode-feeds',
-    label: 'Glowie',
+    label: 'News',
     category: 'Mode',
     keywords: ['feeds', 'news', 'rss', 'glowie', 'glowie report'],
     synonyms: ['timeline', 'news desk'],
     action: 'navigate',
     viewId: 'news-feeds',
     weight: 8,
+  },
+  {
+    id: 'mode-weather',
+    label: 'Weather',
+    category: 'Mode',
+    keywords: ['weather', 'forecast', 'radar', 'precip', 'storm', 'nws', 'open-meteo'],
+    synonyms: ['meteorology', 'rain', 'radar map'],
+    action: 'navigate',
+    viewId: WEATHER_VIEW_ID,
+    weight: 10,
   },
   {
     id: 'mode-tools',

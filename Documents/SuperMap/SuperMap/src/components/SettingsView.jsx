@@ -14,6 +14,7 @@ const TAB_LABELS = {
   conflictMap: 'Conflict Map',
   exploreMap: 'Explore',
   flockMap: 'Flock Cameras',
+  liveWebcams: 'Live Webcams',
   osintFeeds: 'OSINT Feeds',
   newsFeeds: 'Glowie Report',
   osintX: 'OSINT (X)',

@@ -66,7 +66,10 @@ const MAP_VIEWS = [
   { id: 'explore-map', label: 'Explore', tabKey: 'exploreMap' },
   { id: 'geolocate-map', label: 'Geolocate', tabKey: 'geolocateMap' },
   { id: 'flock-map', label: 'Flock Cameras', tabKey: 'flockMap' },
+  { id: 'live-webcams', label: 'Live Webcams', tabKey: 'liveWebcams' },
 ]
+
+const MAP_VIEW_IDS = MAP_VIEWS.map((v) => v.id)
 
 const FEED_VIEWS = [
   { id: 'news-feeds', label: 'Glowie Report', tabKey: 'newsFeeds' },
@@ -224,7 +227,7 @@ function App() {
     } catch {}
   }, [])
 
-  const isMapView = ['osint-map', 'conflict-map', 'explore-map', 'geolocate-map', 'flock-map'].includes(activeView)
+  const isMapView = MAP_VIEW_IDS.includes(activeView)
   const isCrimeView = isCrimeIntelligenceView(activeView)
   const isWeatherPage = isWeatherView(activeView)
   const isFeedView = ['osint-feeds', 'news-feeds', 'recent-videos', 'osint-x', 'advanced-search', 'broadcasts'].includes(activeView)
@@ -252,7 +255,7 @@ function App() {
     setSubnavOpen(true)
     if (resolved === CRIME_VIEW_ID) setAppMode(APP_MODES.CRIME)
     else if (resolved === WEATHER_VIEW_ID) setAppMode(APP_MODES.WEATHER)
-    else if (['osint-map', 'conflict-map', 'explore-map', 'geolocate-map', 'flock-map'].includes(resolved)) setAppMode(APP_MODES.MAPS)
+    else if (MAP_VIEW_IDS.includes(resolved)) setAppMode(APP_MODES.MAPS)
     else if (['osint-feeds', 'osint-x', 'advanced-search', 'news-feeds', 'broadcasts', 'recent-videos'].includes(resolved)) setAppMode(APP_MODES.FEEDS)
     else if (resolved === 'home') setAppMode(APP_MODES.HOME)
     else if (resolved === 'tools') setAppMode(APP_MODES.TOOLS)

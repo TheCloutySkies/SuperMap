@@ -195,6 +195,22 @@
   pointer-events: none;
 }
 
+.map-zoom-warning--webcams {
+  background: rgba(15, 23, 42, 0.92);
+  border-color: #22d3ee;
+  color: #e2e8f0;
+}
+
+.map-popup-webcam-thumb {
+  display: block;
+  width: 100%;
+  max-width: 220px;
+  height: auto;
+  margin: 0.4rem 0;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
 .map-loading-spinner {
   position: absolute;
   top: 1rem;

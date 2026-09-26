@@ -22,6 +22,7 @@ import {
   fetchOdintRegions,
   fetchSurveillanceCapabilities,
   fetchFlockCameras,
+  fetchWindyWebcams,
 } from '../services/layerServices'
 import { buildTerminatorGeoJSON } from '../services/solarTerminator'
 import { fetchMilitaryAircraft, fetchUkraineFrontline, fetchInternetOutages } from '../services/newLayerFetchers'
@@ -45,6 +46,9 @@ MapboxDraw.constants.classes.CONTROL_GROUP = 'maplibregl-ctrl-group'
 MapboxDraw.constants.classes.ATTRIBUTION = 'maplibregl-ctrl-attrib'
 
 const MIN_POWER_ZOOM = 14
+/** Windy bbox queries only after the user zooms in enough to keep requests local. */
+const MIN_WEBCAM_ZOOM = 8
+const WEBCAM_FETCH_DEBOUNCE_MS = 450
 const FLOCK_MARKER_URL = '/assets/flock-camera-marker.png'
 const FLOCK_ICON_ID = 'flock-camera-marker'
 
@@ -147,6 +151,7 @@ const CLICKABLE_POINT_LAYERS = [
   'intel-surveillance-capabilities-layer',
   'intel-flock-cameras-layer',
   'intel-flock-cameras-icon',
+  'intel-live-webcams-layer',
   'intel-mil-aircraft-layer',
   'intel-ioda-layer',
   'mapped-news-layer',
@@ -762,6 +767,35 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     if (map.getSource('intel-flock-cameras')) map.removeSource('intel-flock-cameras')
   }
 
+  /** Windy live webcam markers (viewport-fetched; no clustering — counts stay small). */
+  const addLiveWebcams = (geoJson) => {
+    if (map.getSource('intel-live-webcams')) {
+      map.getSource('intel-live-webcams').setData(geoJson)
+      return
+    }
+    map.addSource('intel-live-webcams', {
+      type: 'geojson',
+      data: geoJson,
+    })
+    map.addLayer({
+      id: 'intel-live-webcams-layer',
+      type: 'circle',
+      source: 'intel-live-webcams',
+      paint: {
+        'circle-color': '#22d3ee',
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 5, 14, 9],
+        'circle-opacity': 0.9,
+        'circle-stroke-width': 1.5,
+        'circle-stroke-color': '#ecfeff',
+      },
+    })
+  }
+
+  const removeLiveWebcams = () => {
+    if (map.getLayer('intel-live-webcams-layer')) map.removeLayer('intel-live-webcams-layer')
+    if (map.getSource('intel-live-webcams')) map.removeSource('intel-live-webcams')
+  }
+
   const addUtilityOutages = (geoJson) => {
     if (map.getSource('intel-outages')) {
       map.getSource('intel-outages').setData(geoJson)
@@ -1168,6 +1202,8 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     removeSurveillanceCapabilities,
     addFlockCameras,
     removeFlockCameras,
+    addLiveWebcams,
+    removeLiveWebcams,
     addUtilityOutages,
     removeUtilityOutages,
     addAoiSaved,
@@ -1262,6 +1298,7 @@ export default function MapView({
   eventFilterByViewRef.current = eventFilterByView
 
   const [powerZoomWarning, setPowerZoomWarning] = useState(false)
+  const [webcamZoomHint, setWebcamZoomHint] = useState(false)
   const [mapInstance, setMapInstance] = useState(null)
   const [pinEditorOpen, setPinEditorOpen] = useState(false)
   const [pinEditorPin, setPinEditorPin] = useState(null)
@@ -1426,12 +1463,15 @@ export default function MapView({
       if (!map || !map.getStyle) return
       // Geolocate uses Overpass presets only; Explore should still load layer toggles.
       if (activeViewRef.current === 'geolocate-map') return
-      // Dedicated Flock map: cameras only (ignore leftover OSINT toggles).
+      // Dedicated Flock / Live Webcams maps: cameras only (ignore leftover OSINT toggles).
       // Other maps never load flock — that lives only on flock-map.
+      // Live webcams are fetched by viewport effect (not doFetch).
       const toggles =
         activeViewRef.current === 'flock-map'
           ? { ...DEFAULT_LAYER_TOGGLES, flockCameras: true }
-          : { ...togglesIn, flockCameras: false }
+          : activeViewRef.current === 'live-webcams'
+            ? { ...DEFAULT_LAYER_TOGGLES }
+            : { ...togglesIn, flockCameras: false }
       const getRadarWanted = () => layerTogglesRef.current?.noaaRadar === true
       const helpers = addOrUpdateLayer(map, toggles, onLoading, getRadarWanted)
       const bbox = () => {
@@ -1882,6 +1922,33 @@ export default function MapView({
         popup.setLngLat(coords).setHTML(html).addTo(map)
         return
       }
+      if (feat.layer?.id === 'intel-live-webcams-layer') {
+        const props = feat.properties || {}
+        const esc = (s) => String(s ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+        const title = esc(props.title || 'Webcam')
+        const place = [props.city, props.country].filter(Boolean).map(esc).join(', ')
+        const img = props.image
+          ? `<img class="map-popup-webcam-thumb" src="${esc(props.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" />`
+          : ''
+        const openUrl = props.url || props.playerEmbed || ''
+        const link = openUrl
+          ? `<a href="${esc(openUrl)}" target="_blank" rel="noopener noreferrer" class="map-popup-read-more">Open on Windy</a>`
+          : ''
+        const html = `<div class="map-popup-content">
+          <div class="map-popup-title">${title}</div>
+          ${place ? `<div>${place}</div>` : ''}
+          ${img}
+          ${link}
+          <div class="map-popup-source">Windy Webcams</div>
+        </div>`
+        const coords = feat.geometry?.coordinates?.slice?.() || [e.lngLat.lng, e.lngLat.lat]
+        popup.setLngLat(coords).setHTML(html).addTo(map)
+        return
+      }
       const coords = feat.geometry?.type === 'Point' ? feat.geometry.coordinates.slice() : null
       if (!coords) return
       if (feat.layer.id === 'intel-saved-points-layer') {
@@ -2305,6 +2372,91 @@ export default function MapView({
     } catch (_) {}
   }, [activeView, mapInstance])
 
+  // Frame continental US (below webcam zoom threshold) when opening Live Webcams.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReadyRef.current || activeView !== 'live-webcams') return
+    try {
+      map.flyTo({ center: [-98.35, 39.5], zoom: 4.5, duration: 800 })
+    } catch (_) {}
+  }, [activeView, mapInstance])
+
+  // Live Webcams: lazy Windy fetch by viewport once zoom ≥ MIN_WEBCAM_ZOOM.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReadyRef.current) return
+
+    if (activeView !== 'live-webcams') {
+      setWebcamZoomHint(false)
+      try {
+        const helpers = addOrUpdateLayer(map, {}, onLoadingChange)
+        helpers.removeLiveWebcams()
+      } catch (_) {}
+      return
+    }
+
+    let cancelled = false
+    let debounceTimer = null
+    let abortCtrl = null
+
+    const emptyFc = () => ({ type: 'FeatureCollection', features: [] })
+
+    const runFetch = () => {
+      if (cancelled || !map.getStyle?.()) return
+      const zoom = map.getZoom()
+      if (zoom < MIN_WEBCAM_ZOOM) {
+        setWebcamZoomHint(true)
+        try {
+          const helpers = addOrUpdateLayer(map, {}, onLoadingChange)
+          helpers.addLiveWebcams(emptyFc())
+        } catch (_) {}
+        return
+      }
+      setWebcamZoomHint(false)
+      const b = map.getBounds()
+      const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]
+      if (abortCtrl) abortCtrl.abort()
+      abortCtrl = new AbortController()
+      onLoadingChange?.(true)
+      fetchWindyWebcams(bbox, { signal: abortCtrl.signal, limit: 50 })
+        .then((geoJson) => {
+          if (cancelled || !mapRef.current || !mapReadyRef.current) return
+          if (activeViewRef.current !== 'live-webcams') return
+          const helpers = addOrUpdateLayer(map, {}, onLoadingChange)
+          helpers.addLiveWebcams(geoJson || emptyFc())
+        })
+        .catch((err) => {
+          if (err?.name === 'AbortError' || cancelled) return
+          try {
+            const helpers = addOrUpdateLayer(map, {}, onLoadingChange)
+            helpers.addLiveWebcams(emptyFc())
+          } catch (_) {}
+        })
+        .finally(() => {
+          if (!cancelled) onLoadingChange?.(false)
+        })
+    }
+
+    const schedule = () => {
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(runFetch, WEBCAM_FETCH_DEBOUNCE_MS)
+    }
+
+    runFetch()
+    map.on('moveend', schedule)
+    map.on('zoomend', schedule)
+    map.on('styledata', schedule)
+
+    return () => {
+      cancelled = true
+      if (debounceTimer) clearTimeout(debounceTimer)
+      if (abortCtrl) abortCtrl.abort()
+      map.off('moveend', schedule)
+      map.off('zoomend', schedule)
+      map.off('styledata', schedule)
+    }
+  }, [activeView, mapInstance, onLoadingChange])
+
   useEffect(() => {
     const map = mapRef.current
     if (!map || !map.getStyle) return
@@ -2496,6 +2648,13 @@ export default function MapView({
       return
     }
 
+    if (activeView === 'live-webcams') {
+      helpers.addMappedNews(emptyFC())
+      helpers.addMappedOsint(emptyFC())
+      helpers.removeMappedConflictEvents()
+      return
+    }
+
     const applyLayers = (newsData, osintData) => {
       try {
         helpers.addMappedNews(toNewsOsintGeoJson(newsData))
@@ -2609,6 +2768,11 @@ export default function MapView({
       {powerZoomWarning && (
         <div className="map-zoom-warning">
           Zoom in to level 14+ to load infrastructure data
+        </div>
+      )}
+      {webcamZoomHint && activeView === 'live-webcams' && (
+        <div className="map-zoom-warning map-zoom-warning--webcams">
+          Zoom in to load webcams (zoom {MIN_WEBCAM_ZOOM}+)
         </div>
       )}
       {isMapLoading && (

@@ -49,6 +49,7 @@ app.get('/', (req, res) => {
       weatherWindyConfig: '/api/weather/windy/config',
       adsbMil: '/api/adsb/mil',
       cameras: '/api/cameras?lat=&lon=&radius=',
+      webcams: '/api/webcams?minLat=&maxLat=&minLon=&maxLon=&limit=',
       crimeStats: '/api/crime/stats',
       crimeStates: '/api/crime/states?year=',
       crimeCities: '/api/crime/cities?q=&state=&limit=&offset=',

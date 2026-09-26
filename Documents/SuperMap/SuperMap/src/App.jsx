@@ -7,14 +7,17 @@ import {
   DEFAULT_LAYER_TOGGLES,
   getVisualsPrefs,
   CRIME_VIEW_ID,
+  WEATHER_VIEW_ID,
   resolveCrimeViewId,
   isCrimeIntelligenceView,
+  isWeatherView,
   BRAND_LOGO_SRC,
   BRAND_LOGO_ALT,
 } from './constants'
 import { loadChromePrefs, saveChromePrefs } from './lib/mapToolsPrefs'
 import HomeScreen from './components/HomeScreen'
 import CrimeIntelligenceView from './components/CrimeIntelligenceView'
+import WeatherView from './components/WeatherView'
 import MapView from './components/MapView'
 import FeedsView from './components/FeedsView'
 import RightSidebar from './components/RightSidebar'
@@ -52,7 +55,7 @@ function initMetallicss() {
   })
 }
 
-const APP_MODES = { HOME: 'HOME', MAPS: 'MAPS', CRIME: 'CRIME', FEEDS: 'FEEDS', TOOLS: 'TOOLS', RESOURCES: 'RESOURCES', REPORTS: 'REPORTS', SETTINGS: 'SETTINGS' }
+const APP_MODES = { HOME: 'HOME', MAPS: 'MAPS', CRIME: 'CRIME', WEATHER: 'WEATHER', FEEDS: 'FEEDS', TOOLS: 'TOOLS', RESOURCES: 'RESOURCES', REPORTS: 'REPORTS', SETTINGS: 'SETTINGS' }
 /** @deprecated alias — keep for gradual rename */
 const FOOTER_MODES = APP_MODES
 
@@ -223,6 +226,7 @@ function App() {
 
   const isMapView = ['osint-map', 'conflict-map', 'explore-map', 'geolocate-map', 'flock-map'].includes(activeView)
   const isCrimeView = isCrimeIntelligenceView(activeView)
+  const isWeatherPage = isWeatherView(activeView)
   const isFeedView = ['osint-feeds', 'news-feeds', 'recent-videos', 'osint-x', 'advanced-search', 'broadcasts'].includes(activeView)
   const isSettingsView = activeView === 'settings'
   const tabVisibility = getTabVisibility()
@@ -233,6 +237,7 @@ function App() {
     if (mode === APP_MODES.HOME) setActiveView('home')
     else if (mode === APP_MODES.MAPS) setActiveView('osint-map')
     else if (mode === APP_MODES.CRIME) setActiveView(CRIME_VIEW_ID)
+    else if (mode === APP_MODES.WEATHER) setActiveView(WEATHER_VIEW_ID)
     else if (mode === APP_MODES.FEEDS) setActiveView('news-feeds')
     else if (mode === APP_MODES.TOOLS) setActiveView('tools')
     else if (mode === APP_MODES.RESOURCES) setActiveView('resources')
@@ -246,6 +251,7 @@ function App() {
     setActiveView(resolved)
     setSubnavOpen(true)
     if (resolved === CRIME_VIEW_ID) setAppMode(APP_MODES.CRIME)
+    else if (resolved === WEATHER_VIEW_ID) setAppMode(APP_MODES.WEATHER)
     else if (['osint-map', 'conflict-map', 'explore-map', 'geolocate-map', 'flock-map'].includes(resolved)) setAppMode(APP_MODES.MAPS)
     else if (['osint-feeds', 'osint-x', 'advanced-search', 'news-feeds', 'broadcasts', 'recent-videos'].includes(resolved)) setAppMode(APP_MODES.FEEDS)
     else if (resolved === 'home') setAppMode(APP_MODES.HOME)
@@ -348,8 +354,9 @@ function App() {
   let mobileChipItems = []
   if (appMode === APP_MODES.MAPS) mobilePageTitle = 'Maps'
   else if (appMode === APP_MODES.CRIME) mobilePageTitle = 'Crime'
+  else if (appMode === APP_MODES.WEATHER) mobilePageTitle = 'Weather'
   else if (appMode === APP_MODES.FEEDS) {
-    mobilePageTitle = 'Glowie'
+    mobilePageTitle = 'News'
     mobileChipItems = FEED_VIEWS
       .filter((v) => (v.id === 'osint-x' ? true : tabVisibility[v.tabKey] !== false))
       .map((v) => ({
@@ -392,7 +399,8 @@ function App() {
                   { key: APP_MODES.HOME, label: 'HOME' },
                   { key: APP_MODES.MAPS, label: 'MAPS' },
                   { key: APP_MODES.CRIME, label: 'CRIME' },
-                  { key: APP_MODES.FEEDS, label: 'FEEDS' },
+                  { key: APP_MODES.WEATHER, label: 'WEATHER' },
+                  { key: APP_MODES.FEEDS, label: 'NEWS' },
                   { key: APP_MODES.TOOLS, label: 'TOOLS' },
                   { key: APP_MODES.RESOURCES, label: 'RESOURCES' },
                   { key: APP_MODES.REPORTS, label: 'REPORT MAKER' },
@@ -454,6 +462,15 @@ function App() {
         {isCrimeView && (
           <div className="main-content-scroll main-content-scroll--crime">
             <CrimeIntelligenceView focusSegment={crimeFocusSegment} />
+          </div>
+        )}
+        {isWeatherPage && (
+          <div className="main-content-scroll main-content-scroll--weather">
+            <WeatherView
+              initialLat={weatherCoords.lat ?? userCoords.lat}
+              initialLon={weatherCoords.lon ?? userCoords.lon}
+              onLocationChange={(lat, lon) => setWeatherCoords({ lat, lon })}
+            />
           </div>
         )}
         {activeView === 'osint-feeds' && (
@@ -608,7 +625,7 @@ function App() {
               onClick: () => setActiveViewWithMode(v.id),
             }))
         } else if (appMode === APP_MODES.FEEDS) {
-          subnavTitle = 'Glowie'
+          subnavTitle = 'News'
           subnavItems = FEED_VIEWS
             .filter((v) => (v.id === 'osint-x' ? true : tabVisibility[v.tabKey] !== false))
             .map((v) => ({

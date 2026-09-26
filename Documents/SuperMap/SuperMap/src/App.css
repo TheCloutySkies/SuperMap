@@ -379,6 +379,20 @@
   min-height: 0;
 }
 
+.main-content-scroll--weather {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  max-width: none;
+  height: 100%;
+  min-height: 0;
+}
+
+.main-content-scroll--weather .weather-desk {
+  flex: 1;
+  min-height: 0;
+}
+
 /* Y2K page transition when switching footer sections */
 .main--y2k-transition {
   animation: y2k-page-transition 0.5s ease-out;

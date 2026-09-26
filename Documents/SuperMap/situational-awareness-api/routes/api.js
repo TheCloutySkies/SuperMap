@@ -23,10 +23,12 @@ const Parser = require('rss-parser')
 const { getAllCameras } = require('../camera-discovery/storage/saveCamera')
 const { loadSeedCameras } = require('../camera-discovery/storage/cameraSeeds')
 const crimeRouter = require('./crime')
+const weatherRouter = require('./weather')
 
 const searchCache = new NodeCache({ stdTTL: 15 })
 
 router.use('/crime', crimeRouter)
+router.use('/weather', weatherRouter)
 const geocodeCache = new NodeCache({ stdTTL: 24 * 60 * 60, checkperiod: 120 })
 const weatherNearbyCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 })
 const weatherHourlyCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 })

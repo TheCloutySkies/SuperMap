@@ -1,0 +1,388 @@
+.weather-desk {
+  --wx-bg0: #071018;
+  --wx-bg1: #0c1a28;
+  --wx-panel: rgba(12, 28, 42, 0.82);
+  --wx-border: rgba(120, 180, 220, 0.16);
+  --wx-accent: #4aa3d9;
+  --wx-accent-bright: #7ec8f0;
+  --wx-accent-soft: rgba(74, 163, 217, 0.16);
+  --wx-text: #d8e8f4;
+  --wx-muted: #7a96ad;
+  --wx-danger: #e04545;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 100%;
+  color: var(--wx-text);
+  background:
+    radial-gradient(ellipse 65% 40% at 12% -8%, rgba(74, 163, 217, 0.2), transparent 55%),
+    radial-gradient(ellipse 45% 30% at 92% 8%, rgba(40, 90, 130, 0.22), transparent 50%),
+    linear-gradient(180deg, var(--wx-bg1), var(--wx-bg0));
+  animation: weather-desk-in 0.45s ease both;
+}
+
+@keyframes weather-desk-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.weather-desk-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.85rem 1.25rem;
+  padding: 0.95rem 1.15rem 0.8rem;
+  border-bottom: 1px solid var(--wx-border);
+  background: rgba(7, 16, 24, 0.55);
+  backdrop-filter: blur(10px);
+}
+
+.weather-desk-brand h1 {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--wx-accent-bright);
+  text-shadow: 0 0 22px rgba(126, 200, 240, 0.28);
+}
+
+.weather-desk-brand p {
+  margin: 0.25rem 0 0;
+  font-size: 0.72rem;
+  color: var(--wx-muted);
+  max-width: 36rem;
+}
+
+.weather-desk-locate {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.weather-desk-locate input {
+  min-width: 12rem;
+  flex: 1 1 12rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--wx-border);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--wx-text);
+  font-size: 0.85rem;
+}
+
+.weather-desk-locate button {
+  appearance: none;
+  border: 1px solid var(--wx-border);
+  background: var(--wx-accent-soft);
+  color: var(--wx-accent-bright);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+
+.weather-desk-locate button:hover {
+  border-color: rgba(126, 200, 240, 0.45);
+  transform: translateY(-1px);
+}
+
+.weather-desk-location {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 1rem;
+  padding: 0.55rem 1.15rem;
+  border-bottom: 1px solid var(--wx-border);
+  font-size: 0.8rem;
+}
+
+.weather-desk-place {
+  font-weight: 650;
+  color: var(--wx-text);
+}
+
+.weather-desk-coords {
+  color: var(--wx-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.weather-desk-unit {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 0.2rem;
+  padding: 0.15rem;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--wx-border);
+}
+
+.weather-desk-unit button,
+.weather-desk-span button,
+.weather-desk-radar-toggles button,
+.weather-desk-panel-tabs button {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--wx-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.35rem 0.65rem;
+  border-radius: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.weather-desk-unit button.active,
+.weather-desk-span button.active,
+.weather-desk-radar-toggles button.active,
+.weather-desk-panel-tabs button.active {
+  color: var(--wx-accent-bright);
+  background: var(--wx-accent-soft);
+  border-color: rgba(74, 163, 217, 0.35);
+}
+
+.weather-desk-forecast,
+.weather-desk-radar,
+.weather-desk-panels {
+  padding: 0.9rem 1.15rem 1.1rem;
+  border-bottom: 1px solid var(--wx-border);
+}
+
+.weather-desk-span {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  padding: 0.2rem;
+  margin-bottom: 0.85rem;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--wx-border);
+}
+
+.weather-desk-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  gap: 0.65rem;
+}
+
+.weather-desk-card {
+  padding: 0.7rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--wx-border);
+  background: var(--wx-panel);
+  animation: weather-card-in 0.4s ease both;
+}
+
+.weather-desk-card:nth-child(2) { animation-delay: 0.04s; }
+.weather-desk-card:nth-child(3) { animation-delay: 0.08s; }
+.weather-desk-card:nth-child(4) { animation-delay: 0.12s; }
+.weather-desk-card:nth-child(5) { animation-delay: 0.16s; }
+
+@keyframes weather-card-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.weather-desk-card h3 {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--wx-accent-bright);
+}
+
+.weather-desk-card-cond {
+  margin: 0.3rem 0 0.55rem;
+  font-size: 0.72rem;
+  color: var(--wx-muted);
+}
+
+.weather-desk-card dl {
+  margin: 0;
+  display: grid;
+  gap: 0.28rem;
+}
+
+.weather-desk-card dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+}
+
+.weather-desk-card dt {
+  color: var(--wx-muted);
+}
+
+.weather-desk-card dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.weather-desk-owm-hint {
+  margin: 0.7rem 0 0;
+  font-size: 0.72rem;
+  color: var(--wx-muted);
+}
+
+.weather-desk-radar-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+  margin-bottom: 0.65rem;
+}
+
+.weather-desk-radar-head h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--wx-text);
+}
+
+.weather-desk-radar-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.weather-desk-map {
+  height: min(52vh, 420px);
+  min-height: 240px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--wx-border);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25) inset;
+}
+
+.weather-desk-map .maplibregl-ctrl-attrib {
+  background: rgba(7, 16, 24, 0.75);
+  color: var(--wx-muted);
+}
+
+.weather-desk-map .maplibregl-ctrl-group {
+  background: rgba(12, 28, 42, 0.92);
+  border: 1px solid var(--wx-border);
+}
+
+.weather-desk-map .maplibregl-ctrl-group button {
+  filter: invert(0.85);
+}
+
+.weather-desk-panel-tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.2rem;
+  padding: 0.2rem;
+  margin-bottom: 0.75rem;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--wx-border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.weather-desk-panel-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.weather-desk-panel-body {
+  min-height: 4rem;
+}
+
+.weather-desk-status {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--wx-muted);
+}
+
+.weather-desk-status--err {
+  color: #f0a0a0;
+}
+
+.weather-desk-kv {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 0.55rem;
+}
+
+.weather-desk-kv div {
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--wx-border);
+  background: var(--wx-panel);
+}
+
+.weather-desk-kv dt {
+  font-size: 0.68rem;
+  color: var(--wx-muted);
+  margin-bottom: 0.2rem;
+}
+
+.weather-desk-kv dd {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.weather-desk-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.weather-desk-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--wx-border);
+  background: var(--wx-panel);
+  font-size: 0.8rem;
+}
+
+.weather-desk-list span {
+  color: var(--wx-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.weather-desk-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 700px) {
+  .weather-desk-topbar {
+    padding: 0.75rem 0.85rem;
+  }
+
+  .weather-desk-forecast,
+  .weather-desk-radar,
+  .weather-desk-panels,
+  .weather-desk-location {
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+  }
+
+  .weather-desk-map {
+    height: 42vh;
+  }
+}

@@ -137,6 +137,7 @@ function App() {
   const [mapChromePrefs, setMapChromePrefs] = useState(() => loadChromePrefs())
   const [activeToolId, setActiveToolId] = useState(TOOLS_LIST[0]?.id ?? null)
   const [crimeFocusSegment, setCrimeFocusSegment] = useState(null)
+  const [crimeFocusEntity, setCrimeFocusEntity] = useState(null)
   const [isLeftSidebarMinimized, setIsLeftSidebarMinimized] = useState(false)
   const [footerTransition, setFooterTransition] = useState(false)
   const prevFooterModeRef = useRef(null)
@@ -264,18 +265,39 @@ function App() {
     else if (resolved === 'settings') setAppMode(APP_MODES.SETTINGS)
   }, [])
 
-  /** Omnibar jump: string viewId or rich target (crime section, tool, resource, widget). */
+  /** Omnibar jump: string viewId or rich target (crime section/entity, tool, resource, widget, news/OSINT). */
   const handleOmnibarNavigate = useCallback((target) => {
     if (target == null) return
     if (typeof target === 'string') {
       setActiveViewWithMode(target)
       return
     }
-    const viewId = target.viewId
+    let viewId = target.viewId
     if (!viewId) return
 
+    // News / OSINT content: focus feeds by title (and optionally open URL already handled in Omnibar)
+    if (target.focusQuery && (viewId === 'news-feeds' || viewId === 'osint-feeds' || target.category === 'News' || target.category === 'OSINT')) {
+      setSearchQuery(String(target.focusQuery))
+    }
+
     if (target.toolId) setActiveToolId(target.toolId)
-    if (target.crimeSegment) setCrimeFocusSegment(target.crimeSegment)
+
+    if (target.crimeSegment || target.crimeAbbr || target.crimeCitySlug || target.nationalMetric) {
+      const segment = target.crimeSegment
+        || (target.crimeAbbr ? 'states' : null)
+        || (target.crimeCitySlug ? 'cities' : null)
+        || (target.nationalMetric ? 'national' : null)
+      if (segment) setCrimeFocusSegment(segment)
+      setCrimeFocusEntity({
+        abbr: target.crimeAbbr || null,
+        citySlug: target.crimeCitySlug || null,
+        nationalMetric: target.nationalMetric || null,
+        nonce: Date.now(),
+      })
+      viewId = CRIME_VIEW_ID
+    } else if (target.crimeSegment) {
+      setCrimeFocusSegment(target.crimeSegment)
+    }
 
     setActiveViewWithMode(viewId)
 
@@ -464,7 +486,7 @@ function App() {
         )}
         {isCrimeView && (
           <div className="main-content-scroll main-content-scroll--crime">
-            <CrimeIntelligenceView focusSegment={crimeFocusSegment} />
+            <CrimeIntelligenceView focusSegment={crimeFocusSegment} focusEntity={crimeFocusEntity} />
           </div>
         )}
         {isWeatherPage && (

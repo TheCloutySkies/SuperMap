@@ -104,6 +104,13 @@
   background: var(--y2k-surface);
 }
 
+.omnibar-results-head-hint {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  opacity: 0.75;
+}
+
 .omnibar-results {
   position: absolute;
   top: 100%;
@@ -122,7 +129,7 @@
 
 .omnibar-result {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 0.5rem;
   width: 100%;
@@ -155,14 +162,29 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--y2k-accent);
-  min-width: 4.5rem;
-  max-width: 5.5rem;
+  min-width: 3.75rem;
+  max-width: 5rem;
   flex-shrink: 0;
   opacity: 0.9;
 }
 
-.omnibar-result-title {
+.omnibar-result-main {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.omnibar-result-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.omnibar-result-sub {
+  font-size: 0.72rem;
+  color: var(--y2k-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -171,6 +193,7 @@
 .omnibar-result-action {
   font-size: 0.75rem;
   color: var(--y2k-accent);
+  flex-shrink: 0;
 }
 
 .omnibar-results-actions {

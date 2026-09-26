@@ -29,6 +29,7 @@ app.get('/', (req, res) => {
       osintX: '/api/osint-x?limit=100',
       events: '/api/events?tag=&type=&startTime=&endTime=&bbox=&limit=',
       search: '/api/search?q=&tag=&entity=&startTime=&endTime=&lat=&lon=&radius=',
+      searchOmnibar: '/api/search/omnibar?q=&limit=',
       clusters: '/api/clusters?lat=&lon=&radius=&radiusKm=50&days=1',
       financeScreener: '/api/finance/screener?list=day_gainers',
       financeSearch: '/api/finance/search?search=AA',

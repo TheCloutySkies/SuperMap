@@ -972,6 +972,25 @@ router.get('/events', (req, res) => {
   res.json(geo)
 })
 
+/**
+ * Omnibar content search — aggregates cached news / OSINT / crime.
+ * GET /api/search/omnibar?q=&limit=
+ * Does not call MediaStack; news comes from getNewsCached() only.
+ */
+router.get('/search/omnibar', (req, res) => {
+  try {
+    const omnibarContent = require('../services/omnibarContent')
+    const q = (req.query.q || '').trim()
+    const limit = Math.min(parseInt(req.query.limit, 10) || 16, 40)
+    const payload = omnibarContent.searchOmnibarContent(q, { limit })
+    res.setHeader('Cache-Control', 'public, max-age=15, stale-while-revalidate=60')
+    return res.json(payload)
+  } catch (err) {
+    console.error('[API /search/omnibar]', err.message)
+    return res.status(500).json({ error: 'Omnibar search failed', results: [] })
+  }
+})
+
 router.get('/search', (req, res) => {
   const q = (req.query.q || '').trim()
   const lat = req.query.lat != null ? parseFloat(req.query.lat) : null

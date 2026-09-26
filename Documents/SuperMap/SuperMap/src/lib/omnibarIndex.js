@@ -8,7 +8,7 @@ import { TOOLS_LIST } from '../components/toolsList'
 import { RESOURCE_SECTIONS } from '../components/ResourcesView'
 import { WIDGET_SEARCH_INDEX } from '../components/widgetSearchIndex'
 
-/** @typedef {'Mode'|'Maps'|'Crime'|'Feeds'|'Tools'|'Resources'|'Home'|'Reports'|'Settings'} OmnibarCategory */
+/** @typedef {'Mode'|'Maps'|'Crime'|'Feeds'|'Tools'|'Resources'|'Home'|'Reports'|'Settings'|'News'|'OSINT'|'Jump'} OmnibarCategory */
 
 /**
  * @typedef {Object} OmnibarEntry
@@ -17,9 +17,16 @@ import { WIDGET_SEARCH_INDEX } from '../components/widgetSearchIndex'
  * @property {OmnibarCategory} category
  * @property {string[]} [keywords]
  * @property {string[]} [synonyms]
- * @property {'navigate'} action
- * @property {string} viewId
+ * @property {'navigate'|'open'} action
+ * @property {string} [viewId]
  * @property {string} [crimeSegment]
+ * @property {string} [crimeAbbr]
+ * @property {string} [crimeCitySlug]
+ * @property {string} [nationalMetric]
+ * @property {string} [url]
+ * @property {string} [subtitle]
+ * @property {string} [focusQuery]
+ * @property {string} [focusId]
  * @property {string} [toolId]
  * @property {string} [resourceSectionId]
  * @property {string} [widgetId]
@@ -439,10 +446,13 @@ function haystackFor(entry) {
     [
       entry.label,
       entry.category,
+      entry.subtitle,
       ...(entry.keywords || []),
       ...(entry.synonyms || []),
       entry.viewId,
       entry.crimeSegment,
+      entry.crimeAbbr,
+      entry.crimeCitySlug,
       entry.toolId,
       entry.resourceSectionId,
       entry.widgetId,
@@ -526,6 +536,57 @@ export function searchOmnibarIndex(query, opts = {}) {
   }
   scored.sort((a, b) => b.score - a.score || a.label.localeCompare(b.label))
   return scored.slice(0, limit)
+}
+
+/**
+ * Merge static jump hits with content API hits.
+ * Content categories (News / OSINT / Crime entity) keep their labels;
+ * mode/tool jumps display as "Jump" when mixed with content.
+ * @param {Array<OmnibarEntry & { score?: number }>} jumpHits
+ * @param {Array<OmnibarEntry & { score?: number }>} contentHits
+ * @param {{ limit?: number, remapJumpCategory?: boolean }} [opts]
+ */
+export function mergeOmnibarResults(jumpHits = [], contentHits = [], opts = {}) {
+  const limit = opts.limit ?? 14
+  const remap = opts.remapJumpCategory !== false
+  const byId = new Map()
+
+  for (const hit of jumpHits) {
+    if (!hit?.id) continue
+    const category = remap ? 'Jump' : (hit.category || 'Jump')
+    byId.set(hit.id, { ...hit, category, _kind: 'jump' })
+  }
+  for (const hit of contentHits) {
+    if (!hit?.id) continue
+    // Prefer content entry when id collides (crime city vs jump)
+    const existing = byId.get(hit.id)
+    if (existing && (existing.score || 0) > (hit.score || 0) && existing.category === 'Jump') {
+      continue
+    }
+    byId.set(hit.id, {
+      ...hit,
+      action: hit.action || (hit.url ? 'open' : 'navigate'),
+      _kind: hit.category === 'News' || hit.category === 'OSINT' ? 'content' : (hit.crimeAbbr || hit.crimeCitySlug || hit.nationalMetric ? 'content' : 'jump'),
+    })
+  }
+
+  return [...byId.values()]
+    .sort((a, b) => (b.score || 0) - (a.score || 0) || a.label.localeCompare(b.label))
+    .slice(0, limit)
+}
+
+/** Display category for result chips. */
+export function omnibarDisplayCategory(entry) {
+  if (!entry) return 'Jump'
+  if (entry.category === 'News' || entry.category === 'OSINT' || entry.category === 'Crime') {
+    // Content crime entities vs jump "Crime · National"
+    if (entry.category === 'Crime' && (entry.crimeAbbr || entry.crimeCitySlug || entry.nationalMetric || entry.subtitle)) {
+      return 'Crime'
+    }
+    if (entry.category === 'News' || entry.category === 'OSINT') return entry.category
+  }
+  if (entry.category === 'Jump') return 'Jump'
+  return 'Jump'
 }
 
 export function getOmnibarIndexStats() {

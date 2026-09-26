@@ -335,6 +335,93 @@ function UsCrimeMap({ features, cities, selectedAbbr, selectedCitySlug, onSelect
   )
 }
 
+function isMeaningfulText(v) {
+  if (v == null) return false
+  const s = String(v).trim()
+  if (!s || s === '—' || s === '-') return false
+  // Nearby seed sometimes dumps tip/UI chrome into risk_level
+  if (/submit a tip|track this offender|register to track/i.test(s)) return false
+  if (/^not reported$/i.test(s)) return false
+  return true
+}
+
+/** Official registry status — not the NC conviction scrape sometimes stuffed into `status`. */
+function officialStatus(person) {
+  const s = String(person?.status || '').trim()
+  if (!s) return null
+  if (/conviction information|offense\s*\d|offense date/i.test(s)) return null
+  return isMeaningfulText(s) ? s : null
+}
+
+function riskOrTier(person) {
+  const risk = isMeaningfulText(person?.risk_level) ? String(person.risk_level).trim() : null
+  const tier = isMeaningfulText(person?.tier_level) ? String(person.tier_level).trim() : null
+  if (risk && tier && risk.toLowerCase() !== tier.toLowerCase()) return `${risk} · ${tier}`
+  return risk || tier || null
+}
+
+/**
+ * Pull offense / conviction rows from pack fields only (no live detail API).
+ * Nearby seed rarely has structured offense_details; some states dump conviction
+ * text into `status`. Parse that when present.
+ */
+function offensesFromPack(person) {
+  const rows = []
+  if (Array.isArray(person?.offense_details)) {
+    for (const o of person.offense_details) {
+      if (o == null) continue
+      if (typeof o === 'string' && o.trim()) {
+        rows.push({ description: o.trim(), date: null })
+        continue
+      }
+      if (typeof o === 'object') {
+        const description = o.description || o.offense || o.name || o.label || o.type || null
+        const date = o.date || o.offense_date || o.conviction_date || o.convictionDate || null
+        if (description || date) {
+          rows.push({
+            description: description ? String(description) : 'Offense',
+            date: date ? String(date) : null,
+            place: o.county || o.state || o.location || null,
+          })
+        }
+      }
+    }
+  }
+  if (person?.offense && String(person.offense).trim()) {
+    rows.push({ description: String(person.offense).trim(), date: null })
+  }
+
+  const statusBlob = String(person?.status || '')
+  if (/conviction information|offense\s*\d|offense date/i.test(statusBlob)) {
+    // e.g. Conviction InformationOffense 1Offense Date:09-24-2014County - State:MECKLENBURG - NCConviction Date:03-1…
+    const chunks = statusBlob.split(/Offense\s*\d+/i).slice(1)
+    const parts = chunks.length ? chunks : [statusBlob]
+    for (const chunk of parts) {
+      const offenseDate = chunk.match(/Offense Date:\s*([^C]*?)(?=County|Conviction|$)/i)?.[1]?.trim() || null
+      const place = chunk.match(/County\s*-\s*State:\s*([^C]*?)(?=Conviction|$)/i)?.[1]?.trim() || null
+      const convictionDate = chunk.match(/Conviction Date:\s*([0-9/\-]+|None Reported)?/i)?.[1]?.trim() || null
+      const date = (convictionDate && convictionDate !== 'None Reported')
+        ? convictionDate
+        : (offenseDate && offenseDate !== 'None Reported' ? offenseDate : null)
+      rows.push({
+        description: 'Registry conviction',
+        date,
+        place,
+        raw: chunk.replace(/\s+/g, ' ').trim().slice(0, 160),
+      })
+    }
+  }
+
+  // Deduplicate by description+date
+  const seen = new Set()
+  return rows.filter((r) => {
+    const key = `${r.description}|${r.date || ''}|${r.place || ''}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 function OffenderSummary({ person, onClear }) {
   if (!person) return null
   const addr = [person.address_line1, person.city, person.state_id || person.source_state, person.zip_code]
@@ -343,7 +430,11 @@ function OffenderSummary({ person, onClear }) {
   const aliases = Array.isArray(person.aliases)
     ? person.aliases.map((a) => [a.first_name, a.middle_name, a.last_name].filter(Boolean).join(' ')).filter(Boolean)
     : []
-  const offenses = Array.isArray(person.offense_details) ? person.offense_details : []
+  const status = officialStatus(person)
+  const riskTier = riskOrTier(person)
+  const registryId = isMeaningfulText(person.registration_id) ? String(person.registration_id).trim() : null
+  const designation = isMeaningfulText(person.designation) ? String(person.designation).trim() : null
+  const offenses = offensesFromPack(person)
 
   return (
     <article className="ci-offender-card ci-enter" id="ci-offender-summary">
@@ -365,10 +456,11 @@ function OffenderSummary({ person, onClear }) {
         )}
         <dl className="ci-dl">
           <div><dt>Age / sex</dt><dd>{fmtScalar(person.age, 0)} · {person.sex || '—'}</dd></div>
-          <div><dt>Risk / tier</dt><dd>{person.risk_level || person.tier_level || '—'}</dd></div>
-          <div><dt>Status</dt><dd>{person.status || person.designation || '—'}</dd></div>
+          {riskTier && <div><dt>Risk / tier</dt><dd>{riskTier}</dd></div>}
+          {status && <div><dt>Status</dt><dd>{status}</dd></div>}
+          {designation && <div><dt>Designation</dt><dd>{designation}</dd></div>}
           <div><dt>State</dt><dd>{person.state_id || person.source_state || '—'}</dd></div>
-          <div><dt>Registry ID</dt><dd>{person.registration_id || '—'}</dd></div>
+          {registryId && <div><dt>Registry ID</dt><dd>{registryId}</dd></div>}
           <div><dt>Address</dt><dd>{addr || '—'}</dd></div>
           {person.date_of_birth && <div><dt>DOB</dt><dd>{String(person.date_of_birth)}</dd></div>}
           {person.race && <div><dt>Race</dt><dd>{String(person.race)}</dd></div>}
@@ -380,16 +472,25 @@ function OffenderSummary({ person, onClear }) {
       {aliases.length > 0 && (
         <p className="ci-muted">Aliases: {aliases.slice(0, 8).join('; ')}</p>
       )}
-      {person.offense && <p><strong>Offense:</strong> {String(person.offense)}</p>}
-      {offenses.length > 0 && (
-        <ul className="ci-simple-list">
-          {offenses.slice(0, 12).map((o, i) => (
-            <li key={i}>
-              <span>{typeof o === 'string' ? o : (o.description || o.offense || oLabel(o))}</span>
-              <strong>{o.date || o.conviction_date || ''}</strong>
-            </li>
-          ))}
-        </ul>
+      {offenses.length > 0 ? (
+        <div className="ci-offender-offenses">
+          <h4>Crimes / offenses</h4>
+          <ul className="ci-simple-list">
+            {offenses.slice(0, 12).map((o, i) => (
+              <li key={i}>
+                <span>
+                  {o.description}
+                  {o.place ? ` · ${o.place}` : ''}
+                </span>
+                {o.date ? <strong>{o.date}</strong> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="ci-muted ci-offender-hint">
+          Offense list not included in the metro seed pack for this record (detail API not called).
+        </p>
       )}
       {(person.tracking_url || person.tip_submission_url) && (
         <p className="ci-offender-links">
@@ -402,15 +503,10 @@ function OffenderSummary({ person, onClear }) {
         </p>
       )}
       <p className="ci-muted ci-fineprint">
-        Public registry data via CommunityGuardAPI / NSOPW. For lawful awareness only.
+        Public registry data via CommunityGuardAPI / NSOPW (cached pack only). For lawful awareness only.
       </p>
     </article>
   )
-}
-
-function oLabel(o) {
-  if (o == null || typeof o !== 'object') return '—'
-  return String(o.name || o.label || o.type || 'Offense')
 }
 
 function ArrestOffenseTable({ rows }) {

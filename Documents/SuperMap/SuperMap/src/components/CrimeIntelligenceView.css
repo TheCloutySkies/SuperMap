@@ -1002,6 +1002,22 @@
   margin-top: 0.75rem;
 }
 
+.ci-offender-offenses {
+  margin: 0.75rem 0 0.35rem;
+}
+
+.ci-offender-offenses h4 {
+  margin: 0 0 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ci-accent-bright, #6ed9a0);
+}
+
+.ci-offender-offenses .ci-simple-list {
+  margin: 0;
+}
+
 .ci-offender-card {
   margin-top: 1rem;
   padding: 0.95rem 1rem;

@@ -13,18 +13,15 @@ const US_ZOOM = 3.4
 const STREET_STYLE = {
   version: 8,
   sources: {
-    basemap: {
+    osm: {
       type: 'raster',
-      tiles: [
-        'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-        'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-        'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-      ],
+      // Keyless OSM raster — same stack as Maps (MapView OSM_STYLE). No Carto/API key.
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
       tileSize: 256,
-      attribution: '© OpenStreetMap © CARTO',
+      attribution: '© OpenStreetMap',
     },
   },
-  layers: [{ id: 'basemap', type: 'raster', source: 'basemap', minzoom: 0, maxzoom: 20 }],
+  layers: [{ id: 'osm', type: 'raster', source: 'osm', minzoom: 0, maxzoom: 19 }],
 }
 
 function circlePolygon(lon, lat, radiusMiles, steps = 64) {
@@ -326,6 +323,20 @@ export default function SexOffendersMap({
       minZoom: 2,
       maxZoom: 18,
       attributionControl: true,
+      transformRequest: (url, resourceType) => {
+        if (
+          url
+          && (url.includes('openstreetmap.org') || url.includes('tile.openstreetmap'))
+          && (resourceType === 'Tile' || resourceType === 'Source' || resourceType === 'Unknown')
+        ) {
+          return {
+            url,
+            headers: {
+              Accept: 'image/png,image/*;q=0.8,*/*;q=0.5',
+            },
+          }
+        }
+      },
     })
     mapRef.current = map
 

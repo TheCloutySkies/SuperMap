@@ -331,9 +331,18 @@ async function getThreatSummary() {
     }
   }
 
+  let keywordTagHint = ''
+  let keywordTags = []
+  try {
+    const kt = require('./keywordTags')
+    keywordTags = kt.getKeywordTags()?.tags || []
+    keywordTagHint = kt.formatTagsForPrompt(25)
+  } catch (_) { /* optional */ }
+
   const inputText = buildInputFromArticles(prioritized)
-  const scoreHint = `\n(Item score aggregate hint: ${scoreAgg.high_risk_count} high-risk (4–5) of ${scoreAgg.scored_items}; suggested floor ${scoreAgg.threat_level} / ${scoreAgg.threat_score})\n\n`
-  const fullPrompt = PROMPT_PREFIX + scoreHint + inputText
+  const scoreHint = `\n(Item score aggregate hint: ${scoreAgg.high_risk_count} high-risk (4–5) of ${scoreAgg.scored_items}; suggested floor ${scoreAgg.threat_level} / ${scoreAgg.threat_score})\n`
+  const tagBlock = keywordTagHint ? `\n${keywordTagHint}\nUse these recurring headline themes when weighing what dominates the day.\n` : '\n'
+  const fullPrompt = PROMPT_PREFIX + scoreHint + tagBlock + '\n' + inputText
   const rawResponse = await callThreatModel(fullPrompt)
   const parsed = rawResponse ? parseThreatResponse(rawResponse) : null
 
@@ -353,6 +362,7 @@ async function getThreatSummary() {
       threat_score,
       sources,
       high_risk_count: scoreAgg.high_risk_count,
+      keyword_tags: keywordTags.slice(0, 20),
       top_risks: prioritized
         .filter((a) => (a.risk_score || 1) >= HIGH_RISK_MIN)
         .slice(0, 5)
@@ -371,6 +381,7 @@ async function getThreatSummary() {
     threat_score: fallback.threat_score,
     sources,
     high_risk_count: scoreAgg.high_risk_count,
+    keyword_tags: keywordTags.slice(0, 20),
     top_risks: prioritized
       .filter((a) => (a.risk_score || 1) >= HIGH_RISK_MIN)
       .slice(0, 5)

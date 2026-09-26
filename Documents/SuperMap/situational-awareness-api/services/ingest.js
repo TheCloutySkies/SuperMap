@@ -155,6 +155,8 @@ function eventToFeature(event) {
     link: raw.link || raw.url,
     description: event.description,
     thumbnail: raw.thumbnail || raw.image || raw.thumbnailUrl || null,
+    image: raw.image || raw.thumbnail || null,
+    category: raw.category || null,
     videoUrl: videoUrl || undefined,
   }
   if (risk_score != null) {

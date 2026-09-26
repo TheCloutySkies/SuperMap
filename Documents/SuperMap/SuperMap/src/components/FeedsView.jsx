@@ -9,6 +9,25 @@ const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.
 const FEED_MODE = { NEWS: 'GLOBAL_NEWS', OSINT: 'GENERAL_OSINT', VIDEOS: 'RECENT_VIDEOS' }
 const OSINT_SUB = { INTEL: 'intel' }
 
+const CATEGORY_OPTIONS = [
+  { key: 'all', label: 'All topics' },
+  { key: 'general', label: 'World' },
+  { key: 'business', label: 'Business' },
+  { key: 'technology', label: 'Technology' },
+  { key: 'health', label: 'Health' },
+  { key: 'science', label: 'Science' },
+  { key: 'politics', label: 'Politics' },
+]
+
+const TOPIC_SECTION_ORDER = [
+  { key: 'general', label: 'World & geopolitics' },
+  { key: 'politics', label: 'Politics & policy' },
+  { key: 'business', label: 'Markets & economy' },
+  { key: 'technology', label: 'Technology & cyber' },
+  { key: 'health', label: 'Health' },
+  { key: 'science', label: 'Science' },
+]
+
 /** Display name for OSINT source (actual source, not alert type). */
 function osintSourceDisplayName(source) {
   const s = (source || '').toLowerCase()
@@ -22,16 +41,6 @@ function osintSourceDisplayName(source) {
   if (s === 'thewarzone') return 'The War Zone'
   return source || '—'
 }
-const SOURCE_SECTIONS_NEWS = [
-  { key: 'all', label: 'All sources' },
-  { key: 'Al Jazeera', label: 'Al Jazeera' },
-  { key: 'Foreign Affairs', label: 'Foreign Affairs' },
-  { key: 'International Crisis Group', label: 'International Crisis Group' },
-  { key: 'POLITICO Defense', label: 'POLITICO Defense' },
-  { key: 'POLITICO Politics', label: 'POLITICO Politics' },
-  { key: 'Reddit', label: 'Reddit RSS' },
-  { key: 'Google News', label: 'Google RSS' },
-]
 
 const SOURCE_SECTIONS_OSINT = [
   { key: 'all', label: 'All sources' },
@@ -69,6 +78,32 @@ function vimeoEmbedUrl(url) {
   if (!url || !url.includes('vimeo.com')) return null
   const m = url.match(/vimeo\.com\/(?:video\/)?(\d+)/)
   return m ? `https://player.vimeo.com/video/${m[1]}` : null
+}
+
+function isRealImage(url) {
+  if (!url || typeof url !== 'string') return false
+  if (url.includes('google.com/s2/favicons')) return false
+  return /^https?:\/\//i.test(url)
+}
+
+function articleImage(item) {
+  const url = item?.image || item?.thumbnail
+  return isRealImage(url) ? url : null
+}
+
+function normalizeCategory(raw, title = '', snippet = '') {
+  const c = String(raw || '').toLowerCase().trim()
+  if (['general', 'business', 'technology', 'health', 'science', 'politics', 'entertainment', 'sports'].includes(c)) {
+    if (c === 'entertainment' || c === 'sports') return 'general'
+    return c
+  }
+  const text = `${title} ${snippet}`.toLowerCase()
+  if (/\b(election|congress|parliament|president|senate|white house|legislation)\b/.test(text)) return 'politics'
+  if (/\b(cyber|hack|tech|chip|ai|software)\b/.test(text)) return 'technology'
+  if (/\b(market|stock|economy|bank|oil|trade)\b/.test(text)) return 'business'
+  if (/\b(health|hospital|vaccine|disease)\b/.test(text)) return 'health'
+  if (/\b(science|climate|space|nasa|research)\b/.test(text)) return 'science'
+  return 'general'
 }
 
 function VideoCard({ item, onExpand }) {
@@ -132,15 +167,8 @@ function matchesSource(item, sourceFilter, feedMode) {
   if (feedMode === FEED_MODE.OSINT) {
     return s === sourceFilter.toLowerCase()
   }
-  if (sourceFilter === 'Al Jazeera') return s.includes('al jazeera')
-  if (sourceFilter === 'Foreign Affairs') return s.includes('foreign affairs')
-  if (sourceFilter === 'POLITICO Defense') return s.includes('politico defense')
-  if (sourceFilter === 'POLITICO Politics') return s.includes('politico politics')
-  if (sourceFilter === 'Reddit') return s.includes('reddit')
-  if (sourceFilter === 'Google News') return s.includes('google')
-  return s.includes(sourceFilter.toLowerCase())
+  return s === sourceFilter.toLowerCase() || s.includes(sourceFilter.toLowerCase())
 }
-
 
 function geoJsonToItems(data) {
   const raw = Array.isArray(data)
@@ -154,11 +182,13 @@ function geoJsonToItems(data) {
             link: f.properties?.link,
             pubDate: f.properties?.timestamp != null ? new Date(f.properties.timestamp).toISOString() : null,
             contentSnippet: f.properties?.description ?? f.properties?.contentSnippet,
+            thumbnail: f.properties?.thumbnail,
+            image: f.properties?.image || f.properties?.thumbnail,
+            category: f.properties?.category,
             coordinates: f.geometry?.type === 'Point' ? f.geometry.coordinates : null,
           }))
         : []
 
-  // Dedupe to avoid React key collisions (feeds sometimes contain duplicates across sources/retries).
   const seen = new Set()
   const out = []
   for (let i = 0; i < raw.length; i++) {
@@ -172,9 +202,89 @@ function geoJsonToItems(data) {
     if (!primary) continue
     if (seen.has(primary)) continue
     seen.add(primary)
-    out.push({ ...item, _key: primary })
+    out.push({
+      ...item,
+      _key: primary,
+      category: normalizeCategory(item.category, title, item.contentSnippet || item.description || ''),
+    })
   }
   return out
+}
+
+function formatStoryDate(item) {
+  const d = item.pubDate || item.timestamp
+  if (!d) return ''
+  try {
+    return new Date(d).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+  } catch {
+    return ''
+  }
+}
+
+function NewsHeroStory({ item }) {
+  const img = articleImage(item)
+  return (
+    <a
+      href={item.link}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="news-desk-hero-story"
+    >
+      {img && (
+        <div className="news-desk-hero-media" aria-hidden>
+          <img src={img} alt="" className="news-desk-hero-img" />
+        </div>
+      )}
+      <div className="news-desk-hero-copy">
+        <span className="news-desk-kicker">{item.source}</span>
+        <h2 className="news-desk-hero-title">{item.title || 'Untitled'}</h2>
+        {(item.contentSnippet || item.description) && (
+          <p className="news-desk-hero-deck">
+            {String(item.contentSnippet || item.description).slice(0, 180)}
+          </p>
+        )}
+        <span className="news-desk-meta">{formatStoryDate(item)}</span>
+      </div>
+    </a>
+  )
+}
+
+function NewsTile({ item, size = 'md' }) {
+  const img = articleImage(item)
+  return (
+    <a
+      href={item.link}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`news-desk-tile news-desk-tile--${size}`}
+    >
+      {img && (
+        <div className="news-desk-tile-media" aria-hidden>
+          <img src={img} alt="" loading="lazy" />
+        </div>
+      )}
+      <div className="news-desk-tile-body">
+        <span className="news-desk-kicker">{item.source}</span>
+        <h3 className="news-desk-tile-title">{item.title || 'Untitled'}</h3>
+        <span className="news-desk-meta">{formatStoryDate(item)}</span>
+      </div>
+    </a>
+  )
+}
+
+function NewsTextRow({ item }) {
+  return (
+    <a
+      href={item.link}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="news-desk-text-row"
+    >
+      <span className="news-desk-text-row-source">{item.source}</span>
+      <span className="news-desk-text-row-title">{item.title || 'Untitled'}</span>
+      <span className="news-desk-text-row-date">{formatStoryDate(item)}</span>
+    </a>
+  )
 }
 
 export default function FeedsView({ title, activeView, keywordFilter = '', onClearFilter, initialNews, onPinnedToMap }) {
@@ -184,6 +294,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
   const isVideosOnly = activeView === 'recent-videos'
   const [feedMode, setFeedMode] = useState(isVideosOnly ? FEED_MODE.VIDEOS : isOsintOnly ? FEED_MODE.OSINT : FEED_MODE.NEWS)
   const [newsItems, setNewsItems] = useState(initialItems)
+  const [newsMeta, setNewsMeta] = useState(initialNews?.meta || null)
   const [osintItems, setOsintItems] = useState([])
   const [videoItems, setVideoItems] = useState([])
   const [newsLoading, setNewsLoading] = useState(initialItems.length === 0)
@@ -192,6 +303,8 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
   const [videoTagFilter, setVideoTagFilter] = useState('all')
   const [refreshing, setRefreshing] = useState(false)
   const [sourceFilter, setSourceFilter] = useState('all')
+  const [categoryFilter, setCategoryFilter] = useState('all')
+  const [localSearch, setLocalSearch] = useState('')
   const [sortBy, setSortBy] = useState('newest')
   const [osintSub, setOsintSub] = useState(OSINT_SUB.INTEL)
   const [pinningId, setPinningId] = useState(null)
@@ -243,6 +356,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
             console.debug('[FEEDS news] OUTPUT', { count: items.length, ms: Date.now() - t0 })
           }
           setNewsItems(items)
+          setNewsMeta(res.data?.meta || null)
           if (Array.isArray(items) && items.length === 0) {
             retryId = setTimeout(() => {
               if (cancelled) return
@@ -302,13 +416,6 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
     const id = item.id || item.link
     setPinError(null)
     setPinningId(id)
-    if (feedsDebugEnabled()) {
-      console.debug('[FEEDS pin-from-text] INPUT', {
-        title: item.title || 'Untitled',
-        source: item.source || 'osint',
-        url: item.link,
-      })
-    }
     axios
       .post(`${API_BASE}/api/events/pin-from-text`, {
         title: item.title || 'Untitled',
@@ -317,7 +424,6 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
         url: item.link,
       }, { timeout: 12000 })
       .then((res) => {
-        if (feedsDebugEnabled()) console.debug('[FEEDS pin-from-text] OUTPUT', { ok: !res.data?.error })
         if (res.data?.error) {
           setPinError(res.data.error)
           return
@@ -345,6 +451,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
     Promise.all(requests)
       .then((responses) => {
         setNewsItems(geoJsonToItems(responses[0].data))
+        setNewsMeta(responses[0].data?.meta || null)
         setOsintItems(geoJsonToItems(responses[1].data))
         if (feedMode === FEED_MODE.VIDEOS && responses[2]) {
           const features = responses[2].data?.features ?? []
@@ -368,24 +475,69 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
       })
   }
 
-  const q = (keywordFilter || '').trim().toLowerCase()
+  const omnibarQ = (keywordFilter || '').trim().toLowerCase()
+  const localQ = (localSearch || '').trim().toLowerCase()
+  const q = localQ || omnibarQ
+  const quotaExhausted = !!newsMeta?.mediastack?.quotaExhausted
 
-  const newsSourceList = useMemo(() => newsItems, [newsItems])
+  const publisherSources = useMemo(() => {
+    const counts = new Map()
+    for (const item of newsItems) {
+      const src = String(item.source || '').trim()
+      if (!src) continue
+      counts.set(src, (counts.get(src) || 0) + 1)
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 18)
+      .map(([key, count]) => ({ key, label: key, count }))
+  }, [newsItems])
 
   const filteredAndSortedNews = useMemo(() => {
-    let list = newsSourceList.filter(
-      (item) =>
-        matchesSource(item, sourceFilter, FEED_MODE.NEWS) &&
-        (!q ||
-          (item.title && item.title.toLowerCase().includes(q)) ||
-          (item.source && item.source.toLowerCase().includes(q)) ||
-          (item.contentSnippet && item.contentSnippet.toLowerCase().includes(q)))
-    )
+    let list = newsItems.filter((item) => {
+      if (!matchesSource(item, sourceFilter, FEED_MODE.NEWS)) return false
+      if (categoryFilter !== 'all' && item.category !== categoryFilter) return false
+      if (!q) return true
+      const hay = `${item.title || ''} ${item.source || ''} ${item.contentSnippet || ''} ${item.description || ''} ${item.category || ''}`.toLowerCase()
+      return hay.includes(q)
+    })
     if (sortBy === 'newest') list = [...list].sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0))
     else if (sortBy === 'oldest') list = [...list].sort((a, b) => new Date(a.pubDate || 0) - new Date(b.pubDate || 0))
     else if (sortBy === 'source') list = [...list].sort((a, b) => (a.source || '').localeCompare(b.source || ''))
     return list
-  }, [newsSourceList, sourceFilter, sortBy, q])
+  }, [newsItems, sourceFilter, categoryFilter, sortBy, q])
+
+  const imageLed = useMemo(
+    () => filteredAndSortedNews.filter((it) => articleImage(it)),
+    [filteredAndSortedNews]
+  )
+  const hero = imageLed[0] || null
+  const secondaryTiles = imageLed.slice(1, 4)
+  const heroKeys = useMemo(() => {
+    const set = new Set()
+    ;[hero, ...secondaryTiles].filter(Boolean).forEach((it) => set.add(it._key || it.link || it.id))
+    return set
+  }, [hero, secondaryTiles])
+
+  const topicSections = useMemo(() => {
+    const remaining = filteredAndSortedNews.filter((it) => !heroKeys.has(it._key || it.link || it.id))
+    const byCat = new Map()
+    for (const item of remaining) {
+      const cat = item.category || 'general'
+      if (!byCat.has(cat)) byCat.set(cat, [])
+      byCat.get(cat).push(item)
+    }
+    const sections = []
+    for (const def of TOPIC_SECTION_ORDER) {
+      const items = byCat.get(def.key) || []
+      if (items.length) sections.push({ ...def, items })
+    }
+    for (const [key, items] of byCat) {
+      if (TOPIC_SECTION_ORDER.some((d) => d.key === key)) continue
+      if (items.length) sections.push({ key, label: key, items })
+    }
+    return sections
+  }, [filteredAndSortedNews, heroKeys])
 
   const filteredAndSortedOsint = useMemo(() => {
     let list = osintItems.filter(
@@ -416,7 +568,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
   }, [videoItems, videoTagFilter])
 
   const loading = newsLoading || osintLoading || (feedMode === FEED_MODE.VIDEOS && videoLoading)
-  const isEmpty = feedMode === FEED_MODE.VIDEOS ? !videoItems.length : feedMode === FEED_MODE.NEWS ? !newsSourceList.length : !osintItems.length
+  const isEmpty = feedMode === FEED_MODE.VIDEOS ? !videoItems.length : feedMode === FEED_MODE.NEWS ? !newsItems.length : !osintItems.length
   const filteredEmpty = feedMode === FEED_MODE.VIDEOS ? !filteredVideos.length : feedMode === FEED_MODE.NEWS ? !filteredAndSortedNews.length : !filteredAndSortedOsint.length
 
   const expandedVideoModal = useMemo(() => {
@@ -488,28 +640,32 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
     )
   }, [expandedVideo])
 
+  const showNewsDesk = feedMode === FEED_MODE.NEWS || isNewsOnly
+
   return (
-    <div className={`feeds-dashboard feeds-dashboard--${feedMode === FEED_MODE.VIDEOS ? 'videos' : feedMode === FEED_MODE.NEWS ? 'news' : 'osint'}`}>
-      <div className="feeds-dashboard-header">
-        <div className="feeds-dashboard-title-row">
-          <h1>{title}</h1>
-          <button
-            type="button"
-            className="feeds-refresh-btn"
-            onClick={refreshFeeds}
-            disabled={refreshing || loading}
-            title="Reload feeds from the API"
-          >
-            {refreshing || loading ? '…' : '↻'} Refresh
-          </button>
+    <div className={`feeds-dashboard feeds-dashboard--${feedMode === FEED_MODE.VIDEOS ? 'videos' : feedMode === FEED_MODE.NEWS ? 'news' : 'osint'}${showNewsDesk ? ' feeds-dashboard--news-desk' : ''}`}>
+      {!showNewsDesk && (
+        <div className="feeds-dashboard-header">
+          <div className="feeds-dashboard-title-row">
+            <h1>{title}</h1>
+            <button
+              type="button"
+              className="feeds-refresh-btn"
+              onClick={refreshFeeds}
+              disabled={refreshing || loading}
+              title="Reload feeds from the API"
+            >
+              {refreshing || loading ? '…' : '↻'} Refresh
+            </button>
+          </div>
+          <p className="feeds-dashboard-subtitle">
+            Breaking alerts, investigations, and defense OSINT
+          </p>
         </div>
-        <p className="feeds-dashboard-subtitle">
-          {feedMode === FEED_MODE.NEWS ? 'Wikipedia, Reddit, Google News, BBC & more' : 'Breaking alerts (Faytuks), Investigations (Bellingcat), Cybersecurity (CISA), International news (DW)'}
-        </p>
-      </div>
+      )}
 
       {(activeView === 'news-feeds' || activeView === 'osint-feeds') && !isVideosOnly && (
-        <div className="feeds-subnav">
+        <div className={`feeds-subnav${showNewsDesk ? ' feeds-subnav--on-desk' : ''}`}>
           <button
             type="button"
             className={`feeds-subnav-btn ${feedMode === FEED_MODE.NEWS ? 'active' : ''}`}
@@ -534,11 +690,147 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
         </div>
       )}
 
-      {feedMode !== FEED_MODE.VIDEOS && (
+      {showNewsDesk && (
+        <div className="news-desk">
+          <header className="news-desk-masthead">
+            <div className="news-desk-masthead-brand">
+              <p className="news-desk-brand">Good Palantir</p>
+              <h1 className="news-desk-title">News Desk</h1>
+              <p className="news-desk-tagline">Image-led headlines from trusted publishers, sorted by topic.</p>
+            </div>
+            <button
+              type="button"
+              className="news-desk-refresh"
+              onClick={refreshFeeds}
+              disabled={refreshing || loading}
+            >
+              {refreshing || loading ? 'Updating…' : 'Refresh'}
+            </button>
+          </header>
+
+          <div className={`news-desk-search-wrap${quotaExhausted ? ' news-desk-search-wrap--emphasized' : ''}`}>
+            <label className="news-desk-search-label" htmlFor="news-desk-search">
+              {quotaExhausted
+                ? 'MediaStack quota reached — search the local cache'
+                : 'Search headlines'}
+            </label>
+            <input
+              id="news-desk-search"
+              type="search"
+              className="news-desk-search"
+              placeholder={quotaExhausted ? 'Search cached articles by title, source, or topic…' : 'Search titles, publishers, topics…'}
+              value={localSearch}
+              onChange={(e) => setLocalSearch(e.target.value)}
+              autoFocus={quotaExhausted}
+            />
+            {quotaExhausted && (
+              <p className="news-desk-quota-note">
+                Live MediaStack pulls are paused until the monthly quota resets. RSS and last-good cache stay available below.
+              </p>
+            )}
+            {(localQ || omnibarQ) && (
+              <button
+                type="button"
+                className="news-desk-clear-search"
+                onClick={() => {
+                  setLocalSearch('')
+                  if (onClearFilter) onClearFilter()
+                }}
+              >
+                Clear search
+              </button>
+            )}
+          </div>
+
+          <div className="news-desk-sources" role="toolbar" aria-label="Filter by publisher">
+            <button
+              type="button"
+              className={`news-desk-source-btn${sourceFilter === 'all' ? ' is-active' : ''}`}
+              onClick={() => setSourceFilter('all')}
+            >
+              All sources
+            </button>
+            {publisherSources.map((sec) => (
+              <button
+                key={sec.key}
+                type="button"
+                className={`news-desk-source-btn${sourceFilter === sec.key ? ' is-active' : ''}`}
+                onClick={() => setSourceFilter(sec.key)}
+              >
+                {sec.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="news-desk-categories" role="toolbar" aria-label="Filter by category">
+            {CATEGORY_OPTIONS.map((cat) => (
+              <button
+                key={cat.key}
+                type="button"
+                className={`news-desk-cat-btn${categoryFilter === cat.key ? ' is-active' : ''}`}
+                onClick={() => setCategoryFilter(cat.key)}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+
+          {newsLoading ? (
+            <p className="news-desk-loading">Loading the desk…</p>
+          ) : filteredEmpty ? (
+            <div className="news-desk-empty">
+              {isEmpty ? (
+                <p>Couldn’t load news. Start the API, then use Refresh.</p>
+              ) : (
+                <p>No stories match these filters. Try another source, category, or search term.</p>
+              )}
+            </div>
+          ) : (
+            <>
+              {(hero || secondaryTiles.length > 0) && (
+                <section className="news-desk-visual" aria-label="Image stories">
+                  {hero && <NewsHeroStory item={hero} />}
+                  {secondaryTiles.length > 0 && (
+                    <div className="news-desk-secondary">
+                      {secondaryTiles.map((item) => (
+                        <NewsTile key={item._key || item.link} item={item} size="lg" />
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {topicSections.map((section) => (
+                <section key={section.key} className="news-desk-topic" aria-labelledby={`topic-${section.key}`}>
+                  <div className="news-desk-topic-head">
+                    <h2 id={`topic-${section.key}`} className="news-desk-topic-title">{section.label}</h2>
+                    <span className="news-desk-topic-count">{section.items.length}</span>
+                  </div>
+                  <div className="news-desk-topic-grid">
+                    {section.items.slice(0, 3).filter((it) => articleImage(it)).map((item) => (
+                      <NewsTile key={item._key || item.link} item={item} size="md" />
+                    ))}
+                  </div>
+                  <div className="news-desk-topic-list">
+                    {section.items
+                      .filter((it, idx) => !(idx < 3 && articleImage(it)))
+                      .slice(0, 12)
+                      .map((item) => (
+                        <NewsTextRow key={item._key || item.link} item={item} />
+                      ))}
+                  </div>
+                </section>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {feedMode !== FEED_MODE.VIDEOS && !showNewsDesk && (
         <div className="feeds-toolbar">
           <div className="feeds-source-filter">
             <span className="feeds-toolbar-label">Source:</span>
-            {(feedMode === FEED_MODE.OSINT || isOsintOnly ? SOURCE_SECTIONS_OSINT : SOURCE_SECTIONS_NEWS).map((sec) => (
+            {SOURCE_SECTIONS_OSINT.map((sec) => (
               <button
                 key={sec.key}
                 type="button"
@@ -597,7 +889,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
           ) : filteredEmpty ? (
             <div className="feeds-empty">
               <p>No videos match the current filters.</p>
-              <p className="feeds-empty-hint">Video feeds include Al Jazeera Video, DW News, BBC World Video, plus video items from news and OSINT sources. Try <strong>Refresh</strong> or clear the tag filter.</p>
+              <p className="feeds-empty-hint">Try <strong>Refresh</strong> or clear the tag filter.</p>
               {videoTagFilter !== 'all' && (
                 <button type="button" className="feeds-clear-filter" onClick={() => setVideoTagFilter('all')}>Show all</button>
               )}
@@ -619,72 +911,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
         </div>
       )}
 
-      {(feedMode === FEED_MODE.NEWS || isNewsOnly) && (
-        <div className="feeds-news-section">
-          {newsLoading ? (
-            <p className="feeds-loading">Loading news…</p>
-          ) : filteredEmpty ? (
-            <div className="feeds-empty">
-              {isEmpty ? (
-                <p>Couldn’t load feeds. Run <code>npm run dev:all</code> from the SuperMap folder, then use <strong>Refresh</strong>.</p>
-              ) : sourceFilter === 'Reddit' ? (
-                <>
-                  <p>Reddit is currently rate-limiting requests from this network, so there may be no Reddit items available.</p>
-                  <p>Try again later, or switch to another source (Wikipedia / Google RSS / BBC).</p>
-                </>
-              ) : (
-                <>
-                  <p>No items match the current filters.</p>
-                  {onClearFilter && (
-                    <button type="button" className="feeds-clear-filter" onClick={onClearFilter}>Clear search</button>
-                  )}
-                </>
-              )}
-            </div>
-          ) : (
-            <div className="feeds-masonry feeds-masonry--news">
-              {filteredAndSortedNews.map((item, i) => (
-                  <div key={item._key || item.link || item.id || i} className="feeds-news-card-wrap">
-                    <a
-                      href={item.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="feeds-news-card"
-                    >
-                      {item.thumbnail && !String(item.thumbnail).includes('google.com/s2/favicons') && (
-                        <div className="feeds-news-card-img-wrap">
-                          <img src={item.thumbnail} alt="" className="feeds-news-card-img" />
-                        </div>
-                      )}
-                      <div className="feeds-news-card-body">
-                        <span className="feeds-news-card-source">
-                          {item.thumbnail && String(item.thumbnail).includes('google.com/s2/favicons') && (
-                            <img src={item.thumbnail} alt="" className="feeds-news-card-favicon" loading="lazy" />
-                          )}
-                          {item.source}
-                          {item.risk_score != null && Number(item.risk_score) >= 2 && (
-                            <span
-                              className={`feeds-risk-badge feeds-risk-badge--${Number(item.risk_score)}`}
-                              title={item.risk_label || `Risk ${item.risk_score}/5`}
-                            >
-                              {item.risk_score}/5
-                            </span>
-                          )}
-                        </span>
-                        <h3 className="feeds-news-card-title">{item.title || 'Untitled'}</h3>
-                        <span className="feeds-news-card-date">
-                          {item.pubDate ? new Date(item.pubDate).toLocaleDateString(undefined, { dateStyle: 'short' }) : ''}
-                        </span>
-                      </div>
-                    </a>
-                  </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {(feedMode === FEED_MODE.OSINT || isOsintOnly) && (
+      {(feedMode === FEED_MODE.OSINT || isOsintOnly) && !showNewsDesk && (
         <div className="feeds-osint-section">
           <div className="feeds-osint-subnav">
             <button
@@ -703,13 +930,10 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
               ) : filteredEmpty ? (
                 <div className="feeds-empty feeds-empty--osint">
                   {isEmpty ? (
-                    <p>Couldn’t load OSINT feeds. Start the API (<code>npm run dev</code> in situational-awareness-api) and use <strong>Refresh</strong>.</p>
+                    <p>Couldn’t load OSINT feeds. Start the API and use <strong>Refresh</strong>.</p>
                   ) : (
                     <>
                       <p>No items match the current filters.</p>
-                      {sourceFilter && sourceFilter !== 'all' && (
-                        <p className="feeds-empty-hint">The API fetches ISW, Defense One, War on the Rocks, Defense News, and The War Zone every few minutes. Try <strong>Refresh</strong> in a moment.</p>
-                      )}
                       {onClearFilter && (
                         <button type="button" className="feeds-clear-filter" onClick={onClearFilter}>Clear search</button>
                       )}
@@ -779,7 +1003,6 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
               )}
             </>
           )}
-
         </div>
       )}
     </div>

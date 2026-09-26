@@ -123,6 +123,17 @@ function domainFavicon(url) {
   }
 }
 
+/** Heuristic category for RSS items (MediaStack provides its own). */
+function inferCategory(title = '', snippet = '', source = '') {
+  const text = `${title} ${snippet} ${source}`.toLowerCase()
+  if (/\b(cyber|hack|ransomware|breach|malware|chip|semiconductor|ai|tech)\b/.test(text)) return 'technology'
+  if (/\b(health|hospital|vaccine|disease|outbreak|who|pandemic|covid)\b/.test(text)) return 'health'
+  if (/\b(market|stock|oil|gas|economy|inflation|bank|trade|sanction)\b/.test(text)) return 'business'
+  if (/\b(climate|space|nasa|scientist|research|study)\b/.test(text)) return 'science'
+  if (/\b(election|congress|parliament|president|diplomacy|nato|war|conflict|military|missile)\b/.test(text)) return 'general'
+  return 'general'
+}
+
 function pickThumbnailFromItem(item) {
   if (!item || typeof item !== 'object') return null
   const encUrl = item.enclosure?.url
@@ -216,14 +227,17 @@ async function fetchFeed(feed) {
     const rows = (result.items || []).map((item) => {
       const link = item.link || item.guid || ''
       const videoUrl = pickVideoUrlFromItem(item)
+      const title = item.title || ''
+      const contentSnippet = (item.contentSnippet || item.content || '').replace(/<[^>]+>/g, ' ').slice(0, 500)
       return {
-        title: item.title || '',
+        title,
         link,
         pubDate: item.pubDate || '',
         source: feed.name,
-        contentSnippet: (item.contentSnippet || item.content || '').replace(/<[^>]+>/g, ' ').slice(0, 500),
+        contentSnippet,
         thumbnail: pickThumbnailFromItem(item) || domainFavicon(link || ''),
         videoUrl: videoUrl || undefined,
+        category: inferCategory(title, contentSnippet, feed.name),
       }
     })
     if (feed.name === 'Google News' || feed.name.startsWith('Reuters')) {
@@ -284,130 +298,25 @@ async function fetchWikipediaFeatured() {
   return items
 }
 
-/** Reddit /r/worldnews and /r/news – no API key, JSON. Reddit requires User-Agent. Throttled to avoid 429. */
-let redditCache = { items: [], okAt: 0, cooldownUntil: 0 }
-async function fetchRedditNews() {
-  // Avoid hammering Reddit; it rate-limits aggressively (429/403). Prefer stale data over none.
-  const REDDIT_TTL_MS = 30 * 60 * 1000
-  if (redditCache.okAt && Date.now() - redditCache.okAt < REDDIT_TTL_MS) {
-    return Array.isArray(redditCache.items) ? redditCache.items : []
-  }
-  if (Date.now() < (redditCache.cooldownUntil || 0)) {
-    return Array.isArray(redditCache.items) ? redditCache.items : []
-  }
-  const items = []
-  const subs = [
-    { url: 'https://www.reddit.com/r/worldnews.json', name: 'Reddit r/worldnews' },
-    { url: 'https://www.reddit.com/r/news.json', name: 'Reddit r/news' },
-  ]
-
-  // Public proxy first (avoids direct Reddit 429 for many networks).
-  // Shape: { items: [{ title, link, isoDate, ... }] }
-  const proxyBases = [
-    'https://reddit-rss-api.deno.dev',
-  ]
-  for (const sub of subs) {
-    const subName = sub.url.includes('/r/worldnews') ? 'worldnews' : (sub.url.includes('/r/news') ? 'news' : '')
-    if (!subName) continue
-    for (const base of proxyBases) {
-      try {
-        const res = await axios.get(`${base}/r/${subName}`, { timeout: 8000, headers: REQUEST_HEADERS, validateStatus: (s) => s === 200 })
-        const arr = Array.isArray(res.data?.items) ? res.data.items : []
-        if (arr.length) {
-          items.push(...arr.slice(0, 15).map((it) => ({
-            title: it.title || '',
-            link: it.link || '',
-            pubDate: it.isoDate || it.pubDate || '',
-            source: `Reddit r/${subName} (proxy)`,
-            contentSnippet: '',
-            thumbnail: domainFavicon(it.link || ''),
-          })))
-          break
-        }
-      } catch (_) {
-        // Try next proxy/base.
-      }
-    }
-  }
-
-  if (items.length > 0) {
-    redditCache.items = items
-    redditCache.okAt = Date.now()
-    return items
-  }
-
-  for (let i = 0; i < subs.length; i++) {
-    if (i > 0) await new Promise((r) => setTimeout(r, 1500))
-    const sub = subs[i]
-    try {
-      const res = await axios.get(sub.url, {
-        timeout: 8000,
-        headers: REQUEST_HEADERS,
-        maxRedirects: 3,
-        validateStatus: (s) => s === 200,
-      })
-      const children = res.data?.data?.children || []
-      children.slice(0, 15).forEach((p) => {
-        const d = p.data
-        if (d && d.title && (d.url || d.permalink)) {
-          const link = d.url || `https://www.reddit.com${d.permalink || ''}`
-          const videoUrl = (d.is_video && d.secure_media?.reddit_video?.fallback_url) ? d.secure_media.reddit_video.fallback_url : null
-          const thumbnail = d.thumbnail && /^https?:\/\//i.test(d.thumbnail) ? d.thumbnail : (videoUrl ? null : domainFavicon(link))
-          items.push({
-            title: d.title,
-            link,
-            pubDate: d.created_utc ? new Date(d.created_utc * 1000).toISOString() : new Date().toISOString(),
-            source: sub.name,
-            contentSnippet: (d.selftext || '').slice(0, 500),
-            thumbnail,
-            videoUrl: videoUrl || undefined,
-          })
-        }
-      })
-    } catch (err) {
-      const status = err?.response?.status
-      if (status === 429 || status === 403) {
-        console.warn(`[news] ${sub.name} JSON blocked (${status}) – trying RSS fallback`)
-        try {
-          const rssUrl = sub.url.replace(/\.json$/i, '/.rss')
-          const result = await parser.parseURL(rssUrl)
-          const rssItems = (result.items || []).slice(0, 15).map((item) => ({
-            title: item.title || '',
-            link: item.link || item.guid || '',
-            pubDate: item.pubDate || '',
-            source: `${sub.name} (RSS)`,
-            contentSnippet: (item.contentSnippet || item.content || '').replace(/<[^>]+>/g, ' ').slice(0, 500),
-            thumbnail: item.enclosure?.url || null,
-          }))
-          items.push(...rssItems)
-        } catch (rssErr) {
-          console.warn(`[news] ${sub.name} RSS fallback failed:`, rssErr?.message || rssErr)
-        }
-        // Back off aggressively; serve last-known-good Reddit items if any.
-        redditCache.cooldownUntil = Date.now() + 10 * 60 * 1000
-      } else {
-        console.warn(`[news] ${sub.name}:`, err.message)
-      }
-    }
-  }
-  if (items.length > 0) {
-    redditCache.items = items
-    redditCache.okAt = Date.now()
-  }
-  return items.length > 0 ? items : (Array.isArray(redditCache.items) ? redditCache.items : [])
-}
-
 let cachedNews = null
 
+/** Merge MediaStack disk cache (publisher source + image). No MediaStack chip — use publisher name. */
+function getMediaStackItems() {
+  try {
+    const mediastack = require('./mediastack')
+    return mediastack.getCachedArticles() || []
+  } catch (_) {
+    return []
+  }
+}
+
 async function getNews() {
-  const [rssResults, redditItems] = await Promise.all([
-    Promise.allSettled(FEEDS.map(fetchFeed)),
-    fetchRedditNews(),
-  ])
+  const rssResults = await Promise.allSettled(FEEDS.map(fetchFeed))
   let items = rssResults
     .filter((r) => r.status === 'fulfilled')
     .flatMap((r) => r.value)
-  items = items.concat(redditItems)
+  // MediaStack cache (filled only at 08:00 / 15:00 ET scheduled pulls)
+  items = items.concat(getMediaStackItems())
   // Keep feed diversity: cap per-source and reserve a few newest items per source
   // so prolific feeds don't crowd out everything else.
   const PER_SOURCE_CAP = 25
@@ -435,7 +344,18 @@ async function getNews() {
     return !reservedKeys.has(k)
   })
   pool.sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0))
-  items = reserved.concat(pool).slice(0, 120)
+  items = reserved.concat(pool)
+  // Prefer real article images (MediaStack + RSS enclosures) so the news desk hero stays visual
+  const hasRealImage = (it) => {
+    const u = it?.image || it?.thumbnail
+    return typeof u === 'string' && u.startsWith('http') && !u.includes('google.com/s2/favicons')
+  }
+  items.sort((a, b) => {
+    const imgDelta = (hasRealImage(b) ? 1 : 0) - (hasRealImage(a) ? 1 : 0)
+    if (imgDelta !== 0) return imgDelta
+    return new Date(b.pubDate || 0) - new Date(a.pubDate || 0)
+  })
+  items = items.slice(0, 120)
 
   let geotagged = items
   try {
@@ -480,15 +400,40 @@ async function getNews() {
       event.lon = item.coordinates[0]
       event.lat = item.coordinates[1]
     }
+    const extraTags = ['news']
+    if (item.category) extraTags.push(`cat-${String(item.category).toLowerCase()}`)
+    if (item.fromMediaStack) extraTags.push('mediastack')
     ingestEvent(event, {
-      extraTags: String(item.source || '').toLowerCase().includes('reddit') ? ['reddit', 'news'] : ['news'],
+      extraTags,
       assessment: assessments[i] || undefined,
     })
     events.push(event)
   }
 
   const features = events.map(eventToFeature)
-  const result = { type: 'FeatureCollection', features }
+  let mediastackMeta = { quotaExhausted: false, fetchedAt: null, articleCount: 0 }
+  try {
+    const mediastack = require('./mediastack')
+    mediastackMeta = mediastack.getStatus()
+  } catch (_) { /* optional */ }
+  let keywordTags = []
+  try {
+    const kt = require('./keywordTags')
+    keywordTags = kt.getKeywordTags()?.tags || []
+  } catch (_) { /* optional */ }
+
+  const result = {
+    type: 'FeatureCollection',
+    features,
+    meta: {
+      mediastack: {
+        quotaExhausted: !!mediastackMeta.quotaExhausted,
+        fetchedAt: mediastackMeta.fetchedAt || null,
+        articleCount: mediastackMeta.articleCount || 0,
+      },
+      keywordTags,
+    },
+  }
   cachedNews = result
   return result
 }

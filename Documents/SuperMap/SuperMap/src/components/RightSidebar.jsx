@@ -166,6 +166,7 @@ export default function RightSidebar({
   const isExploreMap = activeView === 'explore-map'
   const isGeolocateMap = activeView === 'geolocate-map'
   const isFlockMap = activeView === 'flock-map'
+  const isLiveWebcams = activeView === 'live-webcams'
   const sections = isCrimeMap
     ? CRIME_LAYER_SECTIONS
     : isConflictMap
@@ -333,7 +334,17 @@ export default function RightSidebar({
         </section>
       )}
 
-      {isMapView && !isConflictMap && !isExploreMap && !isGeolocateMap && !isFlockMap && (
+      {isMapView && isLiveWebcams && (
+        <section className="right-sidebar-section">
+          <h3>Live Webcams</h3>
+          <p className="layers-hint">
+            Windy webcams for the visible area. Zoom to level 8+ to load cameras; pan to refresh.
+            Click a marker for a preview and link to the Windy player.
+          </p>
+        </section>
+      )}
+
+      {isMapView && !isConflictMap && !isExploreMap && !isGeolocateMap && !isFlockMap && !isLiveWebcams && (
         <>
           <section className="right-sidebar-section">
             <button

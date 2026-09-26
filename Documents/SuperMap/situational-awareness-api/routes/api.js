@@ -22,8 +22,10 @@ const fs = require('fs')
 const Parser = require('rss-parser')
 const { getAllCameras } = require('../camera-discovery/storage/saveCamera')
 const { loadSeedCameras } = require('../camera-discovery/storage/cameraSeeds')
+const { getWebcamsByBbox, windyConfigured } = require('../services/cameras')
 const crimeRouter = require('./crime')
 const weatherRouter = require('./weather')
+const windyWebcamsCache = new NodeCache({ stdTTL: 90, checkperiod: 60 })
 
 const searchCache = new NodeCache({ stdTTL: 15 })
 
@@ -687,6 +689,57 @@ router.get('/cameras', async (req, res) => {
   } catch (err) {
     console.error('[API /cameras]', err.message)
     res.status(500).json({ error: 'Failed to fetch cameras' })
+  }
+})
+
+/**
+ * GET /api/webcams?minLat=&maxLat=&minLon=&maxLon=&limit=
+ * Proxies Windy Webcams API v2 list/bbox using server-side WINDY_API.
+ * Intended for Live Webcams map (viewport lazy fetch). Do not call without a bbox.
+ */
+router.get('/webcams', async (req, res) => {
+  try {
+    if (!windyConfigured() && String(process.env.WEBCAMS_DEMO || '').trim() !== '1') {
+      return res.status(503).json({
+        type: 'FeatureCollection',
+        features: [],
+        configured: false,
+        error: 'WINDY_API not configured',
+      })
+    }
+    const north = req.query.maxLat != null ? Number(req.query.maxLat) : Number(req.query.north)
+    const south = req.query.minLat != null ? Number(req.query.minLat) : Number(req.query.south)
+    const east = req.query.maxLon != null ? Number(req.query.maxLon) : Number(req.query.east)
+    const west = req.query.minLon != null ? Number(req.query.minLon) : Number(req.query.west)
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 50)
+
+    if (![north, south, east, west].every((n) => Number.isFinite(n))) {
+      return res.status(400).json({
+        error: 'bbox required',
+        hint: 'Pass minLat, maxLat, minLon, maxLon (or north,south,east,west)',
+      })
+    }
+
+    const cacheKey = [
+      north.toFixed(3),
+      east.toFixed(3),
+      south.toFixed(3),
+      west.toFixed(3),
+      limit,
+    ].join(':')
+    const cached = windyWebcamsCache.get(cacheKey)
+    if (cached) {
+      res.set('X-Webcams-Cache', 'HIT')
+      return res.json(cached)
+    }
+
+    const data = await getWebcamsByBbox({ north, east, south, west, limit })
+    windyWebcamsCache.set(cacheKey, data)
+    res.set('X-Webcams-Cache', 'MISS')
+    res.json(data)
+  } catch (err) {
+    console.error('[API /webcams]', err.message)
+    res.status(500).json({ error: 'Failed to fetch webcams' })
   }
 })
 

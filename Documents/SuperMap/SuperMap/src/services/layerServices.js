@@ -820,3 +820,47 @@ export async function fetchFlockCameras(_bbox) {
   }
 }
 
+/**
+ * Windy live webcams for current map viewport (lazy bbox fetch via /api/webcams).
+ * @param {[number, number, number, number]} bbox [west, south, east, north]
+ * @param {{ signal?: AbortSignal, limit?: number }} [opts]
+ */
+export async function fetchWindyWebcams(bbox, opts = {}) {
+  const [west, south, east, north] = bbox || []
+  if (![west, south, east, north].every((n) => Number.isFinite(n))) {
+    return { type: 'FeatureCollection', features: [], configured: false }
+  }
+  const limit = opts.limit ?? 50
+  const qs = new URLSearchParams({
+    minLat: String(south),
+    maxLat: String(north),
+    minLon: String(west),
+    maxLon: String(east),
+    limit: String(limit),
+  })
+  const apiRoot = API_BASE || ''
+  try {
+    const res = await fetch(`${apiRoot}/api/webcams?${qs}`, {
+      signal: opts.signal,
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      console.warn('[SuperMap webcams]', res.status, body?.error || res.statusText)
+      return {
+        type: 'FeatureCollection',
+        features: [],
+        configured: body?.configured !== false,
+        error: body?.error || `HTTP ${res.status}`,
+      }
+    }
+    const data = await res.json()
+    if (data?.type === 'FeatureCollection') return data
+    return { type: 'FeatureCollection', features: [], configured: true }
+  } catch (err) {
+    if (err?.name === 'AbortError') throw err
+    console.warn('[SuperMap webcams]', err?.message || err)
+    return { type: 'FeatureCollection', features: [], configured: true, error: err?.message }
+  }
+}
+
+

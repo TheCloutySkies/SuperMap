@@ -170,6 +170,16 @@ export const OMNIBAR_CORE_ENTRIES = Object.freeze([
     viewId: 'flock-map',
     weight: 10,
   },
+  {
+    id: 'map-live-webcams',
+    label: 'Live Webcams',
+    category: 'Maps',
+    keywords: ['webcam', 'webcams', 'live cam', 'windy', 'camera stream'],
+    synonyms: ['live cameras', 'cctv', 'traffic cam', 'windy webcams'],
+    action: 'navigate',
+    viewId: 'live-webcams',
+    weight: 10,
+  },
 
   // Crime sections
   {

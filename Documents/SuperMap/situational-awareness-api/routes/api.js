@@ -130,17 +130,39 @@ router.get('/news', async (req, res) => {
   try {
     const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
     const cached = !forceRefresh ? newsService.getNewsCached() : null
+    const attachMeta = (payload) => {
+      if (!payload || typeof payload !== 'object') return payload
+      try {
+        const mediastack = require('../services/mediastack')
+        const keywordTags = require('../services/keywordTags')
+        const status = mediastack.getStatus()
+        return {
+          ...payload,
+          meta: {
+            ...(payload.meta || {}),
+            mediastack: {
+              quotaExhausted: !!status.quotaExhausted,
+              fetchedAt: status.fetchedAt || null,
+              articleCount: status.articleCount || 0,
+            },
+            keywordTags: keywordTags.getKeywordTags()?.tags || payload.meta?.keywordTags || [],
+          },
+        }
+      } catch {
+        return payload
+      }
+    }
     if (cached && Array.isArray(cached.features) && cached.features.length > 0) {
       if (feedsDebugEnabled()) {
         console.log('[FEEDS API /news] OUTPUT', { cached: true, features: cached.features.length, ms: Date.now() - t0 })
       }
-      return res.json(cached)
+      return res.json(attachMeta(cached))
     }
     const items = await newsService.getNews()
     if (feedsDebugEnabled()) {
       console.log('[FEEDS API /news] OUTPUT', { cached: false, features: items?.features?.length || 0, ms: Date.now() - t0 })
     }
-    return res.json(items)
+    return res.json(attachMeta(items))
   } catch (err) {
     console.error('[API /news]', err.message)
     res.status(500).json({ error: 'Failed to fetch news' })

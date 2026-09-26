@@ -5,6 +5,8 @@ const apiRouter = require('./routes/api')
 const newsService = require('./services/news')
 const osintService = require('./services/osint')
 const osintXFeedService = require('./services/osintXFeedService')
+const mediastack = require('./services/mediastack')
+const keywordTags = require('./services/keywordTags')
 const { warmHomeCaches, refreshHomeImagesBackground } = require('./services/homeBootstrap')
 
 const app = express()
@@ -61,11 +63,30 @@ const CISA_INTERVAL_MS = 15 * 60 * 1000
 const BELLINGCAT_INTERVAL_MS = 30 * 60 * 1000
 const OSINT_X_INTERVAL_MS = 2 * 60 * 1000 // 2 minutes — rotating batch covers all handles ~every 6–8 min
 const HOME_IMAGES_REFRESH_MS = 3 * 60 * 1000 // 3 minutes — keep homepage gallery fresh
+const MEDIASTACK_TICK_MS = 60 * 1000 // check ET window every minute
+const KEYWORD_TAGS_INTERVAL_MS = 60 * 60 * 1000 // hourly headline keyword counts
 
 function runIngest(isWarmup = false) {
   newsService.getNews()
     .catch((e) => console.warn('[ingest] news:', e.message))
     .then(() => { if (isWarmup) console.log('[ingest] News ready for search and feeds') })
+}
+
+/** MediaStack: only 08:00 and 15:00 America/New_York (once per window). */
+function runMediaStackTick() {
+  if (!mediastack.isPullWindowDue()) return
+  mediastack.maybeScheduledPull()
+    .then((cache) => {
+      console.log('[mediastack] scheduled pull done; articles=', (cache?.articles || []).length, 'quota=', !!cache?.quotaExhausted)
+      // Rebuild merged news cache so Feeds picks up new images/sources
+      return newsService.getNews()
+    })
+    .catch((e) => console.warn('[mediastack] tick:', e.message))
+}
+
+function runKeywordTagsRefresh() {
+  keywordTags.refreshKeywordTags()
+    .catch((e) => console.warn('[keyword-tags]', e.message))
 }
 
 function runOsintWarmup() {
@@ -100,6 +121,12 @@ app.listen(PORT, () => {
   // Defer initial ingest so server is responsive immediately (faster startup)
   setImmediate(() => runIngest(true))
   setInterval(() => runIngest(false), INGEST_INTERVAL_MS)
+  // MediaStack: check every minute for 08:00 / 15:00 ET windows only (no startup pull)
+  setTimeout(runMediaStackTick, 15000)
+  setInterval(runMediaStackTick, MEDIASTACK_TICK_MS)
+  // Hourly keyword tags for threat summary
+  setTimeout(runKeywordTagsRefresh, 45000)
+  setInterval(runKeywordTagsRefresh, KEYWORD_TAGS_INTERVAL_MS)
   setTimeout(runOsintWarmup, 5000)
   setInterval(() => osintService.fetchDW().catch((e) => console.warn('[osint] DW:', e.message)), DW_INTERVAL_MS)
   setInterval(() => osintService.fetchCISA().catch((e) => console.warn('[osint] CISA:', e.message)), CISA_INTERVAL_MS)

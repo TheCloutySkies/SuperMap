@@ -8,9 +8,6 @@ const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.
   ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
   : (import.meta.env.DEV ? '' : 'http://localhost:3001')
 
-const DEFAULT_LAT = 39.8283
-const DEFAULT_LON = -98.5795
-
 const SPANS = [
   { id: 'now', label: 'Now', hours: 0 },
   { id: '24h', label: '24h', hours: 24 },
@@ -24,7 +21,6 @@ const PANEL_TABS = [
   { id: 'flood', label: 'Flood' },
   { id: 'satellite', label: 'Satellite radiation' },
   { id: 'historical', label: 'Historical' },
-  { id: 'runs', label: 'Single runs' },
 ]
 
 const RADAR_LAYERS = [
@@ -74,6 +70,8 @@ const WMO_LABELS = {
   99: 'Severe thunderstorm',
 }
 
+const LOCATION_STORAGE_KEY = 'supermap-weather-location'
+
 async function getJson(path) {
   const res = await fetch(`${API_BASE}${path}`)
   if (!res.ok) {
@@ -112,6 +110,56 @@ function fmtMm(n) {
 
 function emptyFC() {
   return { type: 'FeatureCollection', features: [] }
+}
+
+function readStoredLocation() {
+  try {
+    const raw = sessionStorage.getItem(LOCATION_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!Number.isFinite(parsed?.lat) || !Number.isFinite(parsed?.lon)) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function storeLocation(lat, lon, label) {
+  try {
+    sessionStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify({ lat, lon, label }))
+  } catch {
+    /* ignore */
+  }
+}
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[data-wx-src="${src}"]`)
+    if (existing) {
+      if (existing.dataset.loaded === '1') resolve()
+      else existing.addEventListener('load', () => resolve(), { once: true })
+      return
+    }
+    const el = document.createElement('script')
+    el.src = src
+    el.async = true
+    el.dataset.wxSrc = src
+    el.onload = () => {
+      el.dataset.loaded = '1'
+      resolve()
+    }
+    el.onerror = () => reject(new Error(`Failed to load ${src}`))
+    document.head.appendChild(el)
+  })
+}
+
+function loadStylesheet(href) {
+  if (document.querySelector(`link[data-wx-href="${href}"]`)) return
+  const link = document.createElement('link')
+  link.rel = 'stylesheet'
+  link.href = href
+  link.dataset.wxHref = href
+  document.head.appendChild(link)
 }
 
 function setRasterVisible(map, sourceId, layerId, visible, tileUrl, attribution) {
@@ -159,18 +207,27 @@ function setGeoJsonLayer(map, sourceId, layerId, geojson, paint, type = 'fill') 
 }
 
 export default function WeatherView({ initialLat, initialLon, onLocationChange }) {
+  const stored = typeof window !== 'undefined' ? readStoredLocation() : null
+  const hasPropLocation = Number.isFinite(initialLat) && Number.isFinite(initialLon)
+
+  const [locationReady, setLocationReady] = useState(Boolean(hasPropLocation || stored))
+  const [locationPrompt, setLocationPrompt] = useState(!hasPropLocation && !stored)
+  const [geoStatus, setGeoStatus] = useState(hasPropLocation || stored ? 'ready' : 'pending')
   const [lat, setLat] = useState(
-    Number.isFinite(initialLat) ? initialLat : DEFAULT_LAT,
+    hasPropLocation ? initialLat : (stored?.lat ?? null),
   )
   const [lon, setLon] = useState(
-    Number.isFinite(initialLon) ? initialLon : DEFAULT_LON,
+    hasPropLocation ? initialLon : (stored?.lon ?? null),
   )
-  const [placeLabel, setPlaceLabel] = useState('Continental US')
+  const [placeLabel, setPlaceLabel] = useState(
+    hasPropLocation ? 'Selected location' : (stored?.label || ''),
+  )
   const [searchQuery, setSearchQuery] = useState('')
+  const [searchError, setSearchError] = useState(null)
   const [span, setSpan] = useState('now')
   const [forecast, setForecast] = useState(null)
   const [forecastError, setForecastError] = useState(null)
-  const [loadingForecast, setLoadingForecast] = useState(true)
+  const [loadingForecast, setLoadingForecast] = useState(false)
   const [panel, setPanel] = useState('air')
   const [panelData, setPanelData] = useState(null)
   const [panelError, setPanelError] = useState(null)
@@ -186,39 +243,92 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
   const [alertsFc, setAlertsFc] = useState(emptyFC())
   const [tropicalFc, setTropicalFc] = useState(emptyFC())
   const [tempUnit, setTempUnit] = useState('F')
+  const [mapFullscreen, setMapFullscreen] = useState(false)
+  const [windyStatus, setWindyStatus] = useState(null)
+  const [windyError, setWindyError] = useState(null)
 
   const mapContainerRef = useRef(null)
+  const mapShellRef = useRef(null)
+  const windyContainerRef = useRef(null)
   const mapRef = useRef(null)
   const readyRef = useRef(false)
+  const windyMapRef = useRef(null)
+  const windyApiRef = useRef(null)
   const radarTogglesRef = useRef(radarToggles)
   const radarMetaRef = useRef(radarMeta)
   const alertsRef = useRef(alertsFc)
   const tropicalRef = useRef(tropicalFc)
+  const latLonRef = useRef({ lat, lon })
 
   radarTogglesRef.current = radarToggles
   radarMetaRef.current = radarMeta
   alertsRef.current = alertsFc
   tropicalRef.current = tropicalFc
+  latLonRef.current = { lat, lon }
 
   const applyLocation = useCallback((nextLat, nextLon, label) => {
     setLat(nextLat)
     setLon(nextLon)
-    if (label) setPlaceLabel(label)
+    setLocationReady(true)
+    setLocationPrompt(false)
+    setGeoStatus('ready')
+    setSearchError(null)
+    const nextLabel = label || 'Selected location'
+    setPlaceLabel(nextLabel)
+    storeLocation(nextLat, nextLon, nextLabel)
     onLocationChange?.(nextLat, nextLon)
     const map = mapRef.current
     if (map && readyRef.current) {
       map.easeTo({ center: [nextLon, nextLat], zoom: Math.max(map.getZoom(), 6) })
     }
+    const windyMap = windyMapRef.current
+    if (windyMap?.setView) {
+      windyMap.setView([nextLat, nextLon], Math.max(windyMap.getZoom?.() || 5, 6))
+    }
   }, [onLocationChange])
+
+  const requestGeolocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      setGeoStatus('unsupported')
+      setLocationPrompt(true)
+      return
+    }
+    setGeoStatus('locating')
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        applyLocation(pos.coords.latitude, pos.coords.longitude, 'Current location')
+      },
+      () => {
+        setGeoStatus('denied')
+        setLocationPrompt(true)
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
+    )
+  }, [applyLocation])
+
+  // On open: use props / session, else try geolocation, else prompt.
+  useEffect(() => {
+    if (hasPropLocation) {
+      applyLocation(initialLat, initialLon, 'Selected location')
+      return
+    }
+    if (stored) {
+      setLocationReady(true)
+      setLocationPrompt(false)
+      setGeoStatus('ready')
+      return
+    }
+    requestGeolocation()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!Number.isFinite(initialLat) || !Number.isFinite(initialLon)) return
     if (initialLat === lat && initialLon === lon) return
-    setLat(initialLat)
-    setLon(initialLon)
+    applyLocation(initialLat, initialLon, 'Selected location')
   }, [initialLat, initialLon]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (!locationReady || !Number.isFinite(lat) || !Number.isFinite(lon)) return undefined
     let cancelled = false
     setLoadingForecast(true)
     setForecastError(null)
@@ -236,9 +346,10 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
         if (!cancelled) setLoadingForecast(false)
       })
     return () => { cancelled = true }
-  }, [lat, lon])
+  }, [lat, lon, locationReady])
 
   useEffect(() => {
+    if (!locationReady || !Number.isFinite(lat) || !Number.isFinite(lon)) return undefined
     let cancelled = false
     setLoadingPanel(true)
     setPanelError(null)
@@ -249,7 +360,6 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
       flood: `/api/weather/flood?lat=${lat}&lon=${lon}`,
       satellite: `/api/weather/satellite-radiation?lat=${lat}&lon=${lon}`,
       historical: `/api/weather/historical?lat=${lat}&lon=${lon}`,
-      runs: `/api/weather/single-runs?lat=${lat}&lon=${lon}`,
     }
     getJson(paths[panel])
       .then((data) => {
@@ -262,7 +372,7 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
         if (!cancelled) setLoadingPanel(false)
       })
     return () => { cancelled = true }
-  }, [lat, lon, panel])
+  }, [lat, lon, panel, locationReady])
 
   useEffect(() => {
     let cancelled = false
@@ -273,6 +383,7 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
   }, [])
 
   useEffect(() => {
+    if (!locationReady || !Number.isFinite(lat) || !Number.isFinite(lon)) return undefined
     let cancelled = false
     Promise.all([
       getJson(`/api/weather/alerts?lat=${lat}&lon=${lon}`).catch(() => null),
@@ -287,7 +398,7 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
       setTropicalFc({ type: 'FeatureCollection', features: tropFeatures.filter((f) => f?.geometry) })
     })
     return () => { cancelled = true }
-  }, [lat, lon])
+  }, [lat, lon, locationReady])
 
   const syncRadarLayers = useCallback(() => {
     const map = mapRef.current
@@ -295,8 +406,10 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
     const toggles = radarTogglesRef.current
     const meta = radarMetaRef.current
     const precipUrl = meta?.rainviewer?.precipTiles || meta?.openWeatherMapTiles?.precipitation
-    const windUrl = meta?.openWeatherMapTiles?.wind
     const tempUrl = meta?.openWeatherMapTiles?.temperature
+    // Wind uses Windy Map Forecast (separate canvas). OWM wind tiles only if Windy unavailable.
+    const useOwmWind = Boolean(toggles.wind && !meta?.windyConfigured && meta?.openWeatherMapTiles?.wind)
+    const windUrl = useOwmWind ? meta.openWeatherMapTiles.wind : null
 
     setRasterVisible(
       map,
@@ -310,7 +423,7 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
       map,
       'wx-wind',
       'wx-wind-layer',
-      toggles.wind,
+      useOwmWind,
       windUrl,
       meta?.openWeatherMapTiles?.attribution,
     )
@@ -356,13 +469,26 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
     }
   }, [])
 
+  const resizeMaps = useCallback(() => {
+    mapRef.current?.resize?.()
+    try {
+      windyMapRef.current?.invalidateSize?.()
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  // MapLibre radar map — create once when location is ready; pan on later moves.
   useEffect(() => {
-    if (!mapContainerRef.current || mapRef.current) return undefined
+    if (!locationReady || !mapContainerRef.current || mapRef.current) return undefined
+    const startLat = Number.isFinite(latLonRef.current.lat) ? latLonRef.current.lat : 39.5
+    const startLon = Number.isFinite(latLonRef.current.lon) ? latLonRef.current.lon : -98.5
+
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
       style: BASEMAP_STYLE,
-      center: [lon, lat],
-      zoom: 4.2,
+      center: [startLon, startLat],
+      zoom: 5.5,
       minZoom: 2,
       maxZoom: 12,
       attributionControl: true,
@@ -374,55 +500,183 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
     map.on('load', () => {
       readyRef.current = true
       syncRadarLayers()
+      requestAnimationFrame(() => map.resize())
     })
+
+    const ro = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(() => {
+        map.resize()
+      })
+      : null
+    if (ro && mapShellRef.current) ro.observe(mapShellRef.current)
 
     return () => {
       readyRef.current = false
+      ro?.disconnect?.()
       map.remove()
       mapRef.current = null
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [locationReady, syncRadarLayers])
 
   useEffect(() => {
     syncRadarLayers()
   }, [radarToggles, radarMeta, alertsFc, tropicalFc, syncRadarLayers])
 
+  useEffect(() => {
+    resizeMaps()
+  }, [mapFullscreen, resizeMaps])
+
+  useEffect(() => {
+    if (!mapFullscreen) return undefined
+    const onKey = (e) => {
+      if (e.key === 'Escape') setMapFullscreen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prev
+    }
+  }, [mapFullscreen])
+
+  // Windy Map Forecast wind layer (WINDY_API → /api/weather/windy/config → windyInit)
+  useEffect(() => {
+    const wantWind = Boolean(radarToggles.wind && locationReady)
+    if (!wantWind) {
+      setWindyStatus(null)
+      setWindyError(null)
+      windyApiRef.current = null
+      windyMapRef.current = null
+      if (windyContainerRef.current) windyContainerRef.current.innerHTML = ''
+      return undefined
+    }
+
+    let cancelled = false
+
+    async function mountWindy() {
+      setWindyError(null)
+      setWindyStatus('loading')
+      try {
+        // Wait a frame so the windy container is in the DOM.
+        await new Promise((r) => requestAnimationFrame(() => r()))
+        if (cancelled) return
+
+        const cfg = await getJson('/api/weather/windy/config')
+        if (cancelled) return
+        if (!cfg?.configured || !cfg.key) {
+          setWindyStatus('missing')
+          setWindyError('WINDY_API is not set on the API. Wind needs a Windy Map Forecast key.')
+          return
+        }
+        if (!windyContainerRef.current) {
+          setWindyStatus('error')
+          setWindyError('Wind map container missing')
+          return
+        }
+
+        loadStylesheet(cfg.leafletCss || 'https://unpkg.com/leaflet@1.4.0/dist/leaflet.css')
+        await loadScript(cfg.leafletJs || 'https://unpkg.com/leaflet@1.4.0/dist/leaflet.js')
+        await loadScript(cfg.libBootUrl || 'https://api.windy.com/assets/map-forecast/libBoot.js')
+        if (cancelled || typeof window.windyInit !== 'function') {
+          throw new Error('Windy Map Forecast library failed to load')
+        }
+
+        const { lat: cLat, lon: cLon } = latLonRef.current
+        const options = {
+          key: cfg.key,
+          lat: Number.isFinite(cLat) ? cLat : 39.5,
+          lon: Number.isFinite(cLon) ? cLon : -98.5,
+          zoom: 5,
+          overlay: cfg.defaultOverlay || 'wind',
+          level: 'surface',
+          particlesAnim: cfg.particlesAnim || 'on',
+        }
+
+        // windyInit mounts into #windy by default.
+        windyContainerRef.current.id = 'windy'
+        windyContainerRef.current.innerHTML = ''
+
+        await new Promise((resolve, reject) => {
+          try {
+            window.windyInit(options, (windyAPI) => {
+              if (cancelled) return
+              windyApiRef.current = windyAPI
+              windyMapRef.current = windyAPI.map
+              try {
+                windyAPI.store?.set?.('overlay', 'wind')
+                windyAPI.store?.set?.('particlesAnim', 'on')
+              } catch {
+                /* ignore */
+              }
+              setWindyStatus('ready')
+              requestAnimationFrame(() => {
+                try { windyAPI.map?.invalidateSize?.() } catch { /* ignore */ }
+              })
+              resolve()
+            })
+          } catch (err) {
+            reject(err)
+          }
+        })
+      } catch (err) {
+        if (!cancelled) {
+          setWindyStatus('error')
+          setWindyError(err.message || 'Windy wind layer failed')
+        }
+      }
+    }
+
+    mountWindy()
+
+    return () => {
+      cancelled = true
+      windyApiRef.current = null
+      windyMapRef.current = null
+      if (windyContainerRef.current) {
+        windyContainerRef.current.innerHTML = ''
+      }
+    }
+  }, [radarToggles.wind, locationReady, mapFullscreen])
+
   const handleSearch = (e) => {
     e?.preventDefault?.()
     const q = searchQuery.trim()
-    if (!q) return
+    if (!q) {
+      setSearchError('Enter a city or place name.')
+      return
+    }
+    setSearchError(null)
     geocodePlaceQuery(q, { count: 1 }).then((results) => {
       const first = results?.[0]
       if (first?.lat != null && first?.lon != null) {
         applyLocation(first.lat, first.lon, first.display_name || first.name)
+      } else {
+        setSearchError('No matches. Try another place name.')
       }
+    }).catch(() => {
+      setSearchError('Location search failed. Try again.')
     })
-  }
-
-  const handleGeolocate = () => {
-    if (!navigator.geolocation) return
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        applyLocation(pos.coords.latitude, pos.coords.longitude, 'Current location')
-      },
-      () => {},
-      { enableHighAccuracy: true, timeout: 10000 },
-    )
   }
 
   const om = forecast?.openMeteo
   const current = om?.current
   const hourly = om?.hourly
   const daily = om?.daily
+  const cards = locationReady
+    ? buildForecastCards({ span, current, hourly, daily, tempUnit })
+    : []
 
-  const cards = buildForecastCards({ span, current, hourly, daily, tempUnit })
+  const windLayerOn = Boolean(radarToggles.wind)
+  const windyReady = windyStatus === 'ready'
+  const windUsesWindy = Boolean(windLayerOn && (radarMeta?.windyConfigured || windyReady || windyStatus === 'loading'))
 
   return (
-    <div className="weather-desk">
+    <div className={`weather-desk${mapFullscreen ? ' weather-desk--map-fs' : ''}`}>
       <header className="weather-desk-topbar">
         <div className="weather-desk-brand">
           <h1>Weather</h1>
-          <p>Forecast, radar, and environmental panels · Open-Meteo · NWS · OpenWeatherMap</p>
+          <p>Forecast desk + radar · Open-Meteo · NWS · Windy wind</p>
         </div>
         <form className="weather-desk-locate" onSubmit={handleSearch}>
           <label className="weather-desk-sr" htmlFor="weather-place-search">Location</label>
@@ -435,101 +689,189 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
             autoComplete="off"
           />
           <button type="submit">Go</button>
-          <button type="button" onClick={handleGeolocate} title="Use my location">Locate</button>
+          <button type="button" onClick={requestGeolocation} title="Use my location">
+            {geoStatus === 'locating' ? 'Locating…' : 'Locate'}
+          </button>
         </form>
       </header>
 
-      <div className="weather-desk-location">
-        <span className="weather-desk-place">{placeLabel}</span>
-        <span className="weather-desk-coords">{lat.toFixed(3)}, {lon.toFixed(3)}</span>
-        <div className="weather-desk-unit" role="group" aria-label="Temperature unit">
-          <button type="button" className={tempUnit === 'F' ? 'active' : ''} onClick={() => setTempUnit('F')}>°F</button>
-          <button type="button" className={tempUnit === 'C' ? 'active' : ''} onClick={() => setTempUnit('C')}>°C</button>
-        </div>
-      </div>
-
-      <section className="weather-desk-forecast" aria-label="Forecast">
-        <div className="weather-desk-span">
-          {SPANS.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              className={span === s.id ? 'active' : ''}
-              onClick={() => setSpan(s.id)}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-        {loadingForecast && <p className="weather-desk-status">Loading forecast…</p>}
-        {forecastError && <p className="weather-desk-status weather-desk-status--err">{forecastError}</p>}
-        {!loadingForecast && !forecastError && (
-          <div className="weather-desk-cards">
-            {cards.map((card) => (
-              <article key={card.id} className="weather-desk-card">
-                <h3>{card.title}</h3>
-                <p className="weather-desk-card-cond">{card.condition}</p>
-                <dl>
-                  <div><dt>Temp</dt><dd>{card.temp}</dd></div>
-                  <div><dt>Precip</dt><dd>{card.precip}</dd></div>
-                  <div><dt>Wind</dt><dd>{card.wind}</dd></div>
-                </dl>
-              </article>
-            ))}
+      {locationPrompt && !locationReady && (
+        <div className="weather-desk-gate" role="status">
+          <div className="weather-desk-gate-card">
+            <h2>Choose a forecast location</h2>
+            <p>
+              {geoStatus === 'locating' && 'Requesting your location…'}
+              {geoStatus === 'denied' && 'Location permission was denied. Search for a city or place to load the forecast.'}
+              {geoStatus === 'unsupported' && 'Geolocation is unavailable here. Search for a city or place to continue.'}
+              {geoStatus === 'pending' && 'Allow location access, or search for a place before the forecast loads.'}
+            </p>
+            <form className="weather-desk-locate weather-desk-locate--gate" onSubmit={handleSearch}>
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="e.g. Chicago, Denver, Miami…"
+                autoComplete="off"
+                autoFocus
+              />
+              <button type="submit">Show forecast</button>
+              <button type="button" onClick={requestGeolocation}>Use my location</button>
+            </form>
+            {searchError && <p className="weather-desk-status weather-desk-status--err">{searchError}</p>}
           </div>
-        )}
-        {forecast?.openWeatherMap?.current && (
-          <p className="weather-desk-owm-hint">
-            OWM: {forecast.openWeatherMap.current.weather?.[0]?.description || '—'}
-            {' · '}
-            {fmtTempC(forecast.openWeatherMap.current.main?.temp, tempUnit)}
-          </p>
-        )}
-      </section>
+        </div>
+      )}
 
-      <section className="weather-desk-radar" aria-label="Radar">
-        <div className="weather-desk-radar-head">
-          <h2>Radar layers</h2>
-          <div className="weather-desk-radar-toggles" role="group" aria-label="Radar layer toggles">
-            {RADAR_LAYERS.map((layer) => (
-              <button
-                key={layer.id}
-                type="button"
-                className={radarToggles[layer.id] ? 'active' : ''}
-                onClick={() => setRadarToggles((prev) => ({ ...prev, [layer.id]: !prev[layer.id] }))}
+      {locationReady && (
+        <>
+          <div className="weather-desk-location">
+            <span className="weather-desk-place">{placeLabel || 'Selected location'}</span>
+            <span className="weather-desk-coords">{Number(lat).toFixed(3)}, {Number(lon).toFixed(3)}</span>
+            <div className="weather-desk-unit" role="group" aria-label="Temperature unit">
+              <button type="button" className={tempUnit === 'F' ? 'active' : ''} onClick={() => setTempUnit('F')}>°F</button>
+              <button type="button" className={tempUnit === 'C' ? 'active' : ''} onClick={() => setTempUnit('C')}>°C</button>
+            </div>
+          </div>
+
+          <div className="weather-desk-zones">
+            <section className="weather-desk-zone weather-desk-zone--forecast" aria-label="Forecast">
+              <div className="weather-desk-zone-head">
+                <h2>Forecast</h2>
+                <div className="weather-desk-span" role="tablist" aria-label="Forecast span">
+                  {SPANS.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className={span === s.id ? 'active' : ''}
+                      onClick={() => setSpan(s.id)}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {loadingForecast && <p className="weather-desk-status">Loading forecast…</p>}
+              {forecastError && <p className="weather-desk-status weather-desk-status--err">{forecastError}</p>}
+              {!loadingForecast && !forecastError && (
+                <div className="weather-desk-cards">
+                  {cards.map((card) => (
+                    <article key={card.id} className="weather-desk-card">
+                      <h3>{card.title}</h3>
+                      <p className="weather-desk-card-cond">{card.condition}</p>
+                      <dl>
+                        <div><dt>Temp</dt><dd>{card.temp}</dd></div>
+                        <div><dt>Precip</dt><dd>{card.precip}</dd></div>
+                        <div><dt>Wind</dt><dd>{card.wind}</dd></div>
+                      </dl>
+                    </article>
+                  ))}
+                </div>
+              )}
+              {forecast?.openWeatherMap?.current && (
+                <p className="weather-desk-owm-hint">
+                  OWM: {forecast.openWeatherMap.current.weather?.[0]?.description || '—'}
+                  {' · '}
+                  {fmtTempC(forecast.openWeatherMap.current.main?.temp, tempUnit)}
+                </p>
+              )}
+
+              <div className="weather-desk-panels" aria-label="Environment panels">
+                <div className="weather-desk-panel-tabs">
+                  {PANEL_TABS.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className={panel === t.id ? 'active' : ''}
+                      onClick={() => setPanel(t.id)}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="weather-desk-panel-body">
+                  {loadingPanel && <p className="weather-desk-status">Loading…</p>}
+                  {panelError && <p className="weather-desk-status weather-desk-status--err">{panelError}</p>}
+                  {!loadingPanel && !panelError && panelData && (
+                    <PanelBody panel={panel} data={panelData} tempUnit={tempUnit} />
+                  )}
+                </div>
+              </div>
+            </section>
+
+            <section className="weather-desk-zone weather-desk-zone--radar" aria-label="Radar">
+              <div className="weather-desk-zone-head">
+                <h2>Radar</h2>
+                <div className="weather-desk-radar-actions">
+                  <div className="weather-desk-radar-toggles" role="group" aria-label="Radar layer toggles">
+                    {RADAR_LAYERS.map((layer) => (
+                      <button
+                        key={layer.id}
+                        type="button"
+                        className={radarToggles[layer.id] ? 'active' : ''}
+                        onClick={() => setRadarToggles((prev) => ({ ...prev, [layer.id]: !prev[layer.id] }))}
+                      >
+                        {layer.label}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="weather-desk-fs-btn"
+                    onClick={() => setMapFullscreen((v) => !v)}
+                    aria-pressed={mapFullscreen}
+                  >
+                    {mapFullscreen ? 'Exit full screen' : 'Full screen'}
+                  </button>
+                </div>
+              </div>
+
+              <div
+                className={`weather-desk-map-shell${mapFullscreen ? ' is-fullscreen' : ''}`}
+                ref={mapShellRef}
               >
-                {layer.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="weather-desk-map" ref={mapContainerRef} />
-        {!radarMeta?.owmConfigured && radarToggles.wind && (
-          <p className="weather-desk-status">Wind tiles need OPENWEATHERMAP_API_KEY on the API.</p>
-        )}
-      </section>
+                <div
+                  className={`weather-desk-map${windyReady ? ' is-dimmed' : ''}`}
+                  ref={mapContainerRef}
+                />
+                {windLayerOn && windyStatus !== 'missing' && (
+                  <div
+                    className={`weather-desk-map-windy${windyReady ? ' is-visible' : ''}`}
+                    ref={windyContainerRef}
+                    aria-label="Windy wind layer"
+                    aria-hidden={!windyReady}
+                  />
+                )}
+                {mapFullscreen && (
+                  <button
+                    type="button"
+                    className="weather-desk-fs-exit"
+                    onClick={() => setMapFullscreen(false)}
+                  >
+                    Exit full screen
+                  </button>
+                )}
+              </div>
 
-      <section className="weather-desk-panels" aria-label="Environment panels">
-        <div className="weather-desk-panel-tabs">
-          {PANEL_TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={panel === t.id ? 'active' : ''}
-              onClick={() => setPanel(t.id)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-        <div className="weather-desk-panel-body">
-          {loadingPanel && <p className="weather-desk-status">Loading…</p>}
-          {panelError && <p className="weather-desk-status weather-desk-status--err">{panelError}</p>}
-          {!loadingPanel && !panelError && panelData && (
-            <PanelBody panel={panel} data={panelData} tempUnit={tempUnit} />
-          )}
-        </div>
-      </section>
+              {radarToggles.wind && windyStatus === 'missing' && (
+                <p className="weather-desk-status weather-desk-status--err">
+                  {windyError || 'Set WINDY_API (Windy Map Forecast key) on the API for wind.'}
+                  {!radarMeta?.owmConfigured && ' OWM wind tiles are also unavailable.'}
+                </p>
+              )}
+              {radarToggles.wind && windyError && windyStatus === 'error' && (
+                <p className="weather-desk-status weather-desk-status--err">{windyError}</p>
+              )}
+              {radarToggles.wind && windUsesWindy && windyStatus === 'loading' && (
+                <p className="weather-desk-status">Loading Windy wind particles…</p>
+              )}
+              {radarToggles.wind && windUsesWindy && windyStatus === 'ready' && (
+                <p className="weather-desk-status">Wind: Windy Map Forecast particles</p>
+              )}
+            </section>
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -564,7 +906,6 @@ function buildForecastCards({ span, current, hourly, daily, tempUnit }) {
     return cards.slice(0, 8)
   }
 
-  // 7-day
   const days = daily?.time || []
   return days.slice(0, 7).map((day, i) => ({
     id: `d-${day}`,
@@ -603,13 +944,6 @@ function formatDay(iso) {
 
 function PanelBody({ panel, data, tempUnit }) {
   const om = data?.openMeteo
-  if (panel === 'runs' && data?.available === false) {
-    return (
-      <p className="weather-desk-status">
-        Single Runs API is not available right now{data.error ? `: ${data.error}` : '.'}
-      </p>
-    )
-  }
 
   if (panel === 'air') {
     const c = om?.current || {}
@@ -686,15 +1020,6 @@ function PanelBody({ panel, data, tempUnit }) {
           </li>
         ))}
       </ul>
-    )
-  }
-
-  if (panel === 'runs') {
-    const times = om?.hourly?.time || []
-    return (
-      <p className="weather-desk-status">
-        Single Runs available · {times.length} hourly samples from {data.source}.
-      </p>
     )
   }
 

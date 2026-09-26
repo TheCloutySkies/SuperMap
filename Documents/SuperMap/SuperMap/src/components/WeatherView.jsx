@@ -500,7 +500,13 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
     map.on('load', () => {
       readyRef.current = true
       syncRadarLayers()
-      requestAnimationFrame(() => map.resize())
+      const bump = () => { try { map.resize() } catch { /* ignore */ } }
+      requestAnimationFrame(() => {
+        bump()
+        requestAnimationFrame(bump)
+      })
+      setTimeout(bump, 120)
+      setTimeout(bump, 400)
     })
 
     const ro = typeof ResizeObserver !== 'undefined'
@@ -522,6 +528,40 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
     syncRadarLayers()
   }, [radarToggles, radarMeta, alertsFc, tropicalFc, syncRadarLayers])
 
+  const toggleMapFullscreen = useCallback(async () => {
+    const shell = mapShellRef.current
+    if (!shell) return
+    try {
+      if (document.fullscreenElement === shell) {
+        await document.exitFullscreen()
+        setMapFullscreen(false)
+      } else if (document.fullscreenElement) {
+        await document.exitFullscreen()
+        await shell.requestFullscreen()
+        setMapFullscreen(true)
+      } else if (typeof shell.requestFullscreen === 'function') {
+        await shell.requestFullscreen()
+        setMapFullscreen(true)
+      } else {
+        setMapFullscreen((v) => !v)
+      }
+    } catch {
+      setMapFullscreen((v) => !v)
+    }
+  }, [])
+
+  useEffect(() => {
+    const onFs = () => {
+      const shell = mapShellRef.current
+      const inFs = Boolean(shell && document.fullscreenElement === shell)
+      setMapFullscreen(inFs)
+      requestAnimationFrame(() => resizeMaps())
+      setTimeout(() => resizeMaps(), 100)
+    }
+    document.addEventListener('fullscreenchange', onFs)
+    return () => document.removeEventListener('fullscreenchange', onFs)
+  }, [resizeMaps])
+
   useEffect(() => {
     resizeMaps()
   }, [mapFullscreen, resizeMaps])
@@ -529,11 +569,16 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
   useEffect(() => {
     if (!mapFullscreen) return undefined
     const onKey = (e) => {
-      if (e.key === 'Escape') setMapFullscreen(false)
+      if (e.key !== 'Escape') return
+      if (document.fullscreenElement) {
+        document.exitFullscreen?.().catch(() => setMapFullscreen(false))
+      } else {
+        setMapFullscreen(false)
+      }
     }
     window.addEventListener('keydown', onKey)
     const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    if (!document.fullscreenElement) document.body.style.overflow = 'hidden'
     return () => {
       window.removeEventListener('keydown', onKey)
       document.body.style.overflow = prev
@@ -818,7 +863,7 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
                   <button
                     type="button"
                     className="weather-desk-fs-btn"
-                    onClick={() => setMapFullscreen((v) => !v)}
+                    onClick={toggleMapFullscreen}
                     aria-pressed={mapFullscreen}
                   >
                     {mapFullscreen ? 'Exit full screen' : 'Full screen'}
@@ -846,7 +891,7 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
                   <button
                     type="button"
                     className="weather-desk-fs-exit"
-                    onClick={() => setMapFullscreen(false)}
+                    onClick={toggleMapFullscreen}
                   >
                     Exit full screen
                   </button>

@@ -23,8 +23,8 @@
 }
 
 @keyframes weather-desk-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .weather-desk-topbar {
@@ -373,16 +373,24 @@
   flex: 0 0 auto;
 }
 
-.weather-desk-map-shell.is-fullscreen {
+.weather-desk-map-shell.is-fullscreen,
+.weather-desk-map-shell:fullscreen {
   position: fixed;
   inset: 0;
-  z-index: 120;
+  z-index: 400;
   width: 100vw;
-  height: 100vh;
+  height: 100dvh;
   max-height: none;
   aspect-ratio: auto;
   border-radius: 0;
   border: none;
+  background: #060a08;
+}
+
+.weather-desk-map-shell:fullscreen {
+  position: relative;
+  width: 100%;
+  height: 100%;
 }
 
 .weather-desk-map,
@@ -392,6 +400,19 @@
   width: 100%;
   height: 100%;
   min-height: 0;
+}
+
+.weather-desk-map .maplibregl-map {
+  position: absolute !important;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.weather-desk-map .maplibregl-canvas-container,
+.weather-desk-map .maplibregl-canvas {
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .weather-desk-map {
@@ -429,12 +450,6 @@
   z-index: 5;
   background: rgba(6, 10, 8, 0.82);
   backdrop-filter: blur(8px);
-}
-
-.weather-desk-map .maplibregl-canvas-container,
-.weather-desk-map .maplibregl-canvas {
-  width: 100% !important;
-  height: 100% !important;
 }
 
 .weather-desk-map .maplibregl-ctrl-attrib {

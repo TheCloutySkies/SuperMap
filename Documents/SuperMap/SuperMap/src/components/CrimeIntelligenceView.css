@@ -682,6 +682,67 @@
   transition: box-shadow 0.35s ease, border-color 0.35s ease;
 }
 
+.ci-map-wrap--live {
+  padding: 0;
+  overflow: hidden;
+  min-height: min(62vh, 520px);
+}
+
+.ci-so-map {
+  position: relative;
+  width: 100%;
+  height: min(62vh, 520px);
+  min-height: 320px;
+  background: #0a1610;
+}
+
+.ci-so-map-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.ci-so-map .maplibregl-ctrl-attrib {
+  font-size: 0.65rem;
+  background: rgba(10, 22, 16, 0.75);
+  color: #9ab5a6;
+}
+
+.ci-so-map .maplibregl-ctrl-group {
+  background: #12261c;
+  border: 1px solid rgba(110, 217, 160, 0.25);
+}
+
+.ci-so-map .maplibregl-ctrl-group button {
+  background: transparent;
+  color: #cfe8da;
+}
+
+.ci-offender-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.65rem 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.ci-offender-toolbar .ci-select-wrap {
+  margin-bottom: 0;
+  min-width: min(100%, 220px);
+}
+
+.ci-coverage-msg {
+  margin: 0 0 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid rgba(224, 122, 58, 0.45);
+  background: rgba(224, 122, 58, 0.12);
+  color: #f0c9a8;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
 .ci-map-wrap.has-selection {
   border-color: rgba(110, 217, 160, 0.4);
   box-shadow: 0 0 0 1px rgba(61, 154, 106, 0.15), 0 12px 40px rgba(0, 0, 0, 0.35);

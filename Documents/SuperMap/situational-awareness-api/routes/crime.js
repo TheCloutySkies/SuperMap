@@ -60,8 +60,45 @@ router.get('/hate-crime', (_req, res) => handle(res, () => crimeData.getHateCrim
  */
 router.get('/sex-offenders/status', (_req, res) => handle(res, () => sexOffenders.getPackStatus()))
 
+router.get('/sex-offenders/coverage', (req, res) => {
+  try {
+    return res.json(sexOffenders.checkCoverage({
+      lat: req.query.lat,
+      lon: req.query.lon ?? req.query.lng,
+    }))
+  } catch (err) {
+    if (err.code === 'BAD_REQUEST') {
+      return res.status(400).json({ error: err.message })
+    }
+    console.error('[API /crime/sex-offenders/coverage]', err.message)
+    return res.status(500).json({ error: err.message || 'Coverage check failed' })
+  }
+})
+
+router.get('/sex-offenders/nearby', (req, res) => {
+  try {
+    return res.json(sexOffenders.getNearbyMarkers({
+      lat: req.query.lat,
+      lon: req.query.lon ?? req.query.lng,
+      radiusMiles: req.query.radiusMiles ?? req.query.radius,
+    }))
+  } catch (err) {
+    if (err.code === 'BAD_REQUEST') {
+      return res.status(400).json({ error: err.message })
+    }
+    console.error('[API /crime/sex-offenders/nearby]', err.message)
+    return res.status(500).json({ error: err.message || 'Nearby lookup failed' })
+  }
+})
+
 router.get('/sex-offenders/markers', (req, res) => {
-  handle(res, () => sexOffenders.getMarkers({ metro: req.query.metro }))
+  handle(res, () => sexOffenders.getMarkers({
+    metro: req.query.metro,
+    pinsOnly: req.query.pinsOnly,
+    lat: req.query.lat,
+    lon: req.query.lon ?? req.query.lng,
+    radiusMiles: req.query.radiusMiles ?? req.query.radius,
+  }))
 })
 
 router.get('/sex-offenders/:id', (req, res) => {

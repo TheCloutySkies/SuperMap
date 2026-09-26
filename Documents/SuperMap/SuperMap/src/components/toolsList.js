@@ -37,4 +37,28 @@ export const TOOLS_LIST = [
     desc: 'Federal Railroad Administration railway map (Esri).',
     embedUrl: 'https://experience.arcgis.com/experience/b6c12fd0a4774f38a303e3d034775854/',
   },
+  {
+    id: 'youtube-geofind',
+    title: 'YouTube Geofind',
+    desc: 'Browse geotagged YouTube videos on a map (mattw.io).',
+    embedUrl: 'https://mattw.io/youtube-geofind/',
+  },
+  {
+    id: 'sondehub',
+    title: 'SondeHub',
+    desc: 'Worldwide radiosonde tracker — altitude, frequency, and type.',
+    embedUrl: 'https://sondehub.org/',
+  },
+  {
+    id: 'ventusky',
+    title: 'Ventusky',
+    desc: 'Interactive weather maps — wind, rain, temperature, pressure, waves.',
+    embedUrl: 'https://www.ventusky.com/',
+  },
+  {
+    id: 'native-land',
+    title: 'Native Land',
+    desc: 'Indigenous territories, languages, and treaties map.',
+    embedUrl: 'https://native-land.ca/',
+  },
 ]

@@ -500,7 +500,13 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
     map.on('load', () => {
       readyRef.current = true
       syncRadarLayers()
-      requestAnimationFrame(() => map.resize())
+      const bump = () => { try { map.resize() } catch { /* ignore */ } }
+      requestAnimationFrame(() => {
+        bump()
+        requestAnimationFrame(bump)
+      })
+      setTimeout(bump, 120)
+      setTimeout(bump, 400)
     })
 
     const ro = typeof ResizeObserver !== 'undefined'
@@ -826,32 +832,9 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
                 </div>
               </div>
 
-              <div
-                className={`weather-desk-map-shell${mapFullscreen ? ' is-fullscreen' : ''}`}
-                ref={mapShellRef}
-              >
-                <div
-                  className={`weather-desk-map${windyReady ? ' is-dimmed' : ''}`}
-                  ref={mapContainerRef}
-                />
-                {windLayerOn && windyStatus !== 'missing' && (
-                  <div
-                    className={`weather-desk-map-windy${windyReady ? ' is-visible' : ''}`}
-                    ref={windyContainerRef}
-                    aria-label="Windy wind layer"
-                    aria-hidden={!windyReady}
-                  />
-                )}
-                {mapFullscreen && (
-                  <button
-                    type="button"
-                    className="weather-desk-fs-exit"
-                    onClick={() => setMapFullscreen(false)}
-                  >
-                    Exit full screen
-                  </button>
-                )}
-              </div>
+              {mapFullscreen
+                ? createPortal(mapShell, document.body)
+                : mapShell}
 
               {radarToggles.wind && windyStatus === 'missing' && (
                 <p className="weather-desk-status weather-desk-status--err">

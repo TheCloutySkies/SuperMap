@@ -43,9 +43,35 @@ const MAPBOX_TOKEN = process.env.MAPBOX_TOKEN || ''
 const GEOAPIFY_KEY = process.env.GEOAPIFY_KEY || ''
 const { HOME_CACHE_CONTROL, getHomePayload } = require('../services/homeBootstrap')
 
+/** Last-good APOD + short backoff so DEMO_KEY / 429s do not spam NASA or empty the widget. */
+let spaceApodLastGood = null
+let spaceApodBackoffUntil = 0
+const SPACE_APOD_BACKOFF_MS = 15 * 60 * 1000
+const spaceWarnLastAt = Object.create(null)
+
 function feedsDebugEnabled() {
   const v = String(process.env.DEBUG_FEEDS || '').trim().toLowerCase()
   return v === '1' || v === 'true' || v === 'yes'
+}
+
+function spaceErrorMessage(err, fallback = 'unknown error') {
+  const status = err?.response?.status
+  const code = err?.code
+  const msg = String(err?.message || err?.response?.statusText || '').trim()
+  if (status && msg) return `${msg} (HTTP ${status})`
+  if (status) return `HTTP ${status}`
+  if (msg) return msg
+  if (code) return String(code)
+  return fallback
+}
+
+/** Log each /space upstream failure at most once per 30 minutes (same key). */
+function warnSpaceOnce(key, message) {
+  const now = Date.now()
+  const prev = spaceWarnLastAt[key] || 0
+  if (now - prev < 30 * 60 * 1000) return
+  spaceWarnLastAt[key] = now
+  console.warn(`[API /space] ${message}`)
 }
 
 function setHomeCacheHeaders(res) {
@@ -1716,7 +1742,7 @@ router.get('/netblocks', async (req, res) => {
   res.json(payload)
 })
 
-/** NASA space: EONET (global hazards), NASA News, optional APOD. Cache 1 hour. */
+/** NASA space: EONET (global hazards), NASA News, optional APOD. Cache 1 hour. Partial payloads on upstream failure. */
 router.get('/space', async (req, res) => {
   setHomeCacheHeaders(res)
   const cacheKey = 'space'
@@ -1724,6 +1750,9 @@ router.get('/space', async (req, res) => {
   if (cached) return res.json({ ...cached, _cached: true })
 
   const NASA_KEY = (process.env.NASA_API_KEY || '').trim() || 'DEMO_KEY'
+  if (NASA_KEY === 'DEMO_KEY') {
+    warnSpaceOnce('demo-key', 'APOD using DEMO_KEY (rate-limited). Set NASA_API_KEY for production.')
+  }
   const out = { updatedAt: new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }) }
 
   const prescribedFire = /prescribed\s*fire|rx\s*pcs|controlled\s*burn/i
@@ -1743,7 +1772,7 @@ router.get('/space', async (req, res) => {
         }))
     }
   } catch (e) {
-    console.warn('[API /space] EONET error:', e.message)
+    warnSpaceOnce('eonet', `EONET error: ${spaceErrorMessage(e, 'EONET request failed')}`)
   }
 
   try {
@@ -1756,16 +1785,30 @@ router.get('/space', async (req, res) => {
       })).filter((i) => i.title)
     }
   } catch (e) {
-    console.warn('[API /space] NASA News RSS error:', e.message)
+    warnSpaceOnce('nasa-news', `NASA News RSS error: ${spaceErrorMessage(e, 'NASA News RSS request failed')}`)
   }
 
-  try {
-    const apodRes = await axios.get(`https://api.nasa.gov/planetary/apod?api_key=${NASA_KEY}`, { timeout: 8000 })
-    if (apodRes.data && apodRes.data.url) {
-      out.apod = { url: apodRes.data.url, title: apodRes.data.title || 'Image of the Day' }
+  const now = Date.now()
+  if (now < spaceApodBackoffUntil && spaceApodLastGood) {
+    out.apod = spaceApodLastGood
+  } else {
+    try {
+      const apodRes = await axios.get(`https://api.nasa.gov/planetary/apod?api_key=${encodeURIComponent(NASA_KEY)}`, { timeout: 8000 })
+      if (apodRes.data && apodRes.data.url) {
+        out.apod = { url: apodRes.data.url, title: apodRes.data.title || 'Image of the Day' }
+        spaceApodLastGood = out.apod
+        spaceApodBackoffUntil = 0
+      }
+    } catch (e) {
+      const status = e?.response?.status
+      const hint = NASA_KEY === 'DEMO_KEY' ? ' (DEMO_KEY; set NASA_API_KEY)' : ''
+      warnSpaceOnce('apod', `APOD error: ${spaceErrorMessage(e, 'APOD request failed')}${hint}`)
+      if (status === 429 || status === 403) {
+        spaceApodBackoffUntil = now + SPACE_APOD_BACKOFF_MS
+      }
+      // Degrade: reuse last-good APOD when present; otherwise omit (do not fail /space).
+      if (spaceApodLastGood) out.apod = spaceApodLastGood
     }
-  } catch (e) {
-    console.warn('[API /space] APOD error:', e.message)
   }
 
   spaceCache.set(cacheKey, out)

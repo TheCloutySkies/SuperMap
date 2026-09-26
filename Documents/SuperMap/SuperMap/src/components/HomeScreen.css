@@ -455,6 +455,86 @@
   margin-bottom: 0.6rem;
 }
 
+.home-screen-gas-prices-fuel-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+  max-width: 280px;
+}
+
+.home-screen-gas-prices-fuel-btn {
+  appearance: none;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--y2k-text-muted);
+  background: var(--y2k-surface-raised);
+  border: 1px solid var(--y2k-border);
+  border-radius: 4px;
+  padding: 0.4rem 0.55rem;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.home-screen-gas-prices-fuel-btn:hover:not(:disabled) {
+  color: var(--y2k-text);
+  border-color: var(--y2k-text-muted);
+}
+
+.home-screen-gas-prices-fuel-btn--active {
+  color: #fff;
+  background: var(--y2k-accent);
+  border-color: var(--y2k-accent);
+}
+
+.home-screen-gas-prices-fuel-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.home-screen-gas-prices-extremes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 0.75rem;
+  margin: 0.55rem 0 0.75rem;
+}
+
+.home-screen-gas-prices-extreme {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--y2k-border);
+  border-radius: 4px;
+}
+
+.home-screen-gas-prices-extreme-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--y2k-text-muted);
+}
+
+.home-screen-gas-prices-extreme-name {
+  font-size: 0.85rem;
+  color: var(--y2k-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-screen-gas-prices-extreme-price {
+  font-size: 1rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--y2k-text);
+}
+
 .home-screen-gas-prices-label {
   display: block;
   font-size: 0.75rem;
@@ -1121,6 +1201,19 @@
 .app--device-mobile .home-screen-gas-prices {
   padding: 0.75rem 0.85rem;
   margin-top: 1.25rem;
+}
+
+.app--device-mobile .home-screen-gas-prices-fuel-toggle {
+  max-width: none;
+  width: 100%;
+}
+
+.app--device-mobile .home-screen-gas-prices-fuel-btn {
+  min-height: 44px;
+}
+
+.app--device-mobile .home-screen-gas-prices-extremes {
+  gap: 0.45rem;
 }
 
 .app--device-mobile .home-screen-gas-prices-select {

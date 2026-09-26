@@ -1841,7 +1841,18 @@ router.get('/gas-prices', async (req, res) => {
   if (!force) {
     const cached = gasPricesCache.get(cacheKey)
     // Only serve successful live payloads from cache — never cache misses / unavailable
-    if (cached && cached.ok && !cached.gasUnavailable && (cached.national != null || cached.states?.length)) {
+    if (
+      cached
+      && cached.ok
+      && !cached.gasUnavailable
+      && (
+        cached.national != null
+        || cached.states?.length
+        || cached.diesel?.national != null
+        || cached.diesel?.states?.length
+        || cached.gasoline?.national != null
+      )
+    ) {
       return res.json({ ...cached, _cached: true })
     }
   }

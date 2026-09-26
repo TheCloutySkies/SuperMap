@@ -53,12 +53,45 @@ function normalizeGasPrices(data) {
       national: null,
       regions: [],
       states: [],
+      extremes: null,
+      gasoline: null,
+      diesel: null,
       unit: data.unit || 'USD/gal',
       error: 'Waiting for live EIA weekly prices (cached estimate discarded).',
       source: null,
     }
   }
   return data
+}
+
+/** Active fuel slice: prefer nested gasoline/diesel blocks; fall back to top-level gasoline fields. */
+function selectGasFuel(gasPrices, fuel) {
+  if (!gasPrices) return null
+  const nested = fuel === 'diesel' ? gasPrices.diesel : (gasPrices.gasoline || null)
+  if (nested && typeof nested === 'object') {
+    return {
+      ...nested,
+      unit: gasPrices.unit || 'USD/gal',
+      asOf: gasPrices.asOf,
+      weekEnding: gasPrices.weekEnding,
+      releaseDate: gasPrices.releaseDate,
+      sourceLabel: gasPrices.sourceLabel,
+    }
+  }
+  if (fuel === 'diesel') return null
+  return {
+    ok: gasPrices.ok !== false,
+    national: gasPrices.national,
+    regions: gasPrices.regions || [],
+    states: gasPrices.states || [],
+    extremes: gasPrices.extremes || null,
+    stateUnavailable: gasPrices.stateUnavailable,
+    unit: gasPrices.unit || 'USD/gal',
+    asOf: gasPrices.asOf,
+    weekEnding: gasPrices.weekEnding,
+    releaseDate: gasPrices.releaseDate,
+    sourceLabel: gasPrices.sourceLabel,
+  }
 }
 
 function applyHomePayload(data, setters) {
@@ -134,6 +167,7 @@ export default function HomeScreen({
     Array.isArray(snap?.gasStates) ? snap.gasStates : []
   )
   const [selectedGasState, setSelectedGasState] = useState('')
+  const [gasFuel, setGasFuel] = useState('gasoline') // 'gasoline' | 'diesel'
   const [widgetBootstrap, setWidgetBootstrap] = useState(() => ({
     news: snap?.news || null,
     stocks: snap?.stocks || null,
@@ -262,6 +296,9 @@ export default function HomeScreen({
           national: null,
           regions: [],
           states: [],
+          extremes: null,
+          gasoline: null,
+          diesel: null,
           unit: 'USD/gal',
           error: err.message || 'Failed to load gas prices',
         })
@@ -272,7 +309,11 @@ export default function HomeScreen({
   // Gas prices: skip first national fetch when bootstrap already supplied *live* data; refetch on state change or stale discard
   useEffect(() => {
     if (!API_BASE) return
-    const bootLive = gasPrices && !gasPrices.gasUnavailable && gasPrices.ok !== false && gasPrices.national != null
+    const bootLive = gasPrices && !gasPrices.gasUnavailable && gasPrices.ok !== false && (
+      gasPrices.national != null
+      || gasPrices.gasoline?.national != null
+      || gasPrices.diesel?.national != null
+    )
     if (!selectedGasState && skipInitialGasFetch.current && bootLive) {
       skipInitialGasFetch.current = false
       return
@@ -282,6 +323,18 @@ export default function HomeScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch only on state pick; force refresh is manual
   }, [selectedGasState])
 
+  const activeGasFuel = selectGasFuel(gasPrices, gasFuel)
+  const dieselAvailable = Boolean(
+    gasPrices
+    && !gasPrices.gasUnavailable
+    && gasPrices.ok !== false
+    && (
+      gasPrices.diesel?.ok
+      || gasPrices.diesel?.national != null
+      || (Array.isArray(gasPrices.diesel?.regions) && gasPrices.diesel.regions.length > 0)
+    ),
+  )
+
   const gasNeedsRetry =
     !gasPricesLoading && (
       !gasPrices ||
@@ -290,8 +343,12 @@ export default function HomeScreen({
       gasPrices.ok === false ||
       (
         gasPrices.national == null &&
+        gasPrices.gasoline?.national == null &&
+        gasPrices.diesel?.national == null &&
         !(Array.isArray(gasPrices.states) && gasPrices.states.some((s) => s?.price != null)) &&
-        !(Array.isArray(gasPrices.regions) && gasPrices.regions.length > 0)
+        !(Array.isArray(gasPrices.regions) && gasPrices.regions.length > 0) &&
+        !(Array.isArray(gasPrices.gasoline?.regions) && gasPrices.gasoline.regions.length > 0) &&
+        !(Array.isArray(gasPrices.diesel?.regions) && gasPrices.diesel.regions.length > 0)
       )
     )
 
@@ -470,6 +527,29 @@ export default function HomeScreen({
                   {gasPricesLoading ? 'Refreshing…' : 'Refresh'}
                 </button>
               </div>
+              <div
+                className="home-screen-gas-prices-fuel-toggle"
+                role="group"
+                aria-label="Fuel type"
+              >
+                <button
+                  type="button"
+                  className={`home-screen-gas-prices-fuel-btn${gasFuel === 'gasoline' ? ' home-screen-gas-prices-fuel-btn--active' : ''}`}
+                  onClick={() => setGasFuel('gasoline')}
+                  aria-pressed={gasFuel === 'gasoline'}
+                >
+                  Gasoline
+                </button>
+                <button
+                  type="button"
+                  className={`home-screen-gas-prices-fuel-btn${gasFuel === 'diesel' ? ' home-screen-gas-prices-fuel-btn--active' : ''}`}
+                  onClick={() => setGasFuel('diesel')}
+                  aria-pressed={gasFuel === 'diesel'}
+                  title="On-highway diesel"
+                >
+                  Diesel
+                </button>
+              </div>
               {gasPricesStates.length > 0 && (
                 <div className="home-screen-gas-prices-controls">
                   <label htmlFor="gas-prices-state" className="home-screen-gas-prices-label">State</label>
@@ -503,55 +583,87 @@ export default function HomeScreen({
               )}
               {!gasPricesLoading && gasPrices && !gasPrices.gasUnavailable && gasPrices.ok !== false && (
                 <>
-                  {Array.isArray(gasPrices.states) && gasPrices.states.length > 0 && gasPrices.states[0].price != null ? (
+                  {gasFuel === 'diesel' && !activeGasFuel?.ok && activeGasFuel?.national == null
+                    && !(Array.isArray(activeGasFuel?.regions) && activeGasFuel.regions.length) ? (
+                    <p className="home-screen-gas-prices-no-data">
+                      Live diesel prices unavailable in this EIA response. Switch to Gasoline or tap Refresh.
+                    </p>
+                  ) : (
                     <>
-                      <div className="home-screen-gas-prices-national">
-                        <span className="home-screen-gas-prices-state-label">{gasPrices.states[0].name}</span>
-                        <span className="home-screen-gas-prices-value">${Number(gasPrices.states[0].price).toFixed(2)}</span>
-                        <span className="home-screen-gas-prices-unit">{gasPrices.unit}</span>
-                      </div>
-                      {gasPrices.states[0].useRegionalFallback && (
-                        <p className="home-screen-gas-prices-no-data home-screen-gas-prices-estimate-note">
-                          No state series published; showing {gasPrices.states[0].regionLabel || 'regional'} (PADD) average.
+                      {Array.isArray(activeGasFuel?.states) && activeGasFuel.states.length > 0 && activeGasFuel.states[0].price != null ? (
+                        <>
+                          <div className="home-screen-gas-prices-national">
+                            <span className="home-screen-gas-prices-state-label">{activeGasFuel.states[0].name}</span>
+                            <span className="home-screen-gas-prices-value">${Number(activeGasFuel.states[0].price).toFixed(2)}</span>
+                            <span className="home-screen-gas-prices-unit">{activeGasFuel.unit || gasPrices.unit}</span>
+                          </div>
+                          {activeGasFuel.states[0].useRegionalFallback && (
+                            <p className="home-screen-gas-prices-no-data home-screen-gas-prices-estimate-note">
+                              No state series published; showing {activeGasFuel.states[0].regionLabel || 'regional'} (PADD) average.
+                            </p>
+                          )}
+                          {activeGasFuel.national != null && !activeGasFuel.states[0].useRegionalFallback && (
+                            <p className="home-screen-gas-prices-us-avg">US avg ${Number(activeGasFuel.national).toFixed(2)} {activeGasFuel.unit || gasPrices.unit}</p>
+                          )}
+                        </>
+                      ) : activeGasFuel?.stateUnavailable ? (
+                        <p className="home-screen-gas-prices-no-data">
+                          No EIA state or regional series for this selection. Try another state or All regions.
+                        </p>
+                      ) : activeGasFuel?.national != null ? (
+                        <div className="home-screen-gas-prices-national">
+                          <span className="home-screen-gas-prices-state-label">US average</span>
+                          <span className="home-screen-gas-prices-value">${Number(activeGasFuel.national).toFixed(2)}</span>
+                          <span className="home-screen-gas-prices-unit">{activeGasFuel.unit || gasPrices.unit}</span>
+                        </div>
+                      ) : (
+                        <p className="home-screen-gas-prices-no-data">
+                          No price rows in the EIA response. Tap Refresh to try again.
                         </p>
                       )}
-                      {gasPrices.national != null && !gasPrices.states[0].useRegionalFallback && (
-                        <p className="home-screen-gas-prices-us-avg">US avg ${Number(gasPrices.national).toFixed(2)} {gasPrices.unit}</p>
+                      {activeGasFuel?.extremes?.highest && activeGasFuel?.extremes?.lowest && !selectedGasState && (
+                        <div
+                          className="home-screen-gas-prices-extremes"
+                          aria-label={activeGasFuel.extremes.scope === 'region'
+                            ? 'Most and least expensive regions'
+                            : 'Most and least expensive states'}
+                        >
+                          <div className="home-screen-gas-prices-extreme">
+                            <span className="home-screen-gas-prices-extreme-label">
+                              Most expensive {activeGasFuel.extremes.scope === 'region' ? 'region' : 'state'}
+                            </span>
+                            <span className="home-screen-gas-prices-extreme-name">{activeGasFuel.extremes.highest.name}</span>
+                            <span className="home-screen-gas-prices-extreme-price">${Number(activeGasFuel.extremes.highest.price).toFixed(2)}</span>
+                          </div>
+                          <div className="home-screen-gas-prices-extreme">
+                            <span className="home-screen-gas-prices-extreme-label">
+                              Least expensive {activeGasFuel.extremes.scope === 'region' ? 'region' : 'state'}
+                            </span>
+                            <span className="home-screen-gas-prices-extreme-name">{activeGasFuel.extremes.lowest.name}</span>
+                            <span className="home-screen-gas-prices-extreme-price">${Number(activeGasFuel.extremes.lowest.price).toFixed(2)}</span>
+                          </div>
+                        </div>
+                      )}
+                      {Array.isArray(activeGasFuel?.regions) && activeGasFuel.regions.length > 0 && !selectedGasState && (
+                        <ul className="home-screen-gas-prices-regions">
+                          {activeGasFuel.regions.map((r) => (
+                            <li key={r.name}>
+                              <span className="home-screen-gas-prices-region-name">{r.name}</span>
+                              <span className="home-screen-gas-prices-region-price">${Number(r.price).toFixed(2)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {(gasPrices.asOf || gasPrices.weekEnding || gasPrices.releaseDate || gasPrices.sourceLabel) && (
+                        <p className="home-screen-gas-prices-source">
+                          {gasPrices.sourceLabel || 'EIA'}
+                          {gasPrices.asOf || gasPrices.weekEnding
+                            ? ` · week ending ${gasPrices.asOf || gasPrices.weekEnding}`
+                            : ''}
+                          {gasPrices.releaseDate ? ` · released ${gasPrices.releaseDate}` : ''}
+                        </p>
                       )}
                     </>
-                  ) : gasPrices.stateUnavailable ? (
-                    <p className="home-screen-gas-prices-no-data">
-                      No EIA state or regional series for this selection. Try another state or All regions.
-                    </p>
-                  ) : gasPrices.national != null ? (
-                    <div className="home-screen-gas-prices-national">
-                      <span className="home-screen-gas-prices-state-label">US average</span>
-                      <span className="home-screen-gas-prices-value">${Number(gasPrices.national).toFixed(2)}</span>
-                      <span className="home-screen-gas-prices-unit">{gasPrices.unit}</span>
-                    </div>
-                  ) : (
-                    <p className="home-screen-gas-prices-no-data">
-                      No price rows in the EIA response. Tap Refresh to try again.
-                    </p>
-                  )}
-                  {Array.isArray(gasPrices.regions) && gasPrices.regions.length > 0 && !selectedGasState && (
-                    <ul className="home-screen-gas-prices-regions">
-                      {gasPrices.regions.map((r) => (
-                        <li key={r.name}>
-                          <span className="home-screen-gas-prices-region-name">{r.name}</span>
-                          <span className="home-screen-gas-prices-region-price">${Number(r.price).toFixed(2)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {(gasPrices.asOf || gasPrices.weekEnding || gasPrices.releaseDate || gasPrices.sourceLabel) && (
-                    <p className="home-screen-gas-prices-source">
-                      {gasPrices.sourceLabel || 'EIA'}
-                      {gasPrices.asOf || gasPrices.weekEnding
-                        ? ` · week ending ${gasPrices.asOf || gasPrices.weekEnding}`
-                        : ''}
-                      {gasPrices.releaseDate ? ` · released ${gasPrices.releaseDate}` : ''}
-                    </p>
                   )}
                 </>
               )}

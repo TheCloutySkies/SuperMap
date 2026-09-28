@@ -1,4 +1,5 @@
 # Keep Render free-tier API awake so HomeScreen data loads without cold starts.
+# Prefer /api/home (not only /health) so disk last-good stays warm in memory.
 name: API keepalive
 
 on:
@@ -12,22 +13,35 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Ping situational-awareness API health
+      - name: Ping situational-awareness API (/health + /api/home)
         run: |
           set -e
-          URL="${API_HEALTH_URL:-https://supermap-api.onrender.com/health}"
-          echo "Pinging $URL"
+          HEALTH_URL="${API_HEALTH_URL:-https://supermap-api.onrender.com/health}"
+          HOME_URL="${API_HOME_URL:-https://supermap-api.onrender.com/api/home}"
+          echo "Pinging $HEALTH_URL then $HOME_URL"
           # Retry a few times — Render cold start can take >60s after long idle
+          ok=0
           for i in 1 2 3 4 5; do
-            if curl -fsS --connect-timeout 30 --max-time 120 "$URL"; then
+            if curl -fsS --connect-timeout 30 --max-time 120 "$HEALTH_URL"; then
               echo
-              echo "OK (attempt $i)"
-              exit 0
+              echo "health OK (attempt $i)"
+              ok=1
+              break
             fi
-            echo "Attempt $i failed; retrying..."
+            echo "health attempt $i failed; retrying..."
             sleep 15
           done
-          echo "Keepalive ping failed after retries"
-          exit 1
+          if [ "$ok" != "1" ]; then
+            echo "Keepalive health ping failed after retries"
+            exit 1
+          fi
+          # Warm home last-good into memory (deadline-bounded on server; do not fail the job on soft errors)
+          if curl -fsS --connect-timeout 30 --max-time 90 "$HOME_URL" -o /tmp/home-keepalive.json; then
+            echo
+            echo "home OK ($(wc -c < /tmp/home-keepalive.json) bytes)"
+          else
+            echo "home warm ping soft-failed (process still awake via /health)"
+          fi
         env:
           API_HEALTH_URL: https://supermap-api.onrender.com/health
+          API_HOME_URL: https://supermap-api.onrender.com/api/home

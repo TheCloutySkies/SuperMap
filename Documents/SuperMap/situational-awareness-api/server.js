@@ -233,9 +233,17 @@ app.listen(PORT, () => {
   // Prefer keepalive hitting /api/home (not only /health) so disk last-good stays warm.
 
   // Load disk last-good immediately so first requests are not blank
+  let hadLastGood = false
   try {
     newsService.getNewsCached()
   } catch (_) { /* optional */ }
+  try {
+    if (typeof apiRouter.seedHomeCachesOnBoot === 'function') {
+      hadLastGood = !!apiRouter.seedHomeCachesOnBoot()
+    }
+  } catch (e) {
+    console.warn('[boot] seed:', e.message)
+  }
 
   // MediaStack: check every minute for 08:00 / 15:00 ET windows only
   setTimeout(runMediaStackTick, 15000)
@@ -245,28 +253,32 @@ app.listen(PORT, () => {
   setTimeout(() => run815FeedsBatch(false), 20000)
   setInterval(() => run815FeedsBatch(false), FEEDS_815_TICK_MS)
 
-  // Boot catch-up if empty/stale (do not wait until next 3pm)
-  setTimeout(runBootCatchUp, 6000)
+  // Boot catch-up / OSINT-X: defer when last-good is present so cold-open HTTP
+  // is not starved by ingest on the event loop. Empty boot still catch-up soon.
+  const catchUpDelayMs = hadLastGood ? 45000 : 8000
+  const osintXDelayMs = hadLastGood ? 50000 : 12000
+  setTimeout(runBootCatchUp, catchUpDelayMs)
+  console.log('[boot] catch-up delay ms=', catchUpDelayMs, 'osint-x delay ms=', osintXDelayMs, 'hadLastGood=', hadLastGood)
 
   // Hourly keyword tags for threat summary
   setTimeout(runKeywordTagsRefresh, 45000)
   setInterval(runKeywordTagsRefresh, KEYWORD_TAGS_INTERVAL_MS)
 
   // OSINT X: full list every 5 minutes
-  setTimeout(runOsintXIngest, 8000)
+  setTimeout(runOsintXIngest, osintXDelayMs)
   setInterval(runOsintXIngest, OSINT_X_INTERVAL_MS)
 
   // Warm home bootstrap after disk load / early ingest head start
   setTimeout(() => {
     warmHomeCaches().catch((e) => console.warn('[home] warmup:', e.message))
-  }, 10000)
+  }, hadLastGood ? 15000 : 10000)
 
   // Recent Videos: warm YouTube RSS into hourly disk cache on boot + every hour
   setTimeout(() => {
     if (typeof newsService.warmVideoFeedsCache === 'function') {
       newsService.warmVideoFeedsCache().catch((e) => console.warn('[videos] warm:', e.message))
     }
-  }, 12000)
+  }, hadLastGood ? 20000 : 12000)
   setInterval(() => {
     if (typeof newsService.warmVideoFeedsCache === 'function') {
       newsService.warmVideoFeedsCache().catch((e) => console.warn('[videos] warm:', e.message))

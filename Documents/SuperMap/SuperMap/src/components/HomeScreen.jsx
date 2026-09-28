@@ -46,8 +46,8 @@ function formatDate() {
 function normalizeGasPrices(data) {
   if (!data || typeof data !== 'object') return null
   const src = String(data.source || '')
-  // Reject legacy seed/stale snapshots so we never paint a fake national average.
-  if (data._stale || /(?:^|-)(stale|seed)$/i.test(src) || /seed|stale/i.test(src)) {
+  // Reject hardcoded seed averages only — durable API last-good (_stale) is OK to paint.
+  if (/(?:^|-)seed$/i.test(src) || /\bseed\b/i.test(src)) {
     return {
       ok: false,
       gasUnavailable: true,
@@ -197,26 +197,25 @@ export default function HomeScreen({
 
   const fetchThreatSummary = (refresh = false) => {
     if (!API_BASE) return
-    if (refresh) {
-      setThreatSummary(null)
-      setThreatSummaryError(null)
-    }
-    setThreatSummaryLoading(true)
+    if (refresh) setThreatSummaryError(null)
+    // Soft: never blank existing summary; only spin when empty
+    setThreatSummaryLoading((_) => !threatSummary)
     const url = refresh
       ? `${API_BASE}/api/threat-summary?refresh=1&_=${Date.now()}`
       : `${API_BASE}/api/threat-summary`
-    axios.get(url, { timeout: 95000 })
+    axios.get(url, { timeout: 15000 })
       .then((res) => {
-        setThreatSummary(res.data || null)
-        setThreatSummaryError(null)
-        if (res.data) {
+        if (res.data?.summary) {
+          setThreatSummary(res.data)
+          setThreatSummaryError(null)
           const prev = readHomeSnapshot() || {}
           writeHomeSnapshot({ ...prev, threatSummary: res.data })
         }
       })
       .catch((err) => {
-        setThreatSummaryError(err.message || 'Failed to load threat summary')
-        if (!refresh) setThreatSummary(null)
+        if (!threatSummary) {
+          setThreatSummaryError(err.message || 'Failed to load threat summary')
+        }
       })
       .finally(() => setThreatSummaryLoading(false))
   }
@@ -257,7 +256,8 @@ export default function HomeScreen({
       onHomeBootstrap?.(snap)
     }
     let cancelled = false
-    fetchHomeBootstrap({ timeoutMs: 90000 }).then(({ data }) => {
+    // Snapshot already painted; network revalidate with short budget (≤12s)
+    fetchHomeBootstrap({ timeoutMs: 12000 }).then(({ data }) => {
       if (cancelled || !data) {
         if (!cancelled && !snap?.threatSummary) setThreatSummaryLoading(false)
         return

@@ -390,7 +390,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
     let cancelled = false
     // Soft loading: keep last-good visible; only spin when empty
     setVideoLoading((prev) => (videoItems.length > 0 ? false : true))
-    axios.get(`${API_BASE}/api/feeds/videos`, { timeout: 20000 })
+    axios.get(`${API_BASE}/api/feeds/videos`, { timeout: 12000 })
       .then((res) => {
         if (cancelled) return
         const features = res.data?.features ?? []
@@ -424,23 +424,31 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
     }
     let cancelled = false
     let retryId = null
+    let attempts = 0
+    const MAX_NEWS_RETRIES = 4 // ~10s total with 2.5s gap — never infinite blank loop
     // Keep initialNews / cached items visible while refresh runs
     if (!initialNews || initialItems.length === 0) setNewsLoading(true)
     else setNewsLoading(false)
 
     function doFetch() {
       const t0 = Date.now()
-      axios.get(`${API_BASE}/api/news`, { timeout: 25000 })
+      attempts += 1
+      axios.get(`${API_BASE}/api/news`, { timeout: 12000 })
         .then((res) => {
           if (cancelled) return
           const items = geoJsonToItems(res.data)
           if (feedsDebugEnabled()) {
-            console.debug('[FEEDS news] OUTPUT', { count: items.length, ms: Date.now() - t0 })
+            console.debug('[FEEDS news] OUTPUT', { count: items.length, ms: Date.now() - t0, attempts })
           }
           if (items.length > 0) {
             setNewsItems(items)
             setNewsMeta(res.data?.meta || null)
-          } else if (newsItems.length === 0 && feedMode !== FEED_MODE.VIDEOS) {
+          } else if (
+            newsItems.length === 0
+            && initialItems.length === 0
+            && feedMode !== FEED_MODE.VIDEOS
+            && attempts < MAX_NEWS_RETRIES
+          ) {
             retryId = setTimeout(() => {
               if (cancelled) return
               doFetch()
@@ -450,9 +458,14 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
         .catch((err) => {
           // Keep cached newsItems on failure
           if (feedsDebugEnabled()) {
-            console.debug('[FEEDS news] OUTPUT error', { message: err?.message || String(err), ms: Date.now() - t0 })
+            console.debug('[FEEDS news] OUTPUT error', { message: err?.message || String(err), ms: Date.now() - t0, attempts })
           }
-          if (newsItems.length === 0 && initialItems.length === 0 && feedMode !== FEED_MODE.VIDEOS) {
+          if (
+            newsItems.length === 0
+            && initialItems.length === 0
+            && feedMode !== FEED_MODE.VIDEOS
+            && attempts < MAX_NEWS_RETRIES
+          ) {
             retryId = setTimeout(() => {
               if (cancelled) return
               doFetch()
@@ -482,7 +495,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
     setOsintLoading((prev) => (osintItems.length > 0 ? false : true))
     const t0 = Date.now()
     if (feedsDebugEnabled()) console.debug('[FEEDS osint] INPUT', { url: `${API_BASE}/api/osint` })
-    axios.get(`${API_BASE}/api/osint`, { timeout: 25000 })
+    axios.get(`${API_BASE}/api/osint`, { timeout: 12000 })
       .then((res) => {
         const items = geoJsonToItems(res.data)
         if (!cancelled && items.length > 0) setOsintItems(items)

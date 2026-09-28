@@ -325,11 +325,11 @@ function App() {
   useEffect(() => {
     if (!apiBase || !configured) return
     const timeout = (ms) => ({ signal: AbortSignal.timeout(ms) })
-    // Light warm only — news/osint-x come from HomeScreen /api/home bootstrap
+    // Light warm — prefer /api/home so last-good is in memory; news/osint-x come from bootstrap
     const warm = [
-      fetch(`${apiBase}/api/osint`, timeout(15000)).catch(() => {}),
+      fetch(`${apiBase}/api/home`, timeout(12000)).catch(() => {}),
+      fetch(`${apiBase}/api/osint`, timeout(12000)).catch(() => {}),
       fetch(`${apiBase}/api/config`, timeout(8000)).catch(() => {}),
-      fetch(`${apiBase}/api/geocode?q=London`, timeout(8000)).catch(() => {}),
     ]
     Promise.allSettled(warm)
   }, [configured, apiBase])

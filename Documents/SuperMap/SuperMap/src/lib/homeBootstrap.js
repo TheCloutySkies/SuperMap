@@ -5,6 +5,8 @@
 
 const SNAPSHOT_KEY = 'supermap_home_snapshot'
 const SNAPSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1000 // 24h — still show, then refresh
+/** Cold-open network budget — never block first paint longer than this. */
+const HOME_FETCH_TIMEOUT_MS = 12000
 
 export function getApiBase() {
   const raw = import.meta.env?.VITE_API_URL
@@ -12,12 +14,15 @@ export function getApiBase() {
   return 'http://localhost:3001'
 }
 
-/** Fire-and-forget wake so Render cold start overlaps JS/React boot. */
+/** Fire-and-forget wake so Render cold start overlaps JS/React boot.
+ * Hits /api/home (not only /health) so disk last-good is loaded into memory.
+ */
 export function wakeApiEarly() {
   const base = getApiBase()
   if (!base || typeof fetch !== 'function') return
   try {
     fetch(`${base}/health`, { method: 'GET', mode: 'cors', cache: 'no-store', keepalive: true }).catch(() => {})
+    fetch(`${base}/api/home`, { method: 'GET', mode: 'cors', cache: 'no-store', keepalive: true }).catch(() => {})
   } catch (_) { /* ignore */ }
 }
 
@@ -83,10 +88,10 @@ export function osintXToBannerItems(posts, max = 15) {
 }
 
 /**
- * Fetch /api/home. Prefer network; on failure return snapshot if present.
+ * Fetch /api/home. Prefer network; on failure/timeout return snapshot if present.
  * @returns {Promise<{ data: object|null, fromSnapshot: boolean, error?: string }>}
  */
-export async function fetchHomeBootstrap({ signal, timeoutMs = 60000 } = {}) {
+export async function fetchHomeBootstrap({ signal, timeoutMs = HOME_FETCH_TIMEOUT_MS } = {}) {
   const base = getApiBase()
   if (!base) {
     const snap = readHomeSnapshot()
@@ -108,7 +113,14 @@ export async function fetchHomeBootstrap({ signal, timeoutMs = 60000 } = {}) {
     })
     if (!res.ok) throw new Error(`Home bootstrap HTTP ${res.status}`)
     const data = await res.json()
-    writeHomeSnapshot(data)
+    // Only persist when there is something useful (avoid wiping last-good with empty warm shell)
+    const hasContent =
+      data?.threatSummary?.summary
+      || data?.news?.features?.length
+      || data?.osintX?.length
+      || data?.homeImages?.length
+      || data?.stocks?.current
+    if (hasContent) writeHomeSnapshot(data)
     return { data, fromSnapshot: false }
   } catch (err) {
     const snap = readHomeSnapshot()

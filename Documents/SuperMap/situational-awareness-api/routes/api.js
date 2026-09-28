@@ -42,7 +42,13 @@ const conflictMetricsCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 }
 const homeBootstrapCache = new NodeCache({ stdTTL: 60, checkperiod: 30 })
 const MAPBOX_TOKEN = process.env.MAPBOX_TOKEN || ''
 const GEOAPIFY_KEY = process.env.GEOAPIFY_KEY || ''
-const { HOME_CACHE_CONTROL, getHomePayload } = require('../services/homeBootstrap')
+const {
+  HOME_CACHE_CONTROL,
+  HOME_LIVE_DEADLINE_MS,
+  getHomePayload,
+  getHomePayloadWithDeadline,
+  assembleHomeFromCaches,
+} = require('../services/homeBootstrap')
 const apiResultCache = require('../services/apiResultCache')
 
 const HOME_DISK_NS = 'home'
@@ -251,41 +257,84 @@ router.get('/news', async (req, res) => {
   }
 })
 
-/** Single homescreen bootstrap: all home widgets in one response. Cache 60s + disk last-good. */
+function scheduleHomeBackgroundRefresh() {
+  setImmediate(() => {
+    getHomePayload({ fast: false })
+      .then((payload) => {
+        // Never overwrite last-good with empty.
+        if (payloadHasContent(payload)) {
+          homeBootstrapCache.set('home', payload)
+          persistHomeLastGood(payload)
+        }
+      })
+      .catch((e) => console.warn('[API /home] bg refresh:', e.message))
+  })
+}
+
+/** Single homescreen bootstrap: all home widgets in one response.
+ * Order: memory → disk last-good → piece caches → live with ≤8s deadline.
+ * Catch-up always continues in background; never blank multi-minute waits.
+ */
 router.get('/home', async (req, res) => {
   setHomeCacheHeaders(res)
   const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
   if (!forceRefresh) {
     const cached = homeBootstrapCache.get('home')
-    if (cached) return res.json({ ...cached, _cached: true })
+    if (cached && payloadHasContent(cached)) {
+      return res.json({ ...cached, _cached: true })
+    }
     const disk = loadHomeLastGood()
     if (disk) {
       homeBootstrapCache.set('home', disk)
-      // Refresh in background so keepalive stays warm without blocking cold open
-      setImmediate(() => {
-        getHomePayload()
-          .then((payload) => {
-            if (payloadHasContent(payload)) {
-              homeBootstrapCache.set('home', payload)
-              persistHomeLastGood(payload)
-            }
-          })
-          .catch((e) => console.warn('[API /home] bg refresh:', e.message))
-      })
+      scheduleHomeBackgroundRefresh()
       return res.json({ ...disk, _cached: true, _fromDisk: true })
+    }
+    // Piece caches (news/threat/stocks/gas/osint-x) — sync, no live upstream waits
+    try {
+      const pieces = assembleHomeFromCaches()
+      if (payloadHasContent(pieces)) {
+        homeBootstrapCache.set('home', pieces)
+        persistHomeLastGood(pieces)
+        scheduleHomeBackgroundRefresh()
+        return res.json({ ...pieces, _cached: true, _fromPieces: true })
+      }
+    } catch (e) {
+      console.warn('[API /home] piece assemble:', e.message)
     }
   }
   try {
-    const payload = await getHomePayload()
+    const payload = await getHomePayloadWithDeadline(HOME_LIVE_DEADLINE_MS)
     if (payloadHasContent(payload)) {
       homeBootstrapCache.set('home', payload)
       persistHomeLastGood(payload)
+    } else {
+      // Still schedule catch-up; return warming shell so clients are not blocked
+      scheduleHomeBackgroundRefresh()
     }
-    return res.json(payload)
+    // Always kick a fuller background rebuild after a deadline-bounded response
+    if (payload?._timedOut || forceRefresh) scheduleHomeBackgroundRefresh()
+    return res.json(payload || {
+      threatSummary: null,
+      defcon: null,
+      osintX: [],
+      gasStates: [],
+      gasPrices: null,
+      news: { type: 'FeatureCollection', features: [] },
+      stocks: null,
+      earthquakes: null,
+      space: null,
+      homeImages: [],
+      updatedAt: new Date().toISOString(),
+      _warming: true,
+    })
   } catch (err) {
     console.error('[API /home]', err.message)
     const cached = homeBootstrapCache.get('home') || loadHomeLastGood()
     if (cached) return res.json({ ...cached, _cached: true, _staleOnError: true })
+    try {
+      const pieces = assembleHomeFromCaches()
+      if (payloadHasContent(pieces)) return res.json({ ...pieces, _staleOnError: true })
+    } catch (_) { /* optional */ }
     res.status(500).json({ error: 'Failed to build home payload' })
   }
 })
@@ -1597,6 +1646,20 @@ router.get('/stocks', async (req, res) => {
         _cachedAt: new Date(fresh.fetchedAt).toISOString(),
       })
     }
+    // Stale-while-revalidate: serve last-good immediately on cold open / TTL miss
+    const stale = apiResultCache.getStale('stocks', cacheKey, STOCKS_STALE_SEC)
+    if (stale?.value) {
+      setImmediate(() => {
+        // Fire-and-forget refresh via self-request would recurse; leave warmHome / next force.
+      })
+      return res.json({
+        ...stale.value,
+        _cached: true,
+        _stale: true,
+        _cacheAgeMs: stale.ageMs,
+        _cachedAt: new Date(stale.fetchedAt).toISOString(),
+      })
+    }
   }
 
   const FINNHUB_KEY = (process.env.FINNHUB_API_KEY || '').trim()
@@ -1952,6 +2015,16 @@ router.get('/space', async (req, res) => {
         _cachedAt: new Date(fresh.fetchedAt).toISOString(),
       })
     }
+    const stale = apiResultCache.getStale('space', cacheKey, SPACE_STALE_SEC)
+    if (stale?.value) {
+      return res.json({
+        ...stale.value,
+        _cached: true,
+        _stale: true,
+        _cacheAgeMs: stale.ageMs,
+        _cachedAt: new Date(stale.fetchedAt).toISOString(),
+      })
+    }
   }
 
   const NASA_KEY = (process.env.NASA_API_KEY || '').trim() || 'DEMO_KEY'
@@ -2145,6 +2218,17 @@ router.get('/gas-prices', async (req, res) => {
         _cachedAt: new Date(fresh.fetchedAt).toISOString(),
       })
     }
+    // Stale-while-revalidate: last-good immediately (do not wait on EIA for cold open)
+    const stale = apiResultCache.getStale('gas-prices', cacheKey, GAS_STALE_SEC)
+    if (stale && isGoodGasPayload(stale.value)) {
+      return res.json({
+        ...stale.value,
+        _cached: true,
+        _stale: true,
+        _cacheAgeMs: stale.ageMs,
+        _cachedAt: new Date(stale.fetchedAt).toISOString(),
+      })
+    }
   }
 
   try {
@@ -2265,3 +2349,34 @@ module.exports.rebuildThreatSummaryBackground = rebuildThreatSummaryBackground
 module.exports.persistThreatSummaryIfGood = persistThreatSummaryIfGood
 module.exports.loadHomeLastGood = loadHomeLastGood
 module.exports.persistHomeLastGood = persistHomeLastGood
+
+/** Boot: load disk last-good into memory so first /api/home is instant. */
+module.exports.seedHomeCachesOnBoot = function seedHomeCachesOnBoot() {
+  try {
+    const persisted = readPersistedThreatSummary()
+    if (persisted && isGoodThreatSummary(persisted)) {
+      threatSummaryCache.set('threat-summary', persisted)
+    }
+  } catch (_) { /* optional */ }
+  try {
+    newsService.getNewsCached()
+  } catch (_) { /* optional */ }
+  try {
+    const disk = loadHomeLastGood()
+    if (disk) {
+      homeBootstrapCache.set('home', disk)
+      console.log('[boot] home last-good seeded into memory')
+      return disk
+    }
+    const pieces = assembleHomeFromCaches()
+    if (payloadHasContent(pieces)) {
+      homeBootstrapCache.set('home', pieces)
+      persistHomeLastGood(pieces)
+      console.log('[boot] home seeded from piece caches')
+      return pieces
+    }
+  } catch (e) {
+    console.warn('[boot] home seed:', e.message)
+  }
+  return null
+}

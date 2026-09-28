@@ -132,6 +132,32 @@ function getStale(namespace, key, staleTtlSec = TTL.DAILY) {
   return hit
 }
 
+/**
+ * Newest entry in a namespace still within staleTtlSec (any key).
+ * Useful when cache keys include dynamic symbol lists.
+ */
+function getNewestStale(namespace, staleTtlSec = TTL.DAILY) {
+  const bag = loadNamespace(namespace)
+  const now = Date.now()
+  let best = null
+  for (const [key, entry] of Object.entries(bag.entries || {})) {
+    if (!entry || entry.value === undefined) continue
+    const age = ageMs(entry, now)
+    if (age > staleTtlSec * 1000) continue
+    if (!best || age < best.ageMs) {
+      best = {
+        key,
+        value: entry.value,
+        fetchedAt: entry.fetchedAt,
+        ttlSec: typeof entry.ttlSec === 'number' ? entry.ttlSec : TTL.HOURLY,
+        ageMs: age,
+        fresh: age < (typeof entry.ttlSec === 'number' ? entry.ttlSec : TTL.HOURLY) * 1000,
+      }
+    }
+  }
+  return best
+}
+
 function set(namespace, key, value, ttlSec = TTL.HOURLY) {
   const bag = loadNamespace(namespace)
   bag.entries[key] = {
@@ -257,6 +283,7 @@ module.exports = {
   peek,
   getFresh,
   getStale,
+  getNewestStale,
   set,
   del,
   getOrFetch,

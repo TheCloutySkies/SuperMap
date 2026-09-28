@@ -23,26 +23,30 @@
 
 4. **Durable API result cache** (`services/apiResultCache.js`)  
    Disk-backed + memory cache for slow-changing homepage upstreams. Survives restarts; serves last-good on failure.
-   - **Stocks** (`/api/stocks`): 30m fresh / 24h stale (`?refresh=1` bypasses fresh TTL)
-   - **Gas** (`/api/gas-prices`): 6h fresh / 7d stale (EIA weekly retail)
-   - **Space** (`/api/space`): 6h fresh / 48h stale  
+   - **Stocks** (`/api/stocks`): 30m fresh / 24h stale (`?refresh=1` bypasses fresh TTL); **stale-while-revalidate** on TTL miss
+   - **Gas** (`/api/gas-prices`): 6h fresh / 7d stale (EIA weekly retail); SWR on TTL miss
+   - **Space** (`/api/space`): 6h fresh / 48h stale; SWR on TTL miss
+   - **Home** (`/api/home`): memory → disk last-good → piece caches → live with **≤8s deadline**; catch-up in background  
    Stats: `GET /api/cache/stats`. Files under `data/api-cache/` (gitignored).
 
-5. **RSS/news**  
+5. **Keepalive**  
+   GitHub Actions pings **`/health` then `/api/home`** every 10 minutes so Render free-tier stays awake and home last-good stays in memory. Do not ping `/health` alone.
+
+6. **RSS/news**  
    `newsService.getNewsCached()` already reduces repeated fetches. Ensure TTLs match your freshness needs.
 
-6. **Connection pooling**  
+7. **Connection pooling**  
    Current stack uses SQLite (`better-sqlite3`) for local event/config storage. If you add a direct Postgres pool later, use a small pool (e.g. 5–10) and reuse it.
 
 ### Tag indexes
 
-7. **SQLite**  
+8. **SQLite**  
    `idx_events_timestamp`, `idx_events_type`, `idx_event_tags_tag` already exist. For threat-summary, `getEventsWithAnyTagInTimeRange` benefits from these. No extra indexes required for the current query pattern.
 
 ### Heavy dependencies
 
-8. **Identify slow requires**  
+9. **Identify slow requires**  
    If startup is still slow, profile with `NODE_OPTIONS='--require perf_hooks'` or a simple `Date.now()` around top-level `require()` in `server.js` and `routes/api.js`. Likely candidates: `@turf/turf`, `better-sqlite3` (first access), `rss-parser`, and any module that does network or disk on load.
 
-9. **Optional features**  
+10. **Optional features**  
    Consider loading camera-discovery, finance, or stream-proxy only when their env vars are set, to avoid pulling in large deps for every deployment.

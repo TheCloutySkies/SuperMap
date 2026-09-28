@@ -201,6 +201,13 @@
   color: #e2e8f0;
 }
 
+.map-zoom-warning--webcams-empty {
+  border-color: #64748b;
+  max-width: min(420px, calc(100% - 2rem));
+  text-align: center;
+  line-height: 1.35;
+}
+
 .map-popup-webcam-thumb {
   display: block;
   width: 100%;

@@ -8,7 +8,7 @@ const path = require('path')
 
 const CONFIG_PATH = path.join(__dirname, 'user-config.json')
 
-const { OSINT_X_FEEDS_DEFAULT } = require('./osintXFeeds')
+const { OSINT_X_FEEDS_DEFAULT, normalizeHandle } = require('./osintXFeeds')
 const DEFAULT_OSINT_X = OSINT_X_FEEDS_DEFAULT
 
 const DEFAULT_SUBREDDITS = [
@@ -67,21 +67,17 @@ function setConfig(updates) {
   return getConfig()
 }
 
-/** Normalize X handle: trim, strip @, allow only [a-zA-Z0-9_]. */
-function normalizeHandle(handle) {
-  if (handle == null || typeof handle !== 'string') return ''
-  const s = handle.trim().replace(/^@/, '')
-  return s.replace(/[^a-zA-Z0-9_]/g, '')
-}
-
 function getOsintXFeeds() {
   const { osintXHandles } = getConfig()
   const list = Array.isArray(osintXHandles) ? osintXHandles : []
+  const seen = new Set()
   return list
     .map((entry) => {
       const handle = normalizeHandle(entry.handle != null ? String(entry.handle) : '')
       if (!handle) return null
-      if (handle.toLowerCase() === 'alarabiya_brk') return null
+      const key = handle.toLowerCase()
+      if (seen.has(key)) return null
+      seen.add(key)
       return {
         name: entry.name || handle,
         handle,

@@ -10,8 +10,11 @@ const { getOsintXFeeds } = require('../config/userConfig')
 const { normalizeToEvent, ingestEvent } = require('./ingest')
 const { geotagArticle } = require('./geotagger')
 const { assessItemsBatch } = require('./riskScoring')
+const { tagOsintPost } = require('./osintTagger')
 
 const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 }
+/** Concurrent FxTwitter profile fetches per cycle (keep gentle on free API). */
+const FETCH_CONCURRENCY = 5
 
 const FXTWITTER_PROFILE = 'https://api.fxtwitter.com/2/profile'
 const BROWSER_UA =
@@ -156,10 +159,9 @@ async function fetchOsintXFeeds({ limitFeeds = 0, skipGeotag = false } = {}) {
     return []
   }
 
-  const CONCURRENCY = 4
   const settled = []
-  for (let i = 0; i < osintXFeeds.length; i += CONCURRENCY) {
-    const chunk = osintXFeeds.slice(i, i + CONCURRENCY)
+  for (let i = 0; i < osintXFeeds.length; i += FETCH_CONCURRENCY) {
+    const chunk = osintXFeeds.slice(i, i + FETCH_CONCURRENCY)
     const part = await Promise.allSettled(
       chunk.map((feed) => fetchOneFeed(feed).then((items) => ({ feed, items }))),
     )
@@ -310,9 +312,8 @@ async function fetchHomeOsintImages({ maxHandles = 8, maxImages = 24 } = {}) {
   }
   const items = []
   const seen = new Set()
-  const CONCURRENCY = 4
-  for (let i = 0; i < feeds.length && items.length < maxImages; i += CONCURRENCY) {
-    const chunk = feeds.slice(i, i + CONCURRENCY)
+  for (let i = 0; i < feeds.length && items.length < maxImages; i += FETCH_CONCURRENCY) {
+    const chunk = feeds.slice(i, i + FETCH_CONCURRENCY)
     const settled = await Promise.allSettled(chunk.map((f) => fetchFromFxTwitter(f)))
     for (let j = 0; j < settled.length; j++) {
       const s = settled[j]
@@ -379,35 +380,27 @@ function collectDbOsintImages({ max = 24, maxAgeMs = 48 * 60 * 60 * 1000 } = {})
 }
 
 /**
- * Continuous scheduled ingest: rotate through handles in batches so every
- * account is refreshed regularly without hammering FxTwitter all at once.
- * Overlap-guarded — skips if a previous tick is still running.
+ * Scheduled ingest: full configured handle list every tick.
+ * Concurrency-capped; overlap-guarded — skips if a previous cycle is still running.
  */
-let rotateCursor = 0
 let scheduledIngestInFlight = null
 let lastScheduledAt = 0
 let lastScheduledResult = null
 
-async function fetchOsintXFeedsRotated({ batchSize = 8 } = {}) {
+async function fetchOsintXFeedsScheduled({ concurrency = FETCH_CONCURRENCY } = {}) {
   if (scheduledIngestInFlight) {
     return { skipped: true, reason: 'inflight', ...(lastScheduledResult || {}) }
   }
   const all = getOsintXFeeds()
   if (!all.length) return { skipped: true, reason: 'no-feeds', count: 0, handles: [] }
 
-  const size = Math.max(1, Math.min(batchSize, all.length))
-  const start = rotateCursor % all.length
-  const batch = []
-  for (let i = 0; i < size; i++) batch.push(all[(start + i) % all.length])
-  rotateCursor = (start + size) % all.length
+  const conc = Math.max(1, Math.min(Number(concurrency) || FETCH_CONCURRENCY, 8))
 
   scheduledIngestInFlight = (async () => {
     const t0 = Date.now()
-    // Temporarily restrict getOsintXFeeds consumers by fetching only this batch
     const results = []
-    const CONCURRENCY = 4
-    for (let i = 0; i < batch.length; i += CONCURRENCY) {
-      const chunk = batch.slice(i, i + CONCURRENCY)
+    for (let i = 0; i < all.length; i += conc) {
+      const chunk = all.slice(i, i + conc)
       const part = await Promise.allSettled(chunk.map((feed) => fetchOneFeed(feed)))
       for (let j = 0; j < part.length; j++) {
         const s = part[j]
@@ -432,13 +425,13 @@ async function fetchOsintXFeedsRotated({ batchSize = 8 } = {}) {
     lastScheduledResult = {
       skipped: false,
       count: results.length,
-      handles: batch.map((f) => f.handle),
-      nextCursor: rotateCursor,
+      handles: all.map((f) => f.handle),
+      handleCount: all.length,
       ms: Date.now() - t0,
     }
     console.log(
-      '[osint-x] rotated ingest',
-      `handles=${batch.map((f) => f.handle).join(',')}`,
+      '[osint-x] full-list ingest',
+      `handles=${all.length}`,
       `posts=${results.length}`,
       `ms=${lastScheduledResult.ms}`,
     )
@@ -452,23 +445,31 @@ async function fetchOsintXFeedsRotated({ batchSize = 8 } = {}) {
   }
 }
 
+/** @deprecated Use fetchOsintXFeedsScheduled — kept for any external callers. */
+async function fetchOsintXFeedsRotated(opts = {}) {
+  return fetchOsintXFeedsScheduled({ concurrency: opts.concurrency || FETCH_CONCURRENCY })
+}
+
 function getIngestStatus() {
   return {
     lastScheduledAt: lastScheduledAt || null,
     lastLiveRefreshAt: lastLiveRefreshAt || null,
-    rotateCursor,
     lastScheduledResult,
     liveInFlight: !!liveRefreshInFlight,
     scheduledInFlight: !!scheduledIngestInFlight,
+    handleCount: getOsintXFeeds().length,
+    intervalHintMs: 5 * 60 * 1000,
   }
 }
 
 module.exports = {
   fetchOsintXFeeds,
+  fetchOsintXFeedsScheduled,
   fetchOsintXFeedsRotated,
   ensureOsintXFresh,
   fetchHomeOsintImages,
   collectDbOsintImages,
   getIngestStatus,
   PRIORITY_ORDER,
+  FETCH_CONCURRENCY,
 }

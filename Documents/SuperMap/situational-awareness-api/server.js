@@ -7,6 +7,7 @@ const osintService = require('./services/osint')
 const osintXFeedService = require('./services/osintXFeedService')
 const mediastack = require('./services/mediastack')
 const keywordTags = require('./services/keywordTags')
+const feedSchedule = require('./services/feedSchedule')
 const { warmHomeCaches, refreshHomeImagesBackground } = require('./services/homeBootstrap')
 
 const app = express()
@@ -67,57 +68,134 @@ app.get('/health', (req, res) => {
   res.json({ ok: true })
 })
 
-const INGEST_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
-// OSINT per-source intervals (DW 10min, CISA 15min, Bellingcat 30min)
-const DW_INTERVAL_MS = 10 * 60 * 1000
-const CISA_INTERVAL_MS = 15 * 60 * 1000
-const BELLINGCAT_INTERVAL_MS = 30 * 60 * 1000
-const OSINT_X_INTERVAL_MS = 2 * 60 * 1000 // 2 minutes — rotating batch covers all handles ~every 6–8 min
-const HOME_IMAGES_REFRESH_MS = 3 * 60 * 1000 // 3 minutes — keep homepage gallery fresh
+/** OSINT X: full handle list every 5 minutes (no rotate batch). */
+const OSINT_X_INTERVAL_MS = 5 * 60 * 1000
+const HOME_IMAGES_REFRESH_MS = 3 * 60 * 1000
 const MEDIASTACK_TICK_MS = 60 * 1000 // check ET window every minute
-const KEYWORD_TAGS_INTERVAL_MS = 60 * 60 * 1000 // hourly headline keyword counts
+const FEEDS_815_TICK_MS = 60 * 1000 // news RSS + OSINT publishers 08:00/15:00 ET
+const KEYWORD_TAGS_INTERVAL_MS = 60 * 60 * 1000
 
-function runIngest(isWarmup = false) {
-  newsService.getNews()
-    .catch((e) => console.warn('[ingest] news:', e.message))
-    .then(() => { if (isWarmup) console.log('[ingest] News ready for search and feeds') })
+const BATCH_JOB = 'news-osint-815'
+
+/** Rebuild threat summary in background; never overwrite last-good with empty. */
+function rebuildThreatSummaryBackground(reason = 'batch') {
+  setImmediate(() => {
+    try {
+      const api = require('./routes/api')
+      if (typeof api.rebuildThreatSummaryBackground === 'function') {
+        api.rebuildThreatSummaryBackground(reason)
+        return
+      }
+    } catch (_) { /* fall through */ }
+    // Direct path if export unavailable
+    ;(async () => {
+      try {
+        const threatSummaryService = require('./services/threatSummary')
+        const result = await threatSummaryService.getThreatSummary()
+        if (!result?.summary || result.fallback) {
+          console.log('[threat-summary] skip persist (empty/fallback) after', reason)
+          return
+        }
+        const api = require('./routes/api')
+        if (typeof api.persistThreatSummaryIfGood === 'function') {
+          api.persistThreatSummaryIfGood(result)
+        }
+      } catch (e) {
+        console.warn('[threat-summary] rebuild:', e.message)
+      }
+    })()
+  })
+}
+
+/** News RSS rebuild — only when scheduled or catch-up. */
+function runNewsRebuild(reason = 'scheduled') {
+  return newsService
+    .getNews()
+    .then((payload) => {
+      console.log('[ingest] news rebuild', reason, 'features=', payload?.features?.length || 0)
+      return payload
+    })
+    .catch((e) => {
+      console.warn('[ingest] news:', e.message)
+      return null
+    })
 }
 
 /** MediaStack: only 08:00 and 15:00 America/New_York (once per window). */
 function runMediaStackTick() {
   if (!mediastack.isPullWindowDue()) return
-  mediastack.maybeScheduledPull()
+  mediastack
+    .maybeScheduledPull()
     .then((cache) => {
-      console.log('[mediastack] scheduled pull done; articles=', (cache?.articles || []).length, 'quota=', !!cache?.quotaExhausted)
-      // Rebuild merged news cache so Feeds picks up new images/sources
-      return newsService.getNews()
+      console.log(
+        '[mediastack] scheduled pull done; articles=',
+        (cache?.articles || []).length,
+        'quota=',
+        !!cache?.quotaExhausted,
+      )
+      // Merge MediaStack into news last-good without waiting for the shared batch mark
+      return runNewsRebuild('mediastack')
     })
     .catch((e) => console.warn('[mediastack] tick:', e.message))
 }
 
 function runKeywordTagsRefresh() {
-  keywordTags.refreshKeywordTags()
-    .catch((e) => console.warn('[keyword-tags]', e.message))
+  keywordTags.refreshKeywordTags().catch((e) => console.warn('[keyword-tags]', e.message))
 }
 
-function runOsintWarmup() {
-  osintService.fetchAllOsint()
-    .then((counts) => console.log('[osint] Warmup:', counts))
-    .catch((e) => console.warn('[osint] Warmup:', e.message))
+function runOsintPublishers() {
+  return osintService
+    .fetchAllOsint()
+    .then((counts) => {
+      console.log('[osint] publishers:', counts)
+      return counts
+    })
+    .catch((e) => {
+      console.warn('[osint] publishers:', e.message)
+      return null
+    })
+}
+
+/**
+ * Shared 08:00 / 15:00 ET batch: news RSS + OSINT publishers + threat summary.
+ * MediaStack keeps its own window tick (unchanged cadence).
+ */
+function run815FeedsBatch(force = false) {
+  if (!force && !feedSchedule.isBatchDue(BATCH_JOB)) return Promise.resolve(null)
+  console.log('[feeds-815] starting batch force=', !!force)
+  return Promise.all([runNewsRebuild(force ? 'catch-up' : '815'), runOsintPublishers()])
+    .then(() => {
+      feedSchedule.markBatchDone(BATCH_JOB)
+      rebuildThreatSummaryBackground(force ? 'catch-up' : '815')
+      try {
+        const api = require('./routes/api')
+        if (typeof api.invalidateHomeBootstrapCache === 'function') api.invalidateHomeBootstrapCache()
+      } catch (_) { /* optional */ }
+      return true
+    })
+    .catch((e) => {
+      console.warn('[feeds-815]', e.message)
+      return null
+    })
 }
 
 function runOsintXIngest() {
-  // Rotating batch + overlap guard: continuous updates without starving the API.
-  osintXFeedService.fetchOsintXFeedsRotated({ batchSize: 8 })
+  osintXFeedService
+    .fetchOsintXFeedsScheduled({ concurrency: osintXFeedService.FETCH_CONCURRENCY || 5 })
     .then((result) => {
       if (result?.skipped) {
         if (result.reason === 'inflight') console.log('[osint-x] skip tick (previous still running)')
         return
       }
       if (result?.count > 0) {
-        console.log('[osint-x] Ingested', result.count, 'posts from', (result.handles || []).join(','))
+        console.log(
+          '[osint-x] Ingested',
+          result.count,
+          'posts from',
+          result.handleCount || (result.handles || []).length,
+          'handles',
+        )
       }
-      // Invalidate home bootstrap + refresh gallery so homepage does not stick on old images.
       try {
         const api = require('./routes/api')
         if (typeof api.invalidateHomeBootstrapCache === 'function') api.invalidateHomeBootstrapCache()
@@ -127,41 +205,61 @@ function runOsintXIngest() {
     .catch((e) => console.warn('[osint-x]', e.message))
 }
 
+/** Boot: load disk caches, catch-up news/OSINT if empty or missed last 8/15 window. */
+function runBootCatchUp() {
+  const cached = newsService.getNewsCached()
+  const fetchedAt = newsService.getNewsFetchedAt?.() || cached?.meta?.fetchedAt || null
+  const newsNeeds = !cached?.features?.length || feedSchedule.needsCatchUp(fetchedAt)
+
+  let osintNeeds = false
+  try {
+    const live = osintService.getOsintFromDb(20)
+    osintNeeds = !live?.features?.length
+  } catch (_) {
+    osintNeeds = true
+  }
+
+  if (newsNeeds || osintNeeds) {
+    console.log('[boot] catch-up needed news=', newsNeeds, 'osint=', osintNeeds)
+    run815FeedsBatch(true).catch((e) => console.warn('[boot] catch-up:', e.message))
+  } else {
+    console.log('[boot] last-good caches present; skipping catch-up pull')
+  }
+}
+
 app.listen(PORT, () => {
   console.log(`Situational Awareness API running on http://localhost:${PORT}`)
-  // Defer initial ingest so server is responsive immediately (faster startup)
-  setImmediate(() => runIngest(true))
-  setInterval(() => runIngest(false), INGEST_INTERVAL_MS)
-  // MediaStack: check every minute for 08:00 / 15:00 ET windows only (no startup pull)
+  // Prefer keepalive hitting /api/home (not only /health) so disk last-good stays warm.
+
+  // Load disk last-good immediately so first requests are not blank
+  try {
+    newsService.getNewsCached()
+  } catch (_) { /* optional */ }
+
+  // MediaStack: check every minute for 08:00 / 15:00 ET windows only
   setTimeout(runMediaStackTick, 15000)
   setInterval(runMediaStackTick, MEDIASTACK_TICK_MS)
+
+  // News RSS + OSINT publishers: same 08:00 / 15:00 ET windows
+  setTimeout(() => run815FeedsBatch(false), 20000)
+  setInterval(() => run815FeedsBatch(false), FEEDS_815_TICK_MS)
+
+  // Boot catch-up if empty/stale (do not wait until next 3pm)
+  setTimeout(runBootCatchUp, 6000)
+
   // Hourly keyword tags for threat summary
   setTimeout(runKeywordTagsRefresh, 45000)
   setInterval(runKeywordTagsRefresh, KEYWORD_TAGS_INTERVAL_MS)
-  setTimeout(runOsintWarmup, 5000)
-  setInterval(() => osintService.fetchDW().catch((e) => console.warn('[osint] DW:', e.message)), DW_INTERVAL_MS)
-  setInterval(() => osintService.fetchCISA().catch((e) => console.warn('[osint] CISA:', e.message)), CISA_INTERVAL_MS)
-  setInterval(() => osintService.fetchBellingcat().catch((e) => console.warn('[osint] Bellingcat:', e.message)), BELLINGCAT_INTERVAL_MS)
-  setInterval(() => osintService.fetchISW().catch((e) => console.warn('[osint] ISW:', e.message)), BELLINGCAT_INTERVAL_MS)
-  setInterval(() => osintService.fetchDefenseOne().catch((e) => console.warn('[osint] Defense One:', e.message)), CISA_INTERVAL_MS)
-  setInterval(() => osintService.fetchWarOnTheRocks().catch((e) => console.warn('[osint] War on the Rocks:', e.message)), BELLINGCAT_INTERVAL_MS)
-  setInterval(() => osintService.fetchDefenseNews().catch((e) => console.warn('[osint] Defense News:', e.message)), CISA_INTERVAL_MS)
-  setInterval(() => osintService.fetchTheWarZone().catch((e) => console.warn('[osint] The War Zone:', e.message)), CISA_INTERVAL_MS)
-  setInterval(() => osintService.fetchWHO().catch((e) => console.warn('[osint] WHO:', e.message)), CISA_INTERVAL_MS)
-  setInterval(() => osintService.fetchBreakingDefense().catch((e) => console.warn('[osint] Breaking Defense:', e.message)), CISA_INTERVAL_MS)
-  setInterval(() => osintService.fetchDefenseScoop().catch((e) => console.warn('[osint] DefenseScoop:', e.message)), CISA_INTERVAL_MS)
-  setInterval(() => osintService.fetchStimson().catch((e) => console.warn('[osint] Stimson:', e.message)), BELLINGCAT_INTERVAL_MS)
-  setInterval(() => osintService.fetchGdacsRss().catch((e) => console.warn('[osint] GDACS RSS:', e.message)), DW_INTERVAL_MS)
-  setInterval(() => osintService.fetchVolcanoRss().catch((e) => console.warn('[osint] Volcano RSS:', e.message)), BELLINGCAT_INTERVAL_MS)
-  setInterval(() => osintService.fetchPtwcTsunami().catch((e) => console.warn('[osint] PTWC:', e.message)), DW_INTERVAL_MS)
-  setInterval(() => osintService.fetchNhcOsint().catch((e) => console.warn('[osint] NHC:', e.message)), DW_INTERVAL_MS)
+
+  // OSINT X: full list every 5 minutes
   setTimeout(runOsintXIngest, 8000)
   setInterval(runOsintXIngest, OSINT_X_INTERVAL_MS)
-  // Warm home bootstrap caches after ingest has a head start
+
+  // Warm home bootstrap after disk load / early ingest head start
   setTimeout(() => {
     warmHomeCaches().catch((e) => console.warn('[home] warmup:', e.message))
-  }, 12000)
-  // Periodic gallery refresh even if X ingest produced no new posts
+  }, 10000)
+
   setInterval(() => {
     refreshHomeImagesBackground().catch((e) => console.warn('[home] images tick:', e.message))
   }, HOME_IMAGES_REFRESH_MS)

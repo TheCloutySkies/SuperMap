@@ -299,6 +299,43 @@ async function fetchWikipediaFeatured() {
 }
 
 let cachedNews = null
+let newsFetchedAt = null
+
+const apiResultCache = require('./apiResultCache')
+const NEWS_CACHE_NS = 'news'
+const NEWS_CACHE_KEY = 'feature-collection'
+const NEWS_TTL_SEC = apiResultCache.TTL.DAILY
+const NEWS_STALE_SEC = apiResultCache.TTL.WEEKLY
+
+function persistNewsCache(result) {
+  if (!result || !Array.isArray(result.features) || result.features.length === 0) return
+  cachedNews = result
+  newsFetchedAt = Date.now()
+  try {
+    apiResultCache.set(
+      NEWS_CACHE_NS,
+      NEWS_CACHE_KEY,
+      { payload: result, fetchedAt: newsFetchedAt },
+      NEWS_TTL_SEC,
+    )
+  } catch (err) {
+    console.warn('[news] persist cache:', err.message)
+  }
+}
+
+function loadNewsCacheFromDisk() {
+  try {
+    const hit = apiResultCache.getStale(NEWS_CACHE_NS, NEWS_CACHE_KEY, NEWS_STALE_SEC)
+    if (hit?.value?.payload && Array.isArray(hit.value.payload.features) && hit.value.payload.features.length > 0) {
+      cachedNews = hit.value.payload
+      newsFetchedAt = hit.value.fetchedAt || hit.fetchedAt || null
+      return cachedNews
+    }
+  } catch (err) {
+    console.warn('[news] load cache:', err.message)
+  }
+  return null
+}
 
 /** Merge MediaStack disk cache (publisher source + image). No MediaStack chip — use publisher name. */
 function getMediaStackItems() {
@@ -432,14 +469,29 @@ async function getNews() {
         articleCount: mediastackMeta.articleCount || 0,
       },
       keywordTags,
+      fetchedAt: new Date().toISOString(),
     },
   }
-  cachedNews = result
-  return result
+  // Never blank last-good with an empty rebuild.
+  if (result.features.length > 0) {
+    persistNewsCache(result)
+    return result
+  }
+  const prior = getNewsCached()
+  return prior || result
 }
 
 function getNewsCached() {
-  return cachedNews
+  if (cachedNews && Array.isArray(cachedNews.features) && cachedNews.features.length > 0) {
+    return cachedNews
+  }
+  return loadNewsCacheFromDisk()
+}
+
+function getNewsFetchedAt() {
+  if (newsFetchedAt) return newsFetchedAt
+  loadNewsCacheFromDisk()
+  return newsFetchedAt
 }
 
 /** Reddit video subreddits. raw_json=1 gives unescaped preview image URLs for video-frame thumbnails. */
@@ -539,4 +591,12 @@ async function getVideoFeedItems() {
   return items.slice(0, 80)
 }
 
-module.exports = { getNews, getNewsCached, getVideoFeedItems, getRedditVideoItems, VIDEO_FEEDS, isVideoThemeRelevant }
+module.exports = {
+  getNews,
+  getNewsCached,
+  getNewsFetchedAt,
+  getVideoFeedItems,
+  getRedditVideoItems,
+  VIDEO_FEEDS,
+  isVideoThemeRelevant,
+}

@@ -434,7 +434,29 @@ const OSINT_SOURCES = [
 function getOsintFromDb(limit = 100) {
   const rows = getEvents(limit, null, null, null, null, OSINT_SOURCES)
   const features = rows.map((row) => eventToFeature(row))
-  return { type: 'FeatureCollection', features }
+  const result = { type: 'FeatureCollection', features }
+  if (features.length > 0) {
+    try {
+      const apiResultCache = require('./apiResultCache')
+      apiResultCache.set('osint', 'feature-collection', { payload: result, fetchedAt: Date.now() }, apiResultCache.TTL.DAILY)
+    } catch (_) { /* optional */ }
+  }
+  return result
+}
+
+/** Last-good OSINT FeatureCollection from disk (when DB is empty on cold start). */
+function getOsintLastGood(limit = 100) {
+  const live = getOsintFromDb(limit)
+  if (live.features?.length) return live
+  try {
+    const apiResultCache = require('./apiResultCache')
+    const hit = apiResultCache.getStale('osint', 'feature-collection', apiResultCache.TTL.WEEKLY)
+    if (hit?.value?.payload?.features?.length) {
+      const feats = hit.value.payload.features.slice(0, limit)
+      return { type: 'FeatureCollection', features: feats, _fromDisk: true }
+    }
+  } catch (_) { /* optional */ }
+  return live
 }
 
 async function fetchAllOsint() {
@@ -500,5 +522,6 @@ module.exports = {
   fetchNhcOsint,
   fetchAllOsint,
   getOsintFromDb,
+  getOsintLastGood,
   OSINT_SOURCES,
 }

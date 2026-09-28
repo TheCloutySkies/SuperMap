@@ -215,6 +215,15 @@ async function getHomePayload() {
 /** Fire-and-forget warmup of home caches (news ingest should already be running). */
 async function warmHomeCaches() {
   try {
+    // Prefer disk last-good so first paint is instant even before upstreams finish.
+    try {
+      const api = require('../routes/api')
+      const disk = typeof api.loadHomeLastGood === 'function' ? api.loadHomeLastGood() : null
+      if (disk) {
+        console.log('[home] Loaded disk last-good before warm rebuild')
+      }
+    } catch (_) { /* optional */ }
+
     const payload = await getHomePayload()
     const counts = {
       threat: !!payload.threatSummary?.summary,
@@ -227,6 +236,13 @@ async function warmHomeCaches() {
       space: !!(payload.space?.eonet || payload.space?.nasaNews),
     }
     console.log('[home] Warm caches ready:', counts)
+    try {
+      const api = require('../routes/api')
+      if (typeof api.persistHomeLastGood === 'function') api.persistHomeLastGood(payload)
+      if (typeof api.invalidateHomeBootstrapCache === 'function') {
+        // Re-seed memory via next /api/home; also set by route on persist path
+      }
+    } catch (_) { /* optional */ }
     return payload
   } catch (e) {
     console.warn('[home] Warm caches failed:', e.message)

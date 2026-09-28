@@ -38,16 +38,23 @@ function vimeoEmbedUrl(url) {
   return m ? `https://player.vimeo.com/video/${m[1]}` : null
 }
 
-/** Hosts that serve video without CORS; use link instead of <video> to avoid CORS errors. */
-function isCrossOriginVideoNoCors(url) {
+/** True when URL is an X/Twitter CDN video host that needs /api/proxy-video. */
+function isTwimgVideoHost(url) {
   if (!url || typeof url !== 'string') return false
   try {
-    const u = new URL(url)
-    const host = (u.hostname || '').toLowerCase()
-    return /twimg\.com/i.test(host)
+    const host = (new URL(url).hostname || '').toLowerCase()
+    return /(^|\.)(video\.twimg\.com|v\.twimg\.com|twimg\.com)$/i.test(host) || /twimg\.com$/i.test(host)
   } catch {
-    return /twimg\.com/i.test(url)
+    return /(?:video\.twimg\.com|v\.twimg\.com)/i.test(url)
   }
+}
+
+/** Proxied same-origin URL so <video> can play twimg MP4s without CORS errors. */
+function playableVideoSrc(url) {
+  if (!url || typeof url !== 'string') return null
+  if (!isTwimgVideoHost(url)) return url
+  if (!/\.mp4(\?|$)/i.test(url) && !/(?:video\.twimg\.com|v\.twimg\.com)/i.test(url)) return null
+  return `${API_BASE}/api/proxy-video?url=${encodeURIComponent(url)}`
 }
 
 function readSnapshotPosts() {
@@ -398,6 +405,7 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
         {videos.map((src, i) => {
           const yt = youtubeEmbedUrl(src)
           const vimeo = vimeoEmbedUrl(src)
+          const proxied = playableVideoSrc(src)
           const isDirect = /\.(mp4|webm|ogg)(\?|$)/i.test(src) || /(?:video\.twimg\.com|v\.twimg\.com)/i.test(src)
           if (yt) {
             return (
@@ -425,10 +433,10 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
               </div>
             )
           }
-          if (isDirect && !isCrossOriginVideoNoCors(src)) {
+          if (isDirect && proxied) {
             return (
               <div key={`${post.id}-vid-${i}`} className="x-post-video">
-                <video src={src} controls playsInline crossOrigin="anonymous" />
+                <video src={proxied} controls playsInline preload="metadata" />
               </div>
             )
           }
@@ -657,12 +665,18 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
         <div className="osint-x-video-dialog-backdrop" role="dialog" aria-modal="true">
           <div className="osint-x-video-dialog">
             <h3>Video</h3>
-            {isCrossOriginVideoNoCors(videoDialog.src) ? (
-              <p className="osint-x-video-dialog-fallback-msg">This video is served from a host that blocks embedding. Use the links below.</p>
-            ) : (
+            {playableVideoSrc(videoDialog.src) ? (
               <div className="osint-x-video-dialog-player">
-                <video src={videoDialog.src} controls className="osint-x-video" playsInline crossOrigin="anonymous" />
+                <video
+                  src={playableVideoSrc(videoDialog.src)}
+                  controls
+                  className="osint-x-video"
+                  playsInline
+                  preload="metadata"
+                />
               </div>
+            ) : (
+              <p className="osint-x-video-dialog-fallback-msg">This video cannot be played inline. Use the links below.</p>
             )}
             <div className="osint-x-video-dialog-actions">
               {videoDialog.postUrl && (

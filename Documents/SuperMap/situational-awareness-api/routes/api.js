@@ -307,117 +307,32 @@ router.get('/osint', (req, res) => {
   }
 })
 
-/** Recent videos: conflict/OSINT/geopolitics theme only. GET /api/feeds/videos. Sorted newest first. */
-const isVideoThemeRelevant = newsService.isVideoThemeRelevant
+/** Recent videos: YouTube channel RSS (hourly cache) + optional OSINT X clips. GET /api/feeds/videos. */
 router.get('/feeds/videos', async (req, res) => {
   const t0 = Date.now()
   try {
-    const videoItems = await newsService.getVideoFeedItems()
-    const newsCached = newsService.getNewsCached()
-    const newsFeatures = (newsCached?.features || []).filter((f) => {
-      const p = f.properties || {}
-      const link = p.link || ''
-      const hasVideo = p.videoUrl || /youtube\.com|youtu\.be|vimeo\.com|reddit\.com|v\.redd\.it/i.test(link)
-      if (!hasVideo) return false
-      return isVideoThemeRelevant(p.title, p.source, p.description)
-    })
-    const osintXRows = getEvents(120, null, null, null, null, ['x'])
-    const isXGifUrl = (url) => {
-      if (!url || typeof url !== 'string') return false
-      const u = url.toLowerCase()
-      return /tweet_gif|\.gif(\?|$)|gif\/|gif\.twimg/i.test(u)
-    }
-    const osintXWithVideos = osintXRows
-      .map((r) => {
-        let raw = {}
-        try {
-          raw = r.raw_data ? JSON.parse(r.raw_data) : {}
-        } catch (_) {}
-        const videos = Array.isArray(raw.videos) ? raw.videos : []
-        if (videos.length === 0) return null
-        const videoUrl = videos[0]
-        if (isXGifUrl(videoUrl)) return null
-        return {
-          type: 'Feature',
-          id: r.id,
-          properties: {
-            id: r.id,
-            title: r.title,
-            type: r.type,
-            source: 'x',
-            timestamp: r.timestamp,
-            link: raw.link || raw.url,
-            description: r.description,
-            thumbnail: (raw.images && raw.images[0]) || null,
-            videoUrl,
-            tags: ['OSINT', 'X (Twitter)'],
-          },
-          geometry: null,
-        }
-      })
-      .filter(Boolean)
-
-    const tagFromSource = (source) => {
-      const s = (source || '').toLowerCase()
-      if (s.includes('reddit')) return 'Reddit'
-      if (s.includes('al jazeera') || s.includes('bbc') || s.includes('dw')) return 'News clip'
-      if (s.includes('bellingcat') || s === 'x' || s.includes('osint')) return 'OSINT'
-      if (s.includes('war') || s.includes('defense') || s.includes('combat')) return 'Combat / military'
-      return 'News'
-    }
-    const tagFromTitle = (title) => {
-      const t = (title || '').toLowerCase()
-      if (/\b(combat|footage|strike|drone|missile|war|invasion|frontline)\b/.test(t)) return 'Combat / military'
-      if (/\b(osint|intel|investigation)\b/.test(t)) return 'OSINT'
-      return null
-    }
-
-    const fromVideoFeeds = videoItems.map((it, i) => ({
-      type: 'Feature',
-      id: `video-feed-${i}-${(it.link || '').slice(-12)}`,
-      properties: {
-        id: `video-feed-${i}`,
-        title: it.title || 'Untitled',
-        type: 'news',
-        source: it.source,
-        timestamp: it.pubDate ? new Date(it.pubDate).getTime() : null,
-        link: it.link,
-        description: it.contentSnippet,
-        thumbnail: it.thumbnail,
-        videoUrl: it.videoUrl || it.link,
-        tags: ['News clip', tagFromSource(it.source), tagFromTitle(it.title)].filter(Boolean),
-      },
-      geometry: null,
-    }))
-
-    const fromNews = newsFeatures.map((f) => {
-      const p = f.properties || {}
-      const tags = [...new Set(['News', tagFromSource(p.source), tagFromTitle(p.title)].filter(Boolean))]
-      return {
-        type: 'Feature',
-        id: f.id,
-        properties: {
-          ...p,
-          tags: tags.length ? tags : ['News'],
-        },
-        geometry: f.geometry,
-      }
-    })
-
-    const all = [...fromVideoFeeds, ...fromNews, ...osintXWithVideos]
-    const themeRelevant = all.filter((f) => {
-      const p = f.properties || {}
-      return isVideoThemeRelevant(p.title, p.source, p.description)
-    })
-    themeRelevant.sort((a, b) => (b.properties?.timestamp || 0) - (a.properties?.timestamp || 0))
-    const features = themeRelevant.slice(0, 100)
-
+    const force = String(req.query.refresh || '') === '1'
+    const data = await newsService.getVideoFeatureCollectionCached({ force })
     if (feedsDebugEnabled()) {
-      console.log('[FEEDS API /feeds/videos] OUTPUT', { features: features.length, ms: Date.now() - t0 })
+      console.log('[FEEDS API /feeds/videos] OUTPUT', {
+        features: data?.features?.length || 0,
+        fromCache: !!data?._fromCache,
+        stale: !!data?._stale,
+        ms: Date.now() - t0,
+      })
     }
-    res.json({ type: 'FeatureCollection', features })
+    const { _fromCache, _stale, ...payload } = data || { type: 'FeatureCollection', features: [] }
+    res.json(payload)
   } catch (err) {
     console.error('[API /feeds/videos]', err.message)
+    // Stale-on-error: try disk last-good
+    try {
+      const apiResultCache = require('../services/apiResultCache')
+      const hit = apiResultCache.getStale('feeds-videos', 'feature-collection', apiResultCache.TTL.DAILY)
+      if (hit?.value?.features?.length) {
+        return res.json(hit.value)
+      }
+    } catch (_) { /* optional */ }
     res.status(500).json({ error: 'Failed to fetch video feeds' })
   }
 })

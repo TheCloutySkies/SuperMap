@@ -34,6 +34,28 @@ function isLikelyImageUrl(url) {
   return false
 }
 
+/** Prefer best MP4 from FxTwitter formats[]; never return thumbnail URLs as video. */
+function pickBestVideoUrl(mediaVideo) {
+  if (!mediaVideo || typeof mediaVideo !== 'object') return null
+  const formats = Array.isArray(mediaVideo.formats) ? mediaVideo.formats : []
+  const mp4s = formats
+    .filter((f) => {
+      if (!f || !f.url) return false
+      const container = String(f.container || f.content_type || f.type || '').toLowerCase()
+      const url = String(f.url)
+      if (/\.m3u8(\?|$)/i.test(url) || container.includes('mpegurl') || container.includes('hls')) return false
+      return container.includes('mp4') || /\.mp4(\?|$)/i.test(url)
+    })
+    .sort((a, b) => (Number(b.bitrate) || 0) - (Number(a.bitrate) || 0))
+  if (mp4s.length && mp4s[0].url) return mp4s[0].url
+  const direct = mediaVideo.url
+  if (direct && typeof direct === 'string' && /^https?:\/\//i.test(direct) && !isLikelyImageUrl(direct)) {
+    if (/\.m3u8(\?|$)/i.test(direct)) return null
+    return direct
+  }
+  return null
+}
+
 /** Filter out pure reposts; keep original posts and media posts. */
 function isOriginalWithHeadline(item) {
   const title = (item.title || '').trim()
@@ -71,13 +93,10 @@ async function fetchFromFxTwitter(feed) {
         .filter((m) => m && (m.type === 'photo' || isLikelyImageUrl(m.url)))
         .map((m) => m.url)
         .filter(Boolean)
-      const videos = (Array.isArray(t.media?.videos) ? t.media.videos : [])
-        .map((m) => m.url || m.thumbnail_url)
-        .filter(Boolean)
-      // Video posts often expose a thumbnail usable in the gallery
-      const thumbs = (Array.isArray(t.media?.videos) ? t.media.videos : [])
-        .map((m) => m.thumbnail_url)
-        .filter((u) => isLikelyImageUrl(u))
+      const videoMedia = Array.isArray(t.media?.videos) ? t.media.videos : []
+      const videos = videoMedia.map(pickBestVideoUrl).filter(Boolean)
+      // Video posts often expose a thumbnail usable in the gallery (never put in videos[])
+      const thumbs = videoMedia.map((m) => m.thumbnail_url).filter((u) => isLikelyImageUrl(u))
       for (const th of thumbs) {
         if (!images.includes(th)) images.push(th)
       }

@@ -74,6 +74,7 @@ const HOME_IMAGES_REFRESH_MS = 3 * 60 * 1000
 const MEDIASTACK_TICK_MS = 60 * 1000 // check ET window every minute
 const FEEDS_815_TICK_MS = 60 * 1000 // news RSS + OSINT publishers 08:00/15:00 ET
 const KEYWORD_TAGS_INTERVAL_MS = 60 * 60 * 1000
+const VIDEOS_WARM_INTERVAL_MS = 60 * 60 * 1000 // YouTube RSS ~1h
 
 const BATCH_JOB = 'news-osint-815'
 
@@ -259,6 +260,18 @@ app.listen(PORT, () => {
   setTimeout(() => {
     warmHomeCaches().catch((e) => console.warn('[home] warmup:', e.message))
   }, 10000)
+
+  // Recent Videos: warm YouTube RSS into hourly disk cache on boot + every hour
+  setTimeout(() => {
+    if (typeof newsService.warmVideoFeedsCache === 'function') {
+      newsService.warmVideoFeedsCache().catch((e) => console.warn('[videos] warm:', e.message))
+    }
+  }, 12000)
+  setInterval(() => {
+    if (typeof newsService.warmVideoFeedsCache === 'function') {
+      newsService.warmVideoFeedsCache().catch((e) => console.warn('[videos] warm:', e.message))
+    }
+  }, VIDEOS_WARM_INTERVAL_MS)
 
   setInterval(() => {
     refreshHomeImagesBackground().catch((e) => console.warn('[home] images tick:', e.message))

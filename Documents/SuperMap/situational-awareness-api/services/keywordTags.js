@@ -5,8 +5,11 @@
 
 const fs = require('fs')
 const path = require('path')
+const dataPaths = require('./dataPaths')
 
-const CACHE_PATH = path.join(__dirname, '../data/keyword-tags.json')
+function getCachePath() {
+  return dataPaths.keywordTagsPath()
+}
 
 const STOP = new Set([
   'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'as', 'by',
@@ -45,11 +48,18 @@ function emptyState() {
 function load() {
   if (memory) return memory
   try {
-    if (!fs.existsSync(CACHE_PATH)) {
+    const cachePath = getCachePath()
+    const legacy = path.join(__dirname, '../data/keyword-tags.json')
+    if (!fs.existsSync(cachePath) && fs.existsSync(legacy) && dataPaths.isDurable()) {
+      try {
+        fs.copyFileSync(legacy, cachePath)
+      } catch (_) { /* optional */ }
+    }
+    if (!fs.existsSync(cachePath)) {
       memory = emptyState()
       return memory
     }
-    const raw = JSON.parse(fs.readFileSync(CACHE_PATH, 'utf8'))
+    const raw = JSON.parse(fs.readFileSync(cachePath, 'utf8'))
     memory = {
       tags: Array.isArray(raw.tags) ? raw.tags : [],
       updatedAt: raw.updatedAt || null,
@@ -65,9 +75,9 @@ function load() {
 function save(state) {
   memory = state
   try {
-    const dir = path.dirname(CACHE_PATH)
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(CACHE_PATH, JSON.stringify(state, null, 2), 'utf8')
+    const cachePath = getCachePath()
+    dataPaths.ensureDir(path.dirname(cachePath))
+    fs.writeFileSync(cachePath, JSON.stringify(state, null, 2), 'utf8')
   } catch (err) {
     console.warn('[keyword-tags] write failed:', err.message)
   }

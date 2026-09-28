@@ -6,7 +6,16 @@
 const fs = require('fs')
 const path = require('path')
 
-const CONFIG_PATH = path.join(__dirname, 'user-config.json')
+const dataPaths = require('../services/dataPaths')
+const CONFIG_PATH_LEGACY = path.join(__dirname, 'user-config.json')
+
+function getConfigPath() {
+  try {
+    return dataPaths.userConfigPath()
+  } catch (_) {
+    return CONFIG_PATH_LEGACY
+  }
+}
 
 const { OSINT_X_FEEDS_DEFAULT, normalizeHandle } = require('./osintXFeeds')
 const DEFAULT_OSINT_X = OSINT_X_FEEDS_DEFAULT
@@ -28,7 +37,7 @@ const DEFAULT_STOCK_TICKERS = [
 
 function readConfig() {
   try {
-    const raw = fs.readFileSync(CONFIG_PATH, 'utf8')
+    const raw = fs.readFileSync(getConfigPath(), 'utf8')
     return JSON.parse(raw)
   } catch (err) {
     if (err.code === 'ENOENT') return {}
@@ -39,7 +48,9 @@ function readConfig() {
 
 function writeConfig(data) {
   try {
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(data, null, 2), 'utf8')
+    const p = getConfigPath()
+    dataPaths.ensureDir(path.dirname(p))
+    fs.writeFileSync(p, JSON.stringify(data, null, 2), 'utf8')
   } catch (err) {
     console.warn('[userConfig] write failed:', err.message)
     throw err

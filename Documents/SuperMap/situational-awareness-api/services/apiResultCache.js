@@ -9,8 +9,12 @@
 
 const fs = require('fs')
 const path = require('path')
+const dataPaths = require('./dataPaths')
 
-const CACHE_DIR = path.join(__dirname, '..', 'data', 'api-cache')
+/** Resolved at call-time so DATA_DIR env is honored after dotenv. */
+function getCacheDir() {
+  return dataPaths.apiCacheDir()
+}
 
 /** Named TTL presets (seconds). */
 const TTL = Object.freeze({
@@ -34,12 +38,12 @@ const FLUSH_DEBOUNCE_MS = 250
  */
 
 function ensureDir() {
-  if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true })
+  getCacheDir()
 }
 
 function nsPath(namespace) {
   const safe = String(namespace || 'default').replace(/[^a-zA-Z0-9._-]/g, '_')
-  return path.join(CACHE_DIR, `${safe}.json`)
+  return path.join(getCacheDir(), `${safe}.json`)
 }
 
 function loadNamespace(namespace) {
@@ -248,11 +252,10 @@ async function getOrFetch(namespace, key, opts, fetcher) {
 
 function stats() {
   const out = {}
-  // include loaded namespaces + files on disk
-  ensureDir()
+  const dir = getCacheDir()
   let files = []
   try {
-    files = fs.readdirSync(CACHE_DIR).filter((f) => f.endsWith('.json'))
+    files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'))
   } catch (_) { /* empty */ }
   for (const f of files) {
     const ns = f.replace(/\.json$/, '')
@@ -269,7 +272,12 @@ function stats() {
     }
     out[ns] = { keys: Object.keys(bag.entries).length, fresh, stale }
   }
-  return { dir: CACHE_DIR, namespaces: out }
+  return {
+    dir,
+    durable: dataPaths.isDurable(),
+    dataRoot: dataPaths.getDataRoot(),
+    namespaces: out,
+  }
 }
 
 /** Flush all dirty namespaces synchronously (tests / shutdown). */
@@ -279,7 +287,10 @@ function flushAll() {
 
 module.exports = {
   TTL,
-  CACHE_DIR,
+  get CACHE_DIR() {
+    return getCacheDir()
+  },
+  getCacheDir,
   peek,
   getFresh,
   getStale,

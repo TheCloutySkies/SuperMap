@@ -4,7 +4,14 @@ const { geotagArticles } = require('./geotagger')
 const { normalizeToEvent, ingestEvent, eventToFeature } = require('./ingest')
 const { assessItemsBatch } = require('./riskScoring')
 
-const REQUEST_HEADERS = { 'User-Agent': 'SuperMap/1.0 (OSINT dashboard; https://github.com/supermap)' }
+/** Browser-like UA — many CDNs (GDACS, Google News) return 406 for bare bot UAs. */
+const BROWSER_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+const REQUEST_HEADERS = {
+  'User-Agent': BROWSER_UA,
+  Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.9',
+}
 const parser = new Parser({ timeout: 8000, headers: REQUEST_HEADERS })
 
 const GLOBAL_RSS_DENY = [
@@ -360,11 +367,11 @@ async function parseFeedXml(xml) {
 async function fetchFeed(feed) {
   try {
     // Prefer axios so gzip / redirects (e.g. UN News) decompress cleanly for rss-parser.
+    // Per-feed failures must not abort the rest of the batch (allSettled at caller).
     let result
     const isYouTube = /youtube\.com\/feeds\/videos\.xml/i.test(feed.url || '')
     const headers = {
       ...REQUEST_HEADERS,
-      Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
       ...(isYouTube ? { 'User-Agent': YOUTUBE_BROWSER_UA } : {}),
     }
     try {
@@ -373,8 +380,12 @@ async function fetchFeed(feed) {
         headers,
         responseType: 'text',
         decompress: true,
-        validateStatus: (s) => s >= 200 && s < 300,
+        // Accept 406 body when present — some hosts mislabel but still return XML
+        validateStatus: (s) => (s >= 200 && s < 300) || s === 406,
       })
+      if (res.status === 406 && (!res.data || String(res.data).length < 40)) {
+        throw new Error(`HTTP 406 from ${feed.name}`)
+      }
       const body = typeof res.data === 'string' ? res.data : String(res.data || '')
       if (isYouTube && !/<feed[\s>]/i.test(body) && !/<rss[\s>]/i.test(body)) {
         throw new Error('YouTube RSS returned non-feed body')
@@ -382,7 +393,23 @@ async function fetchFeed(feed) {
       result = await parseFeedXml(body)
     } catch (axiosErr) {
       if (isYouTube) throw axiosErr
-      result = await parser.parseURL(feed.url)
+      // Retry once with SuperMap-branded UA (some hosts invert preferences)
+      try {
+        const res2 = await axios.get(feed.url, {
+          timeout: 10000,
+          headers: {
+            'User-Agent': 'SuperMap/1.0 (OSINT dashboard; +https://github.com/TheCloutySkies/SuperMap)',
+            Accept: REQUEST_HEADERS.Accept,
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+          responseType: 'text',
+          decompress: true,
+          validateStatus: (s) => s >= 200 && s < 300,
+        })
+        result = await parseFeedXml(typeof res2.data === 'string' ? res2.data : String(res2.data || ''))
+      } catch (_) {
+        result = await parser.parseURL(feed.url)
+      }
     }
     const rows = (result.items || []).map((item) => {
       const link = item.link || item.guid || ''
@@ -532,7 +559,55 @@ function getMediaStackItems() {
   }
 }
 
+/**
+ * Build a FeatureCollection from MediaStack last-pull only (sync, no RSS).
+ * Used when news last-good is missing after ephemeral deploy but Glowie cache survived
+ * (or is still in memory) — keeps /api/home and /api/news non-empty.
+ */
+function synthesizeNewsFromMediaStack() {
+  const items = getMediaStackItems()
+  if (!items.length) return null
+  const features = []
+  for (const item of items.slice(0, 100)) {
+    try {
+      const event = normalizeToEvent(
+        {
+          ...item,
+          coordinates: item.coordinates,
+          lat: item.coordinates?.[1],
+          lon: item.coordinates?.[0],
+        },
+        'news',
+        item.source || 'mediastack',
+      )
+      features.push(eventToFeature(event))
+    } catch (_) { /* skip bad row */ }
+  }
+  if (!features.length) return null
+  let mediastackMeta = { quotaExhausted: false, fetchedAt: null, articleCount: items.length }
+  try {
+    const mediastack = require('./mediastack')
+    mediastackMeta = mediastack.getStatus()
+  } catch (_) { /* optional */ }
+  return {
+    type: 'FeatureCollection',
+    features,
+    meta: {
+      mediastack: {
+        quotaExhausted: !!mediastackMeta.quotaExhausted,
+        fetchedAt: mediastackMeta.fetchedAt || null,
+        articleCount: mediastackMeta.articleCount || items.length,
+      },
+      fromMediaStackOnly: true,
+      fetchedAt: mediastackMeta.fetchedAt || new Date().toISOString(),
+    },
+  }
+}
+
 async function getNews() {
+  // Prefer already-cached MediaStack while RSS catch-up runs (cold deploy resilience)
+  const mediaStackSeed = synthesizeNewsFromMediaStack()
+
   const rssResults = await Promise.allSettled(FEEDS.map(fetchFeed))
   let items = rssResults
     .filter((r) => r.status === 'fulfilled')
@@ -578,6 +653,13 @@ async function getNews() {
     return new Date(b.pubDate || 0) - new Date(a.pubDate || 0)
   })
   items = items.slice(0, 120)
+
+  // If every RSS feed failed but MediaStack has articles, return that seed immediately
+  // (still persist) rather than walking geotag/AI on an empty list.
+  if (!items.length && mediaStackSeed?.features?.length) {
+    persistNewsCache(mediaStackSeed)
+    return mediaStackSeed
+  }
 
   let geotagged = items
   try {
@@ -663,14 +745,28 @@ async function getNews() {
     return result
   }
   const prior = getNewsCached()
-  return prior || result
+  if (prior?.features?.length) return prior
+  if (mediaStackSeed?.features?.length) {
+    persistNewsCache(mediaStackSeed)
+    return mediaStackSeed
+  }
+  return result
 }
 
 function getNewsCached() {
   if (cachedNews && Array.isArray(cachedNews.features) && cachedNews.features.length > 0) {
     return cachedNews
   }
-  return loadNewsCacheFromDisk()
+  const fromDisk = loadNewsCacheFromDisk()
+  if (fromDisk) return fromDisk
+  // Prefer MediaStack Glowie last-pull when RSS last-good is gone (ephemeral deploy)
+  const fromMs = synthesizeNewsFromMediaStack()
+  if (fromMs?.features?.length) {
+    cachedNews = fromMs
+    newsFetchedAt = Date.now()
+    return fromMs
+  }
+  return null
 }
 
 function getNewsFetchedAt() {

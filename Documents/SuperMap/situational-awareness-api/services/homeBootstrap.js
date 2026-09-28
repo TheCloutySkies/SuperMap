@@ -8,10 +8,10 @@
  */
 const axios = require('axios')
 const fs = require('fs')
-const path = require('path')
 const osintXFeedService = require('./osintXFeedService')
 const newsService = require('./news')
 const apiResultCache = require('./apiResultCache')
+const dataPaths = require('./dataPaths')
 
 const HOME_CACHE_CONTROL = 'public, max-age=60, stale-while-revalidate=600'
 /** Hard ceiling for cold /api/home when no last-good exists (ms). */
@@ -21,7 +21,9 @@ const HOME_LIVE_DEADLINE_MS = 8000
 const HOME_IMAGES_TTL_MS = 90 * 1000
 let homeImagesCache = { at: 0, items: [], source: null }
 
-const THREAT_SUMMARY_FILE = path.join(__dirname, '..', 'data', 'last-threat-summary.json')
+function threatSummaryFile() {
+  return dataPaths.threatSummaryPath()
+}
 
 function apiBaseUrl() {
   const port = process.env.PORT || 3001
@@ -50,8 +52,13 @@ function invalidateHomeImagesCache() {
 
 function readThreatSummaryDisk() {
   try {
-    if (!fs.existsSync(THREAT_SUMMARY_FILE)) return null
-    const data = JSON.parse(fs.readFileSync(THREAT_SUMMARY_FILE, 'utf8'))
+    const file = threatSummaryFile()
+    const legacy = require('path').join(__dirname, '..', 'data', 'last-threat-summary.json')
+    if (!fs.existsSync(file) && fs.existsSync(legacy) && dataPaths.isDurable()) {
+      try { fs.copyFileSync(legacy, file) } catch (_) { /* optional */ }
+    }
+    if (!fs.existsSync(file)) return null
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'))
     if (data && typeof data.summary === 'string' && data.summary.trim()) return data
   } catch (_) { /* optional */ }
   return null

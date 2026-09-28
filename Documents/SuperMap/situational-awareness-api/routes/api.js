@@ -432,7 +432,11 @@ router.get('/proxy-video', async (req, res) => {
   }
 })
 
-const THREAT_SUMMARY_FILE = path.join(__dirname, '..', 'data', 'last-threat-summary.json')
+const dataPaths = require('../services/dataPaths')
+
+function threatSummaryFile() {
+  return dataPaths.threatSummaryPath()
+}
 
 function isGoodThreatSummary(payload) {
   if (!payload || typeof payload.summary !== 'string') return false
@@ -444,7 +448,12 @@ function isGoodThreatSummary(payload) {
 
 function readPersistedThreatSummary() {
   try {
-    const raw = fs.readFileSync(THREAT_SUMMARY_FILE, 'utf8')
+    const file = threatSummaryFile()
+    const legacy = path.join(__dirname, '..', 'data', 'last-threat-summary.json')
+    if (!fs.existsSync(file) && fs.existsSync(legacy) && dataPaths.isDurable()) {
+      try { fs.copyFileSync(legacy, file) } catch (_) { /* optional */ }
+    }
+    const raw = fs.readFileSync(file, 'utf8')
     const data = JSON.parse(raw)
     if (data && typeof data.summary === 'string') return { ...data, _persisted: true }
   } catch (_) {}
@@ -463,9 +472,9 @@ function writePersistedThreatSummary(payload) {
     return false
   }
   try {
-    const dir = path.dirname(THREAT_SUMMARY_FILE)
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(THREAT_SUMMARY_FILE, JSON.stringify(payload, null, 0), 'utf8')
+    const file = threatSummaryFile()
+    dataPaths.ensureDir(path.dirname(file))
+    fs.writeFileSync(file, JSON.stringify(payload, null, 0), 'utf8')
     return true
   } catch (e) {
     console.warn('[API /threat-summary] Could not persist:', e.message)

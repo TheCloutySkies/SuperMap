@@ -40,6 +40,11 @@ const netblocksCache = new NodeCache({ stdTTL: 15 * 60, checkperiod: 120 })
 const earthquakesWidgetCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 60 })
 const conflictMetricsCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 })
 const homeBootstrapCache = new NodeCache({ stdTTL: 60, checkperiod: 30 })
+const MAPBOX_TOKEN = process.env.MAPBOX_TOKEN || ''
+const GEOAPIFY_KEY = process.env.GEOAPIFY_KEY || ''
+const { HOME_CACHE_CONTROL, getHomePayload } = require('../services/homeBootstrap')
+const apiResultCache = require('../services/apiResultCache')
+
 const HOME_DISK_NS = 'home'
 const HOME_DISK_KEY = 'bootstrap'
 const HOME_DISK_TTL = apiResultCache.TTL.DAILY
@@ -72,10 +77,6 @@ function loadHomeLastGood() {
   return null
 }
 
-const MAPBOX_TOKEN = process.env.MAPBOX_TOKEN || ''
-const GEOAPIFY_KEY = process.env.GEOAPIFY_KEY || ''
-const { HOME_CACHE_CONTROL, getHomePayload } = require('../services/homeBootstrap')
-const apiResultCache = require('../services/apiResultCache')
 /** Stocks: 30m fresh / 24h stale-on-error (disk-backed). */
 const STOCKS_TTL_SEC = apiResultCache.TTL.MARKET
 const STOCKS_STALE_SEC = apiResultCache.TTL.DAILY

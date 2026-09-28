@@ -112,8 +112,10 @@ function VideoCard({ item, onExpand }) {
   const tags = Array.isArray(item.tags) ? item.tags : []
   const ytEmbed = youtubeEmbedUrl(link)
   const vimeoEmbed = vimeoEmbedUrl(link)
-  const canEmbed = ytEmbed || vimeoEmbed
-  const embedSrc = ytEmbed || vimeoEmbed
+  // Prefer thumbnail in the grid (modal plays iframe) — lighter and avoids blank embeds.
+  const thumb = item.thumbnail || (ytEmbed && link.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]+)/)?.[1]
+    ? `https://i.ytimg.com/vi/${link.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]+)/)[1]}/hqdefault.jpg`
+    : null)
   return (
     <div
       className="feeds-video-card feeds-video-card--clickable"
@@ -124,25 +126,21 @@ function VideoCard({ item, onExpand }) {
       aria-label={`Play ${item.title || 'video'}`}
     >
       <div className="feeds-video-card-thumb-wrap">
-        {canEmbed ? (
-          <iframe
-            src={embedSrc + (ytEmbed ? '?rel=0&modestbranding=1' : '')}
-            title={item.title || 'Video'}
-            className="feeds-video-card-embed"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-            allowFullScreen
-            onClick={(e) => e.stopPropagation()}
-          />
-        ) : item.thumbnail ? (
+        {thumb ? (
           <span className="feeds-video-card-thumb-link">
-            <img src={item.thumbnail} alt="" className="feeds-video-card-thumb" loading="lazy" />
+            <img
+              src={thumb}
+              alt=""
+              className="feeds-video-card-thumb"
+              loading="lazy"
+              referrerPolicy="no-referrer"
+            />
             <span className="feeds-video-card-play-overlay" aria-hidden>▶</span>
           </span>
         ) : (
           <span className="feeds-video-card-thumb-placeholder" aria-hidden>▶</span>
         )}
-        {!canEmbed && <span className="feeds-video-card-source">{item.source}</span>}
-        {canEmbed && <span className="feeds-video-card-source feeds-video-card-source--overlay">{item.source}</span>}
+        <span className="feeds-video-card-source">{item.source}</span>
       </div>
       <div className="feeds-video-card-body">
         <h3 className="feeds-video-card-title">{item.title || 'Untitled'}</h3>
@@ -156,7 +154,9 @@ function VideoCard({ item, onExpand }) {
             ))}
           </div>
         )}
-        <span className="feeds-video-card-expand-hint">Click to expand and play</span>
+        <span className="feeds-video-card-expand-hint">
+          {ytEmbed || vimeoEmbed ? 'Click to expand and play' : 'Click to expand and play'}
+        </span>
       </div>
     </div>
   )

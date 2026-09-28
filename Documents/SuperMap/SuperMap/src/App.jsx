@@ -1,4 +1,5 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   hasConfigured,
   setConfigured as persistConfigured,
@@ -7,13 +8,18 @@ import {
   DEFAULT_LAYER_TOGGLES,
   getVisualsPrefs,
   CRIME_VIEW_ID,
-  WEATHER_VIEW_ID,
-  resolveCrimeViewId,
   isCrimeIntelligenceView,
   isWeatherView,
   BRAND_LOGO_SRC,
   BRAND_LOGO_ALT,
 } from './constants'
+import {
+  APP_MODES,
+  pathFromView,
+  pathFromMode,
+  viewFromPath,
+  modeFromView,
+} from './lib/appRoutes'
 import { loadChromePrefs, saveChromePrefs } from './lib/mapToolsPrefs'
 import HomeScreen from './components/HomeScreen'
 import CrimeIntelligenceView from './components/CrimeIntelligenceView'
@@ -55,10 +61,8 @@ function initMetallicss() {
   })
 }
 
-const APP_MODES = { HOME: 'HOME', MAPS: 'MAPS', CRIME: 'CRIME', WEATHER: 'WEATHER', FEEDS: 'FEEDS', TOOLS: 'TOOLS', RESOURCES: 'RESOURCES', REPORTS: 'REPORTS', SETTINGS: 'SETTINGS' }
 /** @deprecated alias — keep for gradual rename */
 const FOOTER_MODES = APP_MODES
-
 
 const MAP_VIEWS = [
   { id: 'osint-map', label: 'OSINT Map', tabKey: 'osintMap' },
@@ -80,12 +84,19 @@ const FEED_VIEWS = [
 ]
 
 function App() {
-  const [configured, setConfigured] = useState(() => hasConfigured())
-  const [appMode, setAppMode] = useState(APP_MODES.HOME)
+  const navigate = useNavigate()
+  const location = useLocation()
+  const route = useMemo(() => viewFromPath(location.pathname), [location.pathname])
+  const activeView = route.viewId
+  const appMode = modeFromView(activeView)
   const footerMode = appMode
-  const setFooterMode = setAppMode
+
+  useEffect(() => {
+    if (route.unknown) navigate('/', { replace: true })
+  }, [route.unknown, navigate])
+
+  const [configured, setConfigured] = useState(() => hasConfigured())
   const [subnavOpen, setSubnavOpen] = useState(true)
-  const [activeView, setActiveView] = useState('home')
   const [basemapId, setBasemapId] = useState('arcgis-topo')
   const [overlayBasemapId, setOverlayBasemapId] = useState(null)
   const [layerToggles, setLayerToggles] = useState(() => ({ ...DEFAULT_LAYER_TOGGLES }))
@@ -123,7 +134,19 @@ function App() {
   const [weatherCoords, setWeatherCoords] = useState({ lat: null, lon: null })
   const [mapCenter, setMapCenter] = useState({ lat: null, lon: null })
   const [overlayOpacity, setOverlayOpacity] = useState(0.6)
-  const [searchQuery, setSearchQuery] = useState('')
+  const [searchQuery, setSearchQuery] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    if (viewFromPath(window.location.pathname).viewId !== 'search-results') return ''
+    return new URLSearchParams(window.location.search).get('q') || ''
+  })
+
+  // Keep search query in sync when landing on /search?q=
+  useEffect(() => {
+    if (activeView !== 'search-results') return
+    const q = new URLSearchParams(location.search).get('q')
+    if (q != null) setSearchQuery(q)
+  }, [activeView, location.search])
+
   const [searchResultsGeoJson, setSearchResultsGeoJson] = useState(null)
   const [prefetchedNews, setPrefetchedNews] = useState(() => readHomeSnapshot()?.news || null)
   const [bannerXItems, setBannerXItems] = useState(() => osintXToBannerItems(readHomeSnapshot()?.osintX))
@@ -197,8 +220,7 @@ function App() {
     const q = typeof place === 'string' ? place.trim() : ''
     if (!q) return
     setSearchQuery(q)
-    setActiveView('osint-map')
-    setFooterMode(FOOTER_MODES.MAPS)
+    navigate(pathFromView('osint-map'))
     fetch(`${apiBase}/api/geocode?q=${encodeURIComponent(q)}&limit=1`, { signal: AbortSignal.timeout(10000) })
       .then((r) => r.json())
       .then((rows) => {
@@ -208,7 +230,7 @@ function App() {
         if (lng != null && lat != null) setFlyToTarget({ lng, lat, zoom: 10 })
       })
       .catch(() => {})
-  }, [apiBase])
+  }, [apiBase, navigate])
 
   const handlePinnedToMap = useCallback((feature) => {
     if (!feature?.geometry?.coordinates?.length) return
@@ -216,11 +238,10 @@ function App() {
       type: 'FeatureCollection',
       features: [...(prev?.features || []), feature],
     }))
-    setActiveView('conflict-map')
-    setFooterMode(FOOTER_MODES.MAPS)
+    navigate(pathFromView('conflict-map'))
     const [lng, lat] = feature.geometry.coordinates
     setFlyToTarget({ lng, lat, zoom: 10, properties: feature.properties || {} })
-  }, [])
+  }, [navigate])
 
   useEffect(() => {
     try {
@@ -236,34 +257,20 @@ function App() {
   const tabVisibility = getTabVisibility()
 
   const handleFooterNav = useCallback((mode) => {
-    setAppMode(mode)
     setSubnavOpen(true)
-    if (mode === APP_MODES.HOME) setActiveView('home')
-    else if (mode === APP_MODES.MAPS) setActiveView('osint-map')
-    else if (mode === APP_MODES.CRIME) setActiveView(CRIME_VIEW_ID)
-    else if (mode === APP_MODES.WEATHER) setActiveView(WEATHER_VIEW_ID)
-    else if (mode === APP_MODES.FEEDS) setActiveView('news-feeds')
-    else if (mode === APP_MODES.TOOLS) setActiveView('tools')
-    else if (mode === APP_MODES.RESOURCES) setActiveView('resources')
-    else if (mode === APP_MODES.REPORTS) setActiveView('report-maker')
-    else if (mode === APP_MODES.SETTINGS) setActiveView('settings')
-  }, [])
+    navigate(pathFromMode(mode))
+  }, [navigate])
 
   const setActiveViewWithMode = useCallback((viewId) => {
-    // Legacy crime-map / crime-intel entry points land on CrimeIntelligenceView
-    const resolved = resolveCrimeViewId(viewId)
-    setActiveView(resolved)
     setSubnavOpen(true)
-    if (resolved === CRIME_VIEW_ID) setAppMode(APP_MODES.CRIME)
-    else if (resolved === WEATHER_VIEW_ID) setAppMode(APP_MODES.WEATHER)
-    else if (MAP_VIEW_IDS.includes(resolved)) setAppMode(APP_MODES.MAPS)
-    else if (['osint-feeds', 'osint-x', 'advanced-search', 'news-feeds', 'broadcasts', 'recent-videos'].includes(resolved)) setAppMode(APP_MODES.FEEDS)
-    else if (resolved === 'home') setAppMode(APP_MODES.HOME)
-    else if (resolved === 'tools') setAppMode(APP_MODES.TOOLS)
-    else if (resolved === 'resources') setAppMode(APP_MODES.RESOURCES)
-    else if (resolved === 'report-maker') setAppMode(APP_MODES.REPORTS)
-    else if (resolved === 'settings') setAppMode(APP_MODES.SETTINGS)
-  }, [])
+    navigate(pathFromView(viewId))
+  }, [navigate])
+
+  const navigateSearch = useCallback((q) => {
+    const query = String(q || '').trim()
+    setSearchQuery(query)
+    navigate(query ? `/search?q=${encodeURIComponent(query)}` : '/search')
+  }, [navigate])
 
   /** Omnibar jump: string viewId or rich target (crime section/entity, tool, resource, widget, news/OSINT). */
   const handleOmnibarNavigate = useCallback((target) => {
@@ -532,11 +539,10 @@ function App() {
             features={searchResultsGeoJson?.features || []}
             widgetMatches={getWidgetMatches(searchQuery)}
             onFlyTo={handleFlyTo}
-            onShowOnMap={() => { setActiveView('osint-map'); setFooterMode(FOOTER_MODES.MAPS) }}
-            onBack={() => setActiveView('home')}
+            onShowOnMap={() => navigate(pathFromView('osint-map'))}
+            onBack={() => navigate('/')}
             onNavigateToWidget={(sectionId) => {
-              setActiveView('home')
-              setFooterMode(FOOTER_MODES.HOME)
+              navigate('/')
               setTimeout(() => {
                 document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }, 150)
@@ -614,8 +620,8 @@ function App() {
             onKeywordChange={setSearchQuery}
             onSearchResults={setSearchResultsGeoJson}
             onNavigateToMap={() => setActiveViewWithMode('osint-map')}
-            onNavigateToSearchResults={(q) => { setSearchQuery(q || searchQuery); setActiveView('search-results'); setAppMode(APP_MODES.FEEDS) }}
-            onNavigateToFeeds={(q) => { setSearchQuery(q || ''); setActiveView('osint-feeds'); setAppMode(APP_MODES.FEEDS) }}
+            onNavigateToSearchResults={(q) => navigateSearch(q || searchQuery)}
+            onNavigateToFeeds={(q) => { setSearchQuery(q || ''); setActiveViewWithMode('osint-feeds') }}
             onCommandNavigate={handleOmnibarNavigate}
             placeholder="Search or jump (Ctrl+K)…"
           />

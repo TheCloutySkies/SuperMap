@@ -81,6 +81,17 @@ function vimeoEmbedUrl(url) {
   return m ? `https://player.vimeo.com/video/${m[1]}` : null
 }
 
+/** Poster URL for grid cards — never loads a live player until expand. */
+function videoPosterUrl(item) {
+  const link = item?.videoUrl || item?.link
+  if (isRealImage(item?.thumbnail)) return item.thumbnail
+  if (isRealImage(item?.image)) return item.image
+  if (!link || typeof link !== 'string') return null
+  const yt = link.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/)
+  if (yt) return `https://i.ytimg.com/vi/${yt[1]}/hqdefault.jpg`
+  return null
+}
+
 function isRealImage(url) {
   if (!url || typeof url !== 'string') return false
   if (url.includes('google.com/s2/favicons')) return false
@@ -108,41 +119,38 @@ function normalizeCategory(raw, title = '', snippet = '') {
 }
 
 function VideoCard({ item, onExpand }) {
-  const link = item.videoUrl || item.link
   const tags = Array.isArray(item.tags) ? item.tags : []
-  const ytEmbed = youtubeEmbedUrl(link)
-  const vimeoEmbed = vimeoEmbedUrl(link)
-  const canEmbed = ytEmbed || vimeoEmbed
-  const embedSrc = ytEmbed || vimeoEmbed
+  const thumb = videoPosterUrl(item)
+
+  const handleActivate = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    onExpand(item)
+  }
+
   return (
     <div
       className="feeds-video-card feeds-video-card--clickable"
       role="button"
       tabIndex={0}
-      onClick={() => onExpand(item)}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onExpand(item) } }}
+      onClick={handleActivate}
+      onMouseDown={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') handleActivate(e)
+      }}
       aria-label={`Play ${item.title || 'video'}`}
     >
       <div className="feeds-video-card-thumb-wrap">
-        {canEmbed ? (
-          <iframe
-            src={embedSrc + (ytEmbed ? '?rel=0&modestbranding=1' : '')}
-            title={item.title || 'Video'}
-            className="feeds-video-card-embed"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-            allowFullScreen
-            onClick={(e) => e.stopPropagation()}
-          />
-        ) : item.thumbnail ? (
+        {thumb ? (
           <span className="feeds-video-card-thumb-link">
-            <img src={item.thumbnail} alt="" className="feeds-video-card-thumb" loading="lazy" />
+            <img src={thumb} alt="" className="feeds-video-card-thumb" loading="lazy" draggable={false} />
             <span className="feeds-video-card-play-overlay" aria-hidden>▶</span>
           </span>
         ) : (
           <span className="feeds-video-card-thumb-placeholder" aria-hidden>▶</span>
         )}
-        {!canEmbed && <span className="feeds-video-card-source">{item.source}</span>}
-        {canEmbed && <span className="feeds-video-card-source feeds-video-card-source--overlay">{item.source}</span>}
+        <span className="feeds-video-card-source feeds-video-card-source--overlay">{item.source}</span>
       </div>
       <div className="feeds-video-card-body">
         <h3 className="feeds-video-card-title">{item.title || 'Untitled'}</h3>
@@ -671,9 +679,18 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
         role="dialog"
         aria-modal="true"
         aria-label="Video preview"
-        onClick={() => setExpandedVideo(null)}
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          setExpandedVideo(null)
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="feeds-video-modal" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="feeds-video-modal"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           <div className="feeds-video-modal-header">
             <h2 className="feeds-video-modal-title">{expandedVideo.title || 'Untitled'}</h2>
             <span className="feeds-video-modal-source">{expandedVideo.source}</span>

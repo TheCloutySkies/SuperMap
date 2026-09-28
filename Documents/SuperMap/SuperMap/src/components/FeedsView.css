@@ -1123,11 +1123,11 @@
   display: block;
 }
 
-/* Expandable video modal */
+/* Expandable video modal — z-index above mobile Home (1200) */
 .feeds-video-modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 9999;
+  z-index: 13000;
   background: rgba(0, 0, 0, 0.85);
   display: flex;
   align-items: center;

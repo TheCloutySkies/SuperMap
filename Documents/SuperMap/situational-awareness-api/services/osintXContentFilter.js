@@ -61,12 +61,16 @@ function textOf(post) {
 
 function hasIntelSignal(post) {
   const tags = Array.isArray(post.tags) ? post.tags : []
+  // Ignore generic ingest tags that every X post carries.
+  const GENERIC = new Set(['x', 'osint', 'news'])
   for (const t of tags) {
-    const key = String(t || '').toLowerCase().replace(/^risk-\d$/, '')
+    const key = String(t || '').toLowerCase()
+    if (GENERIC.has(key) || /^risk-\d$/.test(key)) continue
     if (INTEL_TAGS.has(key)) return true
   }
   const text = textOf(post)
-  return INTEL_KEYWORDS.some((kw) => text.includes(kw))
+  // Avoid matching the bare word "osint" alone as sufficient — prefer topical keywords.
+  return INTEL_KEYWORDS.filter((kw) => kw !== 'osint').some((kw) => text.includes(kw))
 }
 
 function isLifestyleNoise(post) {
@@ -113,13 +117,10 @@ function assessOsintXPost(post, opts = {}) {
     return { keep: false, reason: 'strict-no-signal', relevance: 0 }
   }
 
-  // balanced: keep intel, keep risk>=minRisk, keep high-priority accounts even if soft
+  // balanced: keep intel OR risk>=minRisk. No soft keep for high-priority alone —
+  // curated handles still post lifestyle/noise that should not dominate.
   if (intel) return { keep: true, reason: 'intel-signal', relevance: 3 }
   if (risk != null && risk >= minRisk) return { keep: true, reason: 'risk-ok', relevance: risk }
-  if ((post.priority || '') === 'high' && !lifestyle) {
-    return { keep: true, reason: 'high-priority-account', relevance: 1 }
-  }
-  // Soft / unclear with no intel signal — drop so random life doesn't dominate
   return { keep: false, reason: 'no-intel-signal', relevance: 0 }
 }
 

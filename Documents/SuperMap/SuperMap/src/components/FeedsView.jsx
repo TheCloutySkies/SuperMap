@@ -344,7 +344,9 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
     }
     let cancelled = false
     let retryId = null
-    if (!initialNews) setNewsLoading(true)
+    // Keep initialNews / cached items visible while refresh runs
+    if (!initialNews || initialItems.length === 0) setNewsLoading(true)
+    else setNewsLoading(false)
 
     function doFetch() {
       const t0 = Date.now()
@@ -355,26 +357,27 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
           if (feedsDebugEnabled()) {
             console.debug('[FEEDS news] OUTPUT', { count: items.length, ms: Date.now() - t0 })
           }
-          setNewsItems(items)
-          setNewsMeta(res.data?.meta || null)
-          if (Array.isArray(items) && items.length === 0) {
+          if (items.length > 0) {
+            setNewsItems(items)
+            setNewsMeta(res.data?.meta || null)
+          } else if (newsItems.length === 0) {
             retryId = setTimeout(() => {
               if (cancelled) return
-              setNewsLoading(true)
               doFetch()
             }, 2500)
           }
         })
         .catch((err) => {
-          if (!cancelled) setNewsItems([])
+          // Keep cached newsItems on failure
           if (feedsDebugEnabled()) {
             console.debug('[FEEDS news] OUTPUT error', { message: err?.message || String(err), ms: Date.now() - t0 })
           }
-          retryId = setTimeout(() => {
-            if (cancelled) return
-            setNewsLoading(true)
-            doFetch()
-          }, 2500)
+          if (newsItems.length === 0 && initialItems.length === 0) {
+            retryId = setTimeout(() => {
+              if (cancelled) return
+              doFetch()
+            }, 2500)
+          }
         })
         .finally(() => {
           if (!cancelled) setNewsLoading(false)
@@ -386,6 +389,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
       cancelled = true
       if (retryId) clearTimeout(retryId)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -394,21 +398,23 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
       return
     }
     let cancelled = false
-    setOsintLoading(true)
+    // Soft loading: don't blank existing osintItems
+    setOsintLoading((prev) => (osintItems.length > 0 ? false : true))
     const t0 = Date.now()
     if (feedsDebugEnabled()) console.debug('[FEEDS osint] INPUT', { url: `${API_BASE}/api/osint` })
     axios.get(`${API_BASE}/api/osint`, { timeout: 25000 })
       .then((res) => {
         const items = geoJsonToItems(res.data)
-        if (!cancelled) setOsintItems(items)
+        if (!cancelled && items.length > 0) setOsintItems(items)
         if (feedsDebugEnabled()) console.debug('[FEEDS osint] OUTPUT', { count: items.length, ms: Date.now() - t0 })
       })
       .catch((err) => {
-        if (!cancelled) setOsintItems([])
+        // Keep cached OSINT on failure
         if (feedsDebugEnabled()) console.debug('[FEEDS osint] OUTPUT error', { message: err?.message || String(err), ms: Date.now() - t0 })
       })
       .finally(() => { if (!cancelled) setOsintLoading(false) })
     return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handlePinToMap = (item) => {
@@ -438,34 +444,37 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
 
   const refreshFeeds = () => {
     setRefreshing(true)
-    setNewsLoading(true)
-    setOsintLoading(true)
-    if (feedMode === FEED_MODE.VIDEOS) setVideoLoading(true)
+    // Soft refresh: keep current items visible while updating
     const requests = [
       axios.get(`${API_BASE}/api/news`, { timeout: 15000 }),
       axios.get(`${API_BASE}/api/osint`, { timeout: 15000 }),
     ]
     if (feedMode === FEED_MODE.VIDEOS) {
+      setVideoLoading(true)
       requests.push(axios.get(`${API_BASE}/api/feeds/videos`, { timeout: 20000 }))
     }
     Promise.all(requests)
       .then((responses) => {
-        setNewsItems(geoJsonToItems(responses[0].data))
-        setNewsMeta(responses[0].data?.meta || null)
-        setOsintItems(geoJsonToItems(responses[1].data))
+        const nextNews = geoJsonToItems(responses[0].data)
+        if (nextNews.length > 0) {
+          setNewsItems(nextNews)
+          setNewsMeta(responses[0].data?.meta || null)
+        }
+        const nextOsint = geoJsonToItems(responses[1].data)
+        if (nextOsint.length > 0) setOsintItems(nextOsint)
         if (feedMode === FEED_MODE.VIDEOS && responses[2]) {
           const features = responses[2].data?.features ?? []
-          setVideoItems(features.map((f) => ({
-            ...(f.properties || {}),
-            id: f.properties?.id ?? f.id,
-            _key: f.properties?.id ?? f.id ?? Math.random(),
-          })))
+          if (features.length > 0) {
+            setVideoItems(features.map((f) => ({
+              ...(f.properties || {}),
+              id: f.properties?.id ?? f.id,
+              _key: f.properties?.id ?? f.id ?? Math.random(),
+            })))
+          }
         }
       })
       .catch(() => {
-        setNewsItems([])
-        setOsintItems([])
-        if (feedMode === FEED_MODE.VIDEOS) setVideoItems([])
+        // Keep existing items — do not blank the desk on refresh failure
       })
       .finally(() => {
         setNewsLoading(false)

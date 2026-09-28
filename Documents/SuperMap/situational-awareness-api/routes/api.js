@@ -40,6 +40,38 @@ const netblocksCache = new NodeCache({ stdTTL: 15 * 60, checkperiod: 120 })
 const earthquakesWidgetCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 60 })
 const conflictMetricsCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 })
 const homeBootstrapCache = new NodeCache({ stdTTL: 60, checkperiod: 30 })
+const HOME_DISK_NS = 'home'
+const HOME_DISK_KEY = 'bootstrap'
+const HOME_DISK_TTL = apiResultCache.TTL.DAILY
+const HOME_DISK_STALE = apiResultCache.TTL.WEEKLY
+
+function payloadHasContent(payload) {
+  if (!payload || typeof payload !== 'object') return false
+  if (payload.threatSummary?.summary) return true
+  if (Array.isArray(payload.osintX) && payload.osintX.length > 0) return true
+  if (Array.isArray(payload.homeImages) && payload.homeImages.length > 0) return true
+  if (payload.news?.features?.length > 0) return true
+  if (payload.stocks?.current) return true
+  return false
+}
+
+function persistHomeLastGood(payload) {
+  if (!payloadHasContent(payload)) return
+  try {
+    apiResultCache.set(HOME_DISK_NS, HOME_DISK_KEY, payload, HOME_DISK_TTL)
+  } catch (e) {
+    console.warn('[API /home] persist:', e.message)
+  }
+}
+
+function loadHomeLastGood() {
+  try {
+    const hit = apiResultCache.getStale(HOME_DISK_NS, HOME_DISK_KEY, HOME_DISK_STALE)
+    if (hit?.value && payloadHasContent(hit.value)) return hit.value
+  } catch (_) { /* optional */ }
+  return null
+}
+
 const MAPBOX_TOKEN = process.env.MAPBOX_TOKEN || ''
 const GEOAPIFY_KEY = process.env.GEOAPIFY_KEY || ''
 const { HOME_CACHE_CONTROL, getHomePayload } = require('../services/homeBootstrap')
@@ -166,7 +198,6 @@ router.get('/news', async (req, res) => {
   setHomeCacheHeaders(res)
   try {
     const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
-    const cached = !forceRefresh ? newsService.getNewsCached() : null
     const attachMeta = (payload) => {
       if (!payload || typeof payload !== 'object') return payload
       try {
@@ -189,38 +220,70 @@ router.get('/news', async (req, res) => {
         return payload
       }
     }
-    if (cached && Array.isArray(cached.features) && cached.features.length > 0) {
+
+    // Cache-first: serve last-good immediately (memory + disk).
+    const cached = newsService.getNewsCached()
+    if (!forceRefresh && cached && Array.isArray(cached.features) && cached.features.length > 0) {
       if (feedsDebugEnabled()) {
         console.log('[FEEDS API /news] OUTPUT', { cached: true, features: cached.features.length, ms: Date.now() - t0 })
       }
       return res.json(attachMeta(cached))
     }
-    const items = await newsService.getNews()
-    if (feedsDebugEnabled()) {
-      console.log('[FEEDS API /news] OUTPUT', { cached: false, features: items?.features?.length || 0, ms: Date.now() - t0 })
+
+    if (forceRefresh) {
+      const items = await newsService.getNews()
+      if (feedsDebugEnabled()) {
+        console.log('[FEEDS API /news] OUTPUT', { cached: false, features: items?.features?.length || 0, ms: Date.now() - t0 })
+      }
+      return res.json(attachMeta(items))
     }
-    return res.json(attachMeta(items))
+
+    // Empty cache: respond with empty FC quickly, rebuild in background (8/15 catch-up also covers this).
+    if (cached) return res.json(attachMeta(cached))
+    newsService.getNews().catch((e) => console.warn('[API /news] background:', e.message))
+    return res.json(attachMeta({ type: 'FeatureCollection', features: [], meta: {} }))
   } catch (err) {
     console.error('[API /news]', err.message)
+    const cached = newsService.getNewsCached()
+    if (cached) return res.json(cached)
     res.status(500).json({ error: 'Failed to fetch news' })
   }
 })
 
-/** Single homescreen bootstrap: all home widgets in one response. Cache 60s. */
+/** Single homescreen bootstrap: all home widgets in one response. Cache 60s + disk last-good. */
 router.get('/home', async (req, res) => {
   setHomeCacheHeaders(res)
   const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
   if (!forceRefresh) {
     const cached = homeBootstrapCache.get('home')
     if (cached) return res.json({ ...cached, _cached: true })
+    const disk = loadHomeLastGood()
+    if (disk) {
+      homeBootstrapCache.set('home', disk)
+      // Refresh in background so keepalive stays warm without blocking cold open
+      setImmediate(() => {
+        getHomePayload()
+          .then((payload) => {
+            if (payloadHasContent(payload)) {
+              homeBootstrapCache.set('home', payload)
+              persistHomeLastGood(payload)
+            }
+          })
+          .catch((e) => console.warn('[API /home] bg refresh:', e.message))
+      })
+      return res.json({ ...disk, _cached: true, _fromDisk: true })
+    }
   }
   try {
     const payload = await getHomePayload()
-    homeBootstrapCache.set('home', payload)
+    if (payloadHasContent(payload)) {
+      homeBootstrapCache.set('home', payload)
+      persistHomeLastGood(payload)
+    }
     return res.json(payload)
   } catch (err) {
     console.error('[API /home]', err.message)
-    const cached = homeBootstrapCache.get('home')
+    const cached = homeBootstrapCache.get('home') || loadHomeLastGood()
     if (cached) return res.json({ ...cached, _cached: true, _staleOnError: true })
     res.status(500).json({ error: 'Failed to build home payload' })
   }
@@ -230,7 +293,9 @@ router.get('/osint', (req, res) => {
   const t0 = Date.now()
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 100, 200)
-    const data = osintService.getOsintFromDb(limit)
+    const data = typeof osintService.getOsintLastGood === 'function'
+      ? osintService.getOsintLastGood(limit)
+      : osintService.getOsintFromDb(limit)
     if (feedsDebugEnabled()) {
       console.log('[FEEDS API /osint] OUTPUT', { limit, features: data?.features?.length || 0, ms: Date.now() - t0 })
     }
@@ -404,6 +469,14 @@ router.get('/proxy-video', async (req, res) => {
 
 const THREAT_SUMMARY_FILE = path.join(__dirname, '..', 'data', 'last-threat-summary.json')
 
+function isGoodThreatSummary(payload) {
+  if (!payload || typeof payload.summary !== 'string') return false
+  const s = payload.summary.trim()
+  if (!s) return false
+  if (payload.fallback && /no (recent|threat-tagged)|no recent articles/i.test(s)) return false
+  return true
+}
+
 function readPersistedThreatSummary() {
   try {
     const raw = fs.readFileSync(THREAT_SUMMARY_FILE, 'utf8')
@@ -414,48 +487,111 @@ function readPersistedThreatSummary() {
 }
 
 function writePersistedThreatSummary(payload) {
+  // Never overwrite last-good with empty / weak fallback.
+  if (!isGoodThreatSummary(payload)) {
+    const existing = readPersistedThreatSummary()
+    if (existing && isGoodThreatSummary(existing)) {
+      console.log('[API /threat-summary] keep last-good; skip empty/fallback write')
+      return false
+    }
+    // Allow first-write only if nothing exists? Prefer not to persist empty.
+    return false
+  }
   try {
     const dir = path.dirname(THREAT_SUMMARY_FILE)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(THREAT_SUMMARY_FILE, JSON.stringify(payload, null, 0), 'utf8')
+    return true
   } catch (e) {
     console.warn('[API /threat-summary] Could not persist:', e.message)
+    return false
   }
 }
 
-/** AI threat summary. Cached 60 min; persisted to file so we avoid extra requests. Use ?refresh=1 to regenerate. */
+function threatPayloadFromResult(result) {
+  return {
+    summary: result.summary,
+    narrative: result.narrative,
+    threat_level: result.threat_level,
+    threat_score: result.threat_score,
+    sources: result.sources || [],
+    timestamp: result.timestamp || new Date().toISOString(),
+    bullets: result.bullets,
+    fallback: result.fallback,
+    high_risk_count: result.high_risk_count || 0,
+    top_risks: Array.isArray(result.top_risks) ? result.top_risks : [],
+  }
+}
+
+/** Background rebuild after 8/15 batch (and optional callers). */
+function rebuildThreatSummaryBackground(reason = 'batch') {
+  setImmediate(async () => {
+    try {
+      const threatSummaryService = require('../services/threatSummary')
+      const result = await threatSummaryService.getThreatSummary()
+      const payload = threatPayloadFromResult(result)
+      if (!isGoodThreatSummary(payload)) {
+        console.log('[threat-summary] rebuild produced empty/fallback; keeping last-good (', reason, ')')
+        return
+      }
+      threatSummaryCache.set('threat-summary', payload)
+      writePersistedThreatSummary(payload)
+      console.log('[threat-summary] rebuilt after', reason)
+    } catch (e) {
+      console.warn('[threat-summary] rebuild failed:', e.message)
+    }
+  })
+}
+
+function persistThreatSummaryIfGood(result) {
+  const payload = threatPayloadFromResult(result)
+  if (!isGoodThreatSummary(payload)) return false
+  threatSummaryCache.set('threat-summary', payload)
+  return writePersistedThreatSummary(payload)
+}
+
+/** AI threat summary. Return last-good immediately; rebuild in background. Use ?refresh=1 to wait. */
 router.get('/threat-summary', async (req, res) => {
   setHomeCacheHeaders(res)
   const cacheKey = 'threat-summary'
   const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
-  if (!forceRefresh) {
-    const cached = threatSummaryCache.get(cacheKey)
-    if (cached) return res.json(cached)
-    const persisted = readPersistedThreatSummary()
-    if (persisted) return res.json(persisted)
+
+  const cached = threatSummaryCache.get(cacheKey)
+  const persisted = readPersistedThreatSummary()
+  const lastGood = (cached && isGoodThreatSummary(cached) ? cached : null)
+    || (persisted && isGoodThreatSummary(persisted) ? persisted : null)
+    || cached
+    || persisted
+
+  if (!forceRefresh && lastGood) {
+    // Soft background refresh if memory miss but disk hit
+    if (!cached && persisted) {
+      threatSummaryCache.set(cacheKey, persisted)
+    }
+    return res.json(lastGood)
   }
+
   try {
     const threatSummaryService = require('../services/threatSummary')
     const result = await threatSummaryService.getThreatSummary()
-    const payload = {
-      summary: result.summary,
-      narrative: result.narrative,
-      threat_level: result.threat_level,
-      threat_score: result.threat_score,
-      sources: result.sources || [],
-      timestamp: result.timestamp || new Date().toISOString(),
-      bullets: result.bullets,
-      fallback: result.fallback,
-      high_risk_count: result.high_risk_count || 0,
-      top_risks: Array.isArray(result.top_risks) ? result.top_risks : [],
+    const payload = threatPayloadFromResult(result)
+    if (isGoodThreatSummary(payload)) {
+      threatSummaryCache.set(cacheKey, payload)
+      writePersistedThreatSummary(payload)
+      return res.json(payload)
+    }
+    // Empty/fallback: keep serving last-good if we have it
+    if (lastGood && isGoodThreatSummary(lastGood)) {
+      console.log('[API /threat-summary] regenerate empty; returning last-good')
+      return res.json({ ...lastGood, _staleOnEmpty: true })
     }
     threatSummaryCache.set(cacheKey, payload)
-    writePersistedThreatSummary(payload)
-    res.json(payload)
+    return res.json(payload)
   } catch (err) {
     console.error('[API /threat-summary]', err.message)
-    const persisted = readPersistedThreatSummary()
-    if (persisted) return res.json(persisted)
+    if (lastGood) return res.json(lastGood)
+    const fallbackPersisted = readPersistedThreatSummary()
+    if (fallbackPersisted) return res.json(fallbackPersisted)
     res.status(500).json({
       error: 'Failed to generate threat summary',
       summary: '',
@@ -599,8 +735,8 @@ function mapOsintXRows(rows, cutoff) {
 }
 
 /** OSINT X via FxTwitter: GET /api/osint-x?limit=100&refresh=1. Last 48h.
- * Always returns DB posts quickly. Live FxTwitter pull is budgeted so the client
- * never hangs in a "Try Refresh" loop (Render + FxTwitter can exceed 90s).
+ * Always returns SQLite posts immediately. Live FxTwitter pull is fire-and-forget
+ * so cold opens never block on a 90s+ refresh.
  */
 router.get('/osint-x', async (req, res) => {
   const t0 = Date.now()
@@ -613,29 +749,19 @@ router.get('/osint-x', async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 100, 200)
     const cutoff = Date.now() - OSINT_X_MAX_AGE_MS
-    let rows = getEvents(limit, null, null, null, null, ['x'])
-    let posts = mapOsintXRows(rows, cutoff)
+    const rows = getEvents(limit, null, null, null, null, ['x'])
+    const posts = mapOsintXRows(rows, cutoff)
     let refreshMeta = { attempted: false, reason: null }
 
-    // Only block the response for a live pull when forced or the DB is empty.
-    // Do NOT wait just because images are missing — that caused 30–90s hangs.
+    // Kick off background top-up without delaying the response.
     const shouldLive = force || posts.length === 0
     if (shouldLive) {
       refreshMeta.attempted = true
-      const budgetMs = force ? 22000 : 15000
-      try {
-        const result = await ensureOsintXFresh({
-          limitFeeds: force ? 12 : 8,
-          force,
-          budgetMs,
-        })
-        refreshMeta.reason = result?.reason || (result?.refreshed ? 'ok' : null)
-        rows = getEvents(limit, null, null, null, null, ['x'])
-        posts = mapOsintXRows(rows, cutoff)
-      } catch (err) {
-        console.warn('[API /osint-x] live refresh:', err.message)
-        refreshMeta.reason = err.message
-      }
+      refreshMeta.reason = 'background'
+      ensureOsintXFresh({
+        limitFeeds: force ? 0 : 12, // 0 = full list on explicit refresh
+        force,
+      }).catch((err) => console.warn('[API /osint-x] background refresh:', err.message))
     }
 
     if (feedsDebugEnabled()) {
@@ -648,7 +774,6 @@ router.get('/osint-x', async (req, res) => {
         ms: Date.now() - t0,
       })
     }
-    // Array body kept for backward compat with OsintXView; meta via headers.
     res.set('X-Osint-X-Count', String(posts.length))
     if (refreshMeta.attempted) res.set('X-Osint-X-Refresh', refreshMeta.reason || 'attempted')
     res.json(posts)
@@ -2174,3 +2299,7 @@ module.exports.invalidateHomeBootstrapCache = function invalidateHomeBootstrapCa
     homeBootstrapCache.del('home')
   } catch (_) { /* ignore */ }
 }
+module.exports.rebuildThreatSummaryBackground = rebuildThreatSummaryBackground
+module.exports.persistThreatSummaryIfGood = persistThreatSummaryIfGood
+module.exports.loadHomeLastGood = loadHomeLastGood
+module.exports.persistHomeLastGood = persistHomeLastGood

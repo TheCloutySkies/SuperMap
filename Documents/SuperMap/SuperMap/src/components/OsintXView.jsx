@@ -107,17 +107,22 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
 
   const applyPosts = (next) => {
     if (!Array.isArray(next)) return
-    setPosts(next)
-    setLoadError(null)
-    try {
-      const prev = readHomeSnapshot() || {}
-      writeHomeSnapshot({ ...prev, osintX: next.slice(0, 100) })
-    } catch { /* optional cache */ }
+    // Never blank UI with an empty refresh when we already have posts.
+    setPosts((prev) => {
+      if (next.length === 0 && prev.length > 0) return prev
+      return next
+    })
+    if (next.length > 0) {
+      setLoadError(null)
+      try {
+        const prev = readHomeSnapshot() || {}
+        writeHomeSnapshot({ ...prev, osintX: next.slice(0, 100) })
+      } catch { /* optional cache */ }
+    }
   }
 
   const fetchPosts = async (force = false) => {
     if (!API_BASE) {
-      setPosts([])
       setLoading(false)
       setRefreshing(false)
       setLoadError('No API URL configured (VITE_API_URL).')
@@ -126,8 +131,13 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
     const gen = ++fetchGen.current
     const params = { limit: 150 }
     if (force) params.refresh = '1'
-    // Soft load: allow up to 45s. Force: API budgets ~22s so 50s is ample.
-    const timeout = force ? 50000 : 45000
+    // Soft load: API returns SQLite immediately; keep timeout modest.
+    const timeout = force ? 20000 : 15000
+    const hadCached = snapshotPosts.current.length > 0
+    if (hadCached) {
+      setLoading(false)
+      setRefreshing(true)
+    }
     try {
       const res = await axios.get(`${API_BASE}/api/osint-x`, {
         params,
@@ -138,15 +148,16 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
       const next = Array.isArray(res.data) ? res.data : []
       if (next.length > 0) {
         applyPosts(next)
+        snapshotPosts.current = next
         return
       }
-      if (!force) {
-        // Empty DB — try one soft force pull, but keep snapshot if that fails
+      // Empty API response: keep snapshot/cached posts visible; soft background retry once.
+      if (!force && !hadCached) {
         setRefreshing(true)
         try {
           const retry = await axios.get(`${API_BASE}/api/osint-x`, {
             params: { limit: 150, refresh: '1' },
-            timeout: 50000,
+            timeout: 20000,
             headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
           })
           if (gen !== fetchGen.current) return
@@ -164,7 +175,11 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
         }
         return
       }
-      setLoadError('No posts in the last 48h. Tap Retry to pull FxTwitter again.')
+      if (!hadCached) {
+        setLoadError('No posts in the last 48h. Tap Retry to pull FxTwitter again.')
+      } else {
+        setLoadError('Refresh still running — showing cached posts.')
+      }
     } catch (err) {
       if (gen !== fetchGen.current) return
       // Never wipe existing posts on failure — avoids empty ↔ refresh loop.

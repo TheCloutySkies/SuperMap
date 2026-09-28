@@ -1299,6 +1299,8 @@ export default function MapView({
 
   const [powerZoomWarning, setPowerZoomWarning] = useState(false)
   const [webcamZoomHint, setWebcamZoomHint] = useState(false)
+  const [webcamEmptyHint, setWebcamEmptyHint] = useState(false)
+  const [webcamStatusMsg, setWebcamStatusMsg] = useState('')
   const [mapInstance, setMapInstance] = useState(null)
   const [pinEditorOpen, setPinEditorOpen] = useState(false)
   const [pinEditorPin, setPinEditorPin] = useState(null)
@@ -1930,20 +1932,22 @@ export default function MapView({
           .replace(/>/g, '&gt;')
           .replace(/"/g, '&quot;')
         const title = esc(props.title || 'Webcam')
-        const place = [props.city, props.country].filter(Boolean).map(esc).join(', ')
+        const place = [props.city, props.region, props.country].filter(Boolean).map(esc).join(', ')
         const img = props.image
           ? `<img class="map-popup-webcam-thumb" src="${esc(props.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" />`
           : ''
         const openUrl = props.url || props.playerEmbed || ''
+        const sourceLabel = props.source || 'Live Webcam'
+        const linkLabel = sourceLabel === 'Windy' ? 'Open on Windy' : 'Open camera'
         const link = openUrl
-          ? `<a href="${esc(openUrl)}" target="_blank" rel="noopener noreferrer" class="map-popup-read-more">Open on Windy</a>`
+          ? `<a href="${esc(openUrl)}" target="_blank" rel="noopener noreferrer" class="map-popup-read-more">${esc(linkLabel)}</a>`
           : ''
         const html = `<div class="map-popup-content">
           <div class="map-popup-title">${title}</div>
           ${place ? `<div>${place}</div>` : ''}
           ${img}
           ${link}
-          <div class="map-popup-source">Windy Webcams</div>
+          <div class="map-popup-source">${esc(sourceLabel)}</div>
         </div>`
         const coords = feat.geometry?.coordinates?.slice?.() || [e.lngLat.lng, e.lngLat.lat]
         popup.setLngLat(coords).setHTML(html).addTo(map)
@@ -2381,13 +2385,15 @@ export default function MapView({
     } catch (_) {}
   }, [activeView, mapInstance])
 
-  // Live Webcams: lazy Windy fetch by viewport once zoom ≥ MIN_WEBCAM_ZOOM.
+  // Live Webcams: lazy multi-source fetch by viewport once zoom ≥ MIN_WEBCAM_ZOOM.
   useEffect(() => {
     const map = mapRef.current
     if (!map || !mapReadyRef.current) return
 
     if (activeView !== 'live-webcams') {
       setWebcamZoomHint(false)
+      setWebcamEmptyHint(false)
+      setWebcamStatusMsg('')
       try {
         const helpers = addOrUpdateLayer(map, {}, onLoadingChange)
         helpers.removeLiveWebcams()
@@ -2406,6 +2412,8 @@ export default function MapView({
       const zoom = map.getZoom()
       if (zoom < MIN_WEBCAM_ZOOM) {
         setWebcamZoomHint(true)
+        setWebcamEmptyHint(false)
+        setWebcamStatusMsg('')
         try {
           const helpers = addOrUpdateLayer(map, {}, onLoadingChange)
           helpers.addLiveWebcams(emptyFc())
@@ -2423,7 +2431,20 @@ export default function MapView({
           if (cancelled || !mapRef.current || !mapReadyRef.current) return
           if (activeViewRef.current !== 'live-webcams') return
           const helpers = addOrUpdateLayer(map, {}, onLoadingChange)
-          helpers.addLiveWebcams(geoJson || emptyFc())
+          const fc = geoJson || emptyFc()
+          helpers.addLiveWebcams(fc)
+          const count = Array.isArray(fc.features) ? fc.features.length : 0
+          if (count === 0) {
+            setWebcamEmptyHint(true)
+            setWebcamStatusMsg(
+              geoJson?.error
+                ? 'Could not load webcams for this view'
+                : 'No webcams in this view — pan to CA / NYC traffic corridors or zoom out slightly',
+            )
+          } else {
+            setWebcamEmptyHint(false)
+            setWebcamStatusMsg('')
+          }
         })
         .catch((err) => {
           if (err?.name === 'AbortError' || cancelled) return
@@ -2431,6 +2452,8 @@ export default function MapView({
             const helpers = addOrUpdateLayer(map, {}, onLoadingChange)
             helpers.addLiveWebcams(emptyFc())
           } catch (_) {}
+          setWebcamEmptyHint(true)
+          setWebcamStatusMsg('Could not load webcams for this view')
         })
         .finally(() => {
           if (!cancelled) onLoadingChange?.(false)
@@ -2773,6 +2796,11 @@ export default function MapView({
       {webcamZoomHint && activeView === 'live-webcams' && (
         <div className="map-zoom-warning map-zoom-warning--webcams">
           Zoom in to load webcams (zoom {MIN_WEBCAM_ZOOM}+)
+        </div>
+      )}
+      {!webcamZoomHint && webcamEmptyHint && activeView === 'live-webcams' && (
+        <div className="map-zoom-warning map-zoom-warning--webcams map-zoom-warning--webcams-empty" role="status">
+          {webcamStatusMsg || 'No webcams in this view'}
         </div>
       )}
       {isMapLoading && (

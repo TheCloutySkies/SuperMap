@@ -22,7 +22,7 @@ const fs = require('fs')
 const Parser = require('rss-parser')
 const { getAllCameras } = require('../camera-discovery/storage/saveCamera')
 const { loadSeedCameras } = require('../camera-discovery/storage/cameraSeeds')
-const { getWebcamsByBbox, windyConfigured } = require('../services/cameras')
+const { getWebcamsByBbox } = require('../services/cameras')
 const crimeRouter = require('./crime')
 const weatherRouter = require('./weather')
 const windyWebcamsCache = new NodeCache({ stdTTL: 90, checkperiod: 60 })
@@ -837,24 +837,17 @@ router.get('/cameras', async (req, res) => {
 
 /**
  * GET /api/webcams?minLat=&maxLat=&minLon=&maxLon=&limit=
- * Proxies Windy Webcams API v2 list/bbox using server-side WINDY_API.
- * Intended for Live Webcams map (viewport lazy fetch). Do not call without a bbox.
+ * Live Webcams map (viewport lazy fetch). Aggregates free public traffic-cam
+ * catalogs (Caltrans CWWP2, NYC DOT TMC) plus optional Windy Webcams v2 when
+ * WINDY_API is a webcams-capable key. Do not call without a bbox.
  */
 router.get('/webcams', async (req, res) => {
   try {
-    if (!windyConfigured() && String(process.env.WEBCAMS_DEMO || '').trim() !== '1') {
-      return res.status(503).json({
-        type: 'FeatureCollection',
-        features: [],
-        configured: false,
-        error: 'WINDY_API not configured',
-      })
-    }
     const north = req.query.maxLat != null ? Number(req.query.maxLat) : Number(req.query.north)
     const south = req.query.minLat != null ? Number(req.query.minLat) : Number(req.query.south)
     const east = req.query.maxLon != null ? Number(req.query.maxLon) : Number(req.query.east)
     const west = req.query.minLon != null ? Number(req.query.minLon) : Number(req.query.west)
-    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 50)
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 80)
 
     if (![north, south, east, west].every((n) => Number.isFinite(n))) {
       return res.status(400).json({
@@ -879,6 +872,8 @@ router.get('/webcams', async (req, res) => {
     const data = await getWebcamsByBbox({ north, east, south, west, limit })
     windyWebcamsCache.set(cacheKey, data)
     res.set('X-Webcams-Cache', 'MISS')
+    if (data.windyConfigured) res.set('X-Webcams-Windy', 'configured')
+    else res.set('X-Webcams-Windy', 'skipped')
     res.json(data)
   } catch (err) {
     console.error('[API /webcams]', err.message)

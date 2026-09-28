@@ -821,14 +821,15 @@ export async function fetchFlockCameras(_bbox) {
 }
 
 /**
- * Windy live webcams for current map viewport (lazy bbox fetch via /api/webcams).
+ * Live webcams for current map viewport (lazy bbox fetch via /api/webcams).
+ * Aggregates free public traffic cams (Caltrans, NYC DOT) + optional Windy.
  * @param {[number, number, number, number]} bbox [west, south, east, north]
  * @param {{ signal?: AbortSignal, limit?: number }} [opts]
  */
 export async function fetchWindyWebcams(bbox, opts = {}) {
   const [west, south, east, north] = bbox || []
   if (![west, south, east, north].every((n) => Number.isFinite(n))) {
-    return { type: 'FeatureCollection', features: [], configured: false }
+    return { type: 'FeatureCollection', features: [], configured: false, empty: true }
   }
   const limit = opts.limit ?? 50
   const qs = new URLSearchParams({
@@ -850,16 +851,24 @@ export async function fetchWindyWebcams(bbox, opts = {}) {
         type: 'FeatureCollection',
         features: [],
         configured: body?.configured !== false,
+        empty: true,
         error: body?.error || `HTTP ${res.status}`,
       }
     }
     const data = await res.json()
-    if (data?.type === 'FeatureCollection') return data
-    return { type: 'FeatureCollection', features: [], configured: true }
+    if (data?.type === 'FeatureCollection') {
+      const features = Array.isArray(data.features) ? data.features : []
+      return {
+        ...data,
+        features,
+        empty: features.length === 0,
+      }
+    }
+    return { type: 'FeatureCollection', features: [], configured: true, empty: true }
   } catch (err) {
     if (err?.name === 'AbortError') throw err
     console.warn('[SuperMap webcams]', err?.message || err)
-    return { type: 'FeatureCollection', features: [], configured: true, error: err?.message }
+    return { type: 'FeatureCollection', features: [], configured: true, empty: true, error: err?.message }
   }
 }
 

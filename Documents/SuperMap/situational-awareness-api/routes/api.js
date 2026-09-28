@@ -710,10 +710,30 @@ function mapOsintXRows(rows, cutoff) {
       const tags = getEventTagNames(r.id)
       const priority = raw.priority || 'medium'
       const risk_score = raw.risk_score != null ? Number(raw.risk_score) : null
+      const metrics = raw.metrics && typeof raw.metrics === 'object'
+        ? {
+            replies: Number(raw.metrics.replies) || 0,
+            reposts: Number(raw.metrics.reposts) || 0,
+            likes: Number(raw.metrics.likes) || 0,
+            bookmarks: Number(raw.metrics.bookmarks) || 0,
+            quotes: Number(raw.metrics.quotes) || 0,
+            views: Number(raw.metrics.views) || 0,
+          }
+        : {
+            replies: Number(raw.replyCount) || 0,
+            reposts: 0,
+            likes: 0,
+            bookmarks: 0,
+            quotes: 0,
+            views: 0,
+          }
       return {
         id: r.id,
         source: 'x',
         account: raw.account || 'x',
+        displayName: raw.displayName || raw.account || 'x',
+        avatarUrl: raw.avatarUrl || null,
+        verified: !!raw.verified,
         title: r.title,
         content: r.description,
         timestamp: r.timestamp,
@@ -722,8 +742,13 @@ function mapOsintXRows(rows, cutoff) {
         risk_label: raw.risk_label || undefined,
         priority,
         url: raw.link || raw.url,
+        tweetId: raw.tweetId || null,
         images: Array.isArray(raw.images) ? raw.images : [],
         videos: Array.isArray(raw.videos) ? raw.videos : [],
+        metrics,
+        replyCount: metrics.replies,
+        // FxTwitter does not return reply thread bodies — only counts.
+        repliesAvailable: false,
         provider: raw.provider || 'fxtwitter',
       }
     })
@@ -738,6 +763,7 @@ function mapOsintXRows(rows, cutoff) {
 /** OSINT X via FxTwitter: GET /api/osint-x?limit=100&refresh=1. Last 48h.
  * Always returns SQLite posts immediately. Live FxTwitter pull is fire-and-forget
  * so cold opens never block on a 90s+ refresh.
+ * Content filter (lifestyle → geo/intel): ?filter=off|balanced|strict&minRisk=1-5&minPriority=low|medium|high
  */
 router.get('/osint-x', async (req, res) => {
   const t0 = Date.now()
@@ -750,12 +776,22 @@ router.get('/osint-x', async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 100, 200)
     const cutoff = Date.now() - OSINT_X_MAX_AGE_MS
-    const rows = getEvents(limit, null, null, null, null, ['x'])
-    const posts = mapOsintXRows(rows, cutoff)
+    const { filterOsintXPosts, getDefaultOpts } = require('../services/osintXContentFilter')
+    const filterDefaults = getDefaultOpts()
+    const filterMode = req.query.filter != null ? String(req.query.filter) : filterDefaults.mode
+    const minRiskQ = parseInt(req.query.minRisk, 10)
+    const minRisk = Number.isFinite(minRiskQ) ? minRiskQ : filterDefaults.minRisk
+    const minPriority = req.query.minPriority != null
+      ? String(req.query.minPriority)
+      : filterDefaults.minPriority
+
+    // Pull extra rows so filter drop doesn't starve the response.
+    const rows = getEvents(Math.min(limit * 3, 400), null, null, null, null, ['x'])
+    const mapped = mapOsintXRows(rows, cutoff)
     let refreshMeta = { attempted: false, reason: null }
 
     // Kick off background top-up without delaying the response.
-    const shouldLive = force || posts.length === 0
+    const shouldLive = force || mapped.length === 0
     if (shouldLive) {
       refreshMeta.attempted = true
       refreshMeta.reason = 'background'
@@ -765,17 +801,27 @@ router.get('/osint-x', async (req, res) => {
       }).catch((err) => console.warn('[API /osint-x] background refresh:', err.message))
     }
 
+    const filtered = filterOsintXPosts(mapped, {
+      mode: filterMode,
+      minRisk,
+      minPriority,
+    })
+    const posts = filtered.posts.slice(0, limit)
+
     if (feedsDebugEnabled()) {
       console.log('[FEEDS API /osint-x] OUTPUT', {
         limit,
         force,
         posts: posts.length,
+        filter: filtered.meta,
         withImages: posts.filter((p) => p.images?.length).length,
         refreshMeta,
         ms: Date.now() - t0,
       })
     }
     res.set('X-Osint-X-Count', String(posts.length))
+    res.set('X-Osint-X-Filter', filtered.meta.mode || 'balanced')
+    res.set('X-Osint-X-Filter-Dropped', String(filtered.meta.dropped || 0))
     if (refreshMeta.attempted) res.set('X-Osint-X-Refresh', refreshMeta.reason || 'attempted')
     res.json(posts)
   } catch (err) {

@@ -1,6 +1,7 @@
 /**
- * Lightweight omnibar content index — news / OSINT / crime from already-cached data.
+ * Lightweight omnibar content index — news / OSINT / X / crime from already-cached data.
  * Never calls MediaStack; news uses getNewsCached() only.
+ * X posts come from SQLite (same source as /api/osint-x).
  */
 const newsService = require('./news')
 const osintService = require('./osint')
@@ -46,9 +47,49 @@ function editDistance(a, b) {
   return row[n]
 }
 
+/** Relative age label for omnibar/search UI (e.g. "12m", "3h", "2d"). */
+function formatAgeLabel(ts) {
+  if (ts == null || !Number.isFinite(Number(ts))) return null
+  const ms = Number(ts)
+  const age = Date.now() - ms
+  if (age < 0) return 'now'
+  const sec = Math.floor(age / 1000)
+  if (sec < 60) return 'now'
+  if (sec < 3600) return `${Math.floor(sec / 60)}m`
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h`
+  if (sec < 604800) return `${Math.floor(sec / 86400)}d`
+  return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+function publishedAtFromFeature(feature) {
+  const p = feature?.properties || {}
+  if (p.timestamp != null && Number.isFinite(Number(p.timestamp))) return Number(p.timestamp)
+  if (p.pubDate) {
+    const t = new Date(p.pubDate).getTime()
+    if (Number.isFinite(t)) return t
+  }
+  if (p.publishedAt) {
+    const t = new Date(p.publishedAt).getTime()
+    if (Number.isFinite(t)) return t
+  }
+  return null
+}
+
+function recencyBoost(publishedAt) {
+  if (publishedAt == null) return 0
+  const age = Date.now() - Number(publishedAt)
+  if (!Number.isFinite(age) || age < 0) return 0
+  if (age < 60 * 60 * 1000) return 45 // <1h
+  if (age < 6 * 60 * 60 * 1000) return 32
+  if (age < 24 * 60 * 60 * 1000) return 22
+  if (age < 3 * 24 * 60 * 60 * 1000) return 12
+  if (age < 7 * 24 * 60 * 60 * 1000) return 5
+  return 0
+}
+
 function scoreEntry(entry, query) {
   const q = normalize(query)
-  if (!q) return entry.weight || 0
+  if (!q) return (entry.weight || 0) + recencyBoost(entry.publishedAt)
 
   const label = normalize(entry.label)
   const hay = normalize([entry.label, entry.subtitle, entry.category, ...(entry.keywords || [])].filter(Boolean).join(' '))
@@ -83,7 +124,19 @@ function scoreEntry(entry, query) {
   }
 
   score += entry.weight || 0
+  score += recencyBoost(entry.publishedAt)
   return score
+}
+
+function attachRecency(entry, publishedAt) {
+  if (publishedAt == null) return entry
+  const ageLabel = formatAgeLabel(publishedAt)
+  return {
+    ...entry,
+    publishedAt,
+    ageLabel: ageLabel || undefined,
+    ageMs: Number.isFinite(publishedAt) ? Math.max(0, Date.now() - publishedAt) : undefined,
+  }
 }
 
 function featureToEntry(feature, category, viewId) {
@@ -93,19 +146,25 @@ function featureToEntry(feature, category, viewId) {
   if (!title || !id) return null
   const source = String(p.source || '').trim()
   const link = String(p.link || p.url || '').trim() || null
-  return {
+  const publishedAt = publishedAtFromFeature(feature)
+  const ageLabel = formatAgeLabel(publishedAt)
+  const baseSubtitle = source || undefined
+  const subtitle = ageLabel
+    ? (baseSubtitle ? `${baseSubtitle} · ${ageLabel}` : ageLabel)
+    : baseSubtitle
+  return attachRecency({
     id: `${category.toLowerCase()}-${id}`,
     label: title,
     category,
-    subtitle: source || undefined,
+    subtitle,
     keywords: [source, p.category, p.type].filter(Boolean),
     action: link ? 'open' : 'navigate',
     url: link || undefined,
     viewId,
     focusQuery: title,
     focusId: String(id),
-    weight: category === 'News' ? 6 : 5,
-  }
+    weight: category === 'News' ? 6 : category === 'X' ? 7 : 5,
+  }, publishedAt)
 }
 
 function buildCrimeEntries() {
@@ -186,6 +245,57 @@ function buildCrimeEntries() {
   return out
 }
 
+function buildXEntries() {
+  const out = []
+  try {
+    const { getEvents, getEventTagNames } = require('../database')
+    const { filterOsintXPosts } = require('./osintXContentFilter')
+    const cutoff = Date.now() - 48 * 60 * 60 * 1000
+    const rows = getEvents(150, null, null, null, null, ['x'])
+    const mapped = []
+    for (const r of rows) {
+      if ((r.timestamp != null ? Number(r.timestamp) : 0) < cutoff) continue
+      let raw = {}
+      try {
+        raw = r.raw_data ? JSON.parse(r.raw_data) : {}
+      } catch (_) {}
+      mapped.push({
+        id: r.id,
+        title: r.title,
+        content: r.description,
+        account: raw.account || 'x',
+        priority: raw.priority || 'medium',
+        risk_score: raw.risk_score != null ? Number(raw.risk_score) : null,
+        tags: getEventTagNames(r.id),
+        url: raw.link || raw.url,
+        timestamp: r.timestamp,
+      })
+    }
+    const { posts } = filterOsintXPosts(mapped, {})
+    for (const p of posts.slice(0, 100)) {
+      const label = String(p.title || p.content || '').trim().slice(0, 160)
+      if (!label) continue
+      const publishedAt = p.timestamp != null ? Number(p.timestamp) : null
+      const ageLabel = formatAgeLabel(publishedAt)
+      const handle = p.account ? `@${String(p.account).replace(/^@/, '')}` : 'X'
+      out.push(attachRecency({
+        id: `x-${p.id}`,
+        label,
+        category: 'X',
+        subtitle: ageLabel ? `${handle} · ${ageLabel}` : handle,
+        keywords: [p.account, 'x', 'twitter', 'osint', ...(p.tags || [])].filter(Boolean),
+        action: p.url ? 'open' : 'navigate',
+        url: p.url || undefined,
+        viewId: 'osint-x',
+        focusQuery: label,
+        focusId: String(p.id),
+        weight: 7,
+      }, publishedAt))
+    }
+  } catch (_) { /* db optional */ }
+  return out
+}
+
 function buildNewsOsintEntries() {
   const out = []
   const news = newsService.getNewsCached()
@@ -204,6 +314,7 @@ function buildNewsOsintEntries() {
     }
   } catch (_) { /* db may be empty */ }
 
+  out.push(...buildXEntries())
   return out
 }
 
@@ -248,6 +359,7 @@ function searchCitiesAsEntries(q, limit = 8) {
 
 /**
  * Search cached content for the omnibar.
+ * Prefers current + relevant News / X / OSINT (recency boost in score).
  * @param {string} query
  * @param {{ limit?: number }} [opts]
  */
@@ -286,7 +398,14 @@ function searchOmnibarContent(query, opts = {}) {
     scored.push({ ...city, score })
   }
 
-  scored.sort((a, b) => b.score - a.score || a.label.localeCompare(b.label))
+  scored.sort((a, b) => {
+    if ((b.score || 0) !== (a.score || 0)) return (b.score || 0) - (a.score || 0)
+    // Tie-break: newer News/X first
+    const ta = a.publishedAt != null ? Number(a.publishedAt) : 0
+    const tb = b.publishedAt != null ? Number(b.publishedAt) : 0
+    if (tb !== ta) return tb - ta
+    return a.label.localeCompare(b.label)
+  })
   return {
     results: scored.slice(0, limit),
     meta: {
@@ -300,7 +419,7 @@ function searchOmnibarContent(query, opts = {}) {
 }
 
 function indexSources(index) {
-  const byCategory = { News: 0, OSINT: 0, Crime: 0 }
+  const byCategory = { News: 0, OSINT: 0, X: 0, Crime: 0 }
   for (const e of index) {
     if (byCategory[e.category] != null) byCategory[e.category] += 1
   }
@@ -316,4 +435,5 @@ module.exports = {
   searchOmnibarContent,
   getContentIndex,
   invalidateOmnibarContentCache,
+  formatAgeLabel,
 }

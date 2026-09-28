@@ -19,7 +19,7 @@ const CONTENT_DEBOUNCE_MS = 220
 function resultKind(item) {
   if (item._kind === 'place') return 'Place'
   if (item._kind === 'map') return item.properties?.type || 'Result'
-  if (item._kind === 'content' || item.category === 'News' || item.category === 'OSINT') {
+  if (item._kind === 'content' || item.category === 'News' || item.category === 'OSINT' || item.category === 'X') {
     return omnibarDisplayCategory(item)
   }
   if (item.crimeAbbr || item.crimeCitySlug || item.nationalMetric) return 'Crime'
@@ -37,12 +37,26 @@ function resultAction(item) {
   if (item._kind === 'place') return 'Fly to'
   if (item._kind === 'map') return 'Show on map'
   if (item.action === 'open' || item.url) return 'Open'
-  if (item.category === 'News' || item.category === 'OSINT') return 'Open'
+  if (item.category === 'News' || item.category === 'OSINT' || item.category === 'X') return 'Open'
   return 'Jump'
 }
 
 function resultSubtitle(item) {
   if (item.subtitle) return item.subtitle
+  return null
+}
+
+function resultAge(item) {
+  if (item.ageLabel) return item.ageLabel
+  if (item.publishedAt != null) {
+    const age = Date.now() - Number(item.publishedAt)
+    if (!Number.isFinite(age) || age < 0) return null
+    const sec = Math.floor(age / 1000)
+    if (sec < 60) return 'now'
+    if (sec < 3600) return `${Math.floor(sec / 60)}m`
+    if (sec < 86400) return `${Math.floor(sec / 3600)}h`
+    if (sec < 604800) return `${Math.floor(sec / 86400)}d`
+  }
   return null
 }
 
@@ -161,9 +175,9 @@ export default function Omnibar({
     const rows = []
     if (commandMode && mergedMatches.length) {
       for (const cmd of mergedMatches) {
-        rows.push({
+          rows.push({
           ...cmd,
-          _kind: cmd._kind || (cmd.category === 'News' || cmd.category === 'OSINT' || cmd.crimeAbbr || cmd.crimeCitySlug || cmd.nationalMetric ? 'content' : 'jump'),
+          _kind: cmd._kind || (cmd.category === 'News' || cmd.category === 'OSINT' || cmd.category === 'X' || cmd.crimeAbbr || cmd.crimeCitySlug || cmd.nationalMetric ? 'content' : 'jump'),
         })
       }
     }
@@ -433,6 +447,8 @@ export default function Omnibar({
               {mergedMatches.map((cmd, i) => {
                 const idx = jumpOffset + i
                 const sub = resultSubtitle(cmd)
+                const age = resultAge(cmd)
+                const showAgeBadge = age && (cmd.category === 'News' || cmd.category === 'X' || cmd.category === 'OSINT')
                 return (
                   <button
                     key={cmd.id}
@@ -452,6 +468,9 @@ export default function Omnibar({
                       <span className="omnibar-result-title">{cmd.label}</span>
                       {sub ? <span className="omnibar-result-sub">{sub}</span> : null}
                     </span>
+                    {showAgeBadge ? (
+                      <span className="omnibar-result-age" title="Recency">{age}</span>
+                    ) : null}
                     <span className="omnibar-result-action">{resultAction(cmd)}</span>
                   </button>
                 )

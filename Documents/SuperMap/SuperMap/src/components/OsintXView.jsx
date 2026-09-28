@@ -1,20 +1,29 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import axios from 'axios'
 import { getApiBase, readHomeSnapshot, writeHomeSnapshot } from '../lib/homeBootstrap'
 import './OsintXView.css'
 
 const API_BASE = getApiBase()
+const POLL_MS = 90 * 1000
 
 function relativeTime(ts) {
   if (!ts) return '—'
   const d = new Date(ts)
   const now = Date.now()
   const sec = Math.floor((now - d) / 1000)
-  if (sec < 60) return 'just now'
-  if (sec < 3600) return `${Math.floor(sec / 60)} min ago`
-  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`
-  if (sec < 604800) return `${Math.floor(sec / 86400)}d ago`
-  return d.toLocaleDateString(undefined, { dateStyle: 'short' })
+  if (sec < 60) return `${Math.max(1, sec)}s`
+  if (sec < 3600) return `${Math.floor(sec / 60)}m`
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h`
+  if (sec < 604800) return `${Math.floor(sec / 86400)}d`
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+function formatCount(n) {
+  const v = Number(n) || 0
+  if (v < 1000) return String(v)
+  if (v < 10000) return `${(v / 1000).toFixed(1).replace(/\.0$/, '')}K`
+  if (v < 1000000) return `${Math.round(v / 1000)}K`
+  return `${(v / 1000000).toFixed(1).replace(/\.0$/, '')}M`
 }
 
 function youtubeEmbedUrl(url) {
@@ -50,14 +59,77 @@ function readSnapshotPosts() {
   }
 }
 
+function avatarInitial(post) {
+  const name = (post.displayName || post.account || '?').trim()
+  return (name[0] || '?').toUpperCase()
+}
+
+/**
+ * Merge incoming posts into the visible list without wiping / remounting.
+ * New ids prepend (newest-first); existing ids update in place.
+ */
+function mergePostsStable(prev, next) {
+  if (!Array.isArray(next)) return prev
+  if (next.length === 0) return prev.length ? prev : next
+
+  const prevById = new Map(prev.map((p) => [p.id, p]))
+  const nextById = new Map(next.map((p) => [p.id, p]))
+  const incomingNew = []
+
+  for (const p of next) {
+    if (!prevById.has(p.id)) incomingNew.push(p)
+  }
+
+  // Preserve previous visual order for known posts; refresh their fields.
+  const kept = []
+  for (const p of prev) {
+    const updated = nextById.get(p.id)
+    if (updated) kept.push({ ...p, ...updated })
+  }
+
+  // Prepend brand-new posts (API already sorts by priority+time; keep that order among new).
+  incomingNew.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+  return [...incomingNew, ...kept]
+}
+
 const SORT_OPTIONS = [
-  { value: 'time', label: 'Time (newest)' },
-  { value: 'time-asc', label: 'Time (oldest)' },
-  { value: 'creator', label: 'Creator (A–Z)' },
+  { value: 'time', label: 'Latest' },
+  { value: 'time-asc', label: 'Oldest' },
+  { value: 'creator', label: 'Account' },
   { value: 'tags', label: 'Tags' },
 ]
 
 const REPORT_X_POSTS_KEY = 'supermap_report_x_posts'
+
+function EngagementIcon({ kind }) {
+  if (kind === 'reply') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M1.751 10c0-4.42 3.584-8 8.005-8h4.366c4.49 0 8.129 3.64 8.129 8.13 0 2.96-1.607 5.68-4.196 7.11l-8.054 4.46v-3.69h-.067c-4.49.1-8.183-3.51-8.183-8.01zm8.005-6c-3.317 0-6.005 2.69-6.005 6 0 3.37 2.77 6.08 6.138 6.01l.351-.01h1.761v2.3l5.087-2.81c1.95-1.08 3.163-3.13 3.163-5.36 0-3.39-2.744-6.13-6.129-6.13H9.756z" />
+      </svg>
+    )
+  }
+  if (kind === 'repost') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4.75 3.79l4.603 4.3-1.506 1.61L3 5.84l-1.006.94L3 7.75v8.5C3 18.99 5.01 21 7.5 21H13v-2H7.5c-1.38 0-2.5-1.12-2.5-2.5v-8.5l.844.79 1.506-1.61L4.75 3.79zm14.5 16.42l-4.603-4.3 1.506-1.61L21 18.16l1.006-.94L21 16.25v-8.5C21 5.01 18.99 3 16.5 3H11v2h5.5c1.38 0 2.5 1.12 2.5 2.5v8.5l-.844-.79-1.506 1.61 4.603 4.3z" />
+      </svg>
+    )
+  }
+  if (kind === 'like') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M16.697 5.5c-1.222-.06-2.679.51-3.89 2.16l-.805 1.09-.806-1.09C9.984 6.01 8.526 5.44 7.304 5.5c-1.243.07-2.349.78-2.91 1.91-.552 1.12-.633 2.78.479 4.82 1.074 1.97 3.257 4.27 7.129 6.61 3.87-2.34 6.052-4.64 7.126-6.61 1.112-2.04 1.03-3.7.477-4.82-.561-1.13-1.666-1.84-2.908-1.91zm4.187 7.69c-1.351 2.48-4.001 5.12-8.379 7.67l-.503.3-.503-.3c-4.379-2.55-7.029-5.19-8.382-7.67-1.36-2.5-1.41-4.86-.514-6.67.887-1.79 2.647-2.91 4.601-3.01 1.651-.09 3.368.56 4.798 2.01 1.429-1.45 3.146-2.1 4.796-2.01 1.954.1 3.714 1.22 4.601 3.01.896 1.81.846 4.17-.514 6.67z" />
+      </svg>
+    )
+  }
+  // views
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8.75 21V3h2v18h-2zM18 21V8.5h2V21h-2zM4 21l.004-10h2L6 21H4zm9.248 0v-7h2v7h-2z" />
+    </svg>
+  )
+}
 
 export default function OsintXView({ keywordFilter = '', onClearFilter, onPinnedToMap }) {
   const snapshotPosts = useRef(typeof window !== 'undefined' ? readSnapshotPosts() : [])
@@ -73,6 +145,7 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
   const [videoDialog, setVideoDialog] = useState(null)
   const [imageDialog, setImageDialog] = useState(null)
   const [imageDownloading, setImageDownloading] = useState(false)
+  const [expandedReplies, setExpandedReplies] = useState(() => new Set())
   const fetchGen = useRef(0)
 
   const openImageDialog = (post, src) => {
@@ -105,23 +178,23 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
     }
   }
 
-  const applyPosts = (next) => {
+  const applyPosts = useCallback((next, { replace = false } = {}) => {
     if (!Array.isArray(next)) return
-    // Never blank UI with an empty refresh when we already have posts.
     setPosts((prev) => {
       if (next.length === 0 && prev.length > 0) return prev
-      return next
+      const merged = replace ? next : mergePostsStable(prev, next)
+      if (merged.length > 0) {
+        try {
+          const snap = readHomeSnapshot() || {}
+          writeHomeSnapshot({ ...snap, osintX: merged.slice(0, 100) })
+        } catch { /* optional cache */ }
+      }
+      return merged
     })
-    if (next.length > 0) {
-      setLoadError(null)
-      try {
-        const prev = readHomeSnapshot() || {}
-        writeHomeSnapshot({ ...prev, osintX: next.slice(0, 100) })
-      } catch { /* optional cache */ }
-    }
-  }
+    if (next.length > 0) setLoadError(null)
+  }, [])
 
-  const fetchPosts = async (force = false) => {
+  const fetchPosts = useCallback(async (force = false, { silent = false } = {}) => {
     if (!API_BASE) {
       setLoading(false)
       setRefreshing(false)
@@ -131,12 +204,13 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
     const gen = ++fetchGen.current
     const params = { limit: 150 }
     if (force) params.refresh = '1'
-    // Soft load: API returns SQLite immediately; keep timeout modest.
     const timeout = force ? 20000 : 15000
-    const hadCached = snapshotPosts.current.length > 0
-    if (hadCached) {
-      setLoading(false)
-      setRefreshing(true)
+    const hadCached = snapshotPosts.current.length > 0 || posts.length > 0
+    if (!silent) {
+      if (hadCached) {
+        setLoading(false)
+        setRefreshing(true)
+      }
     }
     try {
       const res = await axios.get(`${API_BASE}/api/osint-x`, {
@@ -151,7 +225,6 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
         snapshotPosts.current = next
         return
       }
-      // Empty API response: keep snapshot/cached posts visible; soft background retry once.
       if (!force && !hadCached) {
         setRefreshing(true)
         try {
@@ -177,19 +250,18 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
       }
       if (!hadCached) {
         setLoadError('No posts in the last 48h. Tap Retry to pull FxTwitter again.')
-      } else {
+      } else if (!silent) {
         setLoadError('Refresh still running — showing cached posts.')
       }
     } catch (err) {
       if (gen !== fetchGen.current) return
-      // Never wipe existing posts on failure — avoids empty ↔ refresh loop.
       const timedOut = err.code === 'ECONNABORTED'
       setPosts((prev) => {
         if (prev.length === 0) {
           setLoadError(timedOut
             ? 'Timed out reaching the API. Tap Retry (cold starts can take a minute).'
             : (err.response?.data?.error || err.message || 'Failed to load OSINT X.'))
-        } else {
+        } else if (!silent) {
           setLoadError(timedOut
             ? 'Refresh timed out — still showing last loaded posts.'
             : `Refresh failed — still showing last loaded posts. (${err.message || 'error'})`)
@@ -202,11 +274,13 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
         setRefreshing(false)
       }
     }
-  }
+  }, [applyPosts, posts.length])
 
   useEffect(() => {
     if (snapshotPosts.current.length) setLoading(false)
     fetchPosts(false)
+    const id = setInterval(() => fetchPosts(false, { silent: true }), POLL_MS)
+    return () => clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -224,7 +298,7 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
     let list = posts
     if (q) {
       list = list.filter((p) => {
-        const text = `${p.account || ''} ${p.title || ''} ${p.content || ''} ${(p.tags || []).join(' ')}`.toLowerCase()
+        const text = `${p.account || ''} ${p.displayName || ''} ${p.title || ''} ${p.content || ''} ${(p.tags || []).join(' ')}`.toLowerCase()
         return text.includes(q)
       })
     }
@@ -290,271 +364,291 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
     })
   }
 
+  const toggleReplies = (id) => {
+    setExpandedReplies((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const renderMedia = (post) => {
+    const images = Array.isArray(post.images) ? post.images : []
+    const videos = Array.isArray(post.videos) ? post.videos : []
+    if (!images.length && !videos.length) return null
+
+    return (
+      <div className="x-post-media">
+        {images.length > 0 && (
+          <div className={`x-post-media-grid x-post-media-grid--${Math.min(images.length, 4)}`}>
+            {images.slice(0, 4).map((src, i) => (
+              <button
+                key={`${post.id}-img-${i}`}
+                type="button"
+                className="x-post-media-cell"
+                onClick={() => openImageDialog(post, src)}
+                title="Expand image"
+              >
+                <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" />
+              </button>
+            ))}
+          </div>
+        )}
+        {videos.map((src, i) => {
+          const yt = youtubeEmbedUrl(src)
+          const vimeo = vimeoEmbedUrl(src)
+          const isDirect = /\.(mp4|webm|ogg)(\?|$)/i.test(src) || /(?:video\.twimg\.com|v\.twimg\.com)/i.test(src)
+          if (yt) {
+            return (
+              <div key={`${post.id}-vid-${i}`} className="x-post-video">
+                <iframe
+                  title="YouTube"
+                  src={`${yt}?rel=0&modestbranding=1`}
+                  loading="lazy"
+                  allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                  allowFullScreen
+                />
+              </div>
+            )
+          }
+          if (vimeo) {
+            return (
+              <div key={`${post.id}-vid-${i}`} className="x-post-video">
+                <iframe
+                  title="Vimeo"
+                  src={vimeo}
+                  loading="lazy"
+                  allow="autoplay; fullscreen; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+            )
+          }
+          if (isDirect && !isCrossOriginVideoNoCors(src)) {
+            return (
+              <div key={`${post.id}-vid-${i}`} className="x-post-video">
+                <video src={src} controls playsInline crossOrigin="anonymous" />
+              </div>
+            )
+          }
+          return (
+            <a
+              key={`${post.id}-vid-${i}`}
+              href={post.url || src}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="x-post-video-fallback"
+            >
+              Watch video on X →
+            </a>
+          )
+        })}
+      </div>
+    )
+  }
+
   return (
-    <div className="osint-x-view">
-      <header className="osint-x-header">
-        <h2 className="osint-x-title">OSINT (X)</h2>
-        <p className="osint-x-subtitle">Posts from OSINT accounts via FxTwitter (no API key). Sorted by priority and recency.</p>
-        <p className="osint-x-map-hint">To see these posts on the map, switch to the <strong>MAPS</strong> tab below, then open <strong>OSINT Map</strong> in the sidebar.</p>
-        <div className="osint-x-toolbar">
-          <label className="osint-x-filter-label">
-            Sort:
-            <select className="osint-x-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+    <div className="osint-x-view x-feed">
+      <header className="x-feed-header">
+        <div className="x-feed-header-top">
+          <h2 className="x-feed-title">OSINT</h2>
+          <button
+            type="button"
+            className="x-feed-refresh"
+            onClick={handleRefresh}
+            disabled={loading || refreshing}
+            title="Refresh"
+          >
+            {refreshing ? '…' : '↻'}
+          </button>
+        </div>
+        <p className="x-feed-subtitle">
+          Curated geopolitical / military / intel posts via FxTwitter. Personal noise filtered server-side.
+        </p>
+        <div className="x-feed-toolbar">
+          <label className="x-feed-filter">
+            Sort
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
               {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </label>
-          <label className="osint-x-filter-label">
-            Creator:
-            <select className="osint-x-select" value={filterCreator} onChange={(e) => setFilterCreator(e.target.value)}>
+          <label className="x-feed-filter">
+            Account
+            <select value={filterCreator} onChange={(e) => setFilterCreator(e.target.value)}>
               <option value="">All</option>
               {filterCreators.map((c) => <option key={c} value={c}>@{c}</option>)}
             </select>
           </label>
-          <label className="osint-x-filter-label">
-            Tag:
-            <select className="osint-x-select" value={filterTag} onChange={(e) => setFilterTag(e.target.value)}>
+          <label className="x-feed-filter">
+            Tag
+            <select value={filterTag} onChange={(e) => setFilterTag(e.target.value)}>
               <option value="">All</option>
               {filterTags.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </label>
-          <button
-            type="button"
-            className="osint-x-refresh"
-            onClick={handleRefresh}
-            disabled={loading || refreshing}
-          >
-            {refreshing ? 'Refreshing…' : 'Refresh'}
-          </button>
           {q && onClearFilter && (
-            <button type="button" className="osint-x-clear-filter" onClick={onClearFilter}>
+            <button type="button" className="x-feed-clear" onClick={onClearFilter}>
               Clear search
             </button>
           )}
         </div>
-        {pinError && <p className="osint-x-pin-error">{pinError}</p>}
-        {loadError && !loading && <p className="osint-x-load-error" role="status">{loadError}</p>}
+        {pinError && <p className="x-feed-status x-feed-status--error">{pinError}</p>}
+        {loadError && !loading && <p className="x-feed-status" role="status">{loadError}</p>}
       </header>
 
       {loading && !refreshing && posts.length === 0 ? (
-        <p className="osint-x-loading">Loading OSINT X feed…</p>
+        <p className="x-feed-loading">Loading timeline…</p>
       ) : !API_BASE ? (
-        <p className="osint-x-error">Connect to the situational-awareness API (VITE_API_URL) to load this feed.</p>
+        <p className="x-feed-status x-feed-status--error">Connect to the situational-awareness API (VITE_API_URL) to load this feed.</p>
       ) : filtered.length === 0 ? (
-        <div className="osint-x-empty">
+        <div className="x-feed-empty">
           <p>
             {q
               ? 'No posts match the current search.'
-              : (loadError || 'No posts in the last 48 hours yet.')}
+              : (loadError || 'No curated posts in the last 48 hours yet.')}
           </p>
           {!q && (
-            <button type="button" className="osint-x-refresh" onClick={handleRefresh} disabled={refreshing}>
+            <button type="button" className="x-feed-clear" onClick={handleRefresh} disabled={refreshing}>
               {refreshing ? 'Refreshing…' : 'Retry'}
             </button>
           )}
-          {q && onClearFilter && (
-            <button type="button" className="osint-x-clear-filter" onClick={onClearFilter}>Clear search</button>
-          )}
         </div>
       ) : (
-        <ul className="osint-x-list">
-          {filtered.map((post) => (
-            <li key={post.id} className="osint-x-card">
-              <div className="osint-x-card-meta">
-                <span className="osint-x-account">@{post.account}</span>
-                <span className="osint-x-time">{relativeTime(post.timestamp)}</span>
-                {post.risk_score != null && Number(post.risk_score) >= 2 && (
-                  <span
-                    className={`osint-x-risk osint-x-risk--${Number(post.risk_score)}`}
-                    title={post.risk_label || `Risk ${post.risk_score}/5`}
-                  >
-                    {post.risk_score}/5
-                  </span>
-                )}
-                {post.priority && post.priority !== 'medium' && (
-                  <span className={`osint-x-priority osint-x-priority--${post.priority}`}>{post.priority}</span>
-                )}
-              </div>
-              {(post.tags || []).length > 0 && (
-                <div className="osint-x-tags">
-                  {(post.tags || []).filter((t) => t !== 'x' && t !== 'osint' && !/^risk-[1-5]$/i.test(t)).map((tag) => (
-                    <span key={tag} className="osint-x-tag">{tag}</span>
-                  ))}
+        <ul className="x-timeline">
+          {filtered.map((post) => {
+            const handle = String(post.account || 'x').replace(/^@/, '')
+            const displayName = post.displayName || handle
+            const metrics = post.metrics || {}
+            const replyN = metrics.replies ?? post.replyCount ?? 0
+            const repliesOpen = expandedReplies.has(post.id)
+            const tags = (post.tags || []).filter((t) => t !== 'x' && t !== 'osint' && !/^risk-[1-5]$/i.test(t))
+            return (
+              <li key={post.id} className="x-post">
+                <div className="x-post-avatar-col">
+                  {post.avatarUrl ? (
+                    <img
+                      className="x-post-avatar"
+                      src={post.avatarUrl}
+                      alt=""
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="x-post-avatar x-post-avatar--fallback" aria-hidden>
+                      {avatarInitial(post)}
+                    </div>
+                  )}
                 </div>
-              )}
-              <p className="osint-x-content">
-                {post.title || post.content || '—'}
-              </p>
-              {Array.isArray(post.images) && post.images.length > 0 && (
-                <div className="osint-x-media osint-x-media--images">
-                  {post.images.map((src, i) => {
-                    const isPossibleVideoThumb = /(?:pbs\.twimg\.com|twimg\.com)\/media\//i.test(src) && !(Array.isArray(post.videos) && post.videos.length > 0)
-                    return (
-                      <div key={i} className="osint-x-media-img-wrap">
-                        <button type="button" className="osint-x-media-link osint-x-media-link--expand" onClick={() => openImageDialog(post, src)} title="Expand">
-                          <img src={src} alt="" className="osint-x-img" loading="lazy" referrerPolicy="no-referrer" />
-                          <span className="osint-x-media-expand-label">Expand</span>
-                        </button>
-                        {isPossibleVideoThumb && post.url && (
-                          <a href={post.url} target="_blank" rel="noopener noreferrer" className="osint-x-media-open-post osint-x-media-watch-video">
-                            Watch video on X →
-                          </a>
-                        )}
-                        <a href={post.url || src} target="_blank" rel="noopener noreferrer" className="osint-x-media-open-post">Open post →</a>
-                      </div>
-                    )
-                  })}
+                <div className="x-post-body">
+                  <div className="x-post-meta">
+                    <span className="x-post-name">
+                      {displayName}
+                      {post.verified ? <span className="x-post-verified" title="Verified">✓</span> : null}
+                    </span>
+                    <span className="x-post-handle">@{handle}</span>
+                    <span className="x-post-dot">·</span>
+                    <time className="x-post-time" dateTime={post.timestamp ? new Date(post.timestamp).toISOString() : undefined}>
+                      {relativeTime(post.timestamp)}
+                    </time>
+                    {post.risk_score != null && Number(post.risk_score) >= 2 && (
+                      <span
+                        className={`x-post-risk x-post-risk--${Number(post.risk_score)}`}
+                        title={post.risk_label || `Risk ${post.risk_score}/5`}
+                      >
+                        {post.risk_score}/5
+                      </span>
+                    )}
+                  </div>
+                  {tags.length > 0 && (
+                    <div className="x-post-tags">
+                      {tags.slice(0, 6).map((tag) => (
+                        <span key={tag} className="x-post-tag">{tag}</span>
+                      ))}
+                    </div>
+                  )}
+                  <p className="x-post-text">{post.content || post.title || '—'}</p>
+                  {renderMedia(post)}
+                  <div className="x-post-engagement" aria-label="Engagement">
+                    <button
+                      type="button"
+                      className="x-eng x-eng--reply"
+                      onClick={() => toggleReplies(post.id)}
+                      title="Replies"
+                    >
+                      <EngagementIcon kind="reply" />
+                      <span>{formatCount(replyN)}</span>
+                    </button>
+                    <span className="x-eng" title="Reposts">
+                      <EngagementIcon kind="repost" />
+                      <span>{formatCount(metrics.reposts)}</span>
+                    </span>
+                    <span className="x-eng x-eng--like" title="Likes">
+                      <EngagementIcon kind="like" />
+                      <span>{formatCount(metrics.likes)}</span>
+                    </span>
+                    <span className="x-eng" title="Views">
+                      <EngagementIcon kind="views" />
+                      <span>{formatCount(metrics.views)}</span>
+                    </span>
+                  </div>
+                  {repliesOpen && (
+                    <div className="x-post-replies">
+                      <p className="x-post-replies-note">
+                        Reply threads are not returned by FxTwitter (counts only). Open the post on X to read replies.
+                      </p>
+                      {post.url && (
+                        <a href={post.url} target="_blank" rel="noopener noreferrer" className="x-post-replies-link">
+                          View {formatCount(replyN)} {replyN === 1 ? 'reply' : 'replies'} on X →
+                        </a>
+                      )}
+                    </div>
+                  )}
+                  <div className="x-post-actions">
+                    {post.url && (
+                      <a href={post.url} target="_blank" rel="noopener noreferrer" className="x-post-action-link">
+                        Open on X
+                      </a>
+                    )}
+                    {onPinnedToMap && API_BASE && (
+                      <button
+                        type="button"
+                        className="x-post-action-btn"
+                        onClick={() => handlePinToMap(post)}
+                        disabled={pinningId === post.id}
+                      >
+                        {pinningId === post.id ? '…' : 'Pin to map'}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="x-post-action-btn"
+                      onClick={() => handlePinToReport(post)}
+                    >
+                      Pin to report
+                    </button>
+                  </div>
                 </div>
-              )}
-              {Array.isArray(post.videos) && post.videos.length > 0 && (
-                <div className="osint-x-media osint-x-media--videos">
-                  {(post.videos || []).map((src, i) => {
-                    const yt = youtubeEmbedUrl(src)
-                    const vimeo = vimeoEmbedUrl(src)
-                    const isDirect = /\.(mp4|webm|ogg)(\?|$)/i.test(src) || /(?:video\.twimg\.com|v\.twimg\.com)/i.test(src)
-                    if (yt) {
-                      return (
-                        <div key={i} className="osint-x-video-wrap">
-                          <iframe
-                            title="YouTube"
-                            src={`${yt}?rel=0&modestbranding=1`}
-                            className="osint-x-embed"
-                            loading="lazy"
-                            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-                            allowFullScreen
-                          />
-                          <button type="button" className="osint-x-video-expand" onClick={() => openVideoDialog(post, src)} title="Expand / watch on X">
-                            Expand
-                          </button>
-                          {post.url && (
-                            <a href={post.url} target="_blank" rel="noopener noreferrer" className="osint-x-video-open-post">Open on X →</a>
-                          )}
-                        </div>
-                      )
-                    }
-                    if (vimeo) {
-                      return (
-                        <div key={i} className="osint-x-video-wrap">
-                          <iframe
-                            title="Vimeo"
-                            src={vimeo}
-                            className="osint-x-embed"
-                            loading="lazy"
-                            allow="autoplay; fullscreen; picture-in-picture"
-                            allowFullScreen
-                          />
-                          <button type="button" className="osint-x-video-expand" onClick={() => openVideoDialog(post, src)} title="Expand / watch on X">
-                            Expand
-                          </button>
-                          {post.url && (
-                            <a href={post.url} target="_blank" rel="noopener noreferrer" className="osint-x-video-open-post">Open on X →</a>
-                          )}
-                        </div>
-                      )
-                    }
-                    if (isDirect && !isCrossOriginVideoNoCors(src)) {
-                      return (
-                        <div key={i} className="osint-x-video-wrap">
-                          <video src={src} controls className="osint-x-video" playsInline crossOrigin="anonymous" />
-                          <button type="button" className="osint-x-video-expand" onClick={() => openVideoDialog(post, src)} title="Expand">
-                            Expand
-                          </button>
-                          {post.url && (
-                            <a href={post.url} target="_blank" rel="noopener noreferrer" className="osint-x-video-open-post">Open on X →</a>
-                          )}
-                        </div>
-                      )
-                    }
-                    if (isDirect && isCrossOriginVideoNoCors(src)) {
-                      return (
-                        <div key={i} className="osint-x-video-wrap osint-x-video-wrap--fallback">
-                          <a
-                            href={src}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="osint-x-video-fallback osint-x-video-fallback--standalone"
-                          >
-                            Watch video (opens in new tab)
-                          </a>
-                          {post.url && (
-                            <a href={post.url} target="_blank" rel="noopener noreferrer" className="osint-x-video-open-post">Open post on X →</a>
-                          )}
-                        </div>
-                      )
-                    }
-                    return (
-                      <div key={i} className="osint-x-video-wrap osint-x-video-wrap--fallback">
-                        <button
-                          type="button"
-                          className="osint-x-video-fallback osint-x-video-fallback--standalone"
-                          onClick={() => openVideoDialog(post, src)}
-                        >
-                          Watch video on X
-                        </button>
-                        {post.url && (
-                          <a href={post.url} target="_blank" rel="noopener noreferrer" className="osint-x-video-open-post">Open post →</a>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-              <div className="osint-x-card-actions">
-                {post.url && (
-                  <a
-                    href={post.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="osint-x-link"
-                  >
-                    View Source →
-                  </a>
-                )}
-                {onPinnedToMap && API_BASE && (
-                  <button
-                    type="button"
-                    className="osint-x-pin-btn"
-                    onClick={() => handlePinToMap(post)}
-                    disabled={pinningId === post.id}
-                    title="Find location and pin to Conflict Map"
-                  >
-                    {pinningId === post.id ? '…' : 'Pin to map'}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="osint-x-pin-btn"
-                  onClick={() => handlePinToReport(post)}
-                  title="Add this post to Report Maker"
-                >
-                  Pin to report
-                </button>
-              </div>
-            </li>
-          ))}
+              </li>
+            )
+          })}
         </ul>
       )}
+
       {imageDialog && (
         <div className="osint-x-video-dialog-backdrop" role="dialog" aria-modal="true" onClick={() => setImageDialog(null)}>
           <div className="osint-x-video-dialog osint-x-image-dialog" onClick={(e) => e.stopPropagation()}>
             <h3>Image</h3>
             <img src={imageDialog.src} alt="" className="osint-x-image-dialog-img" />
-            {/(?:pbs\.twimg\.com|twimg\.com)\/media\//i.test(imageDialog.src) && (
-              <p className="osint-x-image-dialog-hint">This may be a video thumbnail. Open the post on X to watch the video.</p>
-            )}
             {imageDialog.caption && <p className="osint-x-image-dialog-caption">{imageDialog.caption}</p>}
             <div className="osint-x-video-dialog-actions">
-              <button
-                type="button"
-                className="osint-x-pin-btn"
-                onClick={handleDownloadImage}
-                disabled={imageDownloading}
-              >
+              <button type="button" className="x-post-action-btn" onClick={handleDownloadImage} disabled={imageDownloading}>
                 {imageDownloading ? 'Downloading…' : 'Download image'}
               </button>
               {imageDialog.postUrl && (
-                <a href={imageDialog.postUrl} target="_blank" rel="noopener noreferrer" className="osint-x-pin-btn">Open original post</a>
+                <a href={imageDialog.postUrl} target="_blank" rel="noopener noreferrer" className="x-post-action-btn">Open original post</a>
               )}
-              <button type="button" className="osint-x-clear-filter" onClick={() => setImageDialog(null)}>Close</button>
+              <button type="button" className="x-feed-clear" onClick={() => setImageDialog(null)}>Close</button>
             </div>
           </div>
         </div>
@@ -564,27 +658,17 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
           <div className="osint-x-video-dialog">
             <h3>Video</h3>
             {isCrossOriginVideoNoCors(videoDialog.src) ? (
-              <p className="osint-x-video-dialog-fallback-msg">This video is served from a host that blocks embedding. Use the links below to watch in a new tab or on X.</p>
+              <p className="osint-x-video-dialog-fallback-msg">This video is served from a host that blocks embedding. Use the links below.</p>
             ) : (
-              <>
-                <div className="osint-x-video-dialog-player">
-                  <video src={videoDialog.src} controls className="osint-x-video" playsInline crossOrigin="anonymous" />
-                </div>
-                <p className="osint-x-video-dialog-fallback-msg">If the video does not play above (blocked by host), open it on X.</p>
-              </>
+              <div className="osint-x-video-dialog-player">
+                <video src={videoDialog.src} controls className="osint-x-video" playsInline crossOrigin="anonymous" />
+              </div>
             )}
             <div className="osint-x-video-dialog-actions">
               {videoDialog.postUrl && (
-                <a href={videoDialog.postUrl} target="_blank" rel="noopener noreferrer" className="osint-x-pin-btn">
-                  Watch on X
-                </a>
+                <a href={videoDialog.postUrl} target="_blank" rel="noopener noreferrer" className="x-post-action-btn">Watch on X</a>
               )}
-              <a href={videoDialog.src} target="_blank" rel="noopener noreferrer" className="osint-x-link">
-                Open raw video link
-              </a>
-              <button type="button" className="osint-x-clear-filter" onClick={() => setVideoDialog(null)}>
-                Close
-              </button>
+              <button type="button" className="x-feed-clear" onClick={() => setVideoDialog(null)}>Close</button>
             </div>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import axios from 'axios'
+import ArticlePreviewSheet from './ArticlePreviewSheet'
 import './FeedsView.css'
 
 const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
@@ -221,14 +222,26 @@ function formatStoryDate(item) {
   }
 }
 
-function NewsHeroStory({ item }) {
+function relativeOsintTime(item) {
+  const raw = item?.pubDate || item?.timestamp
+  if (!raw) return '—'
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return '—'
+  const sec = Math.floor((Date.now() - d.getTime()) / 1000)
+  if (sec < 60) return `${Math.max(1, sec)}s`
+  if (sec < 3600) return `${Math.floor(sec / 60)}m`
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h`
+  if (sec < 604800) return `${Math.floor(sec / 86400)}d`
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+function NewsHeroStory({ item, onOpen }) {
   const img = articleImage(item)
   return (
-    <a
-      href={item.link}
-      target="_blank"
-      rel="noopener noreferrer"
+    <button
+      type="button"
       className="news-desk-hero-story"
+      onClick={() => onOpen?.(item)}
     >
       {img && (
         <div className="news-desk-hero-media" aria-hidden>
@@ -245,18 +258,17 @@ function NewsHeroStory({ item }) {
         )}
         <span className="news-desk-meta">{formatStoryDate(item)}</span>
       </div>
-    </a>
+    </button>
   )
 }
 
-function NewsTile({ item, size = 'md' }) {
+function NewsTile({ item, size = 'md', onOpen }) {
   const img = articleImage(item)
   return (
-    <a
-      href={item.link}
-      target="_blank"
-      rel="noopener noreferrer"
+    <button
+      type="button"
       className={`news-desk-tile news-desk-tile--${size}`}
+      onClick={() => onOpen?.(item)}
     >
       {img && (
         <div className="news-desk-tile-media" aria-hidden>
@@ -268,22 +280,69 @@ function NewsTile({ item, size = 'md' }) {
         <h3 className="news-desk-tile-title">{item.title || 'Untitled'}</h3>
         <span className="news-desk-meta">{formatStoryDate(item)}</span>
       </div>
-    </a>
+    </button>
   )
 }
 
-function NewsTextRow({ item }) {
+function NewsTextRow({ item, onOpen }) {
   return (
-    <a
-      href={item.link}
-      target="_blank"
-      rel="noopener noreferrer"
+    <button
+      type="button"
       className="news-desk-text-row"
+      onClick={() => onOpen?.(item)}
     >
       <span className="news-desk-text-row-source">{item.source}</span>
       <span className="news-desk-text-row-title">{item.title || 'Untitled'}</span>
       <span className="news-desk-text-row-date">{formatStoryDate(item)}</span>
-    </a>
+    </button>
+  )
+}
+
+function OsintDeskCard({ item, onOpen, onPin, pinningId, showPin }) {
+  const img = articleImage(item)
+  const id = item.id || item.link
+  return (
+    <article
+      className={`feeds-osint-card feeds-osint-alert-${item.alertLevel || 'medium'}`}
+    >
+      <button type="button" className="feeds-osint-card-main" onClick={() => onOpen?.(item)}>
+        {img && (
+          <div className="feeds-osint-card-media" aria-hidden>
+            <img src={img} alt="" loading="lazy" />
+          </div>
+        )}
+        <div className="feeds-osint-card-body">
+          <div className="feeds-osint-card-meta">
+            <span className="feeds-osint-card-source">{osintSourceDisplayName(item.source)}</span>
+            <span className="feeds-osint-card-time">{relativeOsintTime(item)}</span>
+            {item.risk_score != null ? (
+              <span className={`feeds-risk-badge feeds-risk-badge--${Number(item.risk_score)}`} title={item.risk_label || `Risk ${item.risk_score}/5`}>
+                {item.risk_score}/5
+              </span>
+            ) : item.alertLevel ? (
+              <span className="feeds-osint-card-risk-chip">{item.alertLevel}</span>
+            ) : null}
+          </div>
+          <h3 className="feeds-osint-card-title">{item.title || 'Untitled'}</h3>
+          {item.contentSnippet && (
+            <p className="feeds-osint-card-snippet">{String(item.contentSnippet).slice(0, 160)}</p>
+          )}
+        </div>
+      </button>
+      {showPin && (
+        <div className="feeds-osint-card-actions">
+          <button
+            type="button"
+            className="feeds-pin-to-map-btn"
+            onClick={() => onPin?.(item)}
+            disabled={pinningId === id}
+            title="Find location from text and pin to Conflict Map"
+          >
+            {pinningId === id ? '…' : 'Pin to map'}
+          </button>
+        </div>
+      )}
+    </article>
   )
 }
 
@@ -310,6 +369,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
   const [pinningId, setPinningId] = useState(null)
   const [pinError, setPinError] = useState(null)
   const [expandedVideo, setExpandedVideo] = useState(null)
+  const [previewItem, setPreviewItem] = useState(null)
 
   useEffect(() => {
     if (activeView === 'recent-videos') setFeedMode(FEED_MODE.VIDEOS)
@@ -320,25 +380,37 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
   useEffect(() => {
     if (feedMode !== FEED_MODE.VIDEOS || !API_BASE) return
     let cancelled = false
-    setVideoLoading(true)
+    // Soft loading: keep last-good visible; only spin when empty
+    setVideoLoading((prev) => (videoItems.length > 0 ? false : true))
     axios.get(`${API_BASE}/api/feeds/videos`, { timeout: 20000 })
       .then((res) => {
         if (cancelled) return
         const features = res.data?.features ?? []
-        const items = features.map((f) => ({
-          ...(f.properties || {}),
-          id: f.properties?.id ?? f.id,
-          _key: f.properties?.id ?? f.id ?? Math.random(),
-        }))
-        setVideoItems(items)
+        if (features.length > 0) {
+          const items = features.map((f) => ({
+            ...(f.properties || {}),
+            id: f.properties?.id ?? f.id,
+            _key: f.properties?.id ?? f.id ?? Math.random(),
+          }))
+          setVideoItems(items)
+        }
+        // Empty response: keep last-good; do not clear
       })
-      .catch(() => { if (!cancelled) setVideoItems([]) })
+      .catch(() => {
+        // Keep last-good on failure — never blank the tab
+      })
       .finally(() => { if (!cancelled) setVideoLoading(false) })
     return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [feedMode])
 
   useEffect(() => {
     if (!API_BASE) {
+      setNewsLoading(false)
+      return
+    }
+    // On recent-videos tab, do not drive loading / infinite news retry
+    if (isVideosOnly || feedMode === FEED_MODE.VIDEOS) {
       setNewsLoading(false)
       return
     }
@@ -360,7 +432,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
           if (items.length > 0) {
             setNewsItems(items)
             setNewsMeta(res.data?.meta || null)
-          } else if (newsItems.length === 0) {
+          } else if (newsItems.length === 0 && feedMode !== FEED_MODE.VIDEOS) {
             retryId = setTimeout(() => {
               if (cancelled) return
               doFetch()
@@ -372,7 +444,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
           if (feedsDebugEnabled()) {
             console.debug('[FEEDS news] OUTPUT error', { message: err?.message || String(err), ms: Date.now() - t0 })
           }
-          if (newsItems.length === 0 && initialItems.length === 0) {
+          if (newsItems.length === 0 && initialItems.length === 0 && feedMode !== FEED_MODE.VIDEOS) {
             retryId = setTimeout(() => {
               if (cancelled) return
               doFetch()
@@ -390,7 +462,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
       if (retryId) clearTimeout(retryId)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [feedMode, isVideosOnly])
 
   useEffect(() => {
     if (!API_BASE) {
@@ -576,7 +648,11 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
     return videoItems.filter((it) => Array.isArray(it.tags) && it.tags.includes(videoTagFilter))
   }, [videoItems, videoTagFilter])
 
-  const loading = newsLoading || osintLoading || (feedMode === FEED_MODE.VIDEOS && videoLoading)
+  const loading = feedMode === FEED_MODE.VIDEOS
+    ? videoLoading
+    : feedMode === FEED_MODE.NEWS
+      ? newsLoading
+      : osintLoading
   const isEmpty = feedMode === FEED_MODE.VIDEOS ? !videoItems.length : feedMode === FEED_MODE.NEWS ? !newsItems.length : !osintItems.length
   const filteredEmpty = feedMode === FEED_MODE.VIDEOS ? !filteredVideos.length : feedMode === FEED_MODE.NEWS ? !filteredAndSortedNews.length : !filteredAndSortedOsint.length
 
@@ -775,11 +851,11 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
             <>
               {(hero || secondaryTiles.length > 0) && (
                 <section className="news-desk-visual" aria-label="Image stories">
-                  {hero && <NewsHeroStory item={hero} />}
+                  {hero && <NewsHeroStory item={hero} onOpen={setPreviewItem} />}
                   {secondaryTiles.length > 0 && (
                     <div className="news-desk-secondary">
                       {secondaryTiles.map((item) => (
-                        <NewsTile key={item._key || item.link} item={item} size="lg" />
+                        <NewsTile key={item._key || item.link} item={item} size="lg" onOpen={setPreviewItem} />
                       ))}
                     </div>
                   )}
@@ -794,7 +870,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
                   </div>
                   <div className="news-desk-topic-grid">
                     {section.items.slice(0, 3).filter((it) => articleImage(it)).map((item) => (
-                      <NewsTile key={item._key || item.link} item={item} size="md" />
+                      <NewsTile key={item._key || item.link} item={item} size="md" onOpen={setPreviewItem} />
                     ))}
                   </div>
                   <div className="news-desk-topic-list">
@@ -802,7 +878,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
                       .filter((it, idx) => !(idx < 3 && articleImage(it)))
                       .slice(0, 12)
                       .map((item) => (
-                        <NewsTextRow key={item._key || item.link} item={item} />
+                        <NewsTextRow key={item._key || item.link} item={item} onOpen={setPreviewItem} />
                       ))}
                   </div>
                 </section>
@@ -911,7 +987,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
 
           {osintSub === OSINT_SUB.INTEL && (
             <>
-              {osintLoading ? (
+              {osintLoading && !osintItems.length ? (
                 <p className="feeds-loading">Loading OSINT…</p>
               ) : filteredEmpty ? (
                 <div className="feeds-empty feeds-empty--osint">
@@ -927,70 +1003,40 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
                   )}
                 </div>
               ) : (
-                <div className="feeds-osint-table-wrap">
-                  <table className="feeds-terminal-table">
-                    <thead>
-                      <tr>
-                        <th>Time</th>
-                        <th>Source</th>
-                        <th>Risk</th>
-                        <th>Content</th>
-                        {onPinnedToMap && <th>Map</th>}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pinError && (
-                        <tr><td colSpan={4 + (onPinnedToMap ? 1 : 0)} className="feeds-pin-error">{pinError}</td></tr>
-                      )}
-                      {filteredAndSortedOsint.map((item, i) => (
-                        <tr
-                          key={item._key || item.link || item.id || i}
-                          className={`feeds-osint-row feeds-osint-alert-${item.alertLevel || 'medium'}`}
-                        >
-                          <td className="feeds-osint-time">
-                            {item.pubDate ? new Date(item.pubDate).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : '—'}
-                          </td>
-                          <td className="feeds-osint-source">{osintSourceDisplayName(item.source)}</td>
-                          <td className="feeds-osint-badge">
-                            {item.risk_score != null ? (
-                              <span className={`feeds-risk-badge feeds-risk-badge--${Number(item.risk_score)}`} title={item.risk_label || `Risk ${item.risk_score}/5`}>
-                                {item.risk_score}/5
-                              </span>
-                            ) : (
-                              item.alertLevel || '—'
-                            )}
-                          </td>
-                          <td className="feeds-osint-content">
-                            <a href={item.link} target="_blank" rel="noopener noreferrer">
-                              {item.title || 'Untitled'}
-                            </a>
-                            {item.contentSnippet && (
-                              <div className="feeds-osint-raw">{item.contentSnippet.slice(0, 200)}</div>
-                            )}
-                          </td>
-                          {onPinnedToMap && (
-                            <td className="feeds-osint-pin">
-                              <button
-                                type="button"
-                                className="feeds-pin-to-map-btn"
-                                onClick={() => handlePinToMap(item)}
-                                disabled={pinningId === (item.id || item.link)}
-                                title="Find location from text and pin to Conflict Map"
-                              >
-                                {pinningId === (item.id || item.link) ? '…' : 'Pin to map'}
-                              </button>
-                            </td>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <>
+                  {pinError && <p className="feeds-pin-error">{pinError}</p>}
+                  <div className="feeds-osint-desk" role="feed" aria-label="OSINT intel desk">
+                    {filteredAndSortedOsint.map((item, i) => (
+                      <OsintDeskCard
+                        key={item._key || item.link || item.id || i}
+                        item={item}
+                        onOpen={setPreviewItem}
+                        onPin={handlePinToMap}
+                        pinningId={pinningId}
+                        showPin={!!onPinnedToMap}
+                      />
+                    ))}
+                  </div>
+                </>
               )}
             </>
           )}
         </div>
       )}
+
+      <ArticlePreviewSheet
+        item={previewItem}
+        open={!!previewItem}
+        onClose={() => { setPreviewItem(null); setPinError(null) }}
+        sourceLabel={
+          previewItem && (feedMode === FEED_MODE.OSINT || isOsintOnly)
+            ? osintSourceDisplayName(previewItem.source)
+            : previewItem?.source
+        }
+        onPin={onPinnedToMap ? handlePinToMap : undefined}
+        pinning={!!previewItem && pinningId === (previewItem.id || previewItem.link)}
+        pinError={pinError}
+      />
     </div>
   )
 }

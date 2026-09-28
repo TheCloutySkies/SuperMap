@@ -142,10 +142,20 @@ function pickThumbnailFromItem(item) {
   // Common RSS media extensions
   const mediaThumb = item['media:thumbnail']?.$.url || item['media:thumbnail']?.url
   if (typeof mediaThumb === 'string' && mediaThumb.startsWith('http')) return mediaThumb
+  const mediaGroup = item['media:group']
+  if (mediaGroup) {
+    const groupThumb = mediaGroup['media:thumbnail']?.$.url || mediaGroup['media:thumbnail']?.url
+      || (Array.isArray(mediaGroup['media:thumbnail']) && (mediaGroup['media:thumbnail'][0]?.$.url || mediaGroup['media:thumbnail'][0]?.url))
+    if (typeof groupThumb === 'string' && groupThumb.startsWith('http')) return groupThumb
+  }
   const mediaContent = item['media:content']?.$.url || item['media:content']?.url
-  if (typeof mediaContent === 'string' && mediaContent.startsWith('http')) return mediaContent
+  if (typeof mediaContent === 'string' && mediaContent.startsWith('http') && !/\.(mp4|webm|m3u8)(\?|$)/i.test(mediaContent)) return mediaContent
   const itunesImg = item['itunes:image']?.href || item['itunes:image']?.url
   if (typeof itunesImg === 'string' && itunesImg.startsWith('http')) return itunesImg
+
+  // YouTube Atom: id is yt:video:VIDEO_ID
+  const ytIdMatch = String(item.id || item.guid || item.link || '').match(/(?:yt:video:|(?:youtube\.com\/watch\?v=|youtu\.be\/))([a-zA-Z0-9_-]{6,})/i)
+  if (ytIdMatch) return `https://i.ytimg.com/vi/${ytIdMatch[1]}/hqdefault.jpg`
 
   // Fallback: parse first image from HTML content
   const html = String(item.content || item['content:encoded'] || '').trim()
@@ -201,8 +211,147 @@ const FEEDS = [
   { url: 'https://news.google.com/rss/search?q=site:reuters.com+when:2d&hl=en-US&gl=US&ceid=US:en', name: 'Reuters (Google News)' },
 ]
 
-/** Video feeds: Reddit only for now. Set to [] so getVideoFeedItems() uses only getRedditVideoItems(). */
-const VIDEO_FEEDS = []
+/**
+ * Curated geopolitics / news YouTube channels for Recent Videos (keyless Innertube).
+ * RSS URL kept as optional fallback when Innertube fails.
+ */
+const VIDEO_FEEDS = [
+  { channelId: 'UCNye-wNBqNL5ZzHSJj3l8Bg', name: 'Al Jazeera English' },
+  { channelId: 'UCknLrEdhRCp1aegoMqRaCZg', name: 'DW News' },
+  { channelId: 'UC16niRr50-MSBwiO3YDb3RA', name: 'BBC News' },
+  { channelId: 'UChqUTb7kYRX8-EiaN3XFrSQ', name: 'Reuters' },
+  { channelId: 'UCCCPCZNChQdGa9EkATeye4g', name: 'France 24' },
+  { channelId: 'UCoMdktPbSTixAyNGwb-UYkQ', name: 'Sky News' },
+  { channelId: 'UC52X5wxOL_s5yw0dQk7NtgA', name: 'Associated Press' },
+  { channelId: 'UCSrZ3UV4jOidv8ppoVuvW9Q', name: 'Euronews' },
+  { channelId: 'UC6ZFN9Tx6xh-skXCuRHCDpQ', name: 'PBS NewsHour' },
+  { channelId: 'UCeY0bbntWzzVIaj2z3QigXg', name: 'NBC News' },
+  { channelId: 'UCMP0Q2QwxSnSIR83a8QA_yA', name: 'Breaking Defense' },
+  { channelId: 'UCIPk0zLKy4O0Z7s5TNQBadA', name: 'The War Zone' },
+].map((f) => ({
+  ...f,
+  url: `https://www.youtube.com/feeds/videos.xml?channel_id=${f.channelId}`,
+}))
+
+const YOUTUBE_BROWSER_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+
+/** Approximate relative YouTube labels ("3 hours ago") to an ISO timestamp. */
+function parseRelativePublished(label) {
+  if (!label || typeof label !== 'string') return new Date().toISOString()
+  const s = label.toLowerCase().trim()
+  const now = Date.now()
+  const m = s.match(/(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago/)
+  if (!m) return new Date().toISOString()
+  const n = Number(m[1]) || 1
+  const unit = m[2]
+  const mult = {
+    second: 1000,
+    minute: 60 * 1000,
+    hour: 3600 * 1000,
+    day: 86400 * 1000,
+    week: 7 * 86400 * 1000,
+    month: 30 * 86400 * 1000,
+    year: 365 * 86400 * 1000,
+  }[unit] || 3600 * 1000
+  return new Date(now - n * mult).toISOString()
+}
+
+function extractYoutubeLockup(lockup) {
+  if (!lockup || typeof lockup !== 'object') return null
+  const str = JSON.stringify(lockup)
+  const idMatch =
+    str.match(/\/vi\/([a-zA-Z0-9_-]{11})\//) ||
+    str.match(/"videoId":"([a-zA-Z0-9_-]{11})"/) ||
+    str.match(/watch\?v=([a-zA-Z0-9_-]{11})/)
+  const videoId = idMatch && idMatch[1]
+  if (!videoId) return null
+  const title =
+    lockup.metadata?.lockupMetadataViewModel?.title?.content ||
+    lockup.metadata?.title?.content ||
+    lockup.title?.content ||
+    null
+  const publishedLabel =
+    (lockup.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows || [])
+      .flatMap((r) => r.metadataParts || [])
+      .map((p) => p.text?.content)
+      .filter(Boolean)
+      .slice(-1)[0] || null
+  const thumbs = lockup.contentImage?.thumbnailViewModel?.image?.sources || []
+  const thumbnail = thumbs.slice(-1)[0]?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
+  return { videoId, title, publishedLabel, thumbnail }
+}
+
+/** Keyless YouTube channel videos via Innertube browse (WEB client). */
+async function fetchYoutubeChannelInnertube(feed) {
+  const channelId = feed.channelId
+  if (!channelId) return []
+  try {
+    const res = await axios.post(
+      'https://www.youtube.com/youtubei/v1/browse?prettyPrint=false',
+      {
+        context: {
+          client: {
+            clientName: 'WEB',
+            clientVersion: '2.20240101.00.00',
+            hl: 'en',
+            gl: 'US',
+          },
+        },
+        browseId: channelId,
+        params: 'EgZ2aWRlb3PyBgQKAjoA', // Videos tab
+      },
+      {
+        timeout: 18000,
+        headers: {
+          'User-Agent': YOUTUBE_BROWSER_UA,
+          'Content-Type': 'application/json',
+          'X-Youtube-Client-Name': '1',
+          'X-Youtube-Client-Version': '2.20240101.00.00',
+          Origin: 'https://www.youtube.com',
+          Referer: `https://www.youtube.com/channel/${channelId}/videos`,
+        },
+        validateStatus: (s) => s >= 200 && s < 300,
+      },
+    )
+    const tabs = res.data?.contents?.twoColumnBrowseResultsRenderer?.tabs || []
+    const tab = tabs.find((t) => t.tabRenderer?.selected) || tabs.find((t) => /videos/i.test(t.tabRenderer?.title || ''))
+    const contents = tab?.tabRenderer?.content?.richGridRenderer?.contents || []
+    const items = []
+    for (const row of contents) {
+      const lockup = row?.richItemRenderer?.content?.lockupViewModel
+      const vr = row?.richItemRenderer?.content?.videoRenderer
+      let parsed = extractYoutubeLockup(lockup)
+      if (!parsed && vr?.videoId) {
+        const titleRuns = vr.title?.runs || []
+        parsed = {
+          videoId: vr.videoId,
+          title: titleRuns.map((r) => r.text).join('') || vr.title?.simpleText || '',
+          publishedLabel: vr.publishedTimeText?.simpleText || null,
+          thumbnail: (vr.thumbnail?.thumbnails || []).slice(-1)[0]?.url || `https://i.ytimg.com/vi/${vr.videoId}/hqdefault.jpg`,
+        }
+      }
+      if (!parsed?.videoId || !parsed.title) continue
+      const watch = `https://www.youtube.com/watch?v=${parsed.videoId}`
+      items.push({
+        title: parsed.title,
+        link: watch,
+        guid: `yt:video:${parsed.videoId}`,
+        pubDate: parseRelativePublished(parsed.publishedLabel),
+        source: feed.name,
+        contentSnippet: '',
+        thumbnail: parsed.thumbnail,
+        videoUrl: watch,
+        curated: true,
+        category: 'general',
+      })
+    }
+    return items
+  } catch (err) {
+    console.warn(`[news] YouTube Innertube ${feed.name}:`, err.message)
+    return []
+  }
+}
 
 async function parseFeedXml(xml) {
   return parser.parseString(xml)
@@ -212,16 +361,27 @@ async function fetchFeed(feed) {
   try {
     // Prefer axios so gzip / redirects (e.g. UN News) decompress cleanly for rss-parser.
     let result
+    const isYouTube = /youtube\.com\/feeds\/videos\.xml/i.test(feed.url || '')
+    const headers = {
+      ...REQUEST_HEADERS,
+      Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
+      ...(isYouTube ? { 'User-Agent': YOUTUBE_BROWSER_UA } : {}),
+    }
     try {
       const res = await axios.get(feed.url, {
-        timeout: 10000,
-        headers: { ...REQUEST_HEADERS, Accept: 'application/rss+xml, application/xml, text/xml, */*' },
+        timeout: isYouTube ? 15000 : 10000,
+        headers,
         responseType: 'text',
         decompress: true,
+        validateStatus: (s) => s >= 200 && s < 300,
       })
       const body = typeof res.data === 'string' ? res.data : String(res.data || '')
+      if (isYouTube && !/<feed[\s>]/i.test(body) && !/<rss[\s>]/i.test(body)) {
+        throw new Error('YouTube RSS returned non-feed body')
+      }
       result = await parseFeedXml(body)
     } catch (axiosErr) {
+      if (isYouTube) throw axiosErr
       result = await parser.parseURL(feed.url)
     }
     const rows = (result.items || []).map((item) => {
@@ -229,18 +389,21 @@ async function fetchFeed(feed) {
       const videoUrl = pickVideoUrlFromItem(item)
       const title = item.title || ''
       const contentSnippet = (item.contentSnippet || item.content || '').replace(/<[^>]+>/g, ' ').slice(0, 500)
+      const ytId = youtubeVideoId(link) || youtubeVideoId(item.id) || youtubeVideoId(item.guid)
+      const resolvedLink = ytId ? `https://www.youtube.com/watch?v=${ytId}` : link
       return {
         title,
-        link,
-        pubDate: item.pubDate || '',
+        link: resolvedLink,
+        guid: item.guid || item.id || '',
+        pubDate: item.pubDate || item.isoDate || item.published || '',
         source: feed.name,
         contentSnippet,
-        thumbnail: pickThumbnailFromItem(item) || domainFavicon(link || ''),
-        videoUrl: videoUrl || undefined,
+        thumbnail: pickThumbnailFromItem(item) || (ytId ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg` : null) || domainFavicon(resolvedLink || ''),
+        videoUrl: videoUrl || (ytId ? `https://www.youtube.com/watch?v=${ytId}` : undefined),
         category: inferCategory(title, contentSnippet, feed.name),
       }
     })
-    if (feed.name === 'Google News' || feed.name.startsWith('Reuters')) {
+    if (feed.name === 'Google News' || feed.name.startsWith('Reuters') || /Google News/i.test(feed.name)) {
       return rows.filter(isRelevantGoogleNewsItem)
     }
     return rows.filter((r) => !isGloballyDeniedItem(r))
@@ -248,6 +411,28 @@ async function fetchFeed(feed) {
     console.warn(`[news] Failed to fetch ${feed.name}:`, err.message)
     return []
   }
+}
+
+/** Fetch curated YouTube channels via Innertube (RSS fallback per channel). */
+async function fetchVideoFeedsLimited(feeds, concurrency = 3) {
+  const out = []
+  for (let i = 0; i < feeds.length; i += concurrency) {
+    const batch = feeds.slice(i, i + concurrency)
+    const settled = await Promise.allSettled(
+      batch.map(async (feed) => {
+        const viaApi = await fetchYoutubeChannelInnertube(feed)
+        if (viaApi.length) return viaApi
+        return fetchFeed(feed)
+      }),
+    )
+    for (const r of settled) {
+      if (r.status === 'fulfilled') out.push(...r.value)
+    }
+    if (i + concurrency < feeds.length) {
+      await new Promise((r) => setTimeout(r, 200))
+    }
+  }
+  return out
 }
 
 /** Wikipedia featured content – no API key, stable JSON. See https://api.wikimedia.org/wiki/Feed_API */
@@ -571,24 +756,194 @@ function isVideoThemeRelevant(title = '', source = '', description = '') {
   return VIDEO_THEME_KEYWORDS.some((kw) => text.includes(kw.toLowerCase()))
 }
 
-/** Fetch video-only feeds; returns flat array of items with videoUrl, theme-filtered. */
+/** Extract YouTube video id from a watch / short / embed URL or yt:video: id. */
+function youtubeVideoId(linkOrId) {
+  const s = String(linkOrId || '')
+  const m =
+    s.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{6,})/i) ||
+    s.match(/^yt:video:([a-zA-Z0-9_-]{6,})$/i) ||
+    s.match(/[?&]v=([a-zA-Z0-9_-]{6,})/i)
+  return m ? m[1] : null
+}
+
+function youtubeWatchUrl(id) {
+  return id ? `https://www.youtube.com/watch?v=${id}` : null
+}
+
+function youtubeThumbUrl(id) {
+  return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : null
+}
+
+/**
+ * Fetch curated YouTube channel videos (primary for Recent Videos).
+ * Reddit is no longer the primary source. Items are marked curated so the
+ * API can skip the keyword theme gate for these channel feeds.
+ */
 async function getVideoFeedItems() {
-  const videoFeedNames = new Set(VIDEO_FEEDS.map((f) => f.name))
-  const [feedResults, redditVideos] = await Promise.all([
-    Promise.allSettled(VIDEO_FEEDS.map(fetchFeed)),
-    getRedditVideoItems(),
-  ])
-  const items = feedResults
-    .filter((r) => r.status === 'fulfilled')
-    .flatMap((r) => r.value)
+  const items = (await fetchVideoFeedsLimited(VIDEO_FEEDS, 3))
     .map((it) => {
-      if (!it.videoUrl && it.link && videoFeedNames.has(it.source)) it.videoUrl = it.link
+      const ytId = youtubeVideoId(it.link) || youtubeVideoId(it.videoUrl) || youtubeVideoId(it.guid)
+      const watch = youtubeWatchUrl(ytId) || it.link
+      if (ytId) {
+        it.link = watch
+        it.videoUrl = watch
+        if (!isRealHttpImage(it.thumbnail)) it.thumbnail = youtubeThumbUrl(ytId)
+      }
+      it.curated = true
       return it
     })
     .filter((it) => it.videoUrl || /youtube\.com|youtu\.be|vimeo\.com/i.test(it.link || ''))
-    .filter((it) => isVideoThemeRelevant(it.title, it.source, it.contentSnippet))
-  items.push(...redditVideos)
-  return items.slice(0, 80)
+    .filter((it) => !isGloballyDeniedItem(it))
+
+  // Deduplicate by video id / URL
+  const seen = new Set()
+  const out = []
+  for (const it of items) {
+    const key = youtubeVideoId(it.videoUrl || it.link) || (it.videoUrl || it.link || '').split('&')[0]
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    out.push(it)
+  }
+  out.sort((a, b) => {
+    const ta = a.pubDate ? new Date(a.pubDate).getTime() : 0
+    const tb = b.pubDate ? new Date(b.pubDate).getTime() : 0
+    return tb - ta
+  })
+  return out.slice(0, 80)
+}
+
+function isRealHttpImage(url) {
+  return typeof url === 'string' && /^https?:\/\//i.test(url) && !url.includes('google.com/s2/favicons')
+}
+
+/** Build FeatureCollection for /api/feeds/videos (used by warm + request path). */
+async function buildVideoFeatureCollection() {
+  const videoItems = await getVideoFeedItems()
+  const tagFromSource = (source) => {
+    const s = (source || '').toLowerCase()
+    if (s.includes('reddit')) return 'Reddit'
+    if (s.includes('al jazeera') || s.includes('bbc') || s.includes('dw') || s.includes('reuters') || s.includes('sky') || s.includes('france') || s.includes('cnn') || s.includes('nbc') || s.includes('pbs') || s.includes('euronews') || s.includes('associated press') || s.includes('vice')) return 'News clip'
+    if (s.includes('bellingcat') || s === 'x' || s.includes('osint')) return 'OSINT'
+    if (s.includes('war') || s.includes('defense') || s.includes('combat')) return 'Combat / military'
+    return 'News'
+  }
+  const tagFromTitle = (title) => {
+    const t = (title || '').toLowerCase()
+    if (/\b(combat|footage|strike|drone|missile|war|invasion|frontline)\b/.test(t)) return 'Combat / military'
+    if (/\b(osint|intel|investigation)\b/.test(t)) return 'OSINT'
+    return null
+  }
+
+  const fromVideoFeeds = videoItems.map((it, i) => ({
+    type: 'Feature',
+    id: `video-feed-${i}-${(it.link || '').slice(-12)}`,
+    properties: {
+      id: `video-feed-${i}`,
+      title: it.title || 'Untitled',
+      type: 'news',
+      source: it.source,
+      timestamp: it.pubDate ? new Date(it.pubDate).getTime() : null,
+      link: it.link,
+      description: it.contentSnippet,
+      thumbnail: it.thumbnail,
+      videoUrl: it.videoUrl || it.link,
+      curated: !!it.curated,
+      tags: ['News clip', tagFromSource(it.source), tagFromTitle(it.title)].filter(Boolean),
+    },
+    geometry: null,
+  }))
+
+  // Optional cheap merge: already-cached OSINT X clips (non-GIF)
+  let osintXWithVideos = []
+  try {
+    const { getEvents } = require('../database')
+    const osintXRows = getEvents(80, null, null, null, null, ['x'])
+    const isXGifUrl = (url) => {
+      if (!url || typeof url !== 'string') return false
+      const u = url.toLowerCase()
+      return /tweet_gif|\.gif(\?|$)|gif\/|gif\.twimg/i.test(u)
+    }
+    osintXWithVideos = osintXRows
+      .map((r) => {
+        let raw = {}
+        try {
+          raw = r.raw_data ? JSON.parse(r.raw_data) : {}
+        } catch (_) {}
+        const videos = Array.isArray(raw.videos) ? raw.videos : []
+        if (videos.length === 0) return null
+        const videoUrl = videos[0]
+        if (isXGifUrl(videoUrl)) return null
+        return {
+          type: 'Feature',
+          id: r.id,
+          properties: {
+            id: r.id,
+            title: r.title,
+            type: r.type,
+            source: 'x',
+            timestamp: r.timestamp,
+            link: raw.link || raw.url,
+            description: r.description,
+            thumbnail: (raw.images && raw.images[0]) || null,
+            videoUrl,
+            tags: ['OSINT', 'X (Twitter)'],
+          },
+          geometry: null,
+        }
+      })
+      .filter(Boolean)
+  } catch (_) {
+    osintXWithVideos = []
+  }
+
+  const all = [...fromVideoFeeds, ...osintXWithVideos]
+  const themeRelevant = all.filter((f) => {
+    const p = f.properties || {}
+    if (p.curated) return true
+    return isVideoThemeRelevant(p.title, p.source, p.description)
+  })
+  themeRelevant.sort((a, b) => (b.properties?.timestamp || 0) - (a.properties?.timestamp || 0))
+  return { type: 'FeatureCollection', features: themeRelevant.slice(0, 100) }
+}
+
+const VIDEOS_CACHE_NS = 'feeds-videos'
+const VIDEOS_CACHE_KEY = 'feature-collection'
+const VIDEOS_TTL_SEC = apiResultCache.TTL.HOURLY
+const VIDEOS_STALE_SEC = apiResultCache.TTL.DAILY
+
+async function getVideoFeatureCollectionCached({ force = false } = {}) {
+  try {
+    const result = await apiResultCache.getOrFetch(
+      VIDEOS_CACHE_NS,
+      VIDEOS_CACHE_KEY,
+      { ttlSec: VIDEOS_TTL_SEC, staleTtlSec: VIDEOS_STALE_SEC, force },
+      async () => {
+        const fc = await buildVideoFeatureCollection()
+        if (!fc?.features?.length) return null
+        return fc
+      },
+    )
+    if (result?.value) return { ...result.value, _fromCache: !!result.fromCache, _stale: !!result.stale }
+  } catch (err) {
+    console.warn('[news] videos cache:', err.message)
+  }
+  // Stale-on-error fallback
+  try {
+    const hit = apiResultCache.getStale(VIDEOS_CACHE_NS, VIDEOS_CACHE_KEY, VIDEOS_STALE_SEC)
+    if (hit?.value?.features?.length) return { ...hit.value, _fromCache: true, _stale: true }
+  } catch (_) { /* optional */ }
+  return buildVideoFeatureCollection()
+}
+
+async function warmVideoFeedsCache() {
+  try {
+    const fc = await getVideoFeatureCollectionCached({ force: true })
+    console.log('[news] videos warm:', fc?.features?.length || 0)
+    return fc
+  } catch (err) {
+    console.warn('[news] videos warm failed:', err.message)
+    return null
+  }
 }
 
 module.exports = {
@@ -597,6 +952,9 @@ module.exports = {
   getNewsFetchedAt,
   getVideoFeedItems,
   getRedditVideoItems,
+  getVideoFeatureCollectionCached,
+  buildVideoFeatureCollection,
+  warmVideoFeedsCache,
   VIDEO_FEEDS,
   isVideoThemeRelevant,
 }

@@ -1,5 +1,23 @@
 import './SearchResultsView.css'
 
+function formatResultAge(ts) {
+  if (ts == null) return null
+  const ms = Number(ts)
+  if (!Number.isFinite(ms)) {
+    const parsed = new Date(ts).getTime()
+    if (!Number.isFinite(parsed)) return null
+    return formatResultAge(parsed)
+  }
+  const age = Date.now() - ms
+  if (age < 0) return 'now'
+  const sec = Math.floor(age / 1000)
+  if (sec < 60) return 'now'
+  if (sec < 3600) return `${Math.floor(sec / 60)}m`
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h`
+  if (sec < 604800) return `${Math.floor(sec / 86400)}d`
+  return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
 /**
  * Full-page search results (hidden from main nav). Opened when user searches from the Omnibar.
  * Shows widget/section matches first, then map/event features.
@@ -54,10 +72,23 @@ export default function SearchResultsView({ query, features = [], widgetMatches 
             const title = props.title || props.name || 'Untitled'
             const coords = feature.geometry?.coordinates
             const canShowOnMap = hasCoords(feature)
+            const age = formatResultAge(props.timestamp || props.pubDate || props.publishedAt)
+            const typeLabel = props.type || props.source || 'Result'
+            const isNewsOrX = /news|x|osint|twitter/i.test(String(typeLabel)) || props.source === 'x'
             return (
               <li key={feature.id || i} className="search-results-item">
                 <div className="search-results-item-main">
-                  <span className="search-results-item-type">{props.type || props.source || 'Result'}</span>
+                  <div className="search-results-item-type-row">
+                    <span className="search-results-item-type">{typeLabel}</span>
+                    {age ? (
+                      <span
+                        className={`search-results-item-age${isNewsOrX ? '' : ' search-results-item-age--muted'}`}
+                        title="Recency"
+                      >
+                        {age}
+                      </span>
+                    ) : null}
+                  </div>
                   <h3 className="search-results-item-title">{title}</h3>
                   {props.source && (
                     <span className="search-results-item-source">{props.source}</span>

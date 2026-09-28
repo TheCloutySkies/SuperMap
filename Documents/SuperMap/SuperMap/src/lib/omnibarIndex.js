@@ -8,7 +8,7 @@ import { TOOLS_LIST } from '../components/toolsList'
 import { RESOURCE_SECTIONS } from '../components/ResourcesView'
 import { WIDGET_SEARCH_INDEX } from '../components/widgetSearchIndex'
 
-/** @typedef {'Mode'|'Maps'|'Crime'|'Feeds'|'Tools'|'Resources'|'Home'|'Reports'|'Settings'|'News'|'OSINT'|'Jump'} OmnibarCategory */
+/** @typedef {'Mode'|'Maps'|'Crime'|'Feeds'|'Tools'|'Resources'|'Home'|'Reports'|'Settings'|'News'|'OSINT'|'X'|'Jump'} OmnibarCategory */
 
 /**
  * @typedef {Object} OmnibarEntry
@@ -566,24 +566,30 @@ export function mergeOmnibarResults(jumpHits = [], contentHits = [], opts = {}) 
     byId.set(hit.id, {
       ...hit,
       action: hit.action || (hit.url ? 'open' : 'navigate'),
-      _kind: hit.category === 'News' || hit.category === 'OSINT' ? 'content' : (hit.crimeAbbr || hit.crimeCitySlug || hit.nationalMetric ? 'content' : 'jump'),
+      _kind: hit.category === 'News' || hit.category === 'OSINT' || hit.category === 'X' ? 'content' : (hit.crimeAbbr || hit.crimeCitySlug || hit.nationalMetric ? 'content' : 'jump'),
     })
   }
 
   return [...byId.values()]
-    .sort((a, b) => (b.score || 0) - (a.score || 0) || a.label.localeCompare(b.label))
+    .sort((a, b) => {
+      if ((b.score || 0) !== (a.score || 0)) return (b.score || 0) - (a.score || 0)
+      const ta = a.publishedAt != null ? Number(a.publishedAt) : 0
+      const tb = b.publishedAt != null ? Number(b.publishedAt) : 0
+      if (tb !== ta) return tb - ta
+      return a.label.localeCompare(b.label)
+    })
     .slice(0, limit)
 }
 
 /** Display category for result chips. */
 export function omnibarDisplayCategory(entry) {
   if (!entry) return 'Jump'
-  if (entry.category === 'News' || entry.category === 'OSINT' || entry.category === 'Crime') {
+  if (entry.category === 'News' || entry.category === 'OSINT' || entry.category === 'X' || entry.category === 'Crime') {
     // Content crime entities vs jump "Crime · National"
     if (entry.category === 'Crime' && (entry.crimeAbbr || entry.crimeCitySlug || entry.nationalMetric || entry.subtitle)) {
       return 'Crime'
     }
-    if (entry.category === 'News' || entry.category === 'OSINT') return entry.category
+    if (entry.category === 'News' || entry.category === 'OSINT' || entry.category === 'X') return entry.category
   }
   if (entry.category === 'Jump') return 'Jump'
   return 'Jump'

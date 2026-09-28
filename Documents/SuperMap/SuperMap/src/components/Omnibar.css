@@ -190,6 +190,21 @@
   white-space: nowrap;
 }
 
+.omnibar-result-age {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: #8b98a5;
+  background: rgba(239, 243, 244, 0.06);
+  border: 1px solid rgba(239, 243, 244, 0.12);
+  border-radius: 999px;
+  padding: 0.12rem 0.45rem;
+  min-width: 1.75rem;
+  text-align: center;
+}
+
 .omnibar-result-action {
   font-size: 0.75rem;
   color: var(--y2k-accent);

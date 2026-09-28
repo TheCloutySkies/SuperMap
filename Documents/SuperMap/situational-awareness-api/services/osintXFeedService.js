@@ -87,18 +87,35 @@ async function fetchFromFxTwitter(feed) {
         const ts = Number(t.created_timestamp)
         created = new Date(ts < 1e12 ? ts * 1000 : ts).toISOString()
       }
+      const author = t.author && typeof t.author === 'object' ? t.author : null
+      const screenName = (author?.screen_name || feed.handle || '').replace(/^@/, '')
       return {
         source: 'x',
         category: 'osint',
-        account: feed.handle,
+        account: screenName || feed.handle,
         name: feed.name,
+        displayName: author?.name || feed.name || screenName || feed.handle,
+        avatarUrl: author?.avatar_url || null,
+        verified: !!(author?.verification?.verified),
         title: text.slice(0, 140),
         content: text.slice(0, 2000),
         url: t.url || `https://x.com/${handle}/status/${t.id}`,
+        tweetId: t.id ? String(t.id) : null,
         pubDate: created,
         priority: feed.priority,
         images,
         videos,
+        // FxTwitter exposes counts only — not reply thread bodies.
+        metrics: {
+          replies: Number(t.replies) || 0,
+          reposts: Number(t.reposts) || 0,
+          likes: Number(t.likes) || 0,
+          bookmarks: Number(t.bookmarks) || 0,
+          quotes: Number(t.quotes) || 0,
+          views: Number(t.views) || 0,
+        },
+        replyCount: Number(t.replies) || 0,
+        replyingTo: t.replying_to || null,
         provider: 'fxtwitter',
       }
     })
@@ -137,9 +154,16 @@ function normalizeToOsintEvent(item) {
     link: item.url,
     url: item.url,
     account: item.account,
+    displayName: item.displayName || item.name || item.account,
+    avatarUrl: item.avatarUrl || null,
+    verified: !!item.verified,
+    tweetId: item.tweetId || null,
     priority: item.priority,
     images: item.images || [],
     videos: item.videos || [],
+    metrics: item.metrics || null,
+    replyCount: item.replyCount != null ? Number(item.replyCount) : (item.metrics?.replies ?? 0),
+    replyingTo: item.replyingTo || null,
     country: item.country || null,
     confidence: item.confidence || null,
     provider: item.provider || 'fxtwitter',
@@ -149,6 +173,12 @@ function normalizeToOsintEvent(item) {
     event.lat = item.coordinates[1]
   }
   return event
+}
+
+function invalidateOmnibarAfterX() {
+  try {
+    require('./omnibarContent').invalidateOmnibarContentCache()
+  } catch (_) { /* optional */ }
 }
 
 async function fetchOsintXFeeds({ limitFeeds = 0, skipGeotag = false } = {}) {
@@ -228,6 +258,9 @@ async function fetchOsintXFeeds({ limitFeeds = 0, skipGeotag = false } = {}) {
       id: event.id,
       source: 'x',
       account: item.account,
+      displayName: item.displayName || item.name || item.account,
+      avatarUrl: item.avatarUrl || null,
+      verified: !!item.verified,
       title: item.title,
       content: item.content,
       timestamp: event.timestamp,
@@ -236,8 +269,11 @@ async function fetchOsintXFeeds({ limitFeeds = 0, skipGeotag = false } = {}) {
       risk_label: ingested.risk_label,
       priority: item.priority,
       url: item.url,
+      tweetId: item.tweetId || null,
       images: item.images || [],
       videos: item.videos || [],
+      metrics: item.metrics || null,
+      replyCount: item.replyCount != null ? Number(item.replyCount) : 0,
       provider: 'fxtwitter',
     })
   }
@@ -245,6 +281,7 @@ async function fetchOsintXFeeds({ limitFeeds = 0, skipGeotag = false } = {}) {
   const fail = Object.entries(byHandle).filter(([, v]) => !v.ok || v.count === 0)
   if (ok.length) console.log('[osint-x] OK:', ok.map(([h, v]) => `${h}=${v.count}`).join(', '))
   if (fail.length) console.warn('[osint-x] Failed:', fail.map(([h]) => h).join(', '))
+  if (results.length) invalidateOmnibarAfterX()
   return results
 }
 
@@ -435,6 +472,7 @@ async function fetchOsintXFeedsScheduled({ concurrency = FETCH_CONCURRENCY } = {
       `posts=${results.length}`,
       `ms=${lastScheduledResult.ms}`,
     )
+    if (results.length) invalidateOmnibarAfterX()
     return lastScheduledResult
   })()
 

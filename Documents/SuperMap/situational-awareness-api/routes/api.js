@@ -838,7 +838,7 @@ router.get('/cameras', async (req, res) => {
 /**
  * GET /api/webcams?minLat=&maxLat=&minLon=&maxLon=&limit=
  * Live Webcams map (viewport lazy fetch). Aggregates free public traffic-cam
- * catalogs (Caltrans CWWP2, NYC DOT TMC) plus optional Windy Webcams v2 when
+ * catalogs (Caltrans CWWP2, NYC DOT TMC) plus optional Windy Webcams v3 when
  * WINDY_API is a webcams-capable key. Do not call without a bbox.
  */
 router.get('/webcams', async (req, res) => {

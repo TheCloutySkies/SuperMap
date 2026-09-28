@@ -2,10 +2,16 @@ const axios = require('axios')
 const path = require('path')
 const fs = require('fs/promises')
 
-const WINDY_API = process.env.WINDY_API
+/** Canonical env: WINDY_API (Render). Alias WINDY_API_KEY accepted for parity with weather.js. */
+function windyKey() {
+  return String(process.env.WINDY_API || process.env.WINDY_API_KEY || '').trim()
+}
 
-/** Windy Webcams API v2 list by bounding box (path filter). */
-const WINDY_WEBCAMS_V2_BASE = 'https://api.windy.com/api/webcams/v2/list'
+/** Windy Webcams API v3 (v2 path /api/webcams/v2/list is retired — 404). */
+const WINDY_WEBCAMS_V3_BASE = 'https://api.windy.com/webcams/api/v3/webcams'
+/** @deprecated kept for callers that still import the old name */
+const WINDY_WEBCAMS_V2_BASE = WINDY_WEBCAMS_V3_BASE
+const WINDY_INCLUDE = 'images,location,urls,player'
 
 /** Caltrans CWWP2 public CCTV status (no key). Districts 1–12 with rough AABBs. */
 const CALTRANS_DISTRICTS = [
@@ -36,7 +42,7 @@ let caltransInflight = {}
 let nycInflight = null
 
 function windyConfigured() {
-  return Boolean(WINDY_API && String(WINDY_API).trim())
+  return Boolean(windyKey())
 }
 
 function inBbox(lon, lat, { north, east, south, west }) {
@@ -68,7 +74,7 @@ function toFeature({ id, title, lat, lon, city, region, country, image, url, pla
 }
 
 /**
- * Normalize a Windy webcam object (v2 or loose v3-shaped) to a GeoJSON Point feature.
+ * Normalize a Windy webcam object (v3 preferred; v2-shaped still accepted) to a GeoJSON Point feature.
  */
 function webcamToFeature(c) {
   if (!c) return null
@@ -77,26 +83,33 @@ function webcamToFeature(c) {
   const lon = Number(loc.longitude ?? loc.lon ?? c.longitude)
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
 
+  const webcamId = c.webcamId ?? c.id
   const image =
-    c.image?.current?.preview ||
-    c.image?.current?.thumbnail ||
     c.images?.current?.preview ||
     c.images?.current?.thumbnail ||
+    c.image?.current?.preview ||
+    c.image?.current?.thumbnail ||
     ''
-  const playerLive =
-    c.player?.live?.embed ||
-    (c.player?.live?.available ? c.player?.live?.link : '') ||
+  const player = c.player || {}
+  const playerEmbed =
+    (typeof player.live === 'string' ? player.live : '') ||
+    player.live?.embed ||
+    (player.live?.available ? player.live?.link : '') ||
+    (typeof player.day === 'string' ? player.day : '') ||
+    player.day?.embed ||
+    player.day?.link ||
     ''
-  const playerDay = c.player?.day?.embed || c.player?.day?.link || ''
   const detailUrl =
+    c.urls?.detail ||
+    c.urls?.provider ||
     c.url?.current?.desktop ||
     c.url?.current?.mobile ||
-    c.urls?.detail ||
-    c.player?.day?.link ||
-    (c.id ? `https://www.windy.com/webcams/${c.id}` : '')
+    (typeof player.day === 'string' ? player.day : '') ||
+    player.day?.link ||
+    (webcamId != null ? `https://www.windy.com/webcams/${webcamId}` : '')
 
   return toFeature({
-    id: c.id,
+    id: webcamId != null ? `windy-${webcamId}` : `windy-${lat},${lon}`,
     title: c.title || loc.city || 'Webcam',
     lat,
     lon,
@@ -105,7 +118,7 @@ function webcamToFeature(c) {
     country: loc.country || '',
     image,
     url: detailUrl,
-    playerEmbed: playerLive || playerDay || '',
+    playerEmbed,
     source: 'Windy',
   })
 }
@@ -289,39 +302,47 @@ function bboxMayHitNyc({ north, east, south, west }) {
 }
 
 async function fetchWindyWebcams({ north, east, south, west, limit }) {
-  if (!windyConfigured()) {
-    return { features: [], error: 'not_configured', provider: 'windy-webcams-v2' }
+  const key = windyKey()
+  if (!key) {
+    return { features: [], error: 'not_configured', provider: 'windy-webcams-v3' }
   }
-  const pathFilter = `bbox=${north},${east},${south},${west}/limit=${limit}`
-  const url = `${WINDY_WEBCAMS_V2_BASE}/${pathFilter}`
+  // v3: query bbox=north,east,south,west (same order as retired v2 path filter)
+  const params = {
+    bbox: `${north},${east},${south},${west}`,
+    limit: Math.min(Math.max(parseInt(limit, 10) || 50, 1), 50),
+    include: WINDY_INCLUDE,
+  }
   try {
-    const res = await axios.get(url, {
-      params: {
-        key: WINDY_API,
-        show: 'webcams:location,image,player,url',
-      },
+    const res = await axios.get(WINDY_WEBCAMS_V3_BASE, {
+      params,
       headers: {
-        'X-WINDY-KEY': WINDY_API,
+        'x-windy-api-key': key,
+        Accept: 'application/json',
+        'User-Agent': 'SuperMap/1.0 (situational-awareness; live-webcams)',
       },
       timeout: 12000,
     })
     const data = res.data
-    const cams = data?.result?.webcams || data?.webcams || []
+    const cams = data?.webcams || data?.result?.webcams || []
     const features = cams.map(webcamToFeature).filter(Boolean)
     return {
       features,
-      total: Number(data?.result?.total) || features.length,
-      provider: 'windy-webcams-v2',
+      total: Number(data?.total) || features.length,
+      provider: 'windy-webcams-v3',
     }
   } catch (err) {
-    console.warn('[cameras/webcams]', err.response?.status || '', err.message)
+    const status = err.response?.status
+    console.warn('[cameras/webcams]', status || '', err.message)
+    const unauthorized = status === 401 || status === 403
     return {
       features: [],
-      error: err.response?.status === 401 || err.response?.status === 403
-        ? 'unauthorized'
-        : 'upstream_error',
-      provider: 'windy-webcams-v2',
-      status: err.response?.status,
+      error: unauthorized ? 'unauthorized' : 'upstream_error',
+      // Hint for operators — never include the key.
+      hint: unauthorized
+        ? 'WINDY_API rejected by Webcams API v3 (401/403). Use a webcams-capable key from https://api.windy.com/keys; Caltrans/NYC still work without it.'
+        : undefined,
+      provider: 'windy-webcams-v3',
+      status,
     }
   }
 }
@@ -342,12 +363,49 @@ function filterAndLimit(features, bbox, limit) {
 }
 
 /**
+ * Round-robin across providers so dense free catalogs (NYC/Caltrans) do not
+ * starve optional Windy results when the viewport limit is small.
+ */
+function interleaveBySource(features, limit) {
+  const buckets = new Map()
+  for (const f of features) {
+    const s = f.properties?.source || 'other'
+    if (!buckets.has(s)) buckets.set(s, [])
+    buckets.get(s).push(f)
+  }
+  for (const arr of buckets.values()) {
+    arr.sort((a, b) => {
+      const ai = a.properties?.image ? 0 : 1
+      const bi = b.properties?.image ? 0 : 1
+      if (ai !== bi) return ai - bi
+      return String(a.id).localeCompare(String(b.id))
+    })
+  }
+  // Prefer Windy early when present so Live Webcams shows enrichment clearly.
+  const keys = [...buckets.keys()].sort((a, b) => {
+    if (a === 'Windy') return -1
+    if (b === 'Windy') return 1
+    return a.localeCompare(b)
+  })
+  const out = []
+  let i = 0
+  while (out.length < limit && keys.some((k) => buckets.get(k).length)) {
+    const k = keys[i % keys.length]
+    i += 1
+    const arr = buckets.get(k)
+    if (!arr.length) continue
+    out.push(arr.shift())
+  }
+  return out
+}
+
+/**
  * Fetch live webcams inside a viewport bbox from multiple free/geo sources.
  *
  * Sources (ToS-friendly, no paid keys required):
  * - Caltrans CWWP2 CCTV (public CA DOT traffic cams)
  * - NYC DOT TMC cameras (public NYC traffic cams)
- * - Optional Windy Webcams API v2 when WINDY_API is a webcams-capable key
+ * - Optional Windy Webcams API v3 when WINDY_API is a webcams-capable key
  * - Seed cameras shipped with the API (sparse global samples)
  *
  * @param {{ north:number, east:number, south:number, west:number, limit?:number }} bbox
@@ -413,6 +471,7 @@ async function getWebcamsByBbox(bbox = {}) {
   )
 
   // Optional Windy (key-gated; Map Forecast keys often 401 webcams).
+  let windyHint
   const windyJob = fetchWindyWebcams({ north: n, east: e, south: s, west: w, limit })
     .then((result) => {
       if (result.error === 'not_configured') {
@@ -420,12 +479,14 @@ async function getWebcamsByBbox(bbox = {}) {
         return
       }
       if (result.error) sourceErrors.windy = result.error
-      pushAll(result.features || [], result.provider || 'windy-webcams-v2')
+      if (result.hint) windyHint = result.hint
+      pushAll(result.features || [], result.provider || 'windy-webcams-v3')
     })
 
   await Promise.all([...catalogJobs, windyJob])
 
-  let features = filterAndLimit(merged, bounds, limit)
+  const inView = filterAndLimit(merged, bounds, Math.max(limit * 4, 200))
+  let features = interleaveBySource(inView, limit)
 
   // Demo points only when explicitly opted in and still empty (local screenshots).
   if (!features.length && String(process.env.WEBCAMS_DEMO || '').trim() === '1') {
@@ -443,6 +504,7 @@ async function getWebcamsByBbox(bbox = {}) {
     total: features.length,
     providers: sourcesTried,
     sourceErrors: Object.keys(sourceErrors).length ? sourceErrors : undefined,
+    windyHint: windyHint || undefined,
     provider: features[0]?.properties?.source || 'multi',
   }
 }
@@ -451,7 +513,8 @@ async function getWebcamsByBbox(bbox = {}) {
  * Legacy nearby fetch (lat/lon/radius km). Kept for compatibility.
  */
 async function getCameras(query = {}) {
-  if (!windyConfigured()) {
+  const key = windyKey()
+  if (!key) {
     // Fall back to free catalogs around a point.
     const lat = Number(query.lat)
     const lon = Number(query.lon)
@@ -470,20 +533,20 @@ async function getCameras(query = {}) {
   }
   const { lat, lon, radius = 50 } = query
   try {
-    let pathFilter = `limit=50`
-    if (lat != null && lon != null) {
-      pathFilter = `nearby=${lat},${lon},${radius}/limit=50`
-    }
-    const url = `${WINDY_WEBCAMS_V2_BASE}/${pathFilter}`
-    const res = await axios.get(url, {
+    const res = await axios.get(WINDY_WEBCAMS_V3_BASE, {
       params: {
-        key: WINDY_API,
-        show: 'webcams:location,image,player,url',
+        nearby: `${lat},${lon},${radius}`,
+        limit: 50,
+        include: WINDY_INCLUDE,
       },
-      headers: { 'X-WINDY-KEY': WINDY_API },
+      headers: {
+        'x-windy-api-key': key,
+        Accept: 'application/json',
+        'User-Agent': 'SuperMap/1.0 (situational-awareness; live-webcams)',
+      },
       timeout: 10000,
     })
-    const cams = res.data?.result?.webcams || []
+    const cams = res.data?.webcams || []
     const features = cams.map(webcamToFeature).filter(Boolean)
     return { type: 'FeatureCollection', features }
   } catch (err) {
@@ -496,6 +559,8 @@ module.exports = {
   getCameras,
   getWebcamsByBbox,
   windyConfigured,
+  windyKey,
+  WINDY_WEBCAMS_V3_BASE,
   WINDY_WEBCAMS_V2_BASE,
   NYC_TMC_CAMERAS_URL,
 }

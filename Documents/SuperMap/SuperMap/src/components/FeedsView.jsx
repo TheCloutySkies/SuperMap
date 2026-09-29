@@ -578,7 +578,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
       axios.get(`${API_BASE}/api/osint`, { timeout: 20000 }),
     ]
     if (feedMode === FEED_MODE.VIDEOS) {
-      setVideoLoading(true)
+      setVideoLoading((prev) => (videoItems.length === 0 ? true : false))
       requests.push(axios.get(`${API_BASE}/api/feeds/videos`, { timeout: 20000 }))
     }
     Promise.all(requests)

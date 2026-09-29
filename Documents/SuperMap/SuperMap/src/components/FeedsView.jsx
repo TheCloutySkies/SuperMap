@@ -49,8 +49,9 @@ function preferRicherItems(next, prev) {
   if (n === 0) return prev || []
   if (p === 0) return next
   if (n >= p) return next
-  // Live conspicuously thinner (cold mid-catch-up) — keep last-good paint
-  if (p > 20 && n < 40 && n < p * 0.6) return prev
+  // Live conspicuously thinner (cold mid-catch-up) — keep last-good paint.
+  // No absolute n<40 gate: mid-thin (50 vs 80) still wiped OSINT/videos desks.
+  if (p > 20 && n < p * 0.6) return prev
   return next
 }
 

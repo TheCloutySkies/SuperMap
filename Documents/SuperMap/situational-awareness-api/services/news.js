@@ -531,7 +531,7 @@ function persistNewsCache(result) {
     diskN = existing?.value?.payload?.features?.length || 0
   } catch (_) { /* optional */ }
   const prevN = Math.max(memN, diskN)
-  if (prevN > 0 && nextN < 40 && nextN < prevN * 0.6) {
+  if (prevN > 20 && nextN > 0 && nextN < prevN * 0.6) {
     console.log('[news] keep richer last-good (prev=', prevN, 'next=', nextN, ')')
     // Still refresh memory pointer to the richer set if disk wins
     if (diskN > memN) {
@@ -1046,6 +1046,18 @@ function setVideosCacheIfRicher(fc) {
   return true
 }
 
+function scheduleVideosBackgroundFill(reason) {
+  setImmediate(() => {
+    buildVideoFeatureCollection()
+      .then((fc) => {
+        if (setVideosCacheIfRicher(fc)) {
+          console.log('[news] videos', reason + ':', fc.features.length)
+        }
+      })
+      .catch((e) => console.warn('[news] videos', reason + ':', e.message))
+  })
+}
+
 async function getVideoFeatureCollectionCached({ force = false } = {}) {
   // Stale-while-revalidate: serve hourly/daily last-good IMMEDIATELY on TTL miss.
   // Live YouTube Innertube can take tens of seconds — never block Recent Videos paint.
@@ -1057,27 +1069,25 @@ async function getVideoFeatureCollectionCached({ force = false } = {}) {
       }
       const stale = apiResultCache.getStale(VIDEOS_CACHE_NS, VIDEOS_CACHE_KEY, VIDEOS_STALE_SEC)
       if (stale?.value?.features?.length) {
-        setImmediate(() => {
-          buildVideoFeatureCollection()
-            .then((fc) => {
-              if (setVideosCacheIfRicher(fc)) {
-                console.log('[news] videos SWR refresh:', fc.features.length)
-              }
-            })
-            .catch((e) => console.warn('[news] videos SWR:', e.message))
-        })
+        scheduleVideosBackgroundFill('SWR refresh')
         return { ...stale.value, _fromCache: true, _stale: true }
       }
     } catch (err) {
       console.warn('[news] videos peek:', err.message)
     }
+    // No last-good (Render Free ephemeral wipe): return empty immediately.
+    // Do NOT fall through to getOrFetch — that awaits Innertube and can hang
+    // /api/feeds/videos for 60–90s+ on cold boot. FE localStorage keeps the desk.
+    scheduleVideosBackgroundFill('cold fill')
+    return { type: 'FeatureCollection', features: [], _warming: true }
   }
 
+  // force=true (boot warm / ?refresh=1): await a live rebuild, prefer richer last-good.
   try {
     const result = await apiResultCache.getOrFetch(
       VIDEOS_CACHE_NS,
       VIDEOS_CACHE_KEY,
-      { ttlSec: VIDEOS_TTL_SEC, staleTtlSec: VIDEOS_STALE_SEC, force },
+      { ttlSec: VIDEOS_TTL_SEC, staleTtlSec: VIDEOS_STALE_SEC, force: true },
       async () => {
         const fc = await buildVideoFeatureCollection()
         if (!fc?.features?.length) return null
@@ -1095,22 +1105,10 @@ async function getVideoFeatureCollectionCached({ force = false } = {}) {
   } catch (err) {
     console.warn('[news] videos cache:', err.message)
   }
-  // Stale-on-error fallback
   try {
     const hit = apiResultCache.getStale(VIDEOS_CACHE_NS, VIDEOS_CACHE_KEY, VIDEOS_STALE_SEC)
     if (hit?.value?.features?.length) return { ...hit.value, _fromCache: true, _stale: true }
   } catch (_) { /* optional */ }
-  // No disk last-good: return empty immediately and build in background.
-  // Frontend keeps its own soft snapshot; next poll/SWR hit will fill.
-  setImmediate(() => {
-    buildVideoFeatureCollection()
-      .then((fc) => {
-        if (setVideosCacheIfRicher(fc)) {
-          console.log('[news] videos cold fill:', fc.features.length)
-        }
-      })
-      .catch((e) => console.warn('[news] videos cold build:', e.message))
-  })
   return { type: 'FeatureCollection', features: [], _warming: true }
 }
 

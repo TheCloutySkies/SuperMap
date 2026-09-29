@@ -211,7 +211,8 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
     const gen = ++fetchGen.current
     const params = { limit: 150 }
     if (force) params.refresh = '1'
-    const timeout = force ? 20000 : 15000
+    // Force waits for budgeted server ingest (~18s) — keep client above that.
+    const timeout = force ? 25000 : 20000
     const hadCached = snapshotPosts.current.length > 0 || posts.length > 0
     if (!silent) {
       if (hadCached) {
@@ -237,7 +238,7 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
         try {
           const retry = await axios.get(`${API_BASE}/api/osint-x`, {
             params: { limit: 150, refresh: '1' },
-            timeout: 20000,
+            timeout: 25000,
             headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
           })
           if (gen !== fetchGen.current) return
@@ -256,7 +257,7 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
         return
       }
       if (!hadCached) {
-        setLoadError('No posts in the last 48h. Tap Retry to pull FxTwitter again.')
+        setLoadError('No posts available yet. Tap Retry to pull FxTwitter into the database.')
       } else if (!silent) {
         setLoadError('Refresh still running — showing cached posts.')
       }
@@ -514,7 +515,7 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
           <p>
             {q
               ? 'No posts match the current search.'
-              : (loadError || 'No curated posts in the last 48 hours yet.')}
+              : (loadError || 'No curated posts available yet — tap Retry to pull FxTwitter.')}
           </p>
           {!q && (
             <button type="button" className="x-feed-clear" onClick={handleRefresh} disabled={refreshing}>

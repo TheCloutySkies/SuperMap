@@ -70,6 +70,8 @@ app.get('/health', (req, res) => {
 
 /** OSINT X: full handle list every 5 minutes (no rotate batch). */
 const OSINT_X_INTERVAL_MS = 5 * 60 * 1000
+/** Faster cadence while SQLite has zero X rows (free-tier ephemeral wipe). */
+const OSINT_X_EMPTY_INTERVAL_MS = 2 * 60 * 1000
 const HOME_IMAGES_REFRESH_MS = 3 * 60 * 1000
 const MEDIASTACK_TICK_MS = 60 * 1000 // check ET window every minute
 const FEEDS_815_TICK_MS = 60 * 1000 // news RSS + OSINT publishers 08:00/15:00 ET
@@ -206,6 +208,17 @@ function runOsintXIngest() {
     .catch((e) => console.warn('[osint-x]', e.message))
 }
 
+/** True when SQLite has no X rows — free-tier ephemeral wipe / cold boot. */
+function osintXDbEmpty() {
+  try {
+    const { getEvents } = require('./database')
+    const rows = getEvents(5, null, null, null, null, ['x'])
+    return !rows || rows.length === 0
+  } catch (_) {
+    return true
+  }
+}
+
 /** Boot: load disk caches, catch-up news/OSINT if empty or missed last 8/15 window. */
 function runBootCatchUp() {
   const cached = newsService.getNewsCached()
@@ -279,9 +292,11 @@ app.listen(PORT, () => {
 
   // Boot catch-up / OSINT-X: defer when last-good is present so cold-open HTTP
   // is not starved by ingest on the event loop.
-  // Empty boot: still stagger — warm /api/home first, news soon, OSINT-X later.
+  // Empty boot without DATA_DIR: start OSINT X sooner (~10s) so Retry/budget
+  // pulls have a warm DB; stagger only when last-good exists.
+  const xEmpty = osintXDbEmpty()
   const catchUpDelayMs = hadLastGood ? 45000 : 6000
-  const osintXDelayMs = hadLastGood ? 50000 : 32000
+  const osintXDelayMs = hadLastGood ? 50000 : (xEmpty ? 10000 : 32000)
   const warmHomeDelayMs = hadLastGood ? 15000 : 2500
   const videosDelayMs = hadLastGood ? 20000 : 22000
   setTimeout(runBootCatchUp, catchUpDelayMs)
@@ -294,15 +309,27 @@ app.listen(PORT, () => {
     warmHomeDelayMs,
     'hadLastGood=',
     hadLastGood,
+    'osintXEmpty=',
+    xEmpty,
   )
 
   // Hourly keyword tags for threat summary
   setTimeout(runKeywordTagsRefresh, hadLastGood ? 45000 : 55000)
   setInterval(runKeywordTagsRefresh, KEYWORD_TAGS_INTERVAL_MS)
 
-  // OSINT X: full list every 5 minutes — stagger after news catch-up on cold boot
+  // OSINT X: full list — while DB empty use 2min cadence so free-tier ephemeral
+  // SQLite stays warm within process life; settle to 5min once populated.
   setTimeout(runOsintXIngest, osintXDelayMs)
-  setInterval(runOsintXIngest, OSINT_X_INTERVAL_MS)
+  let osintXTimer = null
+  const scheduleOsintXTick = () => {
+    const interval = osintXDbEmpty() ? OSINT_X_EMPTY_INTERVAL_MS : OSINT_X_INTERVAL_MS
+    osintXTimer = setTimeout(() => {
+      runOsintXIngest()
+      scheduleOsintXTick()
+    }, interval)
+    if (typeof osintXTimer.unref === 'function') osintXTimer.unref()
+  }
+  setTimeout(scheduleOsintXTick, osintXDelayMs + 500)
 
   // Warm home bootstrap early on cold boot so piece/MediaStack/stocks land <10s
   setTimeout(() => {

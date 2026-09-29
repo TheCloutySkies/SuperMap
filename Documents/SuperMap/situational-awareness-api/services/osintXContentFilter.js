@@ -48,9 +48,11 @@ function normalizeMode(raw) {
 function getDefaultOpts() {
   const mode = normalizeMode(process.env.OSINT_X_CONTENT_FILTER || 'balanced')
   const envMinRisk = parseInt(process.env.OSINT_X_MIN_RISK || '', 10)
+  // Balanced default minRisk=1 so thin cold ingest (heuristic risk 1) is not wiped.
+  // Strict still defaults to 2 unless OSINT_X_MIN_RISK overrides.
   const minRisk = Number.isFinite(envMinRisk)
     ? Math.min(5, Math.max(1, envMinRisk))
-    : (mode === 'off' ? 1 : 2)
+    : (mode === 'strict' ? 2 : 1)
   const minPriority = String(process.env.OSINT_X_MIN_PRIORITY || 'low').toLowerCase()
   return { mode, minRisk, minPriority: PRIORITY_RANK[minPriority] ? minPriority : 'low' }
 }

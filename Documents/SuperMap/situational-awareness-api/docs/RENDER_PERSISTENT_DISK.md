@@ -70,10 +70,24 @@ Without a disk, caches still wipe on every deploy. This codebase softens the bla
 
 1. Warming `/api/home` within ~2.5s from piece caches / live stocks-gas
 2. Preferring **MediaStack last-pull** for news when RSS last-good is gone
-3. Staggering OSINT X (~32s) after news catch-up so FxTwitter does not starve cold open
-4. Not aborting the news batch when Google News / individual feeds 406 or time out
+3. Starting OSINT X sooner when SQLite is empty (~10s), with a **2-minute** ingest cadence until the first posts land, then settling to 5 minutes
+4. **`GET /api/osint-x?refresh=1`** awaits a budgeted FxTwitter pull (~18s, 12 handles), writes SQLite, then re-reads — Retry no longer returns `[]` while ingest is still running
+5. Expanding the OSINT X window to 14 days / relaxing the content filter / serving process memory last-good when the 48h curated slice is empty
+6. Cold `/api/news` awaits up to ~12s for RSS/MediaStack rebuild instead of returning an empty FeatureCollection immediately
+7. Not aborting the news batch when Google News / individual feeds 406 or time out
 
-Expect a short warm-up until RSS + X refill; attach a disk for durable last-good.
+Expect a short warm-up until RSS + X refill; **attach a disk + set `DATA_DIR=/var/data`** for durable last-good across deploys.
+
+### Must set on Render (after merge)
+
+| Env / setting | Required? | Value |
+| --- | --- | --- |
+| Plan | For durable disk | **Starter+** (Free cannot attach disks) |
+| Disk mount | Recommended | `/var/data` (1 GB) |
+| `DATA_DIR` | Recommended | `/var/data` |
+| Keepalive | Recommended | Hit `/api/home` (not only `/health`) so last-good stays warm |
+
+If `DATA_DIR` is unset, feeds still refill within the process life via continuous ingest + Retry budget — but every redeploy starts empty again.
 
 ## Unaffected
 

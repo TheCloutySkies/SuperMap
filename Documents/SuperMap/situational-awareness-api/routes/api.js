@@ -245,10 +245,38 @@ router.get('/news', async (req, res) => {
       return res.json(attachMeta(items))
     }
 
-    // Empty cache: respond with empty FC quickly, rebuild in background (8/15 catch-up also covers this).
-    if (cached) return res.json(attachMeta(cached))
+    // Empty cache: await a short rebuild (MediaStack seed / RSS) so cold opens
+    // are not blank while catch-up runs. Cap wait so /api/home stays snappy.
+    if (cached && Array.isArray(cached.features) && cached.features.length > 0) {
+      return res.json(attachMeta(cached))
+    }
+    const NEWS_COLD_BUDGET_MS = 12000
+    try {
+      const items = await Promise.race([
+        newsService.getNews(),
+        new Promise((resolve) => setTimeout(() => resolve(null), NEWS_COLD_BUDGET_MS)),
+      ])
+      if (items && Array.isArray(items.features) && items.features.length > 0) {
+        if (feedsDebugEnabled()) {
+          console.log('[FEEDS API /news] OUTPUT', {
+            cached: false,
+            coldAwait: true,
+            features: items.features.length,
+            ms: Date.now() - t0,
+          })
+        }
+        return res.json(attachMeta(items))
+      }
+    } catch (e) {
+      console.warn('[API /news] cold await:', e.message)
+    }
+    // Rebuild may still be in flight from the race timeout — keep it going.
     newsService.getNews().catch((e) => console.warn('[API /news] background:', e.message))
-    return res.json(attachMeta({ type: 'FeatureCollection', features: [], meta: {} }))
+    const after = newsService.getNewsCached()
+    if (after && Array.isArray(after.features) && after.features.length > 0) {
+      return res.json(attachMeta(after))
+    }
+    return res.json(attachMeta({ type: 'FeatureCollection', features: [], meta: { emptyReason: 'cold-boot' } }))
   } catch (err) {
     console.error('[API /news]', err.message)
     const cached = newsService.getNewsCached()
@@ -670,7 +698,10 @@ router.get('/osint-x/status', (req, res) => {
   }
 })
 
-const OSINT_X_MAX_AGE_MS = 48 * 60 * 60 * 1000 // 48 hours (sparse accounts)
+const OSINT_X_MAX_AGE_MS = 48 * 60 * 60 * 1000 // preferred window
+const OSINT_X_EXPANDED_AGE_MS = 14 * 24 * 60 * 60 * 1000 // fallback when 48h is empty
+/** Process-life last-good so ephemeral free-tier redeploys still have something mid-uptime. */
+let lastGoodOsintXPosts = []
 
 function mapOsintXRows(rows, cutoff) {
   return rows
@@ -733,10 +764,76 @@ function mapOsintXRows(rows, cutoff) {
     })
 }
 
-/** OSINT X via FxTwitter: GET /api/osint-x?limit=100&refresh=1. Last 48h.
- * Always returns SQLite posts immediately. Live FxTwitter pull is fire-and-forget
- * so cold opens never block on a 90s+ refresh.
- * Content filter (lifestyle → geo/intel): ?filter=off|balanced|strict&minRisk=1-5&minPriority=low|medium|high
+function readOsintXRows(limit) {
+  return getEvents(Math.min(limit * 3, 400), null, null, null, null, ['x'])
+}
+
+function persistOsintXLastGood(posts) {
+  if (!Array.isArray(posts) || posts.length === 0) return
+  lastGoodOsintXPosts = posts
+  try {
+    const apiResultCache = require('../services/apiResultCache')
+    apiResultCache.set('osint-x', 'last-good', posts, apiResultCache.TTL.DAILY)
+  } catch (_) { /* optional */ }
+}
+
+function readOsintXLastGood() {
+  if (lastGoodOsintXPosts.length) return lastGoodOsintXPosts
+  try {
+    const apiResultCache = require('../services/apiResultCache')
+    const hit = apiResultCache.getNewestStale
+      ? apiResultCache.getNewestStale('osint-x', apiResultCache.TTL.WEEKLY)
+      : apiResultCache.peek?.('osint-x', 'last-good')
+    const value = hit?.value
+    if (Array.isArray(value) && value.length) {
+      lastGoodOsintXPosts = value
+      return value
+    }
+  } catch (_) { /* optional */ }
+  return []
+}
+
+/**
+ * Map + filter with 48h preferred window; expand to 14d / relax filter / memory
+ * last-good so Retry never shows blank when posts exist somewhere.
+ */
+function assembleOsintXPosts(rows, { limit, cutoff, filterMode, minRisk, minPriority }) {
+  const { filterOsintXPosts } = require('../services/osintXContentFilter')
+  let windowMode = '48h'
+  let mapped = mapOsintXRows(rows, cutoff)
+  if (mapped.length === 0 && rows.length > 0) {
+    mapped = mapOsintXRows(rows, Date.now() - OSINT_X_EXPANDED_AGE_MS)
+    if (mapped.length) windowMode = 'expanded'
+  }
+
+  let filtered = filterOsintXPosts(mapped, { mode: filterMode, minRisk, minPriority })
+  let filterLabel = filtered.meta.mode || 'balanced'
+  if (filtered.posts.length === 0 && mapped.length > 0) {
+    filtered = filterOsintXPosts(mapped, { mode: 'off', minRisk: 1, minPriority: 'low' })
+    filterLabel = 'relaxed'
+  }
+
+  let posts = filtered.posts.slice(0, limit)
+  let from = 'db'
+  if (posts.length === 0) {
+    const mem = readOsintXLastGood()
+    if (mem.length) {
+      posts = mem.slice(0, limit)
+      from = 'memory-last-good'
+      if (windowMode === '48h') windowMode = 'last-good'
+    }
+  } else {
+    persistOsintXLastGood(posts)
+  }
+
+  return { posts, mappedCount: mapped.length, filterMeta: filtered.meta, filterLabel, windowMode, from }
+}
+
+/** OSINT X via FxTwitter: GET /api/osint-x?limit=100&refresh=1.
+ * Prefers last 48h from SQLite. On empty/force: awaits a budgeted FxTwitter
+ * pull (writes DB) then re-reads. Expands window / relaxes filter / serves
+ * memory last-good rather than returning [].
+ * Content filter: ?filter=off|balanced|strict&minRisk=1-5&minPriority=low|medium|high
  */
 router.get('/osint-x', async (req, res) => {
   const t0 = Date.now()
@@ -749,7 +846,7 @@ router.get('/osint-x', async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 100, 200)
     const cutoff = Date.now() - OSINT_X_MAX_AGE_MS
-    const { filterOsintXPosts, getDefaultOpts } = require('../services/osintXContentFilter')
+    const { getDefaultOpts } = require('../services/osintXContentFilter')
     const filterDefaults = getDefaultOpts()
     const filterMode = req.query.filter != null ? String(req.query.filter) : filterDefaults.mode
     const minRiskQ = parseInt(req.query.minRisk, 10)
@@ -758,47 +855,70 @@ router.get('/osint-x', async (req, res) => {
       ? String(req.query.minPriority)
       : filterDefaults.minPriority
 
-    // Pull extra rows so filter drop doesn't starve the response.
-    const rows = getEvents(Math.min(limit * 3, 400), null, null, null, null, ['x'])
-    const mapped = mapOsintXRows(rows, cutoff)
+    let rows = readOsintXRows(limit)
     let refreshMeta = { attempted: false, reason: null }
 
-    // Kick off background top-up without delaying the response.
-    const shouldLive = force || mapped.length === 0
+    // Budgeted live pull that WRITES to SQLite, then re-read. Full-list
+    // continues in background — never await limitFeeds:0 inside the budget.
+    const shouldLive = force || rows.length === 0 || mapOsintXRows(rows, cutoff).length === 0
     if (shouldLive) {
       refreshMeta.attempted = true
-      refreshMeta.reason = 'background'
-      ensureOsintXFresh({
-        limitFeeds: force ? 0 : 12, // 0 = full list on explicit refresh
-        force,
-      }).catch((err) => console.warn('[API /osint-x] background refresh:', err.message))
+      const budgetMs = force ? 18000 : 15000
+      try {
+        const result = await ensureOsintXFresh({
+          limitFeeds: 12,
+          force,
+          budgetMs,
+        })
+        refreshMeta.reason = result?.reason || (result?.refreshed ? 'ok' : 'done')
+        rows = readOsintXRows(limit)
+      } catch (err) {
+        refreshMeta.reason = err.message || 'error'
+        console.warn('[API /osint-x] live refresh:', err.message)
+      }
+      if (force) {
+        const { fetchOsintXFeedsScheduled } = require('../services/osintXFeedService')
+        fetchOsintXFeedsScheduled().catch((err) =>
+          console.warn('[API /osint-x] full-list background:', err.message),
+        )
+      }
     }
 
-    const filtered = filterOsintXPosts(mapped, {
-      mode: filterMode,
+    const assembled = assembleOsintXPosts(rows, {
+      limit,
+      cutoff,
+      filterMode,
       minRisk,
       minPriority,
     })
-    const posts = filtered.posts.slice(0, limit)
+    const posts = assembled.posts
 
     if (feedsDebugEnabled()) {
       console.log('[FEEDS API /osint-x] OUTPUT', {
         limit,
         force,
         posts: posts.length,
-        filter: filtered.meta,
-        withImages: posts.filter((p) => p.images?.length).length,
+        filter: assembled.filterMeta,
+        window: assembled.windowMode,
+        from: assembled.from,
         refreshMeta,
         ms: Date.now() - t0,
       })
     }
     res.set('X-Osint-X-Count', String(posts.length))
-    res.set('X-Osint-X-Filter', filtered.meta.mode || 'balanced')
-    res.set('X-Osint-X-Filter-Dropped', String(filtered.meta.dropped || 0))
+    res.set('X-Osint-X-Filter', assembled.filterLabel)
+    res.set('X-Osint-X-Filter-Dropped', String(assembled.filterMeta?.dropped || 0))
+    res.set('X-Osint-X-Window', assembled.windowMode)
+    res.set('X-Osint-X-From', assembled.from)
     if (refreshMeta.attempted) res.set('X-Osint-X-Refresh', refreshMeta.reason || 'attempted')
     res.json(posts)
   } catch (err) {
     console.error('[API /osint-x]', err.message)
+    const fallback = readOsintXLastGood()
+    if (fallback.length) {
+      res.set('X-Osint-X-From', 'memory-last-good')
+      return res.json(fallback.slice(0, 100))
+    }
     res.status(500).json({ error: 'Failed to fetch OSINT X' })
   }
 })

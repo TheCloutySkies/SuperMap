@@ -1,15 +1,13 @@
 /**
- * Durable data root for Render (and local) last-good caches + SQLite.
+ * Data root for last-good caches + SQLite.
  *
- * Render's default filesystem is ephemeral: every deploy/restart wipes
- * data/api-cache, osint.db, mediastack-cache, and threat last-good →
- * hadLastGood=false and a multi-minute cold catch-up.
+ * Render Free (default, first-class): filesystem is ephemeral. Work around
+ * with in-memory last-good for process life, frontend localStorage seeds,
+ * MediaStack/RSS regenerable catch-up, staggered boot, and keepalive
+ * hitting /api/home (see docs/RENDER_PERSISTENT_DISK.md).
  *
- * Fix: attach a Render persistent disk (Starter+) and set:
- *   DATA_DIR=/var/data
- * Mount the disk at the same path (e.g. /var/data). Only paths under
- * DATA_DIR survive deploys. Free tier cannot attach disks — cold-boot
- * softens stampede and prefers MediaStack/piece caches instead.
+ * Optional: set DATA_DIR to a durable path if you already have one —
+ * not required and not the recommended free-tier path.
  *
  * Static versioned packs (data/crime, data/sex-offenders) stay in-repo
  * and are NOT redirected.
@@ -115,7 +113,9 @@ function logOnce() {
     root,
     'durable=',
     isDurable(),
-    isDurable() ? '(DATA_DIR set — survives Render deploys)' : '(ephemeral — set DATA_DIR + persistent disk on Render Starter+)',
+    isDurable()
+      ? '(DATA_DIR set — durable across deploys)'
+      : '(ephemeral free-tier — memory + keepalive + MediaStack/RSS catch-up)',
   )
 }
 

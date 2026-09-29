@@ -1,5 +1,6 @@
-# Keep Render free-tier API awake so HomeScreen data loads without cold starts.
-# Prefer /api/home (not only /health) so disk last-good stays warm in memory.
+# Keep Render free-tier API awake so HomeScreen / feeds paint without multi-minute cold starts.
+# Prefer /api/home (not only /health) so in-memory last-good stays warm after wake.
+# No paid disk / DATA_DIR required — this is the primary free-tier keep-warm path.
 name: API keepalive
 
 on:

@@ -8,6 +8,7 @@ const osintXFeedService = require('./services/osintXFeedService')
 const mediastack = require('./services/mediastack')
 const keywordTags = require('./services/keywordTags')
 const feedSchedule = require('./services/feedSchedule')
+const dataPaths = require('./services/dataPaths')
 const { warmHomeCaches, refreshHomeImagesBackground } = require('./services/homeBootstrap')
 
 const app = express()
@@ -219,7 +220,10 @@ function osintXDbEmpty() {
   }
 }
 
-/** Boot: load disk caches, catch-up news/OSINT if empty or missed last 8/15 window. */
+/** Boot: load disk/memory caches, catch-up news/OSINT if empty or missed last 8/15 window.
+ * Free tier: stagger MediaStack cold-seed → news RSS → OSINT publishers so the
+ * event loop stays responsive (avoid free-tier death spiral with OSINT X).
+ */
 function runBootCatchUp() {
   const cached = newsService.getNewsCached()
   const fetchedAt = newsService.getNewsFetchedAt?.() || cached?.meta?.fetchedAt || null
@@ -235,12 +239,40 @@ function runBootCatchUp() {
 
   if (newsNeeds || osintNeeds) {
     console.log('[boot] catch-up needed news=', newsNeeds, 'osint=', osintNeeds)
-    // Soft stampede: news RSS first; OSINT publishers delayed so cold /api/home
-    // is not starved by GDACS/FxTwitter/OSINT publisher fan-out.
-    if (newsNeeds) {
-      runNewsRebuild('catch-up').catch((e) => console.warn('[boot] news catch-up:', e.message))
+    // Soft stampede: MediaStack cold-seed first (sync-ish), then news RSS;
+    // OSINT publishers delayed further so cold /api/home + OSINT X stay responsive.
+    const startNews = () => {
+      if (!newsNeeds) return Promise.resolve(null)
+      return runNewsRebuild('catch-up').catch((e) => {
+        console.warn('[boot] news catch-up:', e.message)
+        return null
+      })
     }
+
+    if (newsNeeds) {
+      // Prefer MediaStack seed when RSS last-good is gone (ephemeral wipe).
+      mediastack
+        .maybeColdSeedPull()
+        .then((cache) => {
+          const n = (cache?.articles || []).length
+          if (n > 0) {
+            console.log('[boot] MediaStack cold-seed articles=', n)
+            // Re-read news cache so getNewsCached synthesizes from MediaStack ASAP
+            try { newsService.getNewsCached() } catch (_) { /* optional */ }
+          }
+        })
+        .catch((e) => console.warn('[boot] mediastack cold-seed:', e.message))
+        .finally(() => {
+          // Yield event loop before RSS fan-out
+          setTimeout(() => {
+            startNews().catch(() => {})
+          }, 1500)
+        })
+    }
+
     if (osintNeeds) {
+      // Free tier: push publisher fan-out later so news + OSINT X can paint first.
+      const osintDelayMs = dataPaths.isDurable() ? 18000 : 28000
       setTimeout(() => {
         runOsintPublishers()
           .then(() => {
@@ -252,7 +284,7 @@ function runBootCatchUp() {
             } catch (_) { /* optional */ }
           })
           .catch((e) => console.warn('[boot] osint catch-up:', e.message))
-      }, 18000)
+      }, osintDelayMs)
     } else if (newsNeeds) {
       feedSchedule.markBatchDone(BATCH_JOB)
     }
@@ -264,12 +296,11 @@ function runBootCatchUp() {
 app.listen(PORT, () => {
   console.log(`Situational Awareness API running on http://localhost:${PORT}`)
   try {
-    const dataPaths = require('./services/dataPaths')
     dataPaths.logOnce()
   } catch (_) { /* optional */ }
-  // Prefer keepalive hitting /api/home (not only /health) so disk last-good stays warm.
+  // Prefer keepalive hitting /api/home (not only /health) so in-memory last-good stays warm.
 
-  // Load disk last-good immediately so first requests are not blank
+  // Load disk/memory last-good immediately so first requests are not blank
   let hadLastGood = false
   try {
     newsService.getNewsCached()
@@ -282,6 +313,8 @@ app.listen(PORT, () => {
     console.warn('[boot] seed:', e.message)
   }
 
+  const ephemeral = !dataPaths.isDurable()
+
   // MediaStack: check every minute for 08:00 / 15:00 ET windows only
   setTimeout(runMediaStackTick, 15000)
   setInterval(runMediaStackTick, MEDIASTACK_TICK_MS)
@@ -292,13 +325,14 @@ app.listen(PORT, () => {
 
   // Boot catch-up / OSINT-X: defer when last-good is present so cold-open HTTP
   // is not starved by ingest on the event loop.
-  // Empty boot without DATA_DIR: start OSINT X sooner (~10s) so Retry/budget
-  // pulls have a warm DB; stagger only when last-good exists.
+  // Free tier (ephemeral): start OSINT X sooner (~10s) when DB empty; stagger
+  // news/videos/publishers so catch-up does not death-spiral with X ingest.
   const xEmpty = osintXDbEmpty()
-  const catchUpDelayMs = hadLastGood ? 45000 : 6000
+  const catchUpDelayMs = hadLastGood ? 45000 : (ephemeral ? 4000 : 6000)
   const osintXDelayMs = hadLastGood ? 50000 : (xEmpty ? 10000 : 32000)
   const warmHomeDelayMs = hadLastGood ? 15000 : 2500
-  const videosDelayMs = hadLastGood ? 20000 : 22000
+  // Videos after news catch-up starts — avoid Innertube + RSS stampede on free tier
+  const videosDelayMs = hadLastGood ? 20000 : (ephemeral ? 32000 : 22000)
   setTimeout(runBootCatchUp, catchUpDelayMs)
   console.log(
     '[boot] catch-up delay ms=',
@@ -307,18 +341,23 @@ app.listen(PORT, () => {
     osintXDelayMs,
     'warm-home delay ms=',
     warmHomeDelayMs,
+    'videos delay ms=',
+    videosDelayMs,
     'hadLastGood=',
     hadLastGood,
     'osintXEmpty=',
     xEmpty,
+    'ephemeral=',
+    ephemeral,
   )
 
   // Hourly keyword tags for threat summary
   setTimeout(runKeywordTagsRefresh, hadLastGood ? 45000 : 55000)
   setInterval(runKeywordTagsRefresh, KEYWORD_TAGS_INTERVAL_MS)
 
-  // OSINT X: full list — while DB empty use 2min cadence so free-tier ephemeral
+  // OSINT X: full list — while DB empty use 3min cadence so free-tier ephemeral
   // SQLite stays warm within process life; settle to 5min once populated.
+  // Leave X path alone unless boot contention — delays above keep others off its lane.
   setTimeout(runOsintXIngest, osintXDelayMs)
   let osintXTimer = null
   const scheduleOsintXTick = () => {
@@ -336,7 +375,7 @@ app.listen(PORT, () => {
     warmHomeCaches().catch((e) => console.warn('[home] warmup:', e.message))
   }, warmHomeDelayMs)
 
-  // Recent Videos: warm YouTube RSS into hourly disk cache on boot + every hour
+  // Recent Videos: warm YouTube RSS into hourly cache on boot + every hour
   setTimeout(() => {
     if (typeof newsService.warmVideoFeedsCache === 'function') {
       newsService.warmVideoFeedsCache().catch((e) => console.warn('[videos] warm:', e.message))

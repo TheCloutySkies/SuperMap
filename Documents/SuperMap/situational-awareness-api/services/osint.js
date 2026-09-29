@@ -617,7 +617,8 @@ function getOsintLastGood(limit = 100) {
   const liveN = live.features?.length || 0
   const diskN = disk?.features?.length || 0
   // Prefer disk when live SQLite is empty or conspicuously thinner (post-deploy catch-up).
-  if (diskN > 0 && (liveN === 0 || (liveN < 40 && diskN > liveN * 1.5))) {
+  // Mid-thin (e.g. 50 vs 80) also counts — prior liveN<40 gate still shrank desks.
+  if (diskN > 20 && (liveN === 0 || liveN < diskN * 0.6)) {
     return disk
   }
   if (liveN > 0) return live

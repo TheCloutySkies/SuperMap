@@ -877,10 +877,18 @@ router.get('/osint-x', async (req, res) => {
         console.warn('[API /osint-x] live refresh:', err.message)
       }
       if (force) {
-        const { fetchOsintXFeedsScheduled } = require('../services/osintXFeedService')
-        fetchOsintXFeedsScheduled().catch((err) =>
-          console.warn('[API /osint-x] full-list background:', err.message),
-        )
+        // Only kick full-list if budgeted slice left us thin — avoid stampeding
+        // scheduled ingest on top of the live pull (starves /health on free tier).
+        const afterLive = mapOsintXRows(rows, cutoff)
+        if (afterLive.length < Math.min(limit, 20)) {
+          const { fetchOsintXFeedsScheduled, getIngestStatus } = require('../services/osintXFeedService')
+          const st = typeof getIngestStatus === 'function' ? getIngestStatus() : {}
+          if (!st.scheduledInFlight && !st.liveInFlight) {
+            fetchOsintXFeedsScheduled().catch((err) =>
+              console.warn('[API /osint-x] full-list background:', err.message),
+            )
+          }
+        }
       }
     }
 

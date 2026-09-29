@@ -71,7 +71,7 @@ app.get('/health', (req, res) => {
 /** OSINT X: full handle list every 5 minutes (no rotate batch). */
 const OSINT_X_INTERVAL_MS = 5 * 60 * 1000
 /** Faster cadence while SQLite has zero X rows (free-tier ephemeral wipe). */
-const OSINT_X_EMPTY_INTERVAL_MS = 2 * 60 * 1000
+const OSINT_X_EMPTY_INTERVAL_MS = 3 * 60 * 1000
 const HOME_IMAGES_REFRESH_MS = 3 * 60 * 1000
 const MEDIASTACK_TICK_MS = 60 * 1000 // check ET window every minute
 const FEEDS_815_TICK_MS = 60 * 1000 // news RSS + OSINT publishers 08:00/15:00 ET

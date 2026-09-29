@@ -14,7 +14,7 @@ const { tagOsintPost } = require('./osintTagger')
 
 const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 }
 /** Concurrent FxTwitter profile fetches per cycle (keep gentle on free API). */
-const FETCH_CONCURRENCY = 5
+const FETCH_CONCURRENCY = 3
 
 const FXTWITTER_PROFILE = 'https://api.fxtwitter.com/2/profile'
 const BROWSER_UA =
@@ -24,6 +24,11 @@ const BROWSER_UA =
 let lastLiveRefreshAt = 0
 let liveRefreshInFlight = null
 const LIVE_REFRESH_COOLDOWN_MS = 90 * 1000
+
+/** Let Express /health and /api/* run between FxTwitter + SQLite bursts. */
+function yieldToEventLoop() {
+  return new Promise((resolve) => setImmediate(resolve))
+}
 
 function isLikelyImageUrl(url) {
   const u = String(url || '').trim()
@@ -200,13 +205,16 @@ function invalidateOmnibarAfterX() {
   } catch (_) { /* optional */ }
 }
 
-async function fetchOsintXFeeds({ limitFeeds = 0, skipGeotag = false } = {}) {
+async function fetchOsintXFeeds({ limitFeeds = 0, skipGeotag = false, preferAi = null } = {}) {
   let osintXFeeds = getOsintXFeeds()
   if (limitFeeds > 0) osintXFeeds = osintXFeeds.slice(0, limitFeeds)
   if (osintXFeeds.length === 0) {
     console.warn('[osint-x] No feeds configured. Add handles in Settings or user-config.json.')
     return []
   }
+
+  // Live/Retry path must stay budget-friendly — heuristics only, no LLM wait.
+  const useAi = preferAi == null ? !skipGeotag : !!preferAi
 
   const settled = []
   for (let i = 0; i < osintXFeeds.length; i += FETCH_CONCURRENCY) {
@@ -215,6 +223,7 @@ async function fetchOsintXFeeds({ limitFeeds = 0, skipGeotag = false } = {}) {
       chunk.map((feed) => fetchOneFeed(feed).then((items) => ({ feed, items }))),
     )
     settled.push(...part)
+    await yieldToEventLoop()
   }
 
   const pending = []
@@ -258,7 +267,7 @@ async function fetchOsintXFeeds({ limitFeeds = 0, skipGeotag = false } = {}) {
         content: item.content,
         source: 'x',
       })),
-      { preferAi: true, maxAiItems: 16 },
+      { preferAi: useAi, maxAiItems: useAi ? 16 : 0 },
     )
   } catch (_) {
     assessments = []
@@ -295,6 +304,7 @@ async function fetchOsintXFeeds({ limitFeeds = 0, skipGeotag = false } = {}) {
       replyCount: item.replyCount != null ? Number(item.replyCount) : 0,
       provider: 'fxtwitter',
     })
+    if (i > 0 && i % 25 === 0) await yieldToEventLoop()
   }
   const ok = Object.entries(byHandle).filter(([, v]) => v.ok && v.count > 0)
   const fail = Object.entries(byHandle).filter(([, v]) => !v.ok || v.count === 0)
@@ -447,10 +457,14 @@ async function fetchOsintXFeedsScheduled({ concurrency = FETCH_CONCURRENCY } = {
   if (scheduledIngestInFlight) {
     return { skipped: true, reason: 'inflight', ...(lastScheduledResult || {}) }
   }
+  // Avoid stacking a full-list on top of an in-flight live Retry pull.
+  if (liveRefreshInFlight) {
+    return { skipped: true, reason: 'live-inflight', ...(lastScheduledResult || {}) }
+  }
   const all = getOsintXFeeds()
   if (!all.length) return { skipped: true, reason: 'no-feeds', count: 0, handles: [] }
 
-  const conc = Math.max(1, Math.min(Number(concurrency) || FETCH_CONCURRENCY, 8))
+  const conc = Math.max(1, Math.min(Number(concurrency) || FETCH_CONCURRENCY, 5))
 
   scheduledIngestInFlight = (async () => {
     const t0 = Date.now()
@@ -475,6 +489,8 @@ async function fetchOsintXFeedsScheduled({ concurrency = FETCH_CONCURRENCY } = {
           })
         }
       }
+      // Critical on Render free: without this, /health and feed GETs starve for minutes.
+      await yieldToEventLoop()
     }
     lastScheduledAt = Date.now()
     lastLiveRefreshAt = lastScheduledAt

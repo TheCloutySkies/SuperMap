@@ -245,38 +245,17 @@ router.get('/news', async (req, res) => {
       return res.json(attachMeta(items))
     }
 
-    // Empty cache: await a short rebuild (MediaStack seed / RSS) so cold opens
-    // are not blank while catch-up runs. Cap wait so /api/home stays snappy.
-    if (cached && Array.isArray(cached.features) && cached.features.length > 0) {
+    // Empty cache: return MediaStack/disk seed or empty shell IMMEDIATELY.
+    // Never hold the request for a multi-second RSS rebuild — that blanked Glowie.
+    if (cached && Array.isArray(cached.features)) {
       return res.json(attachMeta(cached))
     }
-    const NEWS_COLD_BUDGET_MS = 12000
-    try {
-      const items = await Promise.race([
-        newsService.getNews(),
-        new Promise((resolve) => setTimeout(() => resolve(null), NEWS_COLD_BUDGET_MS)),
-      ])
-      if (items && Array.isArray(items.features) && items.features.length > 0) {
-        if (feedsDebugEnabled()) {
-          console.log('[FEEDS API /news] OUTPUT', {
-            cached: false,
-            coldAwait: true,
-            features: items.features.length,
-            ms: Date.now() - t0,
-          })
-        }
-        return res.json(attachMeta(items))
-      }
-    } catch (e) {
-      console.warn('[API /news] cold await:', e.message)
-    }
-    // Rebuild may still be in flight from the race timeout — keep it going.
     newsService.getNews().catch((e) => console.warn('[API /news] background:', e.message))
-    const after = newsService.getNewsCached()
-    if (after && Array.isArray(after.features) && after.features.length > 0) {
-      return res.json(attachMeta(after))
-    }
-    return res.json(attachMeta({ type: 'FeatureCollection', features: [], meta: { emptyReason: 'cold-boot' } }))
+    return res.json(attachMeta({
+      type: 'FeatureCollection',
+      features: [],
+      meta: { emptyReason: 'cold-boot', refreshing: true },
+    }))
   } catch (err) {
     console.error('[API /news]', err.message)
     const cached = newsService.getNewsCached()
@@ -552,11 +531,15 @@ function persistThreatSummaryIfGood(result) {
   return writePersistedThreatSummary(payload)
 }
 
-/** AI threat summary. Return last-good immediately; rebuild in background. Use ?refresh=1 to wait. */
+/** AI threat summary. Return last-good immediately; rebuild in background.
+ * ?refresh=1 kicks a background regen but still returns last-good when present.
+ * ?wait=1 with refresh awaits a new generation (slow — avoid for UI paint).
+ */
 router.get('/threat-summary', async (req, res) => {
   setHomeCacheHeaders(res)
   const cacheKey = 'threat-summary'
   const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
+  const waitForNew = req.query.wait === '1' || req.query.wait === 'true'
 
   const cached = threatSummaryCache.get(cacheKey)
   const persisted = readPersistedThreatSummary()
@@ -565,12 +548,31 @@ router.get('/threat-summary', async (req, res) => {
     || cached
     || persisted
 
-  if (!forceRefresh && lastGood) {
-    // Soft background refresh if memory miss but disk hit
-    if (!cached && persisted) {
-      threatSummaryCache.set(cacheKey, persisted)
+  // Instant paint whenever anything usable exists
+  if (lastGood && !(forceRefresh && waitForNew)) {
+    if (!cached && persisted) threatSummaryCache.set(cacheKey, persisted)
+    if (forceRefresh || !cached) {
+      rebuildThreatSummaryBackground(forceRefresh ? 'refresh' : 'disk-seed')
     }
     return res.json(lastGood)
+  }
+
+  if (!forceRefresh || !waitForNew) {
+    // No last-good yet: do not block cold opens on the LLM
+    rebuildThreatSummaryBackground('cold')
+    return res.json({
+      summary: 'Threat assessment is warming up. Last-good is not on this instance yet — it will appear shortly.',
+      narrative: '',
+      threat_level: 'GUARDED',
+      threat_score: 2,
+      sources: [],
+      timestamp: new Date().toISOString(),
+      bullets: [],
+      fallback: true,
+      _warming: true,
+      high_risk_count: 0,
+      top_risks: [],
+    })
   }
 
   try {
@@ -582,7 +584,6 @@ router.get('/threat-summary', async (req, res) => {
       writePersistedThreatSummary(payload)
       return res.json(payload)
     }
-    // Empty/fallback: keep serving last-good if we have it
     if (lastGood && isGoodThreatSummary(lastGood)) {
       console.log('[API /threat-summary] regenerate empty; returning last-good')
       return res.json({ ...lastGood, _staleOnEmpty: true })

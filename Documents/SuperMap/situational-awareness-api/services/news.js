@@ -1008,6 +1008,33 @@ const VIDEOS_TTL_SEC = apiResultCache.TTL.HOURLY
 const VIDEOS_STALE_SEC = apiResultCache.TTL.DAILY
 
 async function getVideoFeatureCollectionCached({ force = false } = {}) {
+  // Stale-while-revalidate: serve hourly/daily last-good IMMEDIATELY on TTL miss.
+  // Live YouTube Innertube can take tens of seconds — never block Recent Videos paint.
+  if (!force) {
+    try {
+      const fresh = apiResultCache.getFresh(VIDEOS_CACHE_NS, VIDEOS_CACHE_KEY)
+      if (fresh?.value?.features?.length) {
+        return { ...fresh.value, _fromCache: true, _stale: false }
+      }
+      const stale = apiResultCache.getStale(VIDEOS_CACHE_NS, VIDEOS_CACHE_KEY, VIDEOS_STALE_SEC)
+      if (stale?.value?.features?.length) {
+        setImmediate(() => {
+          buildVideoFeatureCollection()
+            .then((fc) => {
+              if (fc?.features?.length) {
+                apiResultCache.set(VIDEOS_CACHE_NS, VIDEOS_CACHE_KEY, fc, VIDEOS_TTL_SEC)
+                console.log('[news] videos SWR refresh:', fc.features.length)
+              }
+            })
+            .catch((e) => console.warn('[news] videos SWR:', e.message))
+        })
+        return { ...stale.value, _fromCache: true, _stale: true }
+      }
+    } catch (err) {
+      console.warn('[news] videos peek:', err.message)
+    }
+  }
+
   try {
     const result = await apiResultCache.getOrFetch(
       VIDEOS_CACHE_NS,
@@ -1028,7 +1055,19 @@ async function getVideoFeatureCollectionCached({ force = false } = {}) {
     const hit = apiResultCache.getStale(VIDEOS_CACHE_NS, VIDEOS_CACHE_KEY, VIDEOS_STALE_SEC)
     if (hit?.value?.features?.length) return { ...hit.value, _fromCache: true, _stale: true }
   } catch (_) { /* optional */ }
-  return buildVideoFeatureCollection()
+  // No disk last-good: return empty immediately and build in background.
+  // Frontend keeps its own soft snapshot; next poll/SWR hit will fill.
+  setImmediate(() => {
+    buildVideoFeatureCollection()
+      .then((fc) => {
+        if (fc?.features?.length) {
+          apiResultCache.set(VIDEOS_CACHE_NS, VIDEOS_CACHE_KEY, fc, VIDEOS_TTL_SEC)
+          console.log('[news] videos cold fill:', fc.features.length)
+        }
+      })
+      .catch((e) => console.warn('[news] videos cold build:', e.message))
+  })
+  return { type: 'FeatureCollection', features: [], _warming: true }
 }
 
 async function warmVideoFeedsCache() {

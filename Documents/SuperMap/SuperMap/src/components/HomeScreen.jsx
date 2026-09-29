@@ -200,10 +200,11 @@ export default function HomeScreen({
     if (refresh) setThreatSummaryError(null)
     // Soft: never blank existing summary; only spin when empty
     setThreatSummaryLoading((_) => !threatSummary)
+    // Never ?wait=1 — last-good must paint immediately; refresh kicks background regen
     const url = refresh
       ? `${API_BASE}/api/threat-summary?refresh=1&_=${Date.now()}`
       : `${API_BASE}/api/threat-summary`
-    axios.get(url, { timeout: 15000 })
+    axios.get(url, { timeout: 8000 })
       .then((res) => {
         if (res.data?.summary) {
           setThreatSummary(res.data)

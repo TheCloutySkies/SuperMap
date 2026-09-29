@@ -286,9 +286,28 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
 
   useEffect(() => {
     if (snapshotPosts.current.length) setLoading(false)
+    // Seed from /api/home quickly if dedicated osint-x is slow (ingest starvation).
+    let cancelled = false
+    ;(async () => {
+      if (snapshotPosts.current.length || posts.length) return
+      if (!API_BASE) return
+      try {
+        const home = await axios.get(`${API_BASE}/api/home`, { timeout: 10000 })
+        if (cancelled) return
+        const seed = Array.isArray(home.data?.osintX) ? home.data.osintX : []
+        if (seed.length) {
+          applyPosts(seed)
+          snapshotPosts.current = seed
+          setLoading(false)
+        }
+      } catch { /* optional soft seed */ }
+    })()
     fetchPosts(false)
     const id = setInterval(() => fetchPosts(false, { silent: true }), POLL_MS)
-    return () => clearInterval(id)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

@@ -70,11 +70,12 @@ Without a disk, caches still wipe on every deploy. This codebase softens the bla
 
 1. Warming `/api/home` within ~2.5s from piece caches / live stocks-gas
 2. Preferring **MediaStack last-pull** for news when RSS last-good is gone
-3. Starting OSINT X sooner when SQLite is empty (~10s), with a **2-minute** ingest cadence until the first posts land, then settling to 5 minutes
-4. **`GET /api/osint-x?refresh=1`** awaits a budgeted FxTwitter pull (~18s, 12 handles), writes SQLite, then re-reads — Retry no longer returns `[]` while ingest is still running
+3. Starting OSINT X sooner when SQLite is empty (~10s), with a **3-minute** ingest cadence until the first posts land, then settling to 5 minutes. Full-list ingest **yields the event loop** between handle chunks so `/health` and feed GETs stay responsive (Render free-tier death spiral: blocked event loop → failed health → restart → empty DB again).
+4. **`GET /api/osint-x?refresh=1`** awaits a budgeted FxTwitter pull (~18s, 12 handles, heuristics only — no LLM), writes SQLite, then re-reads — Retry no longer returns `[]` while ingest is still running. Full-list is only kicked if the budgeted slice left the feed thin.
 5. Expanding the OSINT X window to 14 days / relaxing the content filter / serving process memory last-good when the 48h curated slice is empty
 6. Cold `/api/news` awaits up to ~12s for RSS/MediaStack rebuild instead of returning an empty FeatureCollection immediately
 7. Not aborting the news batch when Google News / individual feeds 406 or time out
+8. Frontend OSINT X seeds from `/api/home.osintX` while the dedicated endpoint catches up
 
 Expect a short warm-up until RSS + X refill; **attach a disk + set `DATA_DIR=/var/data`** for durable last-good across deploys.
 

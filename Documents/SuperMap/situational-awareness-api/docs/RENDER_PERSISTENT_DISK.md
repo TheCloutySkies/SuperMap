@@ -1,99 +1,74 @@
-# Render persistent disk for last-good caches
+# Render Free tier — instant feeds without paid disk
 
-## Why the home screen is empty for 1–3 minutes after deploy
+**Hard constraint for Good Palantir:** Render **Free** only. No paid disk, no `DATA_DIR`, no Starter plan required. Instant paint for Glowie / OSINT Feeds / Videos / threat / home must work on an ephemeral filesystem + cold starts.
 
-Render’s default disk is **ephemeral**. On every deploy or restart the API loses:
+OSINT X already has a working free-tier path — leave it alone unless boot contention requires staggering other jobs away from it.
+
+## Why things used to go blank for 1–3 minutes
+
+Render Free wipes the local filesystem on every **deploy / sleep wake / restart**. That removes:
 
 - `data/api-cache/*.json` (home / news / stocks / gas / osint last-good)
-- `osint.db` (OSINT X posts + publisher events)
-- `mediastack-cache.json` (Glowie MediaStack last pull)
+- `osint.db` (OSINT X + publisher events)
+- `mediastack-cache.json`
 - `last-threat-summary.json`
 
-Boot then logs `hadLastGood= false`, runs cold catch-up, and `/api/home` can show `news=0` / `osintX=0` until RSS + FxTwitter finish (often 1–3 minutes under load).
+Without workarounds, boot logged `hadLastGood= false` and users stared at empty desks while RSS + FxTwitter caught up.
 
-## Fix (recommended): persistent disk + `DATA_DIR`
+## Free-tier path (first-class — do this)
 
-Persistent disks require a **paid** Render plan (**Starter** or higher). Free web services cannot attach disks.
+### 1. Keepalive: hit `/api/home`, not only `/health`
 
-### Dashboard steps
+Sleep kills the process and all in-memory last-good. Wake the API every ~10 minutes with **both**:
 
-1. Open the **situational-awareness-api** web service in the Render dashboard.
-2. Confirm the instance plan is **Starter** or above (not Free).
-3. **Disks** → **Add disk** (or Settings → Disk):
-   - **Mount path:** `/var/data`
-   - **Size:** 1 GB is enough for SQLite + JSON caches
-4. **Environment** → add:
-   - `DATA_DIR` = `/var/data`
-5. Save and **redeploy**.
+1. `GET /health` (process alive)
+2. `GET /api/home` (loads piece caches into memory)
 
-After boot you should see:
+This repo ships [`.github/workflows/api-keepalive.yml`](../../../.github/workflows/api-keepalive.yml) on a `*/10 * * * *` cron. Confirm Actions are enabled for the repo; no Render Dashboard buy-up needed.
 
-```text
-[dataPaths] root= /var/data durable= true (DATA_DIR set — survives Render deploys)
-[boot] … hadLastGood= true
+Manual check:
+
+```bash
+curl -fsS https://supermap-api.onrender.com/health
+curl -fsS https://supermap-api.onrender.com/api/home -o /tmp/home.json
 ```
 
-Subsequent deploys reuse the same disk: home/news/osint-x/threat last-good seed into memory immediately.
+### 2. What the API does on Free (no disk)
 
-### What lives under `DATA_DIR`
-
-| Path | Purpose |
+| Workaround | Effect |
 | --- | --- |
-| `$DATA_DIR/api-cache/` | Home, news, stocks, gas, space, osint last-good JSON |
-| `$DATA_DIR/osint.db` | SQLite (OSINT X + publisher events) |
-| `$DATA_DIR/mediastack-cache.json` | MediaStack Glowie last pull |
-| `$DATA_DIR/last-threat-summary.json` | Threat summary last-good |
-| `$DATA_DIR/keyword-tags.json` | Keyword tag cache |
-| `$DATA_DIR/user-config.json` | User X handles / subreddits (migrated from `config/`) |
+| Aggressive **in-memory** last-good | Survives for process lifetime; `/api/news`, `/api/osint`, `/api/feeds/videos`, `/api/threat-summary`, `/api/home` serve it instantly |
+| **MediaStack cold-seed** | One pull when news cache is empty after ephemeral wipe (outside 08:00/15:00 if needed); RSS still rebuilds in background |
+| Prefer MediaStack when RSS empty | `getNewsCached()` synthesizes Glowie from MediaStack last-pull |
+| Never overwrite richer last-good with thin live | OSINT / news persist skips shrinking mid-catch-up |
+| Staggered boot catch-up | MediaStack → news RSS → (later) OSINT publishers → videos; OSINT X keeps its own early lane |
+| Instant GETs | Empty news/videos/threat never block 12s+ on live rebuild; background fill + `refreshing` / `_warming` meta |
 
-Static packs (`data/crime`, `data/sex-offenders`) stay in the repo and are **not** moved.
+### 3. What the frontend does
 
-### Blueprint snippet (optional)
+| Workaround | Effect |
+| --- | --- |
+| Home snapshot (`localStorage`) | Seeds Glowie + threat on cold open before `/api/home` returns |
+| Desk snapshots | OSINT Feeds + Recent Videos paint from local last-good; never blank while revalidating |
+| Prefer richer | Thin live mid-catch-up does not replace a fatter local desk |
+| Soft loading | “Loading…” only when there is nothing to paint |
 
-```yaml
-services:
-  - type: web
-    name: situational-awareness-api
-    plan: starter
-    envVars:
-      - key: DATA_DIR
-        value: /var/data
-    disk:
-      name: supermap-data
-      mountPath: /var/data
-      sizeGB: 1
-```
+### 4. Env on Free (minimal)
 
-## Free tier (no disk)
-
-Without a disk, caches still wipe on every deploy. This codebase softens the blank window by:
-
-1. Warming `/api/home` within ~2.5s from piece caches / live stocks-gas
-2. Preferring **MediaStack last-pull** for news when RSS last-good is gone
-3. Starting OSINT X sooner when SQLite is empty (~10s), with a **3-minute** ingest cadence until the first posts land, then settling to 5 minutes. Full-list ingest **yields the event loop** between handle chunks so `/health` and feed GETs stay responsive (Render free-tier death spiral: blocked event loop → failed health → restart → empty DB again).
-4. **`GET /api/osint-x?refresh=1`** awaits a budgeted FxTwitter pull (~18s, 12 handles, heuristics only — no LLM), writes SQLite, then re-reads — Retry no longer returns `[]` while ingest is still running. Full-list is only kicked if the budgeted slice left the feed thin.
-5. Expanding the OSINT X window to 14 days / relaxing the content filter / serving process memory last-good when the 48h curated slice is empty
-6. Cold `/api/news` awaits up to ~12s for RSS/MediaStack rebuild instead of returning an empty FeatureCollection immediately
-7. Not aborting the news batch when Google News / individual feeds 406 or time out
-8. Frontend OSINT X seeds from `/api/home.osintX` while the dedicated endpoint catches up
-
-Expect a short warm-up until RSS + X refill; **attach a disk + set `DATA_DIR=/var/data`** for durable last-good across deploys.
-
-### Must set on Render (after merge)
-
-| Env / setting | Required? | Value |
+| Setting | Required? | Notes |
 | --- | --- | --- |
-| Plan | For durable disk | **Starter+** (Free cannot attach disks) |
-| Disk mount | Recommended | `/var/data` (1 GB) |
-| `DATA_DIR` | **Required for lasting last-good** | `/var/data` |
-| Keepalive | Recommended | Hit `/api/home` (not only `/health`) so last-good stays warm |
+| `MEDIASTACK_API_KEY` | Recommended | Seeds Glowie after wipe; still rate-limited to scheduled windows + one cold-seed |
+| Keepalive workflow | **Yes for good UX** | `/health` then `/api/home` every 10 min |
+| `DATA_DIR` / persistent disk | **No** | Not used on the free-tier path |
 
-**If `DATA_DIR` is unset**, every redeploy wipes SQLite + api-cache — Glowie / OSINT / Videos / threat rely on disk last-good for instant paint. Set `DATA_DIR=/var/data` with a persistent disk as soon as possible.
+## Optional durable disk (not required)
+
+If you already run a paid instance with a disk, you may set `DATA_DIR=/var/data` so SQLite + JSON survive deploys. That is **optional** and **not** the primary fix for Good Palantir Free. Free web services cannot attach disks — use the workarounds above instead.
 
 ## Unaffected
 
-`WINDY_API` (radar + optional webcams) is unchanged — still read from env only; no disk dependency.
+`WINDY_API` (radar + optional webcams) is unchanged. OSINT X ingest / Retry / content filter stay on their existing free-tier path.
 
 ## Local / without `DATA_DIR`
 
-Defaults to `situational-awareness-api/data/` (and `osint.db` next to `database.js`), same as before.
+Defaults to `situational-awareness-api/data/` (and `osint.db` next to `database.js`), same as before. Memory + MediaStack/RSS catch-up still apply.

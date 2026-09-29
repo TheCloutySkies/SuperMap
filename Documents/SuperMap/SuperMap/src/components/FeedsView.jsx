@@ -10,13 +10,22 @@ const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.
 
 const OSINT_FEED_SNAP_KEY = 'supermap_osint_feeds_snap'
 const VIDEOS_FEED_SNAP_KEY = 'supermap_videos_feeds_snap'
+const FEED_SNAP_MAX_AGE_MS = 24 * 60 * 60 * 1000
 
 function readLocalSnap(key) {
   try {
     const raw = localStorage.getItem(key)
     if (!raw) return null
     const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : null
+    if (Array.isArray(parsed)) return parsed
+    if (parsed && Array.isArray(parsed.items)) {
+      const savedAt = parsed.savedAt ? Date.parse(parsed.savedAt) : 0
+      if (savedAt && Date.now() - savedAt > FEED_SNAP_MAX_AGE_MS) {
+        return parsed.items // still usable as stale paint
+      }
+      return parsed.items
+    }
+    return null
   } catch {
     return null
   }
@@ -25,9 +34,24 @@ function readLocalSnap(key) {
 function writeLocalSnap(key, items) {
   try {
     if (Array.isArray(items) && items.length) {
-      localStorage.setItem(key, JSON.stringify(items.slice(0, 120)))
+      localStorage.setItem(
+        key,
+        JSON.stringify({ items: items.slice(0, 120), savedAt: new Date().toISOString() }),
+      )
     }
   } catch { /* optional */ }
+}
+
+/** Prefer richer desk content — never replace a fat local snap with a thin live slice. */
+function preferRicherItems(next, prev) {
+  const n = Array.isArray(next) ? next.length : 0
+  const p = Array.isArray(prev) ? prev.length : 0
+  if (n === 0) return prev || []
+  if (p === 0) return next
+  if (n >= p) return next
+  // Live conspicuously thinner (cold mid-catch-up) — keep last-good paint
+  if (p > 20 && n < 40 && n < p * 0.6) return prev
+  return next
 }
 
 const FEED_MODE = { NEWS: 'GLOBAL_NEWS', OSINT: 'GENERAL_OSINT', VIDEOS: 'RECENT_VIDEOS' }
@@ -427,8 +451,11 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
             id: f.properties?.id ?? f.id,
             _key: f.properties?.id ?? f.id ?? Math.random(),
           }))
-          setVideoItems(items)
-          writeLocalSnap(VIDEOS_FEED_SNAP_KEY, items)
+          setVideoItems((prev) => {
+            const chosen = preferRicherItems(items, prev)
+            if (chosen === items) writeLocalSnap(VIDEOS_FEED_SNAP_KEY, items)
+            return chosen
+          })
         }
       })
       .catch(() => {
@@ -468,7 +495,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
             console.debug('[FEEDS news] OUTPUT', { count: items.length, ms: Date.now() - t0, attempts })
           }
           if (items.length > 0) {
-            setNewsItems(items)
+            setNewsItems((prev) => preferRicherItems(items, prev.length ? prev : initialItems))
             setNewsMeta(res.data?.meta || null)
             try {
               const snap = readHomeSnapshot() || {}
@@ -530,8 +557,11 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
       .then((res) => {
         const items = geoJsonToItems(res.data)
         if (!cancelled && items.length > 0) {
-          setOsintItems(items)
-          writeLocalSnap(OSINT_FEED_SNAP_KEY, items)
+          setOsintItems((prev) => {
+            const chosen = preferRicherItems(items, prev)
+            if (chosen === items) writeLocalSnap(OSINT_FEED_SNAP_KEY, items)
+            return chosen
+          })
         }
         if (feedsDebugEnabled()) console.debug('[FEEDS osint] OUTPUT', { count: items.length, ms: Date.now() - t0 })
       })
@@ -585,11 +615,17 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
       .then((responses) => {
         const nextNews = geoJsonToItems(responses[0].data)
         if (nextNews.length > 0) {
-          setNewsItems(nextNews)
+          setNewsItems((prev) => preferRicherItems(nextNews, prev))
           setNewsMeta(responses[0].data?.meta || null)
         }
         const nextOsint = geoJsonToItems(responses[1].data)
-        if (nextOsint.length > 0) setOsintItems(nextOsint)
+        if (nextOsint.length > 0) {
+          setOsintItems((prev) => {
+            const chosen = preferRicherItems(nextOsint, prev)
+            if (chosen === nextOsint) writeLocalSnap(OSINT_FEED_SNAP_KEY, nextOsint)
+            return chosen
+          })
+        }
         if (feedMode === FEED_MODE.VIDEOS && responses[2]) {
           const features = responses[2].data?.features ?? []
           if (features.length > 0) {
@@ -598,8 +634,11 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
               id: f.properties?.id ?? f.id,
               _key: f.properties?.id ?? f.id ?? Math.random(),
             }))
-            setVideoItems(items)
-            writeLocalSnap(VIDEOS_FEED_SNAP_KEY, items)
+            setVideoItems((prev) => {
+              const chosen = preferRicherItems(items, prev)
+              if (chosen === items) writeLocalSnap(VIDEOS_FEED_SNAP_KEY, items)
+              return chosen
+            })
           }
         }
         if (nextNews.length > 0) {
@@ -608,7 +647,6 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
             writeHomeSnapshot({ ...snap, news: responses[0].data })
           } catch { /* optional */ }
         }
-        if (nextOsint.length > 0) writeLocalSnap(OSINT_FEED_SNAP_KEY, nextOsint)
       })
       .catch(() => {
         // Keep existing items — do not blank the desk on refresh failure

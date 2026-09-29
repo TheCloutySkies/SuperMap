@@ -15,7 +15,8 @@ export function getApiBase() {
 }
 
 /** Fire-and-forget wake so Render cold start overlaps JS/React boot.
- * Hits /api/home (not only /health) so disk last-good is loaded into memory.
+ * Hits /api/home (not only /health) so last-good is loaded into memory
+ * (critical on Render Free — no durable disk).
  */
 export function wakeApiEarly() {
   const base = getApiBase()

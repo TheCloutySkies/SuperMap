@@ -253,6 +253,22 @@ async function maybeScheduledPull() {
   return pullMediaStack({ hourKey: etHourKey() })
 }
 
+/** One cold-boot MediaStack pull when the process has no articles (Render free ephemeral wipe).
+ * Outside 08:00/15:00 windows, RSS alone can take a while — this seeds Glowie ASAP.
+ * Guarded: once per process, skips when quota exhausted or key missing.
+ */
+let coldSeedAttempted = false
+async function maybeColdSeedPull() {
+  if (coldSeedAttempted) return getCache()
+  coldSeedAttempted = true
+  const cache = getCache()
+  if ((cache.articles || []).length > 0) return cache
+  if (!getApiKey()) return cache
+  if (cache.quotaExhausted) return cache
+  console.log('[mediastack] cold-seed pull (empty cache after ephemeral boot)')
+  return pullMediaStack({ hourKey: `cold-${etHourKey()}` })
+}
+
 function getCachedArticles() {
   return getCache().articles || []
 }
@@ -286,6 +302,7 @@ function clearQuotaFlag() {
 module.exports = {
   pullMediaStack,
   maybeScheduledPull,
+  maybeColdSeedPull,
   getCachedArticles,
   getCache,
   isQuotaExhausted,

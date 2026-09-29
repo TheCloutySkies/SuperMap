@@ -68,7 +68,34 @@ function payloadHasContent(payload) {
 
 function persistHomeLastGood(payload) {
   if (!payloadHasContent(payload)) return
+  // Never shrink a richer home last-good with a thin warm shell (free-tier mid-catch-up).
   try {
+    const existing = loadHomeLastGood()
+    if (existing) {
+      const prevNews = existing.news?.features?.length || 0
+      const nextNews = payload.news?.features?.length || 0
+      const prevX = Array.isArray(existing.osintX) ? existing.osintX.length : 0
+      const nextX = Array.isArray(payload.osintX) ? payload.osintX.length : 0
+      const prevThreat = existing.threatSummary?.summary ? 1 : 0
+      const nextThreat = payload.threatSummary?.summary ? 1 : 0
+      const thinner =
+        (prevNews > 40 && nextNews > 0 && nextNews < prevNews * 0.5)
+        || (prevX > 20 && nextX < prevX * 0.5 && nextX < 15)
+        || (prevThreat && !nextThreat)
+      if (thinner) {
+        // Merge: keep richer pieces, adopt any new non-empty fields
+        const merged = {
+          ...existing,
+          ...payload,
+          news: (nextNews >= prevNews || nextNews === 0) ? (nextNews ? payload.news : existing.news) : existing.news,
+          osintX: (nextX >= prevX || nextX === 0) ? (nextX ? payload.osintX : existing.osintX) : existing.osintX,
+          threatSummary: payload.threatSummary?.summary ? payload.threatSummary : existing.threatSummary,
+          homeImages: (payload.homeImages?.length ? payload.homeImages : existing.homeImages) || [],
+        }
+        apiResultCache.set(HOME_DISK_NS, HOME_DISK_KEY, merged, HOME_DISK_TTL)
+        return
+      }
+    }
     apiResultCache.set(HOME_DISK_NS, HOME_DISK_KEY, payload, HOME_DISK_TTL)
   } catch (e) {
     console.warn('[API /home] persist:', e.message)

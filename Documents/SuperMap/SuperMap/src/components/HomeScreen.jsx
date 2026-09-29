@@ -207,10 +207,16 @@ export default function HomeScreen({
     axios.get(url, { timeout: 8000 })
       .then((res) => {
         if (res.data?.summary) {
+          // Never replace a real last-good with a cold-boot warming placeholder
+          if (res.data._warming && threatSummary?.summary && !threatSummary._warming) {
+            return
+          }
           setThreatSummary(res.data)
           setThreatSummaryError(null)
-          const prev = readHomeSnapshot() || {}
-          writeHomeSnapshot({ ...prev, threatSummary: res.data })
+          if (!res.data._warming && !res.data.fallback) {
+            const prev = readHomeSnapshot() || {}
+            writeHomeSnapshot({ ...prev, threatSummary: res.data })
+          }
         }
       })
       .catch((err) => {

@@ -1,11 +1,34 @@
 import { useState, useEffect, useMemo } from 'react'
 import axios from 'axios'
 import ArticlePreviewSheet from './ArticlePreviewSheet'
+import { readHomeSnapshot, writeHomeSnapshot } from '../lib/homeBootstrap'
 import './FeedsView.css'
 
 const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
   ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
   : 'http://localhost:3001'
+
+const OSINT_FEED_SNAP_KEY = 'supermap_osint_feeds_snap'
+const VIDEOS_FEED_SNAP_KEY = 'supermap_videos_feeds_snap'
+
+function readLocalSnap(key) {
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function writeLocalSnap(key, items) {
+  try {
+    if (Array.isArray(items) && items.length) {
+      localStorage.setItem(key, JSON.stringify(items.slice(0, 120)))
+    }
+  } catch { /* optional */ }
+}
 
 const FEED_MODE = { NEWS: 'GLOBAL_NEWS', OSINT: 'GENERAL_OSINT', VIDEOS: 'RECENT_VIDEOS' }
 const OSINT_SUB = { INTEL: 'intel' }
@@ -355,17 +378,21 @@ function OsintDeskCard({ item, onOpen, onPin, pinningId, showPin }) {
 }
 
 export default function FeedsView({ title, activeView, keywordFilter = '', onClearFilter, initialNews, onPinnedToMap }) {
-  const initialItems = initialNews ? geoJsonToItems(initialNews) : []
+  const homeSnap = typeof window !== 'undefined' ? readHomeSnapshot() : null
+  const seedNews = initialNews || homeSnap?.news || null
+  const initialItems = seedNews ? geoJsonToItems(seedNews) : []
+  const seedOsint = (typeof window !== 'undefined' && readLocalSnap(OSINT_FEED_SNAP_KEY)) || []
+  const seedVideos = (typeof window !== 'undefined' && readLocalSnap(VIDEOS_FEED_SNAP_KEY)) || []
   const isNewsOnly = activeView === 'news-feeds'
   const isOsintOnly = activeView === 'osint-feeds'
   const isVideosOnly = activeView === 'recent-videos'
   const [feedMode, setFeedMode] = useState(isVideosOnly ? FEED_MODE.VIDEOS : isOsintOnly ? FEED_MODE.OSINT : FEED_MODE.NEWS)
   const [newsItems, setNewsItems] = useState(initialItems)
-  const [newsMeta, setNewsMeta] = useState(initialNews?.meta || null)
-  const [osintItems, setOsintItems] = useState([])
-  const [videoItems, setVideoItems] = useState([])
+  const [newsMeta, setNewsMeta] = useState(seedNews?.meta || null)
+  const [osintItems, setOsintItems] = useState(seedOsint)
+  const [videoItems, setVideoItems] = useState(seedVideos)
   const [newsLoading, setNewsLoading] = useState(initialItems.length === 0)
-  const [osintLoading, setOsintLoading] = useState(true)
+  const [osintLoading, setOsintLoading] = useState(seedOsint.length === 0)
   const [videoLoading, setVideoLoading] = useState(false)
   const [videoTagFilter, setVideoTagFilter] = useState('all')
   const [refreshing, setRefreshing] = useState(false)
@@ -388,8 +415,8 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
   useEffect(() => {
     if (feedMode !== FEED_MODE.VIDEOS || !API_BASE) return
     let cancelled = false
-    // Soft loading: keep last-good visible; only spin when empty
-    setVideoLoading((prev) => (videoItems.length > 0 ? false : true))
+    // Soft: only spin when we have nothing to paint
+    setVideoLoading(videoItems.length === 0)
     axios.get(`${API_BASE}/api/feeds/videos`, { timeout: 12000 })
       .then((res) => {
         if (cancelled) return
@@ -401,8 +428,8 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
             _key: f.properties?.id ?? f.id ?? Math.random(),
           }))
           setVideoItems(items)
+          writeLocalSnap(VIDEOS_FEED_SNAP_KEY, items)
         }
-        // Empty response: keep last-good; do not clear
       })
       .catch(() => {
         // Keep last-good on failure — never blank the tab
@@ -426,8 +453,8 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
     let retryId = null
     let attempts = 0
     const MAX_NEWS_RETRIES = 4 // ~10s total with 2.5s gap — never infinite blank loop
-    // Keep initialNews / cached items visible while refresh runs
-    if (!initialNews || initialItems.length === 0) setNewsLoading(true)
+    // Keep snapshot / cached items visible while refresh runs
+    if (initialItems.length === 0 && newsItems.length === 0) setNewsLoading(true)
     else setNewsLoading(false)
 
     function doFetch() {
@@ -443,6 +470,10 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
           if (items.length > 0) {
             setNewsItems(items)
             setNewsMeta(res.data?.meta || null)
+            try {
+              const snap = readHomeSnapshot() || {}
+              writeHomeSnapshot({ ...snap, news: res.data })
+            } catch { /* optional */ }
           } else if (
             newsItems.length === 0
             && initialItems.length === 0
@@ -491,14 +522,17 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
       return
     }
     let cancelled = false
-    // Soft loading: don't blank existing osintItems
-    setOsintLoading((prev) => (osintItems.length > 0 ? false : true))
+    // Soft: paint local snap immediately; only spin when empty
+    setOsintLoading(osintItems.length === 0)
     const t0 = Date.now()
     if (feedsDebugEnabled()) console.debug('[FEEDS osint] INPUT', { url: `${API_BASE}/api/osint` })
     axios.get(`${API_BASE}/api/osint`, { timeout: 12000 })
       .then((res) => {
         const items = geoJsonToItems(res.data)
-        if (!cancelled && items.length > 0) setOsintItems(items)
+        if (!cancelled && items.length > 0) {
+          setOsintItems(items)
+          writeLocalSnap(OSINT_FEED_SNAP_KEY, items)
+        }
         if (feedsDebugEnabled()) console.debug('[FEEDS osint] OUTPUT', { count: items.length, ms: Date.now() - t0 })
       })
       .catch((err) => {
@@ -544,7 +578,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
       axios.get(`${API_BASE}/api/osint`, { timeout: 20000 }),
     ]
     if (feedMode === FEED_MODE.VIDEOS) {
-      setVideoLoading(true)
+      setVideoLoading((prev) => (videoItems.length === 0 ? true : false))
       requests.push(axios.get(`${API_BASE}/api/feeds/videos`, { timeout: 20000 }))
     }
     Promise.all(requests)
@@ -559,13 +593,22 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
         if (feedMode === FEED_MODE.VIDEOS && responses[2]) {
           const features = responses[2].data?.features ?? []
           if (features.length > 0) {
-            setVideoItems(features.map((f) => ({
+            const items = features.map((f) => ({
               ...(f.properties || {}),
               id: f.properties?.id ?? f.id,
               _key: f.properties?.id ?? f.id ?? Math.random(),
-            })))
+            }))
+            setVideoItems(items)
+            writeLocalSnap(VIDEOS_FEED_SNAP_KEY, items)
           }
         }
+        if (nextNews.length > 0) {
+          try {
+            const snap = readHomeSnapshot() || {}
+            writeHomeSnapshot({ ...snap, news: responses[0].data })
+          } catch { /* optional */ }
+        }
+        if (nextOsint.length > 0) writeLocalSnap(OSINT_FEED_SNAP_KEY, nextOsint)
       })
       .catch(() => {
         // Keep existing items — do not blank the desk on refresh failure
@@ -868,7 +911,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
             ))}
           </div>
 
-          {newsLoading ? (
+          {newsLoading && newsItems.length === 0 ? (
             <p className="news-desk-loading">Loading the desk…</p>
           ) : filteredEmpty ? (
             <div className="news-desk-empty">
@@ -977,7 +1020,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
 
       {(feedMode === FEED_MODE.VIDEOS) && (
         <div className="feeds-videos-section">
-          {videoLoading ? (
+          {videoLoading && videoItems.length === 0 ? (
             <p className="feeds-loading">Loading recent videos…</p>
           ) : filteredEmpty ? (
             <div className="feeds-empty">

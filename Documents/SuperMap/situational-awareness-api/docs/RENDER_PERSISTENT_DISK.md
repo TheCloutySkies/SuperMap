@@ -85,10 +85,10 @@ Expect a short warm-up until RSS + X refill; **attach a disk + set `DATA_DIR=/va
 | --- | --- | --- |
 | Plan | For durable disk | **Starter+** (Free cannot attach disks) |
 | Disk mount | Recommended | `/var/data` (1 GB) |
-| `DATA_DIR` | Recommended | `/var/data` |
+| `DATA_DIR` | **Required for lasting last-good** | `/var/data` |
 | Keepalive | Recommended | Hit `/api/home` (not only `/health`) so last-good stays warm |
 
-If `DATA_DIR` is unset, feeds still refill within the process life via continuous ingest + Retry budget — but every redeploy starts empty again.
+**If `DATA_DIR` is unset**, every redeploy wipes SQLite + api-cache — Glowie / OSINT / Videos / threat rely on disk last-good for instant paint. Set `DATA_DIR=/var/data` with a persistent disk as soon as possible.
 
 ## Unaffected
 

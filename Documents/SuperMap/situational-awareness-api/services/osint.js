@@ -585,25 +585,43 @@ function getOsintFromDb(limit = 100) {
   if (features.length > 0) {
     try {
       const apiResultCache = require('./apiResultCache')
-      apiResultCache.set('osint', 'feature-collection', { payload: result, fetchedAt: Date.now() }, apiResultCache.TTL.DAILY)
+      // Never shrink a richer disk last-good with a thin live slice (ephemeral DB mid-catch-up).
+      const existing = apiResultCache.getStale('osint', 'feature-collection', apiResultCache.TTL.WEEKLY)
+      const prevN = existing?.value?.payload?.features?.length || 0
+      if (features.length >= prevN || prevN === 0) {
+        apiResultCache.set(
+          'osint',
+          'feature-collection',
+          { payload: result, fetchedAt: Date.now() },
+          apiResultCache.TTL.DAILY,
+        )
+      }
     } catch (_) { /* optional */ }
   }
   return result
 }
 
-/** Last-good OSINT FeatureCollection from disk (when DB is empty on cold start). */
+/** Last-good OSINT FeatureCollection — prefer live DB, fall back to disk when empty/thin. */
 function getOsintLastGood(limit = 100) {
   const live = getOsintFromDb(limit)
-  if (live.features?.length) return live
+  let disk = null
   try {
     const apiResultCache = require('./apiResultCache')
     const hit = apiResultCache.getStale('osint', 'feature-collection', apiResultCache.TTL.WEEKLY)
     if (hit?.value?.payload?.features?.length) {
       const feats = hit.value.payload.features.slice(0, limit)
-      return { type: 'FeatureCollection', features: feats, _fromDisk: true }
+      disk = { type: 'FeatureCollection', features: feats, _fromDisk: true }
     }
   } catch (_) { /* optional */ }
-  return live
+
+  const liveN = live.features?.length || 0
+  const diskN = disk?.features?.length || 0
+  // Prefer disk when live SQLite is empty or conspicuously thinner (post-deploy catch-up).
+  if (diskN > 0 && (liveN === 0 || (liveN < 40 && diskN > liveN * 1.5))) {
+    return disk
+  }
+  if (liveN > 0) return live
+  return disk || live
 }
 
 async function fetchAllOsint() {

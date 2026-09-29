@@ -537,10 +537,11 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
 
   const refreshFeeds = () => {
     setRefreshing(true)
-    // Soft refresh: keep current items visible while updating
+    // Soft refresh: keep current items visible while updating.
+    // refresh=1 forces news rebuild (MediaStack/RSS) so cold empty desks refill.
     const requests = [
-      axios.get(`${API_BASE}/api/news`, { timeout: 15000 }),
-      axios.get(`${API_BASE}/api/osint`, { timeout: 15000 }),
+      axios.get(`${API_BASE}/api/news`, { params: { refresh: '1' }, timeout: 20000 }),
+      axios.get(`${API_BASE}/api/osint`, { timeout: 20000 }),
     ]
     if (feedMode === FEED_MODE.VIDEOS) {
       setVideoLoading(true)

@@ -68,45 +68,53 @@ function readOsintXFromDb(limit = 80) {
   try {
     const { getEvents, getEventTagNames } = require('../database')
     const { PRIORITY_ORDER } = require('./osintXFeedService')
-    const cutoff = Date.now() - 48 * 60 * 60 * 1000
+    const preferredCutoff = Date.now() - 48 * 60 * 60 * 1000
+    const expandedCutoff = Date.now() - 14 * 24 * 60 * 60 * 1000
     const rows = getEvents(Math.min(limit * 3, 400), null, null, null, null, ['x'])
-    const mapped = rows
-      .filter((r) => r.timestamp && r.timestamp >= cutoff)
-      .map((r) => {
-        let raw = {}
-        try {
-          raw = r.raw_data ? JSON.parse(r.raw_data) : {}
-        } catch (_) { /* ignore */ }
-        const tags = typeof getEventTagNames === 'function' ? getEventTagNames(r.id) : []
-        return {
-          id: r.id,
-          source: 'x',
-          account: raw.account || 'x',
-          displayName: raw.displayName || raw.account || 'x',
-          avatarUrl: raw.avatarUrl || null,
-          verified: !!raw.verified,
-          title: r.title,
-          content: r.description,
-          timestamp: r.timestamp,
-          tags,
-          risk_score: raw.risk_score != null ? Number(raw.risk_score) : null,
-          priority: raw.priority || 'medium',
-          url: raw.link || raw.url,
-          images: Array.isArray(raw.images) ? raw.images : [],
-          videos: Array.isArray(raw.videos) ? raw.videos : [],
-          provider: raw.provider || 'fxtwitter',
-        }
-      })
-      .sort((a, b) => {
-        const pa = PRIORITY_ORDER[a.priority] ?? 2
-        const pb = PRIORITY_ORDER[b.priority] ?? 2
-        if (pa !== pb) return pa - pb
-        return (b.timestamp || 0) - (a.timestamp || 0)
-      })
+    const mapRows = (cutoff) =>
+      rows
+        .filter((r) => r.timestamp && r.timestamp >= cutoff)
+        .map((r) => {
+          let raw = {}
+          try {
+            raw = r.raw_data ? JSON.parse(r.raw_data) : {}
+          } catch (_) { /* ignore */ }
+          const tags = typeof getEventTagNames === 'function' ? getEventTagNames(r.id) : []
+          return {
+            id: r.id,
+            source: 'x',
+            account: raw.account || 'x',
+            displayName: raw.displayName || raw.account || 'x',
+            avatarUrl: raw.avatarUrl || null,
+            verified: !!raw.verified,
+            title: r.title,
+            content: r.description,
+            timestamp: r.timestamp,
+            tags,
+            risk_score: raw.risk_score != null ? Number(raw.risk_score) : null,
+            priority: raw.priority || 'medium',
+            url: raw.link || raw.url,
+            images: Array.isArray(raw.images) ? raw.images : [],
+            videos: Array.isArray(raw.videos) ? raw.videos : [],
+            provider: raw.provider || 'fxtwitter',
+          }
+        })
+        .sort((a, b) => {
+          const pa = PRIORITY_ORDER[a.priority] ?? 2
+          const pb = PRIORITY_ORDER[b.priority] ?? 2
+          if (pa !== pb) return pa - pb
+          return (b.timestamp || 0) - (a.timestamp || 0)
+        })
+    let mapped = mapRows(preferredCutoff)
+    if (mapped.length === 0 && rows.length > 0) mapped = mapRows(expandedCutoff)
     try {
       const { filterOsintXPosts, getDefaultOpts } = require('./osintXContentFilter')
       const opts = getDefaultOpts()
-      return filterOsintXPosts(mapped, opts).posts.slice(0, limit)
+      let filtered = filterOsintXPosts(mapped, opts).posts
+      if (filtered.length === 0 && mapped.length > 0) {
+        filtered = filterOsintXPosts(mapped, { mode: 'off' }).posts
+      }
+      return filtered.slice(0, limit)
     } catch (_) {
       return mapped.slice(0, limit)
     }

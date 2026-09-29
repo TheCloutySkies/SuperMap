@@ -27,7 +27,13 @@
    - **Gas** (`/api/gas-prices`): 6h fresh / 7d stale (EIA weekly retail); SWR on TTL miss
    - **Space** (`/api/space`): 6h fresh / 48h stale; SWR on TTL miss
    - **Home** (`/api/home`): memory → disk last-good → piece caches → live with **≤8s deadline**; catch-up in background  
-   Stats: `GET /api/cache/stats`. Files under `data/api-cache/` (gitignored).
+   Stats: `GET /api/cache/stats`. Files under `$DATA_DIR/api-cache/` when `DATA_DIR` is set, else `data/api-cache/` (gitignored).
+
+4b. **Render ephemeral disk**  
+   Default Render filesystem is wiped on every deploy → `hadLastGood=false` and empty home for 1–3 minutes.  
+   **Fix:** attach a persistent disk (Starter+) at `/var/data` and set `DATA_DIR=/var/data` so SQLite + last-good JSON survive.  
+   Full steps: [`docs/RENDER_PERSISTENT_DISK.md`](./docs/RENDER_PERSISTENT_DISK.md).  
+   Free tier: no disk — boot staggers OSINT X, prefers MediaStack for news, warms `/api/home` early.
 
 5. **Keepalive**  
    GitHub Actions pings **`/health` then `/api/home`** every 10 minutes so Render free-tier stays awake and home last-good stays in memory. Do not ping `/health` alone.

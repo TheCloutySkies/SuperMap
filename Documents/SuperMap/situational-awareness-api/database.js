@@ -1,8 +1,10 @@
 const Database = require('better-sqlite3')
 const path = require('path')
 const crypto = require('crypto')
+const dataPaths = require('./services/dataPaths')
 
-const dbPath = path.join(__dirname, 'osint.db')
+dataPaths.logOnce()
+const dbPath = dataPaths.sqlitePath()
 const db = new Database(dbPath)
 
 db.exec(`

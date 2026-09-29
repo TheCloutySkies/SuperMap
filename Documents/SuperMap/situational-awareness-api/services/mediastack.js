@@ -7,8 +7,11 @@
 const fs = require('fs')
 const path = require('path')
 const axios = require('axios')
+const dataPaths = require('./dataPaths')
 
-const CACHE_PATH = path.join(__dirname, '../data/mediastack-cache.json')
+function getCachePath() {
+  return dataPaths.mediastackCachePath()
+}
 const API_URL = 'http://api.mediastack.com/v1/news'
 const DEFAULT_LIMIT = 100
 
@@ -29,14 +32,22 @@ function emptyCache() {
 }
 
 function ensureDataDir() {
-  const dir = path.dirname(CACHE_PATH)
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  dataPaths.ensureDir(path.dirname(getCachePath()))
 }
 
 function loadCacheFromDisk() {
   try {
-    if (!fs.existsSync(CACHE_PATH)) return emptyCache()
-    const raw = JSON.parse(fs.readFileSync(CACHE_PATH, 'utf8'))
+    const cachePath = getCachePath()
+    // One-time migrate from legacy repo data/ path when DATA_DIR is new
+    const legacy = path.join(__dirname, '../data/mediastack-cache.json')
+    if (!fs.existsSync(cachePath) && fs.existsSync(legacy) && dataPaths.isDurable()) {
+      try {
+        fs.copyFileSync(legacy, cachePath)
+        console.log('[mediastack] migrated cache →', cachePath)
+      } catch (_) { /* optional */ }
+    }
+    if (!fs.existsSync(cachePath)) return emptyCache()
+    const raw = JSON.parse(fs.readFileSync(cachePath, 'utf8'))
     return {
       articles: Array.isArray(raw.articles) ? raw.articles : [],
       fetchedAt: raw.fetchedAt || null,
@@ -54,7 +65,7 @@ function saveCache(cache) {
   ensureDataDir()
   memoryCache = cache
   try {
-    fs.writeFileSync(CACHE_PATH, JSON.stringify(cache, null, 2), 'utf8')
+    fs.writeFileSync(getCachePath(), JSON.stringify(cache, null, 2), 'utf8')
   } catch (err) {
     console.warn('[mediastack] cache write failed:', err.message)
   }

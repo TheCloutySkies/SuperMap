@@ -10,7 +10,14 @@ const { normalizeToEvent, ingestEvent, eventToFeature } = require('./ingest')
 const { getEvents } = require('../database')
 const { geotagArticle } = require('./geotagger')
 
-const REQUEST_HEADERS = { 'User-Agent': 'SuperMap-OSINT/1.0 (https://github.com/supermap)' }
+/** Browser-like UA — GDACS and similar CDNs often 406 bare bot agents. */
+const BROWSER_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+const REQUEST_HEADERS = {
+  'User-Agent': BROWSER_UA,
+  Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.9',
+}
 const parser = new Parser({
   timeout: 12000,
   headers: REQUEST_HEADERS,
@@ -373,10 +380,27 @@ async function fetchTheWarZone() {
 
 /**
  * Shared RSS → geotag → ingest helper for additional free no-key feeds.
+ * Uses axios + browser UA first (GDACS 406 resilience); never throws — returns 0.
  */
 async function ingestRssSource({ url, source, eventType = 'conflict', tags = ['osint'], label = source }) {
   try {
-    const feed = await parser.parseURL(url)
+    let feed
+    try {
+      const res = await axios.get(url, {
+        timeout: 12000,
+        headers: REQUEST_HEADERS,
+        responseType: 'text',
+        decompress: true,
+        validateStatus: (s) => (s >= 200 && s < 300) || s === 406,
+      })
+      if (res.status === 406 && (!res.data || String(res.data).length < 40)) {
+        throw new Error('HTTP 406')
+      }
+      const body = typeof res.data === 'string' ? res.data : String(res.data || '')
+      feed = await parser.parseString(body)
+    } catch (_) {
+      feed = await parser.parseURL(url)
+    }
     const items = []
     for (const raw of feed.items || []) {
       items.push(await enrichItemImage({

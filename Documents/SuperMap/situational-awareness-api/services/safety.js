@@ -4,16 +4,34 @@ const { normalizeToEvent, ingestEvent, eventToFeature } = require('./ingest')
 const USGS_URL = 'https://earthquake.usgs.gov/fdsnws/event/1/query'
 const OPENFEMA_URL = 'https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries'
 
+/** Cap ingest+response so an unbounded USGS pull cannot stall the Free-tier event loop. */
+const EARTHQUAKES_MAX_FEATURES = 500
+
+function defaultEarthquakeStarttime() {
+  const d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+  return d.toISOString().slice(0, 10)
+}
+
 async function getEarthquakes(query = {}) {
   try {
-    const params = { format: 'geojson', orderby: 'time-asc' }
+    // USGS FDSN without starttime/minmagnitude returns multi‑MB catalogs and can
+    // stall the whole API while we ingest every feature into SQLite.
+    const params = {
+      format: 'geojson',
+      orderby: 'time',
+      minmagnitude: query.minmagnitude != null ? Number(query.minmagnitude) : 2.5,
+      starttime: query.starttime || defaultEarthquakeStarttime(),
+    }
+    if (query.endtime) params.endtime = query.endtime
     if (query.bbox) {
       const [w, s, e, n] = query.bbox.split(',').map(Number)
-      Object.assign(params, { minlatitude: s, maxlatitude: n, minlongitude: w, maxlongitude: e })
+      if ([w, s, e, n].every((n) => Number.isFinite(n))) {
+        Object.assign(params, { minlatitude: s, maxlatitude: n, minlongitude: w, maxlongitude: e })
+      }
     }
     const res = await axios.get(USGS_URL, { params, timeout: 10000 })
     const fc = res.data
-    const features = fc.features || []
+    const features = (fc.features || []).slice(0, EARTHQUAKES_MAX_FEATURES)
     const events = []
     for (const f of features) {
       const props = f.properties || {}

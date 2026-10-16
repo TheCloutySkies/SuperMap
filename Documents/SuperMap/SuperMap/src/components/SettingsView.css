@@ -73,6 +73,10 @@
   line-height: 1.4;
 }
 
+.settings-hint--warn {
+  color: #d29922;
+}
+
 .settings-field {
   margin-bottom: 1rem;
 }

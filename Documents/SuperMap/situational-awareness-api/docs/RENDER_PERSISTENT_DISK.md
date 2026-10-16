@@ -24,12 +24,18 @@ Sleep kills the process and all in-memory last-good. Wake the API every ~10 minu
 1. `GET /health` (process alive)
 2. `GET /api/home` (loads piece caches into memory)
 
-This repo ships [`.github/workflows/api-keepalive.yml`](../../../.github/workflows/api-keepalive.yml) on a `*/10 * * * *` cron. Confirm Actions are enabled for the repo; no Render Dashboard buy-up needed.
+This repo ships [`.github/workflows/api-keepalive.yml`](../../../.github/workflows/api-keepalive.yml) on a `*/10 * * * *` cron. Confirm Actions are enabled for the repo; no Render Dashboard buy-up needed. **Do not raise ping frequency** — stampeding Render Free can worsen edge throttling.
+
+#### Keepalive HTTP 429 (edge, not Express)
+
+Intermittent Actions failures with `curl: (22) … 429` on `/health` come from **Render Free + Cloudflare in front of `*.onrender.com`** (cold spin-up / shared CI IP throttle). The API has **no** `express-rate-limit`; `GET /health` and `GET /` are unrestricted in-app. Live probes usually show `server: cloudflare`, `x-render-origin-server: Render`, and no `RateLimit-*` headers on 200s.
+
+The workflow treats 429 with longer backoff, still warms `/api/home` if health is throttled, and soft-exits on persistent 429 so the next ~10m cron can retry without a hard red job.
 
 Manual check:
 
 ```bash
-curl -fsS https://supermap-api.onrender.com/health
+curl -sS -D - -o /tmp/health.json --max-time 60 https://supermap-api.onrender.com/health
 curl -fsS https://supermap-api.onrender.com/api/home -o /tmp/home.json
 ```
 

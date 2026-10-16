@@ -65,7 +65,11 @@ app.get('/', (req, res) => {
   })
 })
 
+/** Liveness for Render Free keepalive + browsers. Intentionally unrestricted
+ *  (no express-rate-limit in this app). Edge HTTP 429s come from Render/CF on
+ *  *.onrender.com during cold spin-up — see .github/workflows/api-keepalive.yml. */
 app.get('/health', (req, res) => {
+  res.set('Cache-Control', 'no-store')
   res.json({ ok: true })
 })
 

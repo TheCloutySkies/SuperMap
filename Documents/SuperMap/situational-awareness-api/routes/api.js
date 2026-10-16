@@ -426,17 +426,35 @@ const PROXY_VIDEO_ALLOWED_HOSTS = [
   'cdn.video.aljazeera.com', 'video.aljazeera.com',
   'www.dw.com', 'dw.com',
   'feeds.bbci.co.uk', 'www.bbc.co.uk', 'bbc.co.uk',
-  'i.ytimg.com', 'r2---sn-', 'googlevideo.com',
-  'v.redd.it', 'reddit.com', 'redd.it',
+  'i.ytimg.com', 'googlevideo.com',
+  'v.redd.it', 'redd.it', 'reddit.com',
 ]
+function isAllowedVideoProxyHost(host) {
+  const h = String(host || '').toLowerCase()
+  if (!h) return false
+  // YouTube progressive CDN hosts look like r2---sn-*.googlevideo.com
+  if (h.endsWith('.googlevideo.com') || h === 'googlevideo.com') return true
+  return PROXY_VIDEO_ALLOWED_HOSTS.some((allowed) => h === allowed || h.endsWith('.' + allowed))
+}
 function isAllowedVideoProxyUrl(raw) {
   try {
     const u = new URL(raw)
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false
+    // HTTPS only — blocks SSRF to localhost/link-local/metadata via http cleartext tricks.
+    if (u.protocol !== 'https:') return false
     const host = (u.hostname || '').toLowerCase()
-    if (PROXY_VIDEO_ALLOWED_HOSTS.some((h) => host.includes(h))) return true
-    if (/\.(mp4|webm|ogg)(\?|$)/i.test(u.pathname || '')) return true
-    return false
+    // Block obvious internal targets even if somehow allowlisted later.
+    if (
+      host === 'localhost' ||
+      host.endsWith('.localhost') ||
+      host.endsWith('.local') ||
+      host.endsWith('.internal') ||
+      /^\d+\.\d+\.\d+\.\d+$/.test(host) ||
+      host.includes(':') // IPv6 literal
+    ) {
+      return false
+    }
+    // Host allowlist only — do NOT allow arbitrary *.mp4 URLs (open SSRF).
+    return isAllowedVideoProxyHost(host)
   } catch {
     return false
   }
@@ -450,9 +468,21 @@ router.get('/proxy-video', async (req, res) => {
     const response = await axios.get(rawUrl, {
       responseType: 'stream',
       timeout: 45000,
-      maxRedirects: 5,
+      maxRedirects: 3,
       headers: { 'User-Agent': 'SuperMap/1.0 (Video proxy; in-app playback)' },
       validateStatus: (s) => s >= 200 && s < 400,
+      // Re-check redirect targets stay on the host allowlist (no open redirect SSRF).
+      beforeRedirect: (options) => {
+        const proto = options.protocol || 'https:'
+        const host = options.hostname || options.host || ''
+        const path = options.pathname || options.path || '/'
+        const next = `${proto}//${host}${path}`
+        if (!isAllowedVideoProxyUrl(next)) {
+          const err = new Error('Redirect target not on video proxy allowlist')
+          err.code = 'PROXY_REDIRECT_BLOCKED'
+          throw err
+        }
+      },
     })
     res.setHeader('Access-Control-Allow-Origin', '*')
     const ct = response.headers['content-type']
@@ -1719,21 +1749,48 @@ router.get('/stream/proxy', async (req, res) => {
 /** User config (X handles, subreddits). GET returns current; POST merges and saves. */
 router.get('/config', (req, res) => {
   try {
-    res.json(userConfig.getConfig())
+    const cfg = userConfig.getConfig()
+    const writeProtected = Boolean(String(process.env.CONFIG_WRITE_TOKEN || '').trim())
+    res.json({ ...cfg, writeProtected, writesEnabled: writeProtected })
   } catch (err) {
     console.error('[API /config]', err.message)
     res.status(500).json({ error: 'Failed to read config' })
   }
 })
 
+function configWriteAuthorized(req) {
+  const expected = String(process.env.CONFIG_WRITE_TOKEN || '').trim()
+  // Secure default for a public API: refuse writes until a token is configured.
+  if (!expected) return false
+  const provided = String(
+    req.get('x-config-token') ||
+    req.get('x-config-write-token') ||
+    (req.body && req.body.configWriteToken) ||
+    '',
+  ).trim()
+  if (!provided || provided.length !== expected.length) return false
+  try {
+    return crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected))
+  } catch {
+    return false
+  }
+}
+
 router.post('/config', (req, res) => {
   try {
-    const { osintXHandles, subreddits } = req.body || {}
+    if (!configWriteAuthorized(req)) {
+      return res.status(403).json({
+        error: 'Config writes require CONFIG_WRITE_TOKEN',
+        hint: 'Set CONFIG_WRITE_TOKEN on the API (Render env). In Settings, paste the same token (browser-local only) before saving handles/subreddits.',
+      })
+    }
+    const { osintXHandles, subreddits, stockTickers } = req.body || {}
     const updates = {}
     if (Array.isArray(osintXHandles)) updates.osintXHandles = osintXHandles
     if (Array.isArray(subreddits)) updates.subreddits = subreddits
+    if (Array.isArray(stockTickers)) updates.stockTickers = stockTickers
     const updated = userConfig.setConfig(updates)
-    res.json(updated)
+    res.json({ ...updated, writeProtected: true, writesEnabled: true })
   } catch (err) {
     console.error('[API POST /config]', err.message)
     res.status(500).json({ error: 'Failed to save config' })

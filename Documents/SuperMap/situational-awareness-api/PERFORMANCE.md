@@ -36,7 +36,7 @@
    `DATA_DIR` is optional only if you already have durable storage — not required for Free.
 
 5. **Keepalive**  
-   GitHub Actions pings **`/health` then `/api/home`** every 10 minutes so Render free-tier stays awake and home last-good stays in memory. Do not ping `/health` alone.
+   GitHub Actions pings **`/health` then `/api/home`** every 10 minutes so Render free-tier stays awake and home last-good stays in memory. Do not ping `/health` alone. Do not raise frequency. Intermittent **HTTP 429** on `/health` is Render Free / Cloudflare edge during spin-up or CI IP throttle — not Express middleware (none present). Workflow backs off longer on 429, still attempts `/api/home`, and soft-exits on persistent 429.
 
 6. **RSS/news**  
    `newsService.getNewsCached()` already reduces repeated fetches. Ensure TTLs match your freshness needs.

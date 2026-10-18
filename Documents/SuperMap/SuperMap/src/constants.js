@@ -231,14 +231,17 @@ export const BASEMAPS = [
     tileSize: 256,
   },
   {
+    // CARTO CDN dark_all now watermarks "API KEY REQUIRED" without a paid key.
+    // Esri Canvas Dark Gray is keyless ArcGIS Online (same family as other BASEMAPS).
     id: 'dark-matter',
     label: 'Dark Matter',
-    type: 'raster',
-    attribution: '© CARTO',
-    tiles: [
-      'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-      'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-      'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+    type: 'hybrid',
+    attribution: 'Esri, OpenStreetMap contributors',
+    imagery: [
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    ],
+    labels: [
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
     ],
     tileSize: 256,
   },
@@ -265,21 +268,20 @@ export const BASEMAPS = [
   },
   {
     id: 'osm-standard',
-    label: 'OpenStreetMap (POIs & places)',
+    label: 'OpenStreetMap',
     type: 'raster',
     attribution: '© OpenStreetMap',
     tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
     tileSize: 256,
   },
   {
+    // CARTO Voyager CDN requires a key; use keyless Esri World Street Map instead.
     id: 'carto-voyager',
     label: 'Carto Voyager',
     type: 'raster',
-    attribution: '© CARTO',
+    attribution: 'Esri, OpenStreetMap contributors',
     tiles: [
-      'https://a.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}.png',
-      'https://b.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}.png',
-      'https://c.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}.png',
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
     ],
     tileSize: 256,
   },

@@ -119,14 +119,60 @@ function emojiIconLayer(id, source, iconId, { size = 0.9, filter = null, minzoom
   return layer
 }
 
+/**
+ * Load a raster marker into the MapLibre style.
+ * Firefox often fails or returns an unusable ImageBitmap from map.loadImage;
+ * decode via HTMLImageElement → canvas ImageData (reliable across browsers).
+ */
 async function ensureMapImage(map, id, url) {
   if (!map || map.hasImage?.(id)) return true
+
+  const addFromImageData = (imageData, pixelRatio = 2) => {
+    if (!imageData || map.hasImage(id)) return true
+    try {
+      map.addImage(id, imageData, { pixelRatio })
+      return true
+    } catch (err) {
+      console.warn('[SuperMap] map addImage failed', id, err?.message || err)
+      return false
+    }
+  }
+
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const image = new Image()
+      // Same-origin assets do not need CORS; keep anonymous for CDN icons.
+      if (!String(url).startsWith('/') && !String(url).startsWith(window.location.origin)) {
+        image.crossOrigin = 'anonymous'
+      }
+      image.onload = () => resolve(image)
+      image.onerror = () => reject(new Error(`Failed to load ${url}`))
+      image.src = url
+    })
+    if (typeof img.decode === 'function') {
+      try { await img.decode() } catch (_) { /* decode optional */ }
+    }
+    const w = img.naturalWidth || img.width
+    const h = img.naturalHeight || img.height
+    if (!w || !h) return false
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+    if (!ctx) return false
+    ctx.clearRect(0, 0, w, h)
+    ctx.drawImage(img, 0, 0)
+    const data = ctx.getImageData(0, 0, w, h)
+    if (addFromImageData(data, 2)) return true
+  } catch (err) {
+    console.warn('[SuperMap] canvas image path failed', id, err?.message || err)
+  }
+
   try {
     const result = await map.loadImage(url)
     const image = result?.data ?? result
     if (!image) return false
-    if (!map.hasImage(id)) map.addImage(id, image)
-    return true
+    return addFromImageData(image, 1)
   } catch (err) {
     console.warn('[SuperMap] map image load failed', id, err?.message || err)
     return false
@@ -663,22 +709,32 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
   /** DeFlock-style cyan ALPR markers (FoggedLens/deflockhopper_maps cameras-us).
    * Clusters stay as cyan circles; photo icon only on unclustered (individual) cameras. */
   const addFlockCameras = (geoJson) => {
+    const hideCircleFallback = () => {
+      if (map.getLayer('intel-flock-cameras-icon') && map.getLayer('intel-flock-cameras-layer')) {
+        map.setLayoutProperty('intel-flock-cameras-layer', 'visibility', 'none')
+      }
+    }
+
     const ensureIconLayer = () => {
-      if (!map.getSource('intel-flock-cameras')) return
-      if (!map.hasImage(FLOCK_ICON_ID)) return
-      if (map.getLayer('intel-flock-cameras-icon')) return
-      map.addLayer({
-        id: 'intel-flock-cameras-icon',
-        type: 'symbol',
-        source: 'intel-flock-cameras',
-        filter: ['!', ['has', 'point_count']],
-        layout: {
-          'icon-image': FLOCK_ICON_ID,
-          'icon-size': ['interpolate', ['linear'], ['zoom'], 12, 0.65, 16, 1.15],
-          'icon-allow-overlap': true,
-          'icon-ignore-placement': true,
-        },
-      })
+      if (!map.getSource('intel-flock-cameras')) return false
+      if (!map.hasImage(FLOCK_ICON_ID)) return false
+      if (!map.getLayer('intel-flock-cameras-icon')) {
+        map.addLayer({
+          id: 'intel-flock-cameras-icon',
+          type: 'symbol',
+          source: 'intel-flock-cameras',
+          filter: ['!', ['has', 'point_count']],
+          layout: {
+            'icon-image': FLOCK_ICON_ID,
+            'icon-size': ['interpolate', ['linear'], ['zoom'], 12, 0.65, 16, 1.15],
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
+            'icon-anchor': 'center',
+          },
+        })
+      }
+      hideCircleFallback()
+      return true
     }
 
     const mountLayers = () => {
@@ -735,23 +791,26 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
         },
       })
       ensureIconLayer()
-      if (map.getLayer('intel-flock-cameras-icon') && map.getLayer('intel-flock-cameras-layer')) {
-        map.setLayoutProperty('intel-flock-cameras-layer', 'visibility', 'none')
-      }
     }
 
+    mountLayers()
     if (map.hasImage(FLOCK_ICON_ID)) {
-      mountLayers()
+      ensureIconLayer()
       return
     }
-    mountLayers()
-    ensureMapImage(map, FLOCK_ICON_ID, FLOCK_MARKER_URL).then(() => {
-      if (!map.getStyle?.()) return
+    ensureMapImage(map, FLOCK_ICON_ID, FLOCK_MARKER_URL).then((ok) => {
+      if (!ok || !map.getStyle?.()) return
       ensureIconLayer()
-      if (map.getLayer('intel-flock-cameras-icon') && map.getLayer('intel-flock-cameras-layer')) {
-        map.setLayoutProperty('intel-flock-cameras-layer', 'visibility', 'none')
-      }
     })
+    // Re-attach after style swaps / missing-image events (common on Firefox + basemap remount).
+    const onMissing = (e) => {
+      if (e?.id !== FLOCK_ICON_ID) return
+      ensureMapImage(map, FLOCK_ICON_ID, FLOCK_MARKER_URL).then((ok) => {
+        if (ok) ensureIconLayer()
+      })
+    }
+    map.off('styleimagemissing', onMissing)
+    map.on('styleimagemissing', onMissing)
   }
 
   const removeFlockCameras = () => {
@@ -1301,6 +1360,8 @@ export default function MapView({
   const [webcamZoomHint, setWebcamZoomHint] = useState(false)
   const [webcamEmptyHint, setWebcamEmptyHint] = useState(false)
   const [webcamStatusMsg, setWebcamStatusMsg] = useState('')
+  /** Full-res live webcam lightbox: { title, place, image, source, openUrl, bust }. */
+  const [webcamLightbox, setWebcamLightbox] = useState(null)
   const [mapInstance, setMapInstance] = useState(null)
   const [pinEditorOpen, setPinEditorOpen] = useState(false)
   const [pinEditorPin, setPinEditorPin] = useState(null)
@@ -1931,10 +1992,16 @@ export default function MapView({
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;')
           .replace(/"/g, '&quot;')
-        const title = esc(props.title || 'Webcam')
-        const place = [props.city, props.region, props.country].filter(Boolean).map(esc).join(', ')
-        const img = props.image
-          ? `<img class="map-popup-webcam-thumb" src="${esc(props.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" />`
+        const titleRaw = props.title || 'Webcam'
+        const title = esc(titleRaw)
+        const placeParts = [props.city, props.region, props.country].filter(Boolean)
+        const place = placeParts.map(esc).join(', ')
+        const imageUrl = props.image || ''
+        const img = imageUrl
+          ? `<button type="button" class="map-popup-webcam-thumb-btn" aria-label="Open full-resolution webcam still">
+              <img class="map-popup-webcam-thumb" src="${esc(imageUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" />
+              <span class="map-popup-webcam-expand">Expand</span>
+            </button>`
           : ''
         const openUrl = props.url || props.playerEmbed || ''
         const sourceLabel = props.source || 'Live Webcam'
@@ -1951,6 +2018,23 @@ export default function MapView({
         </div>`
         const coords = feat.geometry?.coordinates?.slice?.() || [e.lngLat.lng, e.lngLat.lat]
         popup.setLngLat(coords).setHTML(html).addTo(map)
+        // Clicking the preview opens the full-resolution lightbox (markers/popup UX otherwise unchanged).
+        const el = popup.getElement?.()
+        const thumbBtn = el?.querySelector?.('.map-popup-webcam-thumb-btn')
+        if (thumbBtn && imageUrl) {
+          thumbBtn.addEventListener('click', (ev) => {
+            ev.preventDefault()
+            ev.stopPropagation()
+            setWebcamLightbox({
+              title: titleRaw,
+              place: placeParts.join(', '),
+              image: imageUrl,
+              source: sourceLabel,
+              openUrl,
+              bust: Date.now(),
+            })
+          })
+        }
         return
       }
       const coords = feat.geometry?.type === 'Point' ? feat.geometry.coordinates.slice() : null
@@ -2818,6 +2902,104 @@ export default function MapView({
         onDelete={pinEditorPin ? () => handlePinEditorDelete(pinEditorPin.id) : undefined}
         onCreateList={undefined}
       />
+      {webcamLightbox && (
+        <div
+          className="webcam-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label={webcamLightbox.title || 'Webcam still'}
+          onClick={(ev) => {
+            if (ev.target === ev.currentTarget) setWebcamLightbox(null)
+          }}
+          onKeyDown={(ev) => {
+            if (ev.key === 'Escape') setWebcamLightbox(null)
+          }}
+        >
+          <div className="webcam-lightbox-panel">
+            <header className="webcam-lightbox-header">
+              <div>
+                <h2>{webcamLightbox.title || 'Webcam'}</h2>
+                {(webcamLightbox.place || webcamLightbox.source) && (
+                  <p>
+                    {[webcamLightbox.place, webcamLightbox.source].filter(Boolean).join(' · ')}
+                  </p>
+                )}
+              </div>
+              <div className="webcam-lightbox-actions">
+                <button
+                  type="button"
+                  className="webcam-lightbox-btn"
+                  onClick={() => {
+                    setWebcamLightbox((prev) => (prev ? { ...prev, bust: Date.now() } : prev))
+                  }}
+                >
+                  Refresh
+                </button>
+                <button
+                  type="button"
+                  className="webcam-lightbox-btn"
+                  onClick={async () => {
+                    const src = webcamLightbox.image
+                    if (!src) return
+                    const busted = `${src}${src.includes('?') ? '&' : '?'}_=${webcamLightbox.bust || Date.now()}`
+                    const filename = `${String(webcamLightbox.title || 'webcam')
+                      .replace(/[^\w.-]+/g, '_')
+                      .slice(0, 64)}.jpg`
+                    try {
+                      const res = await fetch(busted, { mode: 'cors', referrerPolicy: 'no-referrer' })
+                      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+                      const blob = await res.blob()
+                      const objectUrl = URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = objectUrl
+                      a.download = filename
+                      document.body.appendChild(a)
+                      a.click()
+                      a.remove()
+                      URL.revokeObjectURL(objectUrl)
+                    } catch (_) {
+                      // Cross-origin stills often block fetch; open in a new tab as fallback.
+                      window.open(busted, '_blank', 'noopener,noreferrer')
+                    }
+                  }}
+                >
+                  Download
+                </button>
+                <button
+                  type="button"
+                  className="webcam-lightbox-btn webcam-lightbox-btn--close"
+                  onClick={() => setWebcamLightbox(null)}
+                >
+                  Close
+                </button>
+              </div>
+            </header>
+            <div className="webcam-lightbox-stage">
+              {webcamLightbox.image ? (
+                <img
+                  key={webcamLightbox.bust}
+                  src={`${webcamLightbox.image}${webcamLightbox.image.includes('?') ? '&' : '?'}_=${webcamLightbox.bust || Date.now()}`}
+                  alt={webcamLightbox.title || 'Webcam still'}
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <p className="webcam-lightbox-empty">No still available for this camera.</p>
+              )}
+            </div>
+            {webcamLightbox.openUrl && (
+              <footer className="webcam-lightbox-footer">
+                <a
+                  href={webcamLightbox.openUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {webcamLightbox.source === 'Windy' ? 'Open on Windy' : 'Open camera page'}
+                </a>
+              </footer>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

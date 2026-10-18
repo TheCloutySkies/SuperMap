@@ -14,20 +14,19 @@
   --ci-danger: #e04545;
   --ci-sans: 'IBM Plex Sans', 'Trebuchet MS', sans-serif;
   --ci-serif: 'IBM Plex Serif', Georgia, serif;
-  --ci-desk-pad: clamp(0.65rem, 1.2vw, 1rem);
+  --ci-desk-pad: 16px;
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
   width: 100%;
   max-width: none;
+  margin: 0;
   color: var(--ci-text);
   font-family: var(--ci-sans);
-  /* Opaque desk surface so ambient blobs don't read as empty side margins. */
-  background:
-    radial-gradient(ellipse 90% 55% at 8% -8%, rgba(61, 154, 106, 0.2), transparent 52%),
-    radial-gradient(ellipse 70% 45% at 96% 0%, rgba(40, 90, 70, 0.28), transparent 48%),
-    linear-gradient(180deg, var(--ci-bg1) 0%, var(--ci-bg0) 100%);
+  /* Fully opaque desk — ambient must not vignette the sides into “empty gutters”. */
+  background: var(--ci-bg1);
+  box-shadow: inset 0 1px 0 rgba(110, 217, 160, 0.06);
 }
 
 .ci-topbar {
@@ -224,11 +223,11 @@
 /* Full-bleed multi-column desk — must come AFTER base .ci-dash-grid rules */
 @media (min-width: 1200px) {
   .ci-view {
-    --ci-desk-pad: 0.75rem;
+    --ci-desk-pad: 16px;
   }
 
   .ci-scroll {
-    padding: 0.75rem var(--ci-desk-pad) 1.75rem;
+    padding: 12px var(--ci-desk-pad) 28px;
   }
 
   .ci-panel,
@@ -240,7 +239,7 @@
 
   .ci-dash-grid {
     grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-    gap: 0.85rem 1rem;
+    gap: 12px;
   }
 
   .ci-dash-grid--3 {
@@ -248,7 +247,7 @@
   }
 
   .ci-dash-grid--desk {
-    grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.95fr) minmax(260px, 0.85fr) !important;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr) !important;
   }
 
   .ci-dash-grid--4 {
@@ -257,7 +256,7 @@
 
   .ci-level-strip {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.75rem;
+    gap: 12px;
   }
 
   .ci-map-split {
@@ -265,17 +264,42 @@
   }
 
   .ci-section-head p {
-    max-width: none;
+    max-width: none !important;
+  }
+
+  .ci-dash-col {
+    border-radius: 10px;
+  }
+}
+
+@media (min-width: 1400px) {
+  .ci-view {
+    --ci-desk-pad: 20px;
+  }
+
+  .ci-scroll {
+    padding: 16px var(--ci-desk-pad) 32px;
+  }
+
+  .ci-topbar {
+    padding-left: var(--ci-desk-pad);
+    padding-right: var(--ci-desk-pad);
+  }
+
+  .ci-dash-grid--desk {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 16px;
+  }
+
+  .ci-dash-grid--3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
   }
 }
 
 @media (min-width: 1500px) {
   .ci-view {
-    --ci-desk-pad: 0.85rem;
-  }
-
-  .ci-dash-grid--desk {
-    grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.9fr) minmax(280px, 0.8fr) !important;
+    --ci-desk-pad: 24px;
   }
 }
 
@@ -555,7 +579,7 @@
   font-size: 0.82rem;
   color: var(--ci-muted);
   line-height: 1.4;
-  max-width: 40rem;
+  max-width: none;
 }
 
 .ci-muted {

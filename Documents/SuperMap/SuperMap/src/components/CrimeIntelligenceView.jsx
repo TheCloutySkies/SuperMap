@@ -18,6 +18,26 @@ const SEGMENTS = [
   { id: 'ask', label: 'ThielBot' },
 ]
 
+const PIN_STORAGE_KEY = 'supermap-crime-pins-v1'
+
+function loadPins() {
+  try {
+    const raw = localStorage.getItem(PIN_STORAGE_KEY)
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed.slice(0, 24) : []
+  } catch {
+    return []
+  }
+}
+
+function savePins(pins) {
+  try {
+    localStorage.setItem(PIN_STORAGE_KEY, JSON.stringify(pins.slice(0, 24)))
+  } catch {
+    /* ignore quota */
+  }
+}
+
 const CRIME_METRIC_OPTIONS = [
   { id: 'violentRate', label: 'Violent', countKey: 'violentCrime', rateKey: 'violentRate' },
   { id: 'homicideRate', label: 'Homicide', countKey: 'homicide', rateKey: 'homicideRate' },
@@ -565,6 +585,7 @@ export default function CrimeIntelligenceView({ focusSegment = null, focusEntity
   const [types, setTypes] = useState([])
   const [arrests, setArrests] = useState(null)
   const [homicide, setHomicide] = useState(null)
+  const [hateCrime, setHateCrime] = useState([])
   const [mapFeatures, setMapFeatures] = useState([])
   const [attribution, setAttribution] = useState(null)
   const [error, setError] = useState(null)
@@ -572,6 +593,10 @@ export default function CrimeIntelligenceView({ focusSegment = null, focusEntity
 
   const [nationalMetric, setNationalMetric] = useState('violentRate')
   const [nationalYear, setNationalYear] = useState(null)
+  const [compareAbbrA, setCompareAbbrA] = useState('CA')
+  const [compareAbbrB, setCompareAbbrB] = useState('TX')
+  const [pins, setPins] = useState(() => loadPins())
+  const [copyFlash, setCopyFlash] = useState('')
 
   const [selectedAbbr, setSelectedAbbr] = useState('')
   const [stateDetail, setStateDetail] = useState(null)
@@ -625,9 +650,10 @@ export default function CrimeIntelligenceView({ focusSegment = null, focusEntity
       getJson('/api/crime/types'),
       getJson('/api/crime/arrests'),
       getJson('/api/crime/homicide'),
+      getJson('/api/crime/hate-crime').catch(() => ({ data: [] })),
       buildCrimeStateChoropleth('violentRate').catch(() => null),
     ])
-      .then(([s, t, st, ty, a, h, choropleth]) => {
+      .then(([s, t, st, ty, a, h, hc, choropleth]) => {
         if (cancelled) return
         setStats(s.data)
         const trendRows = Array.isArray(t.data) ? t.data : []
@@ -636,6 +662,7 @@ export default function CrimeIntelligenceView({ focusSegment = null, focusEntity
         setTypes(Array.isArray(ty.data) ? ty.data : [])
         setArrests(a.data)
         setHomicide(h.data)
+        setHateCrime(Array.isArray(hc?.data) ? hc.data : [])
         setMapFeatures(choropleth?.features || [])
         setAttribution(s.meta?.attribution || st.meta?.attribution)
         if (trendRows.length) {
@@ -1180,12 +1207,108 @@ export default function CrimeIntelligenceView({ focusSegment = null, focusEntity
   const arrestBySex = Array.isArray(arrests?.bySex) ? arrests.bySex : []
   const arrestEstimates = Array.isArray(arrests?.nationalEstimates) ? arrests.nationalEstimates : []
 
+  const offenseBreakdown = useMemo(() => {
+    return (types || [])
+      .map((t) => {
+        const latest = t.latest || (Array.isArray(t.nationalHistory) ? t.nationalHistory[t.nationalHistory.length - 1] : null)
+        return {
+          id: t.slug || t.key || t.name,
+          name: t.name || t.label || t.slug || 'Offense',
+          rate: Number(latest?.rate),
+          count: Number(latest?.count),
+          year: latest?.year,
+        }
+      })
+      .filter((r) => Number.isFinite(r.rate) || Number.isFinite(r.count))
+      .sort((a, b) => (Number(b.rate) || 0) - (Number(a.rate) || 0))
+      .slice(0, 10)
+  }, [types])
+
+  const offenseMaxRate = useMemo(
+    () => Math.max(1, ...offenseBreakdown.map((r) => Number(r.rate) || 0)),
+    [offenseBreakdown],
+  )
+
+  const compareStateA = useMemo(
+    () => states.find((s) => String(s.abbr).toUpperCase() === compareAbbrA) || null,
+    [states, compareAbbrA],
+  )
+  const compareStateB = useMemo(
+    () => states.find((s) => String(s.abbr).toUpperCase() === compareAbbrB) || null,
+    [states, compareAbbrB],
+  )
+
+  const hateCrimeTop = useMemo(() => {
+    return [...(hateCrime || [])]
+      .map((r) => ({
+        state: r.state || r.name || r.abbr || '—',
+        total: Number(r.totalIncidents ?? r.total ?? r.count) || 0,
+      }))
+      .filter((r) => r.total > 0)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 8)
+  }, [hateCrime])
+
+  const hateCrimeMax = useMemo(
+    () => Math.max(1, ...hateCrimeTop.map((r) => r.total)),
+    [hateCrimeTop],
+  )
+
+  const rankedStatesForMap = useMemo(() => {
+    return [...states]
+      .filter((s) => Number.isFinite(Number(s.violentRate)))
+      .sort((a, b) => (Number(b.violentRate) || 0) - (Number(a.violentRate) || 0))
+      .slice(0, 20)
+  }, [states])
+
+  const togglePin = useCallback((pin) => {
+    if (!pin?.id) return
+    setPins((prev) => {
+      const exists = prev.some((p) => p.id === pin.id)
+      const next = exists ? prev.filter((p) => p.id !== pin.id) : [{ ...pin, pinnedAt: Date.now() }, ...prev].slice(0, 24)
+      savePins(next)
+      return next
+    })
+  }, [])
+
+  const isPinned = useCallback((id) => pins.some((p) => p.id === id), [pins])
+
+  const copyBriefing = useCallback(async () => {
+    const lines = [
+      `Crime Intelligence briefing · ${new Date().toISOString().slice(0, 10)}`,
+      `National violent ${fmt(national?.violentRate, 1)}/100k · property ${fmt(national?.propertyRate, 1)}/100k · homicide ${fmt(national?.homicideRate, 2)}/100k`,
+    ]
+    if (compareStateA && compareStateB) {
+      lines.push(
+        `Compare ${compareStateA.name} (${fmt(compareStateA.violentRate, 1)}) vs ${compareStateB.name} (${fmt(compareStateB.violentRate, 1)}) violent/100k`,
+      )
+    }
+    if (offenseBreakdown[0]) {
+      lines.push(`Top offense rate: ${offenseBreakdown[0].name} ${fmt(offenseBreakdown[0].rate, 1)}/100k`)
+    }
+    if (pins.length) {
+      lines.push(`Pinned: ${pins.map((p) => p.label).join(', ')}`)
+    }
+    if (hateCrimeTop[0]) {
+      lines.push(`Hate crime incidents (pack): ${hateCrimeTop[0].state} leads with ${fmt(hateCrimeTop[0].total, 0)}`)
+    }
+    lines.push('Source: PlainCrime + FBI UCR')
+    const text = lines.join('\n')
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopyFlash('Copied')
+    } catch {
+      setCopyFlash('Copy failed')
+    }
+    setTimeout(() => setCopyFlash(''), 1800)
+  }, [national, compareStateA, compareStateB, offenseBreakdown, pins, hateCrimeTop])
+
   return (
     <div className="ci-view" role="region" aria-label="Crime Intelligence">
       <header className="ci-topbar">
         <div className="ci-brand">
           <h1>Crime</h1>
-          <p>PlainCrime + FBI UCR · vs national averages</p>
+          <p>Intelligence research desk · PlainCrime + FBI UCR</p>
         </div>
         <nav className="ci-segments" aria-label="Crime sections">
           {SEGMENTS.map((s) => (
@@ -1206,14 +1329,21 @@ export default function CrimeIntelligenceView({ focusSegment = null, focusEntity
         {error && <p className="ci-error ci-enter">{error}</p>}
 
         {segment === 'national' && !loading && (
-          <section className="ci-panel ci-enter" aria-labelledby="ci-national-title">
-            <div className="ci-section-head">
-              <h2 id="ci-national-title">National</h2>
-              <p>
-                Levels vs long-run national averages
-                {' '}
-                (Low &lt;{LEVEL_THRESHOLDS.low}× · Medium &lt;{LEVEL_THRESHOLDS.medium}× · High &lt;{LEVEL_THRESHOLDS.high}× · Extreme ≥{LEVEL_THRESHOLDS.high}×).
-              </p>
+          <section className="ci-panel ci-panel--wide ci-enter" aria-labelledby="ci-national-title">
+            <div className="ci-section-head ci-section-head--row">
+              <div>
+                <h2 id="ci-national-title">National desk</h2>
+                <p>
+                  Full-width research layout · levels vs long-run averages
+                  {' '}
+                  (Low &lt;{LEVEL_THRESHOLDS.low}× · Medium &lt;{LEVEL_THRESHOLDS.medium}× · High &lt;{LEVEL_THRESHOLDS.high}× · Extreme ≥{LEVEL_THRESHOLDS.high}×).
+                </p>
+              </div>
+              <div className="ci-toolbar-actions">
+                <button type="button" className="ci-action-btn" onClick={copyBriefing}>
+                  {copyFlash || 'Copy briefing'}
+                </button>
+              </div>
             </div>
 
             <div className="ci-level-strip">
@@ -1243,36 +1373,270 @@ export default function CrimeIntelligenceView({ focusSegment = null, focusEntity
               </div>
             </div>
 
-            <MetricPicker
-              options={nationalMetricOptions}
-              value={nationalMetric}
-              onChange={setNationalMetric}
-            />
-            <TrendChart
-              series={nationalSeries}
-              year={nationalYear}
-              onYearChange={setNationalYear}
-              valueKey="rate"
-            />
+            <div className="ci-dash-grid ci-dash-grid--desk">
+              <div className="ci-dash-col ci-dash-col--primary">
+                <h3 className="ci-module-title">Time trends</h3>
+                <MetricPicker
+                  options={nationalMetricOptions}
+                  value={nationalMetric}
+                  onChange={setNationalMetric}
+                />
+                <TrendChart
+                  series={nationalSeries}
+                  year={nationalYear}
+                  onYearChange={setNationalYear}
+                  valueKey="rate"
+                />
+              </div>
+
+              <div className="ci-dash-col">
+                <h3 className="ci-module-title">Offense-type breakdown</h3>
+                <p className="ci-module-sub">Latest national rates from the crime pack</p>
+                {offenseBreakdown.length ? (
+                  <ul className="ci-bar-list" aria-label="Offense types by rate">
+                    {offenseBreakdown.map((row) => (
+                      <li key={row.id}>
+                        <div className="ci-bar-list-meta">
+                          <span>{row.name}</span>
+                          <strong>{fmt(row.rate, 1)} / 100k</strong>
+                        </div>
+                        <div className="ci-bar-list-track">
+                          <div
+                            className="ci-bar-list-fill"
+                            style={{ width: `${Math.min(100, ((Number(row.rate) || 0) / offenseMaxRate) * 100)}%` }}
+                          />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="ci-muted">No offense-type series in pack.</p>
+                )}
+              </div>
+
+              <div className="ci-dash-col ci-dash-col--side">
+                <h3 className="ci-module-title">Hate crime (by state)</h3>
+                <p className="ci-module-sub">Incidents from the on-disk hate-crime pack</p>
+                {hateCrimeTop.length ? (
+                  <ul className="ci-bar-list" aria-label="Hate crime by state">
+                    {hateCrimeTop.map((row) => (
+                      <li key={row.state}>
+                        <div className="ci-bar-list-meta">
+                          <span>{row.state}</span>
+                          <strong>{fmt(row.total, 0)}</strong>
+                        </div>
+                        <div className="ci-bar-list-track">
+                          <div
+                            className="ci-bar-list-fill ci-bar-list-fill--warn"
+                            style={{ width: `${Math.min(100, (row.total / hateCrimeMax) * 100)}%` }}
+                          />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="ci-muted">Hate-crime pack not loaded.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="ci-dash-grid ci-dash-grid--3">
+              <div className="ci-dash-col">
+                <h3 className="ci-module-title">State comparison</h3>
+                <p className="ci-module-sub">Side-by-side violent / property / homicide rates</p>
+                <div className="ci-compare-picks">
+                  <label>
+                    <span>A</span>
+                    <select value={compareAbbrA} onChange={(e) => setCompareAbbrA(e.target.value)} aria-label="Compare state A">
+                      {states.map((s) => (
+                        <option key={`a-${s.abbr}`} value={s.abbr}>{s.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>B</span>
+                    <select value={compareAbbrB} onChange={(e) => setCompareAbbrB(e.target.value)} aria-label="Compare state B">
+                      {states.map((s) => (
+                        <option key={`b-${s.abbr}`} value={s.abbr}>{s.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <div className="ci-compare-table" role="table" aria-label="State comparison">
+                  <div className="ci-compare-row ci-compare-row--head" role="row">
+                    <span role="columnheader">Metric</span>
+                    <span role="columnheader">{compareStateA?.abbr || 'A'}</span>
+                    <span role="columnheader">{compareStateB?.abbr || 'B'}</span>
+                  </div>
+                  {[
+                    { label: 'Violent', key: 'violentRate', digits: 1 },
+                    { label: 'Property', key: 'propertyRate', digits: 1 },
+                    { label: 'Homicide', key: 'homicideRate', digits: 2 },
+                  ].map((m) => (
+                    <div className="ci-compare-row" role="row" key={m.key}>
+                      <span role="cell">{m.label}</span>
+                      <span role="cell">{fmt(compareStateA?.[m.key], m.digits)}</span>
+                      <span role="cell">{fmt(compareStateB?.[m.key], m.digits)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="ci-compare-actions">
+                  <button type="button" className="ci-linkish" onClick={() => loadState(compareAbbrA, { open: true, expand: true })}>
+                    Open {compareStateA?.name || compareAbbrA} →
+                  </button>
+                  <button type="button" className="ci-linkish" onClick={() => loadState(compareAbbrB, { open: true, expand: true })}>
+                    Open {compareStateB?.name || compareAbbrB} →
+                  </button>
+                </div>
+              </div>
+
+              <div className="ci-dash-col">
+                <h3 className="ci-module-title">Pinned places</h3>
+                <p className="ci-module-sub">Bookmarks stored locally for quick jump</p>
+                {pins.length === 0 ? (
+                  <p className="ci-muted">Pin a state or city from those sections to build a research set.</p>
+                ) : (
+                  <ul className="ci-pin-list">
+                    {pins.map((p) => (
+                      <li key={p.id}>
+                        <button
+                          type="button"
+                          className="ci-pin-jump"
+                          onClick={() => {
+                            if (p.kind === 'state') loadState(p.abbr, { open: true, expand: true })
+                            else if (p.kind === 'city') openCity(p.slug, { open: true })
+                            else if (p.kind === 'offender-metro') {
+                              goSegment('offenders')
+                              selectOffenderMetro(p.metroId)
+                            }
+                          }}
+                        >
+                          <span className="ci-pin-kind">{p.kind}</span>
+                          {p.label}
+                        </button>
+                        <button
+                          type="button"
+                          className="ci-pin-remove"
+                          aria-label={`Unpin ${p.label}`}
+                          onClick={() => togglePin(p)}
+                        >
+                          ×
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="ci-compare-actions">
+                  {compareStateA && (
+                    <button
+                      type="button"
+                      className="ci-action-btn ci-action-btn--ghost"
+                      onClick={() => togglePin({
+                        id: `state:${compareStateA.abbr}`,
+                        kind: 'state',
+                        abbr: compareStateA.abbr,
+                        label: compareStateA.name,
+                      })}
+                    >
+                      {isPinned(`state:${compareStateA.abbr}`) ? 'Unpin A' : 'Pin A'}
+                    </button>
+                  )}
+                  {compareStateB && (
+                    <button
+                      type="button"
+                      className="ci-action-btn ci-action-btn--ghost"
+                      onClick={() => togglePin({
+                        id: `state:${compareStateB.abbr}`,
+                        kind: 'state',
+                        abbr: compareStateB.abbr,
+                        label: compareStateB.name,
+                      })}
+                    >
+                      {isPinned(`state:${compareStateB.abbr}`) ? 'Unpin B' : 'Pin B'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="ci-dash-col">
+                <h3 className="ci-module-title">Offender quick-jump</h3>
+                <p className="ci-module-sub">Jump into the metro offender map</p>
+                <div className="ci-chip-row">
+                  {(offenderMetros.length ? offenderMetros : [
+                    { id: 'dc', name: 'Washington DC' },
+                    { id: 'la', name: 'Los Angeles' },
+                    { id: 'nyc', name: 'New York' },
+                  ]).slice(0, 8).map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      className="ci-chip"
+                      onClick={() => {
+                        goSegment('offenders')
+                        selectOffenderMetro(m.id)
+                      }}
+                    >
+                      {m.name}
+                    </button>
+                  ))}
+                  <button type="button" className="ci-chip" onClick={() => goSegment('offenders')}>
+                    Country view →
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="ci-dash-grid">
+              <div className="ci-dash-col ci-dash-col--span">
+                <h3 className="ci-module-title">Top / safest cities</h3>
+                <p className="ci-module-sub">From national stats pack — open any city summary · right-click to pin</p>
+                <div className="ci-chip-row">
+                  {featuredCities.slice(0, 18).map((c) => (
+                    <button
+                      key={c.slug}
+                      type="button"
+                      className="ci-chip"
+                      onClick={() => openCity(c.slug, { open: true })}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        togglePin({
+                          id: `city:${c.slug}`,
+                          kind: 'city',
+                          slug: c.slug,
+                          label: `${c.city || c.name}${c.state ? `, ${c.state}` : ''}`,
+                        })
+                      }}
+                    >
+                      {c.city || c.name}
+                      {c.state ? `, ${c.state}` : ''}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
 
             <details className="ci-advanced">
-              <summary>Advanced</summary>
-              <div className="ci-advanced-body">
-                <h3>Arrest offense totals</h3>
-                <ArrestOffenseTable rows={arrestBySex.length ? arrestBySex : arrestEstimates} />
-                <h3>Homicide weapons</h3>
-                <SimpleStatList rows={homicide?.weaponBreakdown} valueKey="count" />
-                <h3>Circumstances</h3>
-                <SimpleStatList rows={homicide?.circumstanceBreakdown} valueKey="count" />
-                <h3>Victim–offender relationship</h3>
-                <SimpleStatList rows={homicide?.relationship} valueKey="count" />
+              <summary>Advanced · arrests &amp; homicide detail</summary>
+              <div className="ci-advanced-body ci-advanced-body--grid">
+                <div>
+                  <h3>Arrest offense totals</h3>
+                  <ArrestOffenseTable rows={arrestBySex.length ? arrestBySex : arrestEstimates} />
+                </div>
+                <div>
+                  <h3>Homicide weapons</h3>
+                  <SimpleStatList rows={homicide?.weaponBreakdown} valueKey="count" />
+                  <h3>Circumstances</h3>
+                  <SimpleStatList rows={homicide?.circumstanceBreakdown} valueKey="count" />
+                  <h3>Victim–offender relationship</h3>
+                  <SimpleStatList rows={homicide?.relationship} valueKey="count" />
+                </div>
               </div>
             </details>
           </section>
         )}
 
         {segment === 'states' && !loading && (
-          <section id="ci-state-panel" className="ci-panel ci-enter" aria-labelledby="ci-states-title">
+          <section id="ci-state-panel" className="ci-panel ci-panel--wide ci-enter" aria-labelledby="ci-states-title">
             {!stateExpanded ? (
               <>
                 <div className="ci-section-head">
@@ -1351,6 +1715,20 @@ export default function CrimeIntelligenceView({ focusSegment = null, focusEntity
                     ← Exit
                   </button>
                   <p className="ci-muted">Full state database view</p>
+                  {stateDetail && (
+                    <button
+                      type="button"
+                      className="ci-action-btn ci-action-btn--ghost"
+                      onClick={() => togglePin({
+                        id: `state:${stateDetail.abbr}`,
+                        kind: 'state',
+                        abbr: stateDetail.abbr,
+                        label: stateDetail.name,
+                      })}
+                    >
+                      {isPinned(`state:${stateDetail.abbr}`) ? 'Unpin' : 'Pin'}
+                    </button>
+                  )}
                 </div>
 
                 {stateLoading && <p className="ci-muted">Loading state…</p>}
@@ -1438,7 +1816,7 @@ export default function CrimeIntelligenceView({ focusSegment = null, focusEntity
         )}
 
         {segment === 'cities' && !loading && (
-          <section id="ci-city-panel" className="ci-panel ci-enter" aria-labelledby="ci-cities-title">
+          <section id="ci-city-panel" className="ci-panel ci-panel--wide ci-enter" aria-labelledby="ci-cities-title">
             <div className="ci-section-head">
               <h2 id="ci-cities-title">Cities</h2>
               <p>Search or pick a featured city — one at a time.</p>
@@ -1487,6 +1865,18 @@ export default function CrimeIntelligenceView({ focusSegment = null, focusEntity
                 <header className="ci-detail-head">
                   <h3>{cityDetail.city}, {cityDetail.state}</h3>
                   <span className="ci-muted">{cityDetail.year || '—'}</span>
+                  <button
+                    type="button"
+                    className="ci-action-btn ci-action-btn--ghost"
+                    onClick={() => togglePin({
+                      id: `city:${cityDetail.slug}`,
+                      kind: 'city',
+                      slug: cityDetail.slug,
+                      label: `${cityDetail.city}, ${cityDetail.state}`,
+                    })}
+                  >
+                    {isPinned(`city:${cityDetail.slug}`) ? 'Unpin' : 'Pin'}
+                  </button>
                 </header>
 
                 <div className="ci-level-strip">
@@ -1582,26 +1972,46 @@ export default function CrimeIntelligenceView({ focusSegment = null, focusEntity
         )}
 
         {segment === 'map' && !loading && (
-          <section className="ci-panel ci-enter" aria-labelledby="ci-map-title">
+          <section className="ci-panel ci-panel--wide ci-enter" aria-labelledby="ci-map-title">
             <div className="ci-section-head">
-              <h2 id="ci-map-title">Map</h2>
-              <p>Tap a state or city marker — opens that summary. No layer toggles.</p>
+              <h2 id="ci-map-title">Map + rankings</h2>
+              <p>Choropleth and ranked state list share the width — tap either to open a summary.</p>
             </div>
-            <div className={`ci-map-wrap ${selectedAbbr || selectedCitySlug ? 'has-selection' : ''}`}>
-              <UsCrimeMap
-                features={mapFeaturesWithLevel}
-                cities={mapCities}
-                selectedAbbr={selectedAbbr}
-                selectedCitySlug={selectedCitySlug}
-                onSelectState={onMapState}
-                onSelectCity={onMapCity}
-              />
-              <div className="ci-map-legend" aria-hidden>
-                <span style={{ background: levelColor('low') }} />Low
-                <span style={{ background: levelColor('medium') }} />Med
-                <span style={{ background: levelColor('high') }} />High
-                <span style={{ background: levelColor('extreme') }} />Extreme
+            <div className="ci-map-split">
+              <div className={`ci-map-wrap ${selectedAbbr || selectedCitySlug ? 'has-selection' : ''}`}>
+                <UsCrimeMap
+                  features={mapFeaturesWithLevel}
+                  cities={mapCities}
+                  selectedAbbr={selectedAbbr}
+                  selectedCitySlug={selectedCitySlug}
+                  onSelectState={onMapState}
+                  onSelectCity={onMapCity}
+                />
+                <div className="ci-map-legend" aria-hidden>
+                  <span style={{ background: levelColor('low') }} />Low
+                  <span style={{ background: levelColor('medium') }} />Med
+                  <span style={{ background: levelColor('high') }} />High
+                  <span style={{ background: levelColor('extreme') }} />Extreme
+                </div>
               </div>
+              <aside className="ci-map-rank" aria-label="Highest violent rates">
+                <h3 className="ci-module-title">Highest violent rates</h3>
+                <ol className="ci-rank-ol">
+                  {rankedStatesForMap.map((s, i) => {
+                    const level = levelFromRatio(s.violentRate, nationalNow.violentRate)
+                    return (
+                      <li key={s.abbr}>
+                        <button type="button" onClick={() => onMapState(s.abbr)}>
+                          <span className="ci-rank-n">{i + 1}</span>
+                          <span className="ci-rank-name">{s.name}</span>
+                          <span className="ci-rank-rate">{fmt(s.violentRate, 1)}</span>
+                          <LevelBadge level={level} />
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ol>
+              </aside>
             </div>
           </section>
         )}

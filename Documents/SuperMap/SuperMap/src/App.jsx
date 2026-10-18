@@ -707,14 +707,14 @@ function App() {
           onToggleLayers={() => setIsRightSidebarOpen((open) => !open)}
           onGoHome={goHome}
         >
-          <main className={`main main--mobile ${footerTransition ? 'main--y2k-transition' : ''} ${isMapView ? 'main--map' : ''}`}>
+          <main className={`main main--mobile ${footerTransition ? 'main--y2k-transition' : ''} ${isMapView ? 'main--map' : ''} ${isCrimeView ? 'main--crime' : ''}`}>
             {mainContent}
           </main>
           {sidebar}
         </MobileShell>
       ) : (
         <>
-      <main className={`main ${footerTransition ? 'main--y2k-transition' : ''} ${isMapView ? 'main--map' : ''}`}>
+      <main className={`main ${footerTransition ? 'main--y2k-transition' : ''} ${isMapView ? 'main--map' : ''} ${isCrimeView ? 'main--crime' : ''}`}>
         {mainContent}
       </main>
       {sidebar}

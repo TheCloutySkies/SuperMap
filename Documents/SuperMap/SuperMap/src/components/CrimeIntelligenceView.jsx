@@ -1373,7 +1373,7 @@ export default function CrimeIntelligenceView({ focusSegment = null, focusEntity
               </div>
             </div>
 
-            <div className="ci-dash-grid">
+            <div className="ci-dash-grid ci-dash-grid--desk">
               <div className="ci-dash-col ci-dash-col--primary">
                 <h3 className="ci-module-title">Time trends</h3>
                 <MetricPicker
@@ -1411,6 +1411,31 @@ export default function CrimeIntelligenceView({ focusSegment = null, focusEntity
                   </ul>
                 ) : (
                   <p className="ci-muted">No offense-type series in pack.</p>
+                )}
+              </div>
+
+              <div className="ci-dash-col ci-dash-col--side">
+                <h3 className="ci-module-title">Hate crime (by state)</h3>
+                <p className="ci-module-sub">Incidents from the on-disk hate-crime pack</p>
+                {hateCrimeTop.length ? (
+                  <ul className="ci-bar-list" aria-label="Hate crime by state">
+                    {hateCrimeTop.map((row) => (
+                      <li key={row.state}>
+                        <div className="ci-bar-list-meta">
+                          <span>{row.state}</span>
+                          <strong>{fmt(row.total, 0)}</strong>
+                        </div>
+                        <div className="ci-bar-list-track">
+                          <div
+                            className="ci-bar-list-fill ci-bar-list-fill--warn"
+                            style={{ width: `${Math.min(100, (row.total / hateCrimeMax) * 100)}%` }}
+                          />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="ci-muted">Hate-crime pack not loaded.</p>
                 )}
               </div>
             </div>
@@ -1534,35 +1559,8 @@ export default function CrimeIntelligenceView({ focusSegment = null, focusEntity
               </div>
 
               <div className="ci-dash-col">
-                <h3 className="ci-module-title">Hate crime (by state)</h3>
-                <p className="ci-module-sub">Incidents from the on-disk hate-crime pack</p>
-                {hateCrimeTop.length ? (
-                  <ul className="ci-bar-list" aria-label="Hate crime by state">
-                    {hateCrimeTop.map((row) => (
-                      <li key={row.state}>
-                        <div className="ci-bar-list-meta">
-                          <span>{row.state}</span>
-                          <strong>{fmt(row.total, 0)}</strong>
-                        </div>
-                        <div className="ci-bar-list-track">
-                          <div
-                            className="ci-bar-list-fill ci-bar-list-fill--warn"
-                            style={{ width: `${Math.min(100, (row.total / hateCrimeMax) * 100)}%` }}
-                          />
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="ci-muted">Hate-crime pack not loaded.</p>
-                )}
-              </div>
-            </div>
-
-            <div className="ci-dash-grid">
-              <div className="ci-dash-col">
                 <h3 className="ci-module-title">Offender quick-jump</h3>
-                <p className="ci-module-sub">Jump into the metro offender map without leaving research flow</p>
+                <p className="ci-module-sub">Jump into the metro offender map</p>
                 <div className="ci-chip-row">
                   {(offenderMetros.length ? offenderMetros : [
                     { id: 'dc', name: 'Washington DC' },
@@ -1586,11 +1584,14 @@ export default function CrimeIntelligenceView({ focusSegment = null, focusEntity
                   </button>
                 </div>
               </div>
-              <div className="ci-dash-col">
+            </div>
+
+            <div className="ci-dash-grid">
+              <div className="ci-dash-col ci-dash-col--span">
                 <h3 className="ci-module-title">Top / safest cities</h3>
-                <p className="ci-module-sub">From national stats pack — open any city summary</p>
+                <p className="ci-module-sub">From national stats pack — open any city summary · right-click to pin</p>
                 <div className="ci-chip-row">
-                  {featuredCities.slice(0, 14).map((c) => (
+                  {featuredCities.slice(0, 18).map((c) => (
                     <button
                       key={c.slug}
                       type="button"
@@ -1611,7 +1612,6 @@ export default function CrimeIntelligenceView({ focusSegment = null, focusEntity
                     </button>
                   ))}
                 </div>
-                <p className="ci-muted ci-tiny">Right-click a city chip to pin it.</p>
               </div>
             </div>
 

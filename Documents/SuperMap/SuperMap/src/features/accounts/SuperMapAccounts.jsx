@@ -678,7 +678,6 @@ function AuthModal() {
           <div>
             <h2>Good Palantir Membership</h2>
             <p className="sm-auth-free">Don't worry it's 100% free.</p>
-            <p>Save places, reports, and print recipes on this device{firebaseReady ? ', synced with Firebase' : ''}.</p>
           </div>
         </div>
         <div className="sm-auth-tabs">

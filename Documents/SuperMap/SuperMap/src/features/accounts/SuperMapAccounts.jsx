@@ -672,7 +672,8 @@ function AuthModal() {
         <div className="sm-auth-brand">
           <span className="sm-auth-mark">◈</span>
           <div>
-            <h2>SuperMap Account</h2>
+            <h2>Good Palantir Membership</h2>
+            <p className="sm-auth-free">Don't worry it's 100% free.</p>
             <p>Save places, reports, and print recipes on this device{firebaseReady ? ', synced with Firebase' : ''}.</p>
           </div>
         </div>

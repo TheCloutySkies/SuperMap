@@ -76,8 +76,11 @@
   gap: 12px;
   align-items: center;
 }
+.sm-auth-brand { padding-right: 36px; align-items: flex-start; }
 .sm-auth-brand h2, .sm-workspace-title h2 { margin: 0 0 4px; }
+.sm-auth-brand h2 { font-size: 22px; line-height: 1.2; }
 .sm-auth-brand p, .sm-workspace-title p, .sm-card-summary { margin: 0; color: #8ea6ba; }
+.sm-auth-free { margin: 0 0 6px; color: #d7e6f4; font-size: 14px; }
 .sm-modal-close {
   border: 1px solid #1f3348;
   background: transparent;

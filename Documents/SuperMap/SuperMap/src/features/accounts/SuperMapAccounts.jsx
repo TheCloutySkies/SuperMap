@@ -37,6 +37,7 @@ import { accountHandle, accountNumber, personHandle, personNumber, personTitle }
 import { getModeVisibility, setModeVisibility } from './menuCatalog'
 import { deleteOwnedContent, subscribeConversations } from './socialData'
 import AccountWorkspace from './AccountWorkspace'
+import PublicProfile from './PublicProfile'
 import './accounts.css'
 
 function getFirebase() {
@@ -211,6 +212,7 @@ export function AccountsProvider({ children }) {
   const [messageDraft, setMessageDraft] = useState(null)
   const [unread, setUnread] = useState(0)
   const [remoteVault, setRemoteVault] = useState([])
+  const [publicProfile, setPublicProfile] = useState(null)
 
   const vault = firebaseReady ? remoteVault : local.vault
   const pinLists = useMemo(
@@ -244,6 +246,7 @@ export function AccountsProvider({ children }) {
         accountNumber: stored.accountNumber || accountNumber(fbUser.uid),
         discoverable: stored.discoverable !== false && !fbUser.isAnonymous ? true : stored.discoverable === true,
         bio: String(stored.bio || '').slice(0, 280),
+        bulletinTagline: String(stored.bulletinTagline || '').slice(0, 80),
         presence: stored.presence === 'online' || stored.presence === 'incognito' ? stored.presence : 'offline',
         anonymous: Boolean(fbUser.isAnonymous),
         provider: signInProvider(fbUser),
@@ -408,6 +411,7 @@ export function AccountsProvider({ children }) {
       accountNumber: user?.accountNumber || accountNumber(user?.uid),
       discoverable: patch.discoverable != null ? Boolean(patch.discoverable) : user?.discoverable !== false,
       bio: patch.bio != null ? String(patch.bio).trim().slice(0, 280) : (user?.bio || ''),
+      bulletinTagline: patch.bulletinTagline != null ? String(patch.bulletinTagline).trim().slice(0, 80) : (user?.bulletinTagline || ''),
       presence: patch.presence === 'online' || patch.presence === 'incognito' || patch.presence === 'offline'
         ? patch.presence
         : (user?.presence || 'offline'),
@@ -427,6 +431,7 @@ export function AccountsProvider({ children }) {
         accountNumber: next.accountNumber,
         discoverable: next.discoverable,
         bio: next.bio,
+        bulletinTagline: next.bulletinTagline,
         presence: next.presence,
         modeVisibility: patch.modeVisibility || getModeVisibility(),
         updatedAt: serverTimestamp(),
@@ -646,6 +651,22 @@ export function AccountsProvider({ children }) {
     return { ok: true }
   }, [showToast])
 
+  const openPublicProfile = useCallback((person) => {
+    if (!person?.uid) return
+    setPublicProfile({
+      uid: person.uid,
+      displayName: person.displayName || person.authorName || '',
+      emoji: person.emoji || person.authorEmoji || '◈',
+      handle: person.handle || '',
+      accountNumber: person.accountNumber || '',
+      bio: person.bio || '',
+      presence: person.presence,
+      bulletinTagline: person.bulletinTagline || person.authorTagline || '',
+    })
+  }, [])
+
+  const closePublicProfile = useCallback(() => setPublicProfile(null), [])
+
   const value = {
     firebaseReady,
     authReady,
@@ -675,6 +696,9 @@ export function AccountsProvider({ children }) {
     createPinList,
     updateSavedItem,
     deleteSavedItem,
+    publicProfile,
+    openPublicProfile,
+    closePublicProfile,
   }
 
   return <AccountsContext.Provider value={value}>{children}</AccountsContext.Provider>
@@ -733,12 +757,13 @@ export function SaveMapRecipeButton(props) {
 }
 
 export function AccountsOverlay() {
-  const { overlay } = useSuperMapAccount()
+  const { overlay, publicProfile, closePublicProfile } = useSuperMapAccount()
   return (
     <>
       <AccountDock />
       {overlay === 'auth' ? <AuthModal /> : null}
       {overlay === 'workspace' ? <AccountWorkspace /> : null}
+      {publicProfile ? <PublicProfile seed={publicProfile} onClose={closePublicProfile} /> : null}
       <Toast />
     </>
   )

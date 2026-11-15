@@ -212,6 +212,22 @@ function touchBoardLocal(store, boardId, patch) {
   store.boards = store.boards.map((board) => (board.id === boardId ? { ...board, ...patch } : board))
 }
 
+function authorTagline(author) {
+  return String(author?.bulletinTagline || '').trim().slice(0, 80)
+}
+
+export async function loadUserProfile(uid) {
+  if (!uid) return null
+  const firestore = db()
+  if (!firestore) return null
+  try {
+    const snap = await getDoc(doc(firestore, 'users', uid))
+    return snap.exists() ? { uid: snap.id, ...snap.data() } : null
+  } catch {
+    return null
+  }
+}
+
 export async function createBoard({ name, description, emoji, author }) {
   const board = {
     id: uid(),
@@ -244,11 +260,13 @@ export async function createThread({ boardId, title, body, author }) {
     authorUid: author.uid,
     authorName: author.displayName || 'Anonymous',
     authorEmoji: author.emoji || '◈',
+    authorTagline: authorTagline(author),
     sticky: false,
     replyCount: 0,
     createdAtMs: now,
     lastPostAtMs: now,
     lastAuthorName: author.displayName || 'Anonymous',
+    lastAuthorUid: author.uid,
     lastEmoji: author.emoji || '◈',
   }
   if (!thread.title || !thread.body) return { ok: false, error: 'A thread needs a subject and a first post.' }
@@ -260,6 +278,7 @@ export async function createThread({ boardId, title, body, author }) {
     authorUid: author.uid,
     authorName: thread.authorName,
     authorEmoji: thread.authorEmoji,
+    authorTagline: thread.authorTagline,
     createdAtMs: now,
     original: true,
   }
@@ -273,6 +292,7 @@ export async function createThread({ boardId, title, body, author }) {
       threadCount: (board?.threadCount || 0) + 1,
       lastPostAtMs: now,
       lastAuthorName: thread.authorName,
+      lastAuthorUid: author.uid,
       lastEmoji: thread.authorEmoji,
       lastTitle: thread.title,
     })
@@ -285,6 +305,7 @@ export async function createThread({ boardId, title, body, author }) {
     threadCount: increment(1),
     lastPostAtMs: now,
     lastAuthorName: thread.authorName,
+    lastAuthorUid: author.uid,
     lastEmoji: thread.authorEmoji,
     lastTitle: thread.title,
   }).catch(() => {})
@@ -303,6 +324,7 @@ export async function addThreadPost({ thread, body, author }) {
     authorUid: author.uid,
     authorName: author.displayName || 'Anonymous',
     authorEmoji: author.emoji || '◈',
+    authorTagline: authorTagline(author),
     createdAtMs: now,
     original: false,
   }
@@ -312,12 +334,13 @@ export async function addThreadPost({ thread, body, author }) {
     store.posts = [...store.posts, post]
     store.threads = store.threads.map((item) => (
       item.id === thread.id
-        ? { ...item, replyCount: (item.replyCount || 0) + 1, lastPostAtMs: now, lastAuthorName: post.authorName, lastEmoji: post.authorEmoji }
+        ? { ...item, replyCount: (item.replyCount || 0) + 1, lastPostAtMs: now, lastAuthorName: post.authorName, lastAuthorUid: author.uid, lastEmoji: post.authorEmoji }
         : item
     ))
     touchBoardLocal(store, thread.boardId, {
       lastPostAtMs: now,
       lastAuthorName: post.authorName,
+      lastAuthorUid: author.uid,
       lastEmoji: post.authorEmoji,
       lastTitle: thread.title,
     })
@@ -329,11 +352,13 @@ export async function addThreadPost({ thread, body, author }) {
     replyCount: increment(1),
     lastPostAtMs: now,
     lastAuthorName: post.authorName,
+    lastAuthorUid: author.uid,
     lastEmoji: post.authorEmoji,
   })
   await updateDoc(doc(firestore, 'boards', thread.boardId), {
     lastPostAtMs: now,
     lastAuthorName: post.authorName,
+    lastAuthorUid: author.uid,
     lastEmoji: post.authorEmoji,
     lastTitle: thread.title,
   }).catch(() => {})
@@ -429,7 +454,7 @@ export async function searchDiscoverableUsers(text) {
       if (!needle) return true
       const handle = personHandle(user).toLowerCase()
       const number = personNumber(user)
-      const hay = `${user.displayName || ''} ${handle} ${number}`.toLowerCase()
+      const hay = `${user.displayName || ''} ${handle} ${number} ${user.bulletinTagline || ''}`.toLowerCase()
       const q = needle.replace(/^@/, '').replace(/^#/, '')
       return hay.includes(needle) || hay.includes(q)
     })

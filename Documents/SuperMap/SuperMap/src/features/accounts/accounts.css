@@ -156,6 +156,77 @@
 .sm-presence--incognito { background: #f0a04b; box-shadow: 0 0 0 2px rgba(240, 160, 75, 0.28); }
 .sm-profile-head h2 { margin: 0; }
 .sm-bio { margin: 0; color: #d5e4f0; white-space: pre-wrap; }
+.sm-bulletin-settings {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #1f3348;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sm-bulletin-settings legend { padding: 0 6px; color: #e9f3fb; }
+.sm-bulletin-preview {
+  width: 160px;
+  padding: 12px;
+  background: #f3e7d4;
+  color: #24180f;
+  border: 1px solid #d9cbb6;
+}
+.sm-bulletin-preview span { font-size: 22px; }
+.sm-bulletin-preview strong, .sm-bulletin-preview em { display: block; }
+.sm-bulletin-preview em { margin-top: 4px; color: #6a5846; font-size: 13px; }
+.sm-public-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(4, 10, 16, 0.72);
+}
+.sm-public {
+  width: min(560px, 100%);
+  max-height: min(80vh, 720px);
+  overflow: auto;
+  padding: 18px;
+  border: 1px solid #1f3348;
+  border-radius: 16px;
+  background: #0d1824;
+  color: #e9f3fb;
+}
+.sm-public-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.sm-public-emoji { margin: 0 0 6px; font-size: 28px; }
+.sm-public h2 { margin: 0; }
+.sm-public-tagline { margin: 6px 0 0; color: #f0a04b; font-style: italic; }
+.sm-public-posts { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+.sm-msg-avatar-btn {
+  border: 0;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+.sm-msg-avatar-btn:hover { outline: 2px solid rgba(56, 225, 255, 0.7); }
+.sm-msg-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+button.sm-msg-go {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
 .sm-thought {
   display: flex;
   align-items: center;

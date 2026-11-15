@@ -705,6 +705,7 @@ function AuthModal() {
           const result = await signInGoogle()
           if (!result.ok) setError(result.error || 'Google sign-in failed.')
         }}>
+          <GoogleMark />
           Continue with Google
         </button>
         <button type="button" className="sm-ghost-btn sm-anon-btn" onClick={async () => {

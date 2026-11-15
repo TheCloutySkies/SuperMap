@@ -103,7 +103,15 @@
 }
 .sm-primary-btn { background: linear-gradient(135deg, #38e1ff, #4da3ff); color: #041018; border: 0; padding: 10px 16px; }
 .sm-ghost-btn, .sm-google-btn { background: transparent; border: 1px solid #2c4a66; color: #e9f3fb; padding: 8px 12px; }
-.sm-google-btn { width: 100%; margin-top: 12px; }
+.sm-google-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 12px;
+}
+.sm-google-btn svg { width: 16px; height: 16px; flex: 0 0 auto; }
 .sm-danger-btn { background: rgba(255, 77, 94, 0.12); border: 1px solid rgba(255, 77, 94, 0.45); color: #ffb3bb; padding: 6px 10px; }
 .sm-save-btn { background: rgba(124, 255, 107, 0.12); border: 1px solid rgba(124, 255, 107, 0.45); color: #7cff6b; padding: 8px 12px; }
 .sm-auth-error { color: #ffb3bb; margin: 0; }

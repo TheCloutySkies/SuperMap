@@ -26,15 +26,14 @@ export default function FinancialMarketsWidget() {
       .get(`${API_BASE}/api/finance/screener`, { params: { list }, timeout: 15000 })
       .then((res) => {
         if (res.data?.error) {
-          setError(res.data.error.includes('subscribed') ? 'Markets data requires a RapidAPI subscription (Yahoo Finance). Subscribe on rapidapi.com or skip this section.' : res.data.error)
+          setError('Markets data is unavailable.')
           setData(null)
           return
         }
         setData(res.data)
       })
-      .catch((err) => {
-        const msg = err.response?.data?.error || (err.response?.status === 503 ? 'Set RAPIDAPI_KEY in backend .env' : err.message)
-        setError(msg)
+      .catch(() => {
+        setError('Markets data is unavailable.')
         setData(null)
       })
       .finally(() => setLoading(false))
@@ -86,7 +85,7 @@ export default function FinancialMarketsWidget() {
       {loading && <p className="financial-markets-loading">Loading…</p>}
       {error && (
         <p className="financial-markets-error">
-          {error.includes('503') || error.includes('RAPIDAPI') ? 'Markets data unavailable. Add RAPIDAPI_KEY in backend .env to enable.' : error}
+          {error}
         </p>
       )}
       {!loading && !error && items.length > 0 && (
@@ -124,7 +123,7 @@ export default function FinancialMarketsWidget() {
         </div>
       )}
       {!loading && !error && items.length === 0 && API_BASE && (
-        <p className="financial-markets-empty">No data. Add RAPIDAPI_KEY in backend .env for Yahoo Finance.</p>
+        <p className="financial-markets-empty">No market data.</p>
       )}
     </section>
   )

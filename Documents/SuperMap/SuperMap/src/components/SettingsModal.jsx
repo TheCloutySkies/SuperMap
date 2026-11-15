@@ -45,13 +45,6 @@ export default function SettingsModal({ onClose }) {
           >
             Tabs
           </button>
-          <button
-            type="button"
-            className={activeSection === 'advanced' ? 'active' : ''}
-            onClick={() => setActiveSection('advanced')}
-          >
-            Advanced
-          </button>
         </div>
         <div className="settings-modal-body">
           {activeSection === 'tabs' && (
@@ -78,14 +71,6 @@ export default function SettingsModal({ onClose }) {
             </section>
           )}
 
-          {activeSection === 'advanced' && (
-            <section className="settings-section">
-              <h3>Advanced</h3>
-              <p className="settings-hint">
-                RapidAPI-based features (ADS-B, Flock Cameras, Yahoo Finance, Meteostat weather, etc.) have been removed. Use the Resources and Tools tabs for embedded alternatives (e.g. ADS-B Exchange, adsb.lol).
-              </p>
-            </section>
-          )}
         </div>
       </div>
     </div>

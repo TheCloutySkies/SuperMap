@@ -18,7 +18,7 @@ const OSINT_LAYER_SECTIONS = [
     layers: [
       { key: 'liveWildfires', label: 'Live Wildfires' },
       { key: 'usgsEarthquakes', label: 'USGS Earthquakes' },
-      { key: 'emscEarthquakes', label: 'EMSC Earthquakes (global)', hint: 'Seismic Portal · free, no key' },
+      { key: 'emscEarthquakes', label: 'EMSC Earthquakes (global)' },
       { key: 'usgsVolcanoes', label: 'USGS Elevated Volcanoes', hint: 'Active alert notices · free' },
       { key: 'nwsAlerts', label: 'NWS Weather Alerts (US)', hint: 'Watches / warnings · free' },
       { key: 'nhcTropical', label: 'NHC Tropical Cyclones', hint: 'Atlantic / EP / CP centers' },
@@ -28,7 +28,7 @@ const OSINT_LAYER_SECTIONS = [
   {
     title: 'Transportation (Tactical)',
     layers: [
-      { key: 'milAircraft', label: 'Military Aircraft (adsb.lol)', hint: 'Free — no API key required' },
+      { key: 'milAircraft', label: 'Military Aircraft (adsb.lol)' },
     ],
   },
   {

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSuperMapAccount } from './SuperMapAccounts'
 import { MODE_CATALOG, PROFILE_EMOJIS, REPORT_OWNER_EMAIL, getModeVisibility, setModeVisibility } from './menuCatalog'
-import { firebaseReady } from './firebaseClient'
 import { personHandle, personNumber, personTitle } from './accountIdentity'
 import {
   conversationId,
@@ -261,7 +260,7 @@ function MessagesPanel() {
               placeholder="Search people"
               aria-label="Search people"
             />
-          ) : <p className="sm-local-note">Direct messages with other accounts need Firebase.</p>}
+          ) : null}
         </div>
         <div className="sm-msg-scroll">
           {find.trim() ? <p className="sm-msg-section">People</p> : null}

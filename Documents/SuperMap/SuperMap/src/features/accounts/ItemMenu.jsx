@@ -227,7 +227,7 @@ export default function ItemMenu({ item, inline = false }) {
                   </ul>
                   {people.length === 0 ? <p>No discoverable accounts match.</p> : null}
                 </>
-              ) : <p>Other people are available once Firebase sign-in is on.</p>}
+              ) : null}
             </div>
           ) : null}
           {step === 'report' ? (

@@ -202,7 +202,7 @@ export default function OsintXView({ keywordFilter = '', onClearFilter }) {
     if (!API_BASE) {
       setLoading(false)
       setRefreshing(false)
-      setLoadError('No API URL configured (VITE_API_URL).')
+      setLoadError('This feed is unavailable.')
       return
     }
     const gen = ++fetchGen.current
@@ -244,17 +244,17 @@ export default function OsintXView({ keywordFilter = '', onClearFilter }) {
             applyPosts(retryPosts)
             return
           }
-          setLoadError('FxTwitter returned no posts yet. Retry in a minute.')
+          setLoadError('No posts yet. Try again in a minute.')
         } catch (err) {
           if (gen !== fetchGen.current) return
           setLoadError(err.code === 'ECONNABORTED'
-            ? 'Timed out loading OSINT X. The API may be cold — tap Retry.'
-            : (err.message || 'Failed to load OSINT X.'))
+            ? 'Timed out. Try again.'
+            : 'Could not load posts.')
         }
         return
       }
       if (!hadCached) {
-        setLoadError('No posts available yet. Tap Retry to pull FxTwitter into the database.')
+        setLoadError('No posts yet.')
       } else if (!silent) {
         setLoadError('Refresh still running — showing cached posts.')
       }
@@ -263,9 +263,7 @@ export default function OsintXView({ keywordFilter = '', onClearFilter }) {
       const timedOut = err.code === 'ECONNABORTED'
       setPosts((prev) => {
         if (prev.length === 0) {
-          setLoadError(timedOut
-            ? 'Timed out reaching the API. Tap Retry (cold starts can take a minute).'
-            : (err.response?.data?.error || err.message || 'Failed to load OSINT X.'))
+          setLoadError(timedOut ? 'Timed out. Try again.' : 'Could not load posts.')
         } else if (!silent) {
           setLoadError(timedOut
             ? 'Refresh timed out — still showing last loaded posts.'
@@ -447,9 +445,6 @@ export default function OsintXView({ keywordFilter = '', onClearFilter }) {
             {refreshing ? '…' : '↻'}
           </button>
         </div>
-        <p className="x-feed-subtitle">
-          Curated geopolitical / military / intel posts via FxTwitter. Personal noise filtered server-side.
-        </p>
         <div className="x-feed-toolbar">
           <label className="x-feed-filter">
             Sort
@@ -483,13 +478,13 @@ export default function OsintXView({ keywordFilter = '', onClearFilter }) {
       {loading && !refreshing && posts.length === 0 ? (
         <p className="x-feed-loading">Loading timeline…</p>
       ) : !API_BASE ? (
-        <p className="x-feed-status x-feed-status--error">Connect to the situational-awareness API (VITE_API_URL) to load this feed.</p>
+        <p className="x-feed-status x-feed-status--error">This feed is unavailable.</p>
       ) : filtered.length === 0 ? (
         <div className="x-feed-empty">
           <p>
             {q
               ? 'No posts match the current search.'
-              : (loadError || 'No curated posts available yet — tap Retry to pull FxTwitter.')}
+              : (loadError || 'No posts yet.')}
           </p>
           {!q && (
             <button type="button" className="x-feed-clear" onClick={handleRefresh} disabled={refreshing}>
@@ -585,9 +580,6 @@ export default function OsintXView({ keywordFilter = '', onClearFilter }) {
                   </div>
                   {repliesOpen && (
                     <div className="x-post-replies">
-                      <p className="x-post-replies-note">
-                        Reply threads are not returned by FxTwitter (counts only). Open the post on X to read replies.
-                      </p>
                       {post.url && (
                         <a href={post.url} target="_blank" rel="noopener noreferrer" className="x-post-replies-link">
                           View {formatCount(replyN)} {replyN === 1 ? 'reply' : 'replies'} on X →

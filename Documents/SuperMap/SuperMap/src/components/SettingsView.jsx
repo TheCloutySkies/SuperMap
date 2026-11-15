@@ -38,15 +38,11 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
   const [visuals, setVisuals] = useState(() => getVisualsPrefs())
   const [osintXHandles, setOsintXHandles] = useState([])
   const [defaultOsintXHandles, setDefaultOsintXHandles] = useState([])
-  const [subreddits, setSubreddits] = useState([])
   const [stockTickers, setStockTickers] = useState([])
   const [configLoading, setConfigLoading] = useState(true)
   const [configSaving, setConfigSaving] = useState(false)
   const [configWriteError, setConfigWriteError] = useState('')
-  const [configWritesEnabled, setConfigWritesEnabled] = useState(false)
-  const [configWriteToken, setConfigWriteToken] = useState(() => readConfigWriteToken())
   const [newHandle, setNewHandle] = useState('')
-  const [newSubreddit, setNewSubreddit] = useState('')
 
   useEffect(() => setTabVisibility(tabPrefs), [tabPrefs])
   useEffect(() => {
@@ -65,47 +61,33 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
       .then((res) => {
         setOsintXHandles(res.data.osintXHandles || [])
         setDefaultOsintXHandles(res.data.defaultOsintXHandles || [])
-        setSubreddits(res.data.subreddits || [])
         setStockTickers(Array.isArray(res.data.stockTickers) ? res.data.stockTickers : [])
-        setConfigWritesEnabled(!!res.data.writesEnabled)
       })
       .catch(() => {
         setOsintXHandles([])
         setDefaultOsintXHandles([])
-        setSubreddits([])
         setStockTickers([])
-        setConfigWritesEnabled(false)
       })
       .finally(() => setConfigLoading(false))
   }, [apiBase])
 
   useEffect(() => fetchConfig(), [fetchConfig])
 
-  useEffect(() => {
-    try {
-      if (configWriteToken) localStorage.setItem(CONFIG_WRITE_TOKEN_KEY, configWriteToken)
-      else localStorage.removeItem(CONFIG_WRITE_TOKEN_KEY)
-    } catch { /* private mode */ }
-  }, [configWriteToken])
-
   const saveConfig = (updates) => {
     if (!apiBase) return
     setConfigSaving(true)
     setConfigWriteError('')
     const headers = {}
-    const token = (configWriteToken || readConfigWriteToken()).trim()
+    const token = readConfigWriteToken().trim()
     if (token) headers['X-Config-Token'] = token
     axios
       .post(`${apiBase}/api/config`, updates, { timeout: 5000, headers })
       .then((res) => {
         setOsintXHandles(res.data.osintXHandles || [])
-        setSubreddits(res.data.subreddits || [])
         if (res.data.stockTickers !== undefined) setStockTickers(res.data.stockTickers || [])
-        setConfigWritesEnabled(!!res.data.writesEnabled)
       })
-      .catch((err) => {
-        const msg = err?.response?.data?.error || err?.response?.data?.hint || 'Could not save config'
-        setConfigWriteError(msg)
+      .catch(() => {
+        setConfigWriteError('Could not save.')
       })
       .finally(() => setConfigSaving(false))
   }
@@ -131,21 +113,6 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
     saveConfig({ osintXHandles: defaultOsintXHandles })
   }
 
-  const addSubreddit = () => {
-    const sub = newSubreddit.trim().replace(/^r\//, '')
-    if (!sub || subreddits.includes(sub)) return
-    const next = [...subreddits, sub]
-    setSubreddits(next)
-    setNewSubreddit('')
-    saveConfig({ subreddits: next })
-  }
-
-  const removeSubreddit = (index) => {
-    const next = subreddits.filter((_, i) => i !== index)
-    setSubreddits(next)
-    saveConfig({ subreddits: next })
-  }
-
   const [newTickerSymbol, setNewTickerSymbol] = useState('')
   const [newTickerName, setNewTickerName] = useState('')
   const addStockTicker = () => {
@@ -167,9 +134,7 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
   const sections = [
     { id: 'visuals', label: 'Visuals' },
     { id: 'tabs', label: 'Tab visibility' },
-    { id: 'configauth', label: 'Config write token' },
     { id: 'xhandles', label: 'X (Twitter) handles' },
-    { id: 'subreddits', label: 'Subreddits' },
     { id: 'stocktickers', label: 'Stock tickers' },
   ]
 
@@ -177,7 +142,6 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
     <div className="settings-view">
       <header className="settings-view-header">
         <h1 className="settings-view-title">Settings</h1>
-        <p className="settings-view-desc">Visuals, API keys, and feed sources. X handles and subreddits are saved to the backend and used by the API.</p>
       </header>
 
       <nav className="settings-view-nav">
@@ -275,45 +239,14 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
           </section>
         )}
 
-        {activeSection === 'configauth' && (
-          <section className="settings-view-section">
-            <h2>Config write token</h2>
-            <p className="settings-hint">
-              Required to save X handles, subreddits, and stock tickers. Set the same value as
-              {' '}<code>CONFIG_WRITE_TOKEN</code> on the API (Render env). Stored only in this browser — never commit it.
-            </p>
-            {!configWritesEnabled && (
-              <p className="settings-hint settings-hint--warn">
-                API config writes are currently locked (no token configured on the server, or token mismatch).
-                Feeds still load; only Settings edits are blocked.
-              </p>
-            )}
-            <div className="settings-field">
-              <label htmlFor="config-write-token">Write token</label>
-              <input
-                id="config-write-token"
-                type="password"
-                autoComplete="off"
-                value={configWriteToken}
-                onChange={(e) => setConfigWriteToken(e.target.value)}
-                placeholder="Paste CONFIG_WRITE_TOKEN"
-                className="settings-input"
-              />
-            </div>
-            {configWriteError && <p className="settings-hint settings-hint--warn">{configWriteError}</p>}
-          </section>
-        )}
-
         {activeSection === 'xhandles' && (
           <section className="settings-view-section">
             <h2>X (Twitter) handles</h2>
-            <p className="settings-hint">OSINT (X) feed uses these accounts. Saved to backend; next ingest will include them.</p>
             {configWriteError && <p className="settings-hint settings-hint--warn">{configWriteError}</p>}
             {configLoading ? (
               <p className="settings-loading">Loading…</p>
             ) : (
               <>
-                <p className="settings-hint">OSINT (X) feeds are fetched via FxTwitter (no API key). If you only see a few creators, click below to restore all default feeds.</p>
                 {defaultOsintXHandles.length > 0 && (
                   <button
                     type="button"
@@ -353,46 +286,9 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
           </section>
         )}
 
-        {activeSection === 'subreddits' && (
-          <section className="settings-view-section">
-            <h2>Subreddits</h2>
-            <p className="settings-hint">Reddit comment signals use these subreddits. Saved to backend.</p>
-            {configLoading ? (
-              <p className="settings-loading">Loading…</p>
-            ) : (
-              <>
-                <div className="settings-list-add">
-                  <input
-                    type="text"
-                    value={newSubreddit}
-                    onChange={(e) => setNewSubreddit(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && addSubreddit()}
-                    placeholder="subreddit name (e.g. worldnews)"
-                    className="settings-input"
-                  />
-                  <button type="button" className="settings-add-btn" onClick={addSubreddit} disabled={configSaving}>
-                    Add
-                  </button>
-                </div>
-                <ul className="settings-list">
-                  {subreddits.map((sub, i) => (
-                    <li key={sub} className="settings-list-item">
-                      <span className="settings-list-label">r/{sub}</span>
-                      <button type="button" className="settings-remove-btn" onClick={() => removeSubreddit(i)} aria-label="Remove">
-                        ×
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </section>
-        )}
-
         {activeSection === 'stocktickers' && (
           <section className="settings-view-section">
             <h2>Stock tickers</h2>
-            <p className="settings-hint">Symbols shown in the homepage Stocks widget (e.g. SPY, AAPL, GC=F). Finnhub symbols; save to backend.</p>
             {configLoading ? (
               <p className="settings-loading">Loading…</p>
             ) : (

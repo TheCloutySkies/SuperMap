@@ -689,7 +689,7 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
         if (cancelled) return
         if (!cfg?.configured || !cfg.key) {
           setWindyStatus('missing')
-          setWindyError('WINDY_API is not set on the API. Wind needs a Windy Map Forecast key.')
+          setWindyError('Wind is unavailable.')
           return
         }
         if (!windyContainerRef.current) {
@@ -1032,7 +1032,7 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
 
                 {radarToggles.wind && windyStatus === 'missing' && (
                   <p className="weather-desk-status weather-desk-status--err">
-                    {windyError || 'Set WINDY_API (Windy Map Forecast key) on the API for wind.'}
+                    {windyError || 'Wind is unavailable.'}
                     {!radarMeta?.owmConfigured && ' OWM wind tiles are also unavailable.'}
                   </p>
                 )}

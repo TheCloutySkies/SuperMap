@@ -1,5 +1,8 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import axios from 'axios'
+import { onAuthStateChanged } from 'firebase/auth'
+import { firebaseReady, getAccountsFirebase } from '../features/accounts/firebaseClient'
+import { searchDiscoverableUsers } from '../features/accounts/socialData'
 import {
   DEFAULT_COMMANDS,
   searchOmnibarIndex,
@@ -18,6 +21,7 @@ const MAX_MERGED = 14
 const CONTENT_DEBOUNCE_MS = 220
 
 function resultKind(item) {
+  if (item._kind === 'person') return 'Account'
   if (item._kind === 'place') return 'Place'
   if (item._kind === 'map') return item.properties?.type || 'Result'
   if (item._kind === 'content' || item.category === 'News' || item.category === 'OSINT' || item.category === 'X') {
@@ -35,6 +39,7 @@ function resultTitle(item) {
 }
 
 function resultAction(item) {
+  if (item._kind === 'person') return 'Message'
   if (item._kind === 'place') return 'Fly to'
   if (item._kind === 'map') return 'Show on map'
   if (item.action === 'open' || item.url) return 'Open'
@@ -85,6 +90,9 @@ export default function Omnibar({
   const [activeIndex, setActiveIndex] = useState(0)
   const [contentHits, setContentHits] = useState([])
   const [contentLoading, setContentLoading] = useState(false)
+  const [people, setPeople] = useState([])
+  const [signedIn, setSignedIn] = useState(false)
+  const selfUidRef = useRef(null)
   const [thielOn, setThielOn] = useState(() => {
     try { return sessionStorage.getItem('supermap-thielbot') === '1' } catch { return false }
   })
@@ -168,6 +176,38 @@ export default function Omnibar({
   }, [query, commandMode])
 
   useEffect(() => {
+    if (!firebaseReady) return undefined
+    const auth = getAccountsFirebase()?.auth
+    if (!auth) return undefined
+    return onAuthStateChanged(auth, (fbUser) => {
+      selfUidRef.current = fbUser?.uid || null
+      setSignedIn(Boolean(fbUser))
+    })
+  }, [])
+
+  useEffect(() => {
+    const q = String(query).trim()
+    if (!signedIn || q.length < 2) {
+      setPeople([])
+      return undefined
+    }
+    let cancel = false
+    const timer = setTimeout(async () => {
+      try {
+        const rows = await searchDiscoverableUsers(q)
+        if (cancel) return
+        setPeople(rows.filter((person) => person.uid && person.uid !== selfUidRef.current).slice(0, 5))
+      } catch {
+        if (!cancel) setPeople([])
+      }
+    }, 220)
+    return () => {
+      cancel = true
+      clearTimeout(timer)
+    }
+  }, [query, signedIn])
+
+  useEffect(() => {
     try { sessionStorage.setItem('supermap-thielbot', thielOn ? '1' : '0') } catch { /* ignore */ }
   }, [thielOn])
 
@@ -208,6 +248,15 @@ export default function Omnibar({
 
   const flatResults = useMemo(() => {
     const rows = []
+    for (const person of people) {
+      rows.push({
+        _kind: 'person',
+        uid: person.uid,
+        displayName: person.displayName || 'Anonymous',
+        emoji: person.emoji || '◈',
+        label: person.displayName || 'Anonymous',
+      })
+    }
     if (commandMode && mergedMatches.length) {
       for (const cmd of mergedMatches) {
           rows.push({
@@ -223,11 +272,11 @@ export default function Omnibar({
       for (const f of mapResults.slice(0, 8)) rows.push({ ...f, _kind: 'map' })
     }
     return rows
-  }, [commandMode, mergedMatches, places, mapResults])
+  }, [people, commandMode, mergedMatches, places, mapResults])
 
   useEffect(() => {
     setActiveIndex(0)
-  }, [query, commandMode, places, mapResults, contentHits])
+  }, [query, commandMode, places, mapResults, contentHits, people])
 
   useEffect(() => {
     const el = listRef.current?.querySelector(`[data-omnibar-idx="${activeIndex}"]`)
@@ -362,9 +411,23 @@ export default function Omnibar({
     setShowDropdown(false)
   }
 
+  const openPerson = (person) => {
+    if (!person?.uid) return
+    window.dispatchEvent(new CustomEvent('supermap:open-messages', {
+      detail: {
+        uid: person.uid,
+        displayName: person.displayName || person.label || 'Anonymous',
+        emoji: person.emoji || '◈',
+      },
+    }))
+    setShowDropdown(false)
+    setCommandMode(false)
+  }
+
   const activateRow = (item) => {
     if (!item) return
-    if (item._kind === 'jump' || item._kind === 'content') runCommand(item)
+    if (item._kind === 'person') openPerson(item)
+    else if (item._kind === 'jump' || item._kind === 'content') runCommand(item)
     else if (item._kind === 'place') handleSelectPlace(item)
     else if (item._kind === 'map') handleSelectMapResult(item)
   }
@@ -384,7 +447,7 @@ export default function Omnibar({
   const totalCount = places.length + mapResults.length
   const showCommands = commandMode && mergedMatches.length > 0
   const showThiel = thielOn && (thielBusy || thielAnswer?.answer)
-  const showDropdownPanel = showDropdown && (showCommands || hasAny || showThiel || (commandMode && contentLoading && String(query).trim()))
+  const showDropdownPanel = showDropdown && (showCommands || hasAny || showThiel || people.length > 0 || (commandMode && contentLoading && String(query).trim()))
 
   const onInputKeyDown = (e) => {
     if (!showDropdownPanel && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
@@ -422,8 +485,8 @@ export default function Omnibar({
     }
   }
 
-  let jumpOffset = 0
-  const placeOffset = showCommands ? mergedMatches.length : 0
+  const jumpOffset = people.length
+  const placeOffset = jumpOffset + (showCommands ? mergedMatches.length : 0)
   const mapOffset = placeOffset + (places.length ? Math.min(places.length, 5) : 0)
 
   return (
@@ -517,6 +580,37 @@ export default function Omnibar({
                 </div>
               )}
             </div>
+          )}
+          {people.length > 0 && (
+            <>
+              <div className="omnibar-results-head">Accounts</div>
+              {people.map((person, i) => {
+                const idx = i
+                const name = person.displayName || 'Anonymous'
+                return (
+                  <button
+                    key={person.uid}
+                    type="button"
+                    role="option"
+                    aria-selected={activeIndex === idx}
+                    data-omnibar-idx={idx}
+                    className={`omnibar-result${activeIndex === idx ? ' is-active' : ''}`}
+                    onMouseEnter={() => setActiveIndex(idx)}
+                    onMouseDown={(ev) => {
+                      ev.preventDefault()
+                      openPerson(person)
+                    }}
+                  >
+                    <span className="omnibar-result-type">Account</span>
+                    <span className="omnibar-result-main">
+                      <span className="omnibar-result-title">{person.emoji || '◈'} {name}</span>
+                      <span className="omnibar-result-sub">Direct message</span>
+                    </span>
+                    <span className="omnibar-result-action">Message</span>
+                  </button>
+                )
+              })}
+            </>
           )}
           {showCommands && (
             <>
@@ -639,7 +733,7 @@ export default function Omnibar({
           )}
           {showCommands && !hasAny && (
             <div className="omnibar-results-hint" aria-hidden>
-              ↑↓ navigate · Enter select · Esc close · News / OSINT / Crime / Jump
+              ↑↓ navigate · Enter select · Esc close · Accounts / News / OSINT / Crime / Jump
             </div>
           )}
         </div>

@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSuperMapAccount } from './SuperMapAccounts'
 import { MODE_CATALOG, PROFILE_EMOJIS, REPORT_OWNER_EMAIL, getModeVisibility, setModeVisibility } from './menuCatalog'
 import { firebaseReady } from './firebaseClient'
 import {
+  conversationId,
   markConversationRead,
+  openDirectConversation,
   searchDiscoverableUsers,
   sendDirectMessage,
   subscribeConversations,
@@ -125,90 +127,233 @@ function ProfilePanel() {
   )
 }
 
+function ago(ms) {
+  if (!ms) return ''
+  const sec = Math.max(0, Math.floor((Date.now() - Number(ms)) / 1000))
+  if (sec < 60) return 'now'
+  if (sec < 3600) return `${Math.floor(sec / 60)}m`
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h`
+  return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
 function MessagesPanel() {
   const { user, messageDraft, firebaseReady: ready } = useSuperMapAccount()
   const [conversations, setConversations] = useState([])
   const [pickedId, setPickedId] = useState(null)
+  const [activePerson, setActivePerson] = useState(null)
   const [messages, setMessages] = useState([])
   const [text, setText] = useState('')
   const [find, setFind] = useState('')
   const [people, setPeople] = useState([])
+  const [searching, setSearching] = useState(false)
+  const [sendError, setSendError] = useState('')
+  const logRef = useRef(null)
+  const composerRef = useRef(null)
 
   useEffect(() => subscribeConversations(user?.uid, setConversations), [user?.uid])
-  const draftId = messageDraft?.uid && user?.uid ? [user.uid, messageDraft.uid].sort().join('__') : null
-  const activeId = pickedId || draftId
+
   useEffect(() => {
-    if (!activeId) return undefined
+    if (!messageDraft?.uid || !user?.uid) return undefined
+    const person = {
+      uid: messageDraft.uid,
+      displayName: messageDraft.displayName || 'Anonymous',
+      emoji: messageDraft.emoji || '◈',
+    }
+    const id = conversationId(user.uid, person.uid)
+    setActivePerson(person)
+    setPickedId(id)
+    openDirectConversation({ from: user, to: person }).catch(() => {})
+    return undefined
+  }, [messageDraft, user])
+
+  const activeId = pickedId
+  useEffect(() => {
+    if (!activeId || !user?.uid) return undefined
     markConversationRead(activeId, user.uid).catch(() => {})
     return subscribeMessages(activeId, setMessages)
   }, [activeId, user?.uid])
 
+  useEffect(() => {
+    const q = find.trim()
+    if (!ready || q.length < 1) {
+      setPeople([])
+      setSearching(false)
+      return undefined
+    }
+    let cancel = false
+    setSearching(true)
+    const timer = setTimeout(async () => {
+      try {
+        const rows = await searchDiscoverableUsers(q)
+        if (!cancel) setPeople(rows.filter((person) => person.uid !== user?.uid))
+      } catch {
+        if (!cancel) setPeople([])
+      } finally {
+        if (!cancel) setSearching(false)
+      }
+    }, 180)
+    return () => {
+      cancel = true
+      clearTimeout(timer)
+    }
+  }, [find, ready, user?.uid])
+
+  useEffect(() => {
+    const el = logRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [messages, activeId])
+
   const active = conversations.find((row) => row.id === activeId) || null
-  const otherUid = useMemo(() => {
-    if (active?.memberUids) return active.memberUids.find((id) => id !== user?.uid)
-    return messageDraft?.uid || null
-  }, [active, messageDraft, user?.uid])
-  const other = active?.members?.[otherUid] || messageDraft || null
+  const partnerId = active?.memberUids?.find((id) => id !== user?.uid) || activePerson?.uid || null
+  const partner = (partnerId && active?.members?.[partnerId]) || (activePerson?.uid === partnerId ? activePerson : null)
+  const other = partner ? { uid: partnerId, displayName: partner.displayName || 'Anonymous', emoji: partner.emoji || '◈' } : null
+  const knownIds = new Set(conversations.map((row) => row.id))
+
+  async function choose(person) {
+    if (!user?.uid || !person?.uid || person.uid === user.uid) return
+    const next = {
+      uid: person.uid,
+      displayName: person.displayName || 'Anonymous',
+      emoji: person.emoji || '◈',
+    }
+    const id = conversationId(user.uid, next.uid)
+    setSendError('')
+    setActivePerson(next)
+    setPickedId(id)
+    setFind('')
+    setPeople([])
+    if (id !== pickedId) setMessages([])
+    await openDirectConversation({ from: user, to: next }).catch(() => {})
+    composerRef.current?.focus()
+  }
 
   async function onSend(event) {
     event.preventDefault()
-    if (!otherUid) return
-    const result = await sendDirectMessage({
-      from: user,
-      to: { uid: otherUid, displayName: other?.displayName, emoji: other?.emoji },
-      body: text,
-    })
+    if (!other) return
+    const result = await sendDirectMessage({ from: user, to: other, body: text })
     if (result.ok) {
       setText('')
+      setSendError('')
       setPickedId(result.id)
+    } else {
+      setSendError(result.error || 'Could not send')
+    }
+  }
+
+  function onComposerKey(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
+      event.currentTarget.form?.requestSubmit()
     }
   }
 
   return (
-    <section className="sm-messages">
-      <div className="sm-message-list">
-        {ready ? (
-          <form onSubmit={async (event) => {
-            event.preventDefault()
-            setPeople(await searchDiscoverableUsers(find))
-          }}>
-            <input value={find} onChange={(event) => setFind(event.target.value)} placeholder="Find a person" aria-label="Find a person" />
-          </form>
-        ) : <p className="sm-local-note">Direct messages with other accounts need Firebase.</p>}
-        {people.map((person) => (
-          <button key={person.uid} type="button" onClick={() => {
-            setPickedId([user.uid, person.uid].sort().join('__'))
-            setPeople([])
-          }}>{person.emoji || '◈'} {person.displayName}</button>
-        ))}
-        {conversations.map((row) => {
-          const partnerId = row.memberUids?.find((id) => id !== user.uid)
-          const partner = row.members?.[partnerId]
-          const unread = row.unread?.[user.uid] || 0
-          return (
-            <button key={row.id} type="button" className={row.id === activeId ? 'active' : ''} onClick={() => setPickedId(row.id)}>
-              <span>{partner?.emoji || '◈'} {partner?.displayName || 'Person'}</span>
-              <em>{row.lastBody}</em>
-              {unread > 0 ? <strong>{unread}</strong> : null}
-            </button>
-          )
-        })}
-      </div>
-      <div className="sm-message-thread">
-        {other ? <h3>{other.emoji || '◈'} {other.displayName || 'Conversation'}</h3> : <h3>Pick a conversation</h3>}
-        <div className="sm-message-log">
-          {messages.map((message) => (
-            <article key={message.id} className={message.fromUid === user.uid ? 'is-mine' : ''}>
-              {message.item?.title ? <p className="sm-message-card">{message.item.title}</p> : null}
-              <p>{message.body}</p>
-              <time>{when(message.createdAtMs)}</time>
-            </article>
-          ))}
+    <section className={`sm-messages${other ? ' is-thread-open' : ''}`}>
+      <aside className="sm-message-list">
+        <div className="sm-msg-search">
+          {ready ? (
+            <input
+              value={find}
+              onChange={(event) => setFind(event.target.value)}
+              placeholder="Search people"
+              aria-label="Search people"
+            />
+          ) : <p className="sm-local-note">Direct messages with other accounts need Firebase.</p>}
         </div>
-        <form onSubmit={onSend} className="sm-reply-form">
-          <textarea rows={3} value={text} onChange={(event) => setText(event.target.value)} placeholder="Message" />
-          <button type="submit" className="sm-primary-btn" disabled={!otherUid}>Send</button>
-        </form>
+        <div className="sm-msg-scroll">
+          {find.trim() ? <p className="sm-msg-section">People</p> : null}
+          {people.map((person) => (
+            <button key={person.uid} type="button" className="sm-msg-row sm-msg-person" onClick={() => choose(person)}>
+              <span className="sm-msg-avatar" aria-hidden>{person.emoji || '◈'}</span>
+              <span className="sm-msg-copy">
+                <strong>{person.displayName || 'Anonymous'}</strong>
+                <em>Open direct message</em>
+              </span>
+              <span className="sm-msg-go">Message</span>
+            </button>
+          ))}
+          {find.trim() && !searching && people.length === 0 ? <p className="sm-local-note">No accounts match.</p> : null}
+          <p className="sm-msg-section">Chats</p>
+          {other && activeId && !knownIds.has(activeId) ? (
+            <button type="button" className="sm-msg-row is-active" aria-current="true">
+              <span className="sm-msg-avatar" aria-hidden>{other.emoji}</span>
+              <span className="sm-msg-copy">
+                <strong>{other.displayName}</strong>
+                <em>New message</em>
+              </span>
+            </button>
+          ) : null}
+          {conversations.map((row) => {
+            const id = row.memberUids?.find((uid) => uid !== user.uid)
+            const person = row.members?.[id] || {}
+            const unread = row.unread?.[user.uid] || 0
+            const preview = row.lastBody || 'Start of the conversation'
+            return (
+              <button
+                key={row.id}
+                type="button"
+                className={`sm-msg-row${row.id === activeId ? ' is-active' : ''}`}
+                aria-current={row.id === activeId ? 'true' : undefined}
+                onClick={() => choose({ uid: id, displayName: person.displayName, emoji: person.emoji })}
+              >
+                <span className="sm-msg-avatar" aria-hidden>{person.emoji || '◈'}</span>
+                <span className="sm-msg-copy">
+                  <strong>{person.displayName || 'Person'}</strong>
+                  <em>{preview}</em>
+                </span>
+                <span className="sm-msg-meta">
+                  {row.updatedAtMs ? <time>{ago(row.updatedAtMs)}</time> : null}
+                  {unread > 0 ? <strong className="sm-msg-unread">{unread}</strong> : null}
+                </span>
+              </button>
+            )
+          })}
+          {conversations.length === 0 && !other ? <p className="sm-local-note">No chats yet. Search for someone to message.</p> : null}
+        </div>
+      </aside>
+      <div className="sm-message-thread">
+        {other ? (
+          <>
+            <header className="sm-msg-head" aria-live="polite">
+              <button type="button" className="sm-msg-back" onClick={() => { setPickedId(null); setActivePerson(null) }}>Chats</button>
+              <span className="sm-msg-avatar sm-msg-avatar-lg" aria-hidden>{other.emoji}</span>
+              <div>
+                <h3>{other.displayName}</h3>
+                <p>Direct message</p>
+              </div>
+            </header>
+            <div className="sm-message-log" ref={logRef}>
+              {messages.length === 0 ? (
+                <p className="sm-msg-empty">This is the start of your conversation with {other.displayName}.</p>
+              ) : null}
+              {messages.map((message) => (
+                <article key={message.id} className={message.fromUid === user.uid ? 'is-mine' : ''}>
+                  {message.item?.title ? <p className="sm-message-card">{message.item.title}</p> : null}
+                  <p>{message.body}</p>
+                  <time>{when(message.createdAtMs)}</time>
+                </article>
+              ))}
+            </div>
+            <form onSubmit={onSend} className="sm-reply-form">
+              <textarea
+                ref={composerRef}
+                rows={1}
+                value={text}
+                onChange={(event) => setText(event.target.value)}
+                onKeyDown={onComposerKey}
+                placeholder={`Message ${other.displayName}`}
+                aria-label={`Message ${other.displayName}`}
+              />
+              <button type="submit" className="sm-primary-btn" disabled={!text.trim()}>Send</button>
+            </form>
+            {sendError ? <p className="sm-auth-error">{sendError}</p> : null}
+          </>
+        ) : (
+          <div className="sm-msg-empty-pane">
+            <h3>Your messages</h3>
+            <p>Search for a person, then open their chat. Their name stays at the top of the thread.</p>
+          </div>
+        )}
       </div>
     </section>
   )

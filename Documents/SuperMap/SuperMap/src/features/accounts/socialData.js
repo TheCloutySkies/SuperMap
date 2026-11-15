@@ -77,6 +77,40 @@ export function conversationId(a, b) {
   return [String(a), String(b)].sort().join('__')
 }
 
+/** Create or refresh a two-person thread in Firebase before the first message. */
+export async function openDirectConversation({ from, to }) {
+  if (!from?.uid || !to?.uid || from.uid === to.uid) return { ok: false, error: 'Pick someone else.' }
+  const id = conversationId(from.uid, to.uid)
+  const now = Date.now()
+  const members = {
+    [from.uid]: { displayName: from.displayName || 'Anonymous', emoji: from.emoji || '◈' },
+    [to.uid]: { displayName: to.displayName || 'Anonymous', emoji: to.emoji || '◈' },
+  }
+  const memberUids = [from.uid, to.uid].sort()
+  const firestore = db()
+  if (!firestore) {
+    const store = readStore()
+    let convo = store.conversations.find((row) => row.id === id)
+    if (!convo) {
+      convo = { id, memberUids, members, unread: { [from.uid]: 0, [to.uid]: 0 }, lastBody: '' }
+      store.conversations.push(convo)
+    } else {
+      convo.members = { ...(convo.members || {}), ...members }
+      convo.memberUids = memberUids
+    }
+    convo.updatedAtMs = now
+    writeStore(store)
+    return { ok: true, id }
+  }
+  await setDoc(doc(firestore, 'conversations', id), {
+    memberUids,
+    members,
+    updatedAtMs: now,
+    updatedAt: serverTimestamp(),
+  }, { merge: true })
+  return { ok: true, id }
+}
+
 export async function ensureStarterBoards() {
   const firestore = db()
   if (!firestore) {

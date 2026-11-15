@@ -1362,6 +1362,79 @@ export default function MapView({
   const [webcamStatusMsg, setWebcamStatusMsg] = useState('')
   /** Full-res live webcam lightbox: { title, place, image, source, openUrl, bust }. */
   const [webcamLightbox, setWebcamLightbox] = useState(null)
+  const [webcamStageFullscreen, setWebcamStageFullscreen] = useState(false)
+  const webcamStageRef = useRef(null)
+
+  const exitWebcamStageFullscreen = useCallback(async () => {
+    const doc = document
+    const fsEl = doc.fullscreenElement || doc.webkitFullscreenElement
+    try {
+      if (fsEl) {
+        const exit = doc.exitFullscreen || doc.webkitExitFullscreen
+        if (exit) await exit.call(doc)
+      }
+    } catch (_) {
+      /* ignore */
+    }
+    setWebcamStageFullscreen(false)
+  }, [])
+
+  const closeWebcamLightbox = useCallback(() => {
+    exitWebcamStageFullscreen()
+    setWebcamLightbox(null)
+  }, [exitWebcamStageFullscreen])
+
+  const toggleWebcamStageFullscreen = useCallback(async () => {
+    const stage = webcamStageRef.current
+    if (!stage) return
+    const doc = document
+    const fsEl = doc.fullscreenElement || doc.webkitFullscreenElement
+    try {
+      if (fsEl === stage) {
+        await exitWebcamStageFullscreen()
+        return
+      }
+      if (fsEl) {
+        const exit = doc.exitFullscreen || doc.webkitExitFullscreen
+        if (exit) await exit.call(doc)
+      }
+      const req = stage.requestFullscreen || stage.webkitRequestFullscreen
+      if (typeof req === 'function') {
+        await req.call(stage)
+        setWebcamStageFullscreen(true)
+      } else {
+        setWebcamStageFullscreen((v) => !v)
+      }
+    } catch (_) {
+      // Fallback CSS fullscreen when Fullscreen API is blocked / unavailable.
+      setWebcamStageFullscreen((v) => !v)
+    }
+  }, [exitWebcamStageFullscreen])
+
+  useEffect(() => {
+    const syncFs = () => {
+      const stage = webcamStageRef.current
+      const fsEl = document.fullscreenElement || document.webkitFullscreenElement
+      // Sync native Fullscreen API; CSS-only fallback is toggled in catch paths.
+      if (fsEl) {
+        setWebcamStageFullscreen(fsEl === stage)
+        return
+      }
+      const hasApi = stage && (stage.requestFullscreen || stage.webkitRequestFullscreen)
+      if (hasApi) setWebcamStageFullscreen(false)
+    }
+    document.addEventListener('fullscreenchange', syncFs)
+    document.addEventListener('webkitfullscreenchange', syncFs)
+    return () => {
+      document.removeEventListener('fullscreenchange', syncFs)
+      document.removeEventListener('webkitfullscreenchange', syncFs)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!webcamLightbox) setWebcamStageFullscreen(false)
+  }, [webcamLightbox])
+
   const [mapInstance, setMapInstance] = useState(null)
   const [pinEditorOpen, setPinEditorOpen] = useState(false)
   const [pinEditorPin, setPinEditorPin] = useState(null)
@@ -2908,11 +2981,19 @@ export default function MapView({
           role="dialog"
           aria-modal="true"
           aria-label={webcamLightbox.title || 'Webcam still'}
+          tabIndex={-1}
           onClick={(ev) => {
-            if (ev.target === ev.currentTarget) setWebcamLightbox(null)
+            if (ev.target === ev.currentTarget) closeWebcamLightbox()
           }}
           onKeyDown={(ev) => {
-            if (ev.key === 'Escape') setWebcamLightbox(null)
+            if (ev.key !== 'Escape') return
+            // Esc exits browser fullscreen first; only then close the lightbox.
+            if (document.fullscreenElement || document.webkitFullscreenElement) return
+            if (webcamStageFullscreen) {
+              setWebcamStageFullscreen(false)
+              return
+            }
+            closeWebcamLightbox()
           }}
         >
           <div className="webcam-lightbox-panel">
@@ -2967,14 +3048,25 @@ export default function MapView({
                 </button>
                 <button
                   type="button"
+                  className="webcam-lightbox-btn"
+                  onClick={toggleWebcamStageFullscreen}
+                  aria-pressed={webcamStageFullscreen}
+                >
+                  {webcamStageFullscreen ? 'Exit full screen' : 'Full screen'}
+                </button>
+                <button
+                  type="button"
                   className="webcam-lightbox-btn webcam-lightbox-btn--close"
-                  onClick={() => setWebcamLightbox(null)}
+                  onClick={closeWebcamLightbox}
                 >
                   Close
                 </button>
               </div>
             </header>
-            <div className="webcam-lightbox-stage">
+            <div
+              ref={webcamStageRef}
+              className={`webcam-lightbox-stage${webcamStageFullscreen ? ' is-fullscreen' : ''}`}
+            >
               {webcamLightbox.image ? (
                 <img
                   key={webcamLightbox.bust}

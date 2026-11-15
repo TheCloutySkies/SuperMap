@@ -253,19 +253,24 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
+  /* Thin outer gutter — sizes relative to the map pane, not the viewport */
+  padding: 0.35rem;
+  box-sizing: border-box;
   background: rgba(2, 8, 14, 0.78);
   backdrop-filter: blur(6px);
 }
 
 .webcam-lightbox-panel {
-  display: flex;
-  flex-direction: column;
-  width: min(1100px, 100%);
-  max-height: min(92vh, 900px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
   background: #0b1520;
   border: 1px solid rgba(34, 211, 238, 0.35);
-  border-radius: 10px;
+  border-radius: 6px;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
   overflow: hidden;
 }
@@ -273,29 +278,32 @@
 .webcam-lightbox-header {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.85rem 1rem;
+  gap: 0.35rem 0.55rem;
+  padding: 0.3rem 0.45rem;
   border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  background: #0b1520;
 }
 
 .webcam-lightbox-header h2 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 0.9rem;
+  line-height: 1.25;
   color: #e2e8f0;
 }
 
 .webcam-lightbox-header p {
-  margin: 0.25rem 0 0;
-  font-size: 0.75rem;
+  margin: 0.1rem 0 0;
+  font-size: 0.68rem;
+  line-height: 1.3;
   color: #94a3b8;
 }
 
 .webcam-lightbox-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.3rem;
 }
 
 .webcam-lightbox-btn {
@@ -303,10 +311,10 @@
   border: 1px solid rgba(34, 211, 238, 0.4);
   background: rgba(34, 211, 238, 0.1);
   color: #e2e8f0;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  padding: 0.4rem 0.7rem;
-  border-radius: 6px;
+  padding: 0.28rem 0.55rem;
+  border-radius: 5px;
   cursor: pointer;
 }
 
@@ -320,26 +328,59 @@
 }
 
 .webcam-lightbox-stage {
-  flex: 1;
   min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0.75rem;
-  background:
-    radial-gradient(ellipse 70% 50% at 50% 40%, rgba(34, 211, 238, 0.08), transparent 60%),
-    #050b12;
-  overflow: auto;
+  /* Thin frame only — still scales up to fill the stage */
+  padding: 2px;
+  background: #000;
+  overflow: hidden;
 }
 
 .webcam-lightbox-stage img {
   display: block;
+  /* Force upscale of small CCTV stills into the stage */
+  width: 100%;
+  height: 100%;
   max-width: 100%;
-  max-height: min(72vh, 760px);
-  width: auto;
-  height: auto;
+  max-height: 100%;
   object-fit: contain;
-  border-radius: 4px;
+  border-radius: 0;
+}
+
+.webcam-lightbox-stage:fullscreen,
+.webcam-lightbox-stage.is-fullscreen {
+  padding: 0;
+  background: #000;
+}
+
+/* CSS-only fallback when Fullscreen API is unavailable */
+.webcam-lightbox-stage.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  width: 100vw;
+  height: 100dvh;
+  max-height: none;
+}
+
+/* Native Fullscreen API — let the UA size the element */
+.webcam-lightbox-stage:fullscreen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  inset: auto;
+  z-index: auto;
+}
+
+.webcam-lightbox-stage:fullscreen img,
+.webcam-lightbox-stage.is-fullscreen img {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
 }
 
 .webcam-lightbox-empty {
@@ -348,13 +389,14 @@
 }
 
 .webcam-lightbox-footer {
-  padding: 0.65rem 1rem 0.85rem;
+  padding: 0.3rem 0.5rem;
   border-top: 1px solid rgba(148, 163, 184, 0.18);
+  background: #0b1520;
 }
 
 .webcam-lightbox-footer a {
   color: #67e8f9;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   text-decoration: none;
 }
 

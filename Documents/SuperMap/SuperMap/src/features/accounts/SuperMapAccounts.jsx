@@ -439,6 +439,21 @@ export function AccountsProvider({ children }) {
     setOverlay('workspace')
   }, [])
 
+  useEffect(() => {
+    const onOpen = (event) => {
+      const person = event.detail
+      if (!person?.uid) return
+      if (!user) {
+        setOverlay('auth')
+        showToast({ tone: 'info', message: 'Sign in to message people' })
+        return
+      }
+      openMessages(person)
+    }
+    window.addEventListener('supermap:open-messages', onOpen)
+    return () => window.removeEventListener('supermap:open-messages', onOpen)
+  }, [user, openMessages, showToast])
+
   const beginAddPlace = useCallback(() => {
     sessionStorage.setItem('supermap.vault-place', '1')
     sessionStorage.setItem('supermap.one-shot-pin', '1')

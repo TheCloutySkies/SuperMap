@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useSuperMapAccount } from './SuperMapAccounts'
 import { createProfilePost, fileReport, queueReportClip, searchDiscoverableUsers, sendDirectMessage } from './socialData'
 import { firebaseReady } from './firebaseClient'
@@ -19,15 +20,60 @@ export default function ItemMenu({ item, inline = false }) {
   const [reason, setReason] = useState('broken')
   const [busy, setBusy] = useState(false)
   const rootRef = useRef(null)
+  const popRef = useRef(null)
 
   useEffect(() => {
     if (!open) return undefined
     const onDoc = (event) => {
-      if (!rootRef.current?.contains(event.target)) setOpen(false)
+      const target = event.target
+      if (rootRef.current?.contains(target) || popRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    const onKey = (event) => {
+      if (event.key === 'Escape') setOpen(false)
     }
     document.addEventListener('pointerdown', onDoc)
-    return () => document.removeEventListener('pointerdown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
   }, [open])
+
+  useLayoutEffect(() => {
+    if (!open) return undefined
+    const pop = popRef.current
+    const anchor = rootRef.current?.querySelector('.item-menu-btn')
+    if (!pop || !anchor) return undefined
+
+    const place = () => {
+      const rect = anchor.getBoundingClientRect()
+      const margin = 8
+      const gap = 4
+      const width = pop.offsetWidth
+      const height = pop.offsetHeight
+      let top = rect.bottom + gap
+      let left = rect.right - width
+      if (top + height > window.innerHeight - margin) {
+        const above = rect.top - gap - height
+        if (above >= margin) top = above
+      }
+      const maxLeft = Math.max(margin, window.innerWidth - margin - width)
+      const maxTop = Math.max(margin, window.innerHeight - margin - height)
+      left = Math.min(Math.max(margin, left), maxLeft)
+      top = Math.min(Math.max(margin, top), maxTop)
+      pop.style.top = `${Math.round(top)}px`
+      pop.style.left = `${Math.round(left)}px`
+    }
+
+    place()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [open, step, people.length, busy])
 
   function requireUser() {
     if (user) return true
@@ -140,10 +186,14 @@ export default function ItemMenu({ item, inline = false }) {
           setOpen((value) => !value)
         }}
       >
-        ···
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+          <circle cx="3" cy="8" r="1.35" />
+          <circle cx="8" cy="8" r="1.35" />
+          <circle cx="13" cy="8" r="1.35" />
+        </svg>
       </button>
-      {open ? (
-        <div className="item-menu-pop" role="menu">
+      {open ? createPortal(
+        <div className={`item-menu-pop${step === 'actions' ? '' : ' is-wide'}`} role="menu" ref={popRef}>
           {step === 'actions' ? (
             <>
               <button type="button" onClick={postToProfile}>Post to Profile</button>
@@ -197,7 +247,8 @@ export default function ItemMenu({ item, inline = false }) {
               <button type="submit" disabled={busy}>{busy ? 'Sending…' : 'Send report'}</button>
             </form>
           ) : null}
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </div>
   )

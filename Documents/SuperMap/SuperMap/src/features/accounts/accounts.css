@@ -199,6 +199,7 @@
 .sm-public-emoji { margin: 0 0 6px; font-size: 28px; }
 .sm-public h2 { margin: 0; }
 .sm-public-tagline { margin: 6px 0 0; color: #f0a04b; font-style: italic; }
+.sm-public-message { margin-top: 12px; }
 .sm-public-posts { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
 .sm-msg-avatar-btn {
   border: 0;

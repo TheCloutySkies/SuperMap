@@ -55,6 +55,25 @@ export default function PublicProfile({ seed, onClose }) {
             <p className="sm-local-note">{personHandle(profile)} · #{personNumber(profile)}</p>
             {tagline ? <p className="sm-public-tagline">{tagline}</p> : null}
             {profile?.bio ? <p className="sm-bio">{profile.bio}</p> : null}
+            {!profile?.isSelf ? (
+              <button
+                type="button"
+                className="sm-primary-btn sm-public-message"
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('supermap:open-messages', {
+                    detail: {
+                      uid: profile.uid,
+                      displayName: profile.displayName || '',
+                      emoji: profile.emoji || '◈',
+                      handle: personHandle(profile),
+                    },
+                  }))
+                  onClose()
+                }}
+              >
+                Message
+              </button>
+            ) : null}
           </div>
           <button type="button" className="sm-modal-close" onClick={onClose} aria-label="Close profile">
             <svg viewBox="0 0 16 16" aria-hidden="true">

@@ -662,8 +662,9 @@ export function AccountsProvider({ children }) {
       bio: person.bio || '',
       presence: person.presence,
       bulletinTagline: person.bulletinTagline || person.authorTagline || '',
+      isSelf: person.uid === user?.uid,
     })
-  }, [])
+  }, [user?.uid])
 
   const closePublicProfile = useCallback(() => setPublicProfile(null), [])
 

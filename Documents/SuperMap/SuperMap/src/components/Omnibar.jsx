@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import axios from 'axios'
-import { onAuthStateChanged } from 'firebase/auth'
-import { firebaseReady, getAccountsFirebase } from '../features/accounts/firebaseClient'
 import { searchDiscoverableUsers } from '../features/accounts/socialData'
+import { useSuperMapAccount } from '../features/accounts/SuperMapAccounts'
 import { personHandle, personTitle } from '../features/accounts/accountIdentity'
 import {
   DEFAULT_COMMANDS,
@@ -92,8 +91,7 @@ export default function Omnibar({
   const [contentHits, setContentHits] = useState([])
   const [contentLoading, setContentLoading] = useState(false)
   const [people, setPeople] = useState([])
-  const [signedIn, setSignedIn] = useState(false)
-  const selfUidRef = useRef(null)
+  const { user, openPublicProfile } = useSuperMapAccount()
   const [thielOn, setThielOn] = useState(() => {
     try { return sessionStorage.getItem('supermap-thielbot') === '1' } catch { return false }
   })
@@ -177,18 +175,8 @@ export default function Omnibar({
   }, [query, commandMode])
 
   useEffect(() => {
-    if (!firebaseReady) return undefined
-    const auth = getAccountsFirebase()?.auth
-    if (!auth) return undefined
-    return onAuthStateChanged(auth, (fbUser) => {
-      selfUidRef.current = fbUser?.uid || null
-      setSignedIn(Boolean(fbUser))
-    })
-  }, [])
-
-  useEffect(() => {
     const q = String(query).trim()
-    if (!signedIn || q.length < 2) {
+    if (!user || q.length < 2) {
       setPeople([])
       return undefined
     }
@@ -197,7 +185,14 @@ export default function Omnibar({
       try {
         const rows = await searchDiscoverableUsers(q)
         if (cancel) return
-        setPeople(rows.filter((person) => person.uid && person.uid !== selfUidRef.current).slice(0, 5))
+        const needle = q.toLowerCase()
+        const selfHay = `${user.displayName || ''} ${personHandle(user)} ${personTitle(user)} ${user.bio || ''} ${user.bulletinTagline || ''}`.toLowerCase()
+        const self = selfHay.includes(needle) || selfHay.includes(needle.replace(/^@/, '')) ? [user] : []
+        const byId = new Map()
+        ;[...self, ...rows].forEach((person) => {
+          if (person?.uid) byId.set(person.uid, person)
+        })
+        setPeople([...byId.values()].slice(0, 6))
       } catch {
         if (!cancel) setPeople([])
       }
@@ -206,7 +201,7 @@ export default function Omnibar({
       cancel = true
       clearTimeout(timer)
     }
-  }, [query, signedIn])
+  }, [query, user])
 
   useEffect(() => {
     try { sessionStorage.setItem('supermap-thielbot', thielOn ? '1' : '0') } catch { /* ignore */ }
@@ -255,6 +250,11 @@ export default function Omnibar({
         uid: person.uid,
         displayName: person.displayName || 'Anonymous',
         emoji: person.emoji || '◈',
+        handle: person.handle,
+        accountNumber: person.accountNumber,
+        bio: person.bio || '',
+        presence: person.presence,
+        bulletinTagline: person.bulletinTagline || '',
         label: person.displayName || 'Anonymous',
       })
     }
@@ -414,14 +414,16 @@ export default function Omnibar({
 
   const openPerson = (person) => {
     if (!person?.uid) return
-    window.dispatchEvent(new CustomEvent('supermap:open-messages', {
-      detail: {
-        uid: person.uid,
-        displayName: person.displayName || person.label || 'Anonymous',
-        emoji: person.emoji || '◈',
-        handle: personHandle(person),
-      },
-    }))
+    openPublicProfile({
+      uid: person.uid,
+      displayName: person.displayName || person.label || '',
+      emoji: person.emoji || '◈',
+      handle: person.handle || personHandle(person),
+      accountNumber: person.accountNumber,
+      bio: person.bio || '',
+      presence: person.presence,
+      bulletinTagline: person.bulletinTagline || '',
+    })
     setShowDropdown(false)
     setCommandMode(false)
   }
@@ -607,9 +609,9 @@ export default function Omnibar({
                     <span className="omnibar-result-type">Account</span>
                     <span className="omnibar-result-main">
                       <span className="omnibar-result-title">{person.emoji || '◈'} {name}</span>
-                      <span className="omnibar-result-sub">{name === handle ? 'Direct message' : `${handle} · Direct message`}</span>
+                      <span className="omnibar-result-sub">{[handle, person.bulletinTagline].filter(Boolean).join(' · ')}</span>
                     </span>
-                    <span className="omnibar-result-action">Message</span>
+                    <span className="omnibar-result-action">Profile</span>
                   </button>
                 )
               })}

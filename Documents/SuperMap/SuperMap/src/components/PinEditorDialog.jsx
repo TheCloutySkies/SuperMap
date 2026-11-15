@@ -39,12 +39,13 @@ export default function PinEditorDialog({
     if (!pin?.id) return
     setSaving(true)
     try {
-      await onSave?.({
+      const result = await onSave?.({
         title: title.trim() || 'Pinned place',
         icon: icon || '📍',
         listName: listName.trim() || 'General',
         notes: notes.trim(),
       })
+      if (result?.ok === false) return
       onClose?.()
     } finally {
       setSaving(false)
@@ -55,18 +56,20 @@ export default function PinEditorDialog({
     if (!pin?.id || !window.confirm('Delete this pin?')) return
     setDeleting(true)
     try {
-      await onDelete?.()
+      const result = await onDelete?.()
+      if (result?.ok === false) return
       onClose?.()
     } finally {
       setDeleting(false)
     }
   }
 
-  const handleCreateList = () => {
+  const handleCreateList = async () => {
     const name = (newListName || '').trim()
     if (!name) return
     if (onCreateList) {
-      onCreateList(name)
+      const result = await onCreateList(name)
+      if (result?.ok === false) return
     } else {
       setCustomLists((prev) => (prev.includes(name) ? prev : [...prev, name].sort()))
     }

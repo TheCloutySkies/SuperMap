@@ -32,6 +32,7 @@ import MapControls from './MapControls'
 import MapToolsRadial from './MapToolsRadial'
 import DrawHUD from './DrawHUD'
 import PinEditorDialog from './PinEditorDialog'
+import { useSuperMapAccount } from '../features/accounts/SuperMapAccounts'
 import WeatherHUD from './WeatherHUD'
 import CoordinatesDisplay from './CoordinatesDisplay'
 import LegendControl from 'mapboxgl-legend'
@@ -1305,6 +1306,31 @@ const API_BASE = (import.meta.env?.VITE_API_URL !== undefined && import.meta.env
   ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
   : (import.meta.env?.DEV ? '' : 'http://localhost:3001')
 
+function accountPlaceFeature(item) {
+  const lat = Number(item?.location?.lat)
+  const lon = Number(item?.location?.lon)
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
+  return {
+    type: 'Feature',
+    id: item.id,
+    properties: {
+      title: item.title || 'Pinned place',
+      icon: item.payload?.icon || '📍',
+      source: item.payload?.listName || 'General',
+      notes: item.summary || '',
+      accountPin: true,
+    },
+    geometry: { type: 'Point', coordinates: [lon, lat] },
+  }
+}
+
+function mergeAccountPlaces(localFc, vault) {
+  const places = (vault || []).filter((item) => item?.type === 'place').map(accountPlaceFeature).filter(Boolean)
+  const accountIds = new Set(places.map((feature) => feature.id))
+  const kept = (localFc?.features || []).filter((feature) => !accountIds.has(feature.id) && !feature?.properties?.accountPin)
+  return { type: 'FeatureCollection', features: [...kept, ...places] }
+}
+
 export default function MapView({
   basemapId,
   overlayBasemapId = null,
@@ -1442,6 +1468,7 @@ export default function MapView({
   const [pinEditorOpen, setPinEditorOpen] = useState(false)
   const [pinEditorPin, setPinEditorPin] = useState(null)
   const [pinEditorIsNew, setPinEditorIsNew] = useState(false)
+  const { vault, pinLists, saveMapPin, deleteSavedItem, createPinList, authReady } = useSuperMapAccount()
   const searchDataByLayerRef = useRef({})
   const onSearchDataUpdateRef = useRef(onSearchDataUpdate)
   onSearchDataUpdateRef.current = onSearchDataUpdate
@@ -1540,6 +1567,13 @@ export default function MapView({
     upsertSavedPointsLayer(getSavedPoints())
   }, [upsertSavedPointsLayer])
 
+  useEffect(() => {
+    if (!authReady) return
+    const next = mergeAccountPlaces(getSavedPoints(), vault)
+    setSavedPoints(next)
+    upsertSavedPointsLayer(next)
+  }, [authReady, vault, upsertSavedPointsLayer])
+
   const addSavedPointAtCenter = useCallback(async (options = {}) => {
     const map = mapRef.current
     if (!map) return
@@ -1561,13 +1595,22 @@ export default function MapView({
     const next = { type: 'FeatureCollection', features: [...(current.features || []), feature] }
     setSavedPoints(next)
     upsertSavedPointsLayer(next)
-  }, [pointIcon, upsertSavedPointsLayer])
+    await saveMapPin({
+      id: feature.id,
+      title: feature.properties.title,
+      icon,
+      listName,
+      notes: '',
+      lat: center.lat,
+      lon: center.lng,
+    })
+  }, [pointIcon, upsertSavedPointsLayer, saveMapPin])
 
   const clearSavedPoints = useCallback(async () => {
-    const empty = { type: 'FeatureCollection', features: [] }
-    setSavedPoints(empty)
-    upsertSavedPointsLayer(empty)
-  }, [upsertSavedPointsLayer])
+    const next = mergeAccountPlaces({ type: 'FeatureCollection', features: [] }, vault)
+    setSavedPoints(next)
+    upsertSavedPointsLayer(next)
+  }, [upsertSavedPointsLayer, vault])
 
   const handlePinEditorSave = useCallback(async (pinId, updates) => {
     const current = getSavedPoints()
@@ -1584,27 +1627,32 @@ export default function MapView({
         },
       }
     })
+    const saved = features.find((feature) => feature.id === pinId)
+    const [lon, lat] = saved?.geometry?.coordinates || []
     const next = { type: 'FeatureCollection', features }
     setSavedPoints(next)
     upsertSavedPointsLayer(next)
-    if (sessionStorage.getItem('supermap.vault-place') === '1') {
-      const saved = features.find((feature) => feature.id === pinId)
-      const [lon, lat] = saved?.geometry?.coordinates || []
-      if (Number.isFinite(lat) && Number.isFinite(lon)) {
-        window.dispatchEvent(new CustomEvent('supermap:vault-place', {
-          detail: { title: updates.title || saved?.properties?.title || 'Place', lat, lon },
-        }))
-      }
-    }
-  }, [upsertSavedPointsLayer])
+    return saveMapPin({
+      id: pinId,
+      title: updates.title || saved?.properties?.title || 'Pinned place',
+      icon: updates.icon || saved?.properties?.icon || '📍',
+      listName: updates.listName || saved?.properties?.source || 'General',
+      notes: updates.notes || '',
+      lat,
+      lon,
+    })
+  }, [upsertSavedPointsLayer, saveMapPin])
 
   const handlePinEditorDelete = useCallback(async (pinId) => {
+    const removed = await deleteSavedItem(pinId)
+    if (removed?.ok === false) return { ok: false }
     const current = getSavedPoints()
     const features = (current.features || []).filter((f) => f.id !== pinId)
     const next = { type: 'FeatureCollection', features }
     setSavedPoints(next)
     upsertSavedPointsLayer(next)
-  }, [upsertSavedPointsLayer])
+    return { ok: true }
+  }, [upsertSavedPointsLayer, deleteSavedItem])
 
   const doFetch = useCallback(
     (map, togglesIn, onLoading) => {
@@ -3018,10 +3066,14 @@ export default function MapView({
         }}
         pin={pinEditorPin}
         isNew={pinEditorIsNew}
-        listNames={pinEditorOpen ? Array.from(new Set([...(getSavedPoints().features || []).map((f) => f.properties?.source).filter(Boolean), 'General'])).sort() : []}
+        listNames={[
+          'General',
+          ...pinLists,
+          ...(vault || []).filter((item) => item.type === 'place').map((item) => item.payload?.listName).filter(Boolean),
+        ]}
         onSave={pinEditorPin ? (updates) => handlePinEditorSave(pinEditorPin.id, updates) : undefined}
         onDelete={pinEditorPin ? () => handlePinEditorDelete(pinEditorPin.id) : undefined}
-        onCreateList={undefined}
+        onCreateList={createPinList}
       />
       {webcamLightbox && (
         <div

@@ -73,13 +73,54 @@ export default function AccountWorkspace() {
 }
 
 function VaultPanel() {
-  const { vault, updateSavedItem, deleteSavedItem, beginAddPlace } = useSuperMapAccount()
+  const { vault, pinLists, updateSavedItem, deleteSavedItem, beginAddPlace } = useSuperMapAccount()
+  const listNames = [...new Set([
+    ...(pinLists || []),
+    ...vault.filter((item) => item.type === 'place').map((item) => item.payload?.listName || 'General'),
+  ])].filter(Boolean)
+  const otherItems = vault.filter((item) => item.type !== 'place' && item.payload?.kind !== 'pin-list')
   return (
     <section className="sm-vault">
       <p className="sm-local-note">Places are a name and a point on the map. Articles and reports show up here when you add them from the ··· menu.</p>
       <button type="button" className="sm-primary-btn" onClick={beginAddPlace}>Add a place</button>
+      {listNames.map((name) => {
+        const places = vault.filter((item) => item.type === 'place' && (item.payload?.listName || 'General') === name)
+        const listRecord = vault.find((item) => item.payload?.kind === 'pin-list' && item.title === name)
+        return (
+          <div key={name}>
+            <div className="sm-list-head">
+              <h3>{name}</h3>
+              {listRecord ? (
+                <button type="button" className="sm-ghost-btn" onClick={() => deleteSavedItem(listRecord.id)}>Delete list</button>
+              ) : null}
+            </div>
+            {places.length === 0 ? <p className="sm-local-note">No places in this list yet.</p> : null}
+            <div className="sm-card-grid">
+              {places.map((item) => (
+                <article key={item.id} className="sm-card">
+                  <span className="sm-type-badge">{item.payload?.icon || '📍'} {item.type}</span>
+                  <h3>{item.title}</h3>
+                  {item.summary ? <p className="sm-card-summary">{item.summary}</p> : null}
+                  {item.location ? <p className="sm-card-summary">{Number(item.location.lat).toFixed(3)}, {Number(item.location.lon).toFixed(3)}</p> : null}
+                  <div className="sm-card-actions">
+                    {item.location ? (
+                      <button type="button" className="sm-ghost-btn" onClick={() => {
+                        window.dispatchEvent(new CustomEvent('supermap:show-place', {
+                          detail: { lat: item.location.lat, lon: item.location.lon, title: item.title, zoom: 12 },
+                        }))
+                      }}>Show on map</button>
+                    ) : null}
+                    <button type="button" className="sm-ghost-btn" onClick={() => updateSavedItem(item.id, { pinned: !item.pinned })}>{item.pinned ? 'Unpin' : 'Pin'}</button>
+                    <button type="button" className="sm-danger-btn" onClick={() => deleteSavedItem(item.id)}>Delete</button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        )
+      })}
       <div className="sm-card-grid">
-        {vault.map((item) => (
+        {otherItems.map((item) => (
           <article key={item.id} className="sm-card">
             <span className="sm-type-badge">{item.type}</span>
             <h3>{item.title}</h3>
@@ -104,7 +145,7 @@ function VaultPanel() {
           </article>
         ))}
       </div>
-      {vault.length === 0 ? <p className="sm-local-note">Nothing saved yet.</p> : null}
+      {vault.length === 0 && listNames.length === 0 ? <p className="sm-local-note">Nothing saved yet.</p> : null}
     </section>
   )
 }

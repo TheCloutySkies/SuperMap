@@ -140,6 +140,8 @@
 .sm-workspace-main { min-width: 0; overflow: auto; }
 .sm-workspace-main:has(.sm-messages) { overflow: hidden; display: flex; flex-direction: column; }
 .sm-vault, .sm-forum { display: flex; flex-direction: column; gap: 14px; padding: 16px; }
+.sm-list-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sm-list-head h3 { margin: 0; font-size: 15px; color: #e9f3fb; }
 .sm-card-grid, .sm-thread-list { display: grid; gap: 12px; }
 .sm-card, .sm-thread-card, .sm-thread-full, .sm-reply {
   border: 1px solid #1f3348;

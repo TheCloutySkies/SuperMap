@@ -4,6 +4,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
 } from 'react'
 import { UserRound, VenetianMask } from 'lucide-react'
@@ -118,7 +119,7 @@ const LOCAL_KEY = 'supermap.accounts.local.v1'
 function readLocal() {
   try {
     const raw = localStorage.getItem(LOCAL_KEY)
-    if (!raw) return { user: null, vault: [], posts: [], replies: [] }
+    if (!raw) return { user: null, vault: [], posts: [], replies: [], pinLists: [] }
     const parsed = JSON.parse(raw)
     return {
       account: parsed.account || null,
@@ -126,9 +127,10 @@ function readLocal() {
       vault: Array.isArray(parsed.vault) ? parsed.vault : [],
       posts: Array.isArray(parsed.posts) ? parsed.posts : [],
       replies: Array.isArray(parsed.replies) ? parsed.replies : [],
+      pinLists: Array.isArray(parsed.pinLists) ? parsed.pinLists : [],
     }
   } catch {
-    return { account: null, user: null, vault: [], posts: [], replies: [] }
+    return { account: null, user: null, vault: [], posts: [], replies: [], pinLists: [] }
   }
 }
 
@@ -211,6 +213,10 @@ export function AccountsProvider({ children }) {
   const [remoteVault, setRemoteVault] = useState([])
 
   const vault = firebaseReady ? remoteVault : local.vault
+  const pinLists = useMemo(
+    () => vault.filter((item) => item?.payload?.kind === 'pin-list').map((item) => item.title).filter(Boolean),
+    [vault],
+  )
 
   const showToast = useCallback((next) => setToast({ id: uid(), ...next }), [])
 
@@ -449,7 +455,7 @@ export function AccountsProvider({ children }) {
         await Promise.all(saved.docs.map((row) => deleteDoc(row.ref)))
         await deleteUser(f.auth.currentUser)
       }
-      setLocal({ account: null, user: null, vault: [], posts: [], replies: [] })
+      setLocal({ account: null, user: null, vault: [], posts: [], replies: [], pinLists: [] })
       setUser(null)
       setRemoteVault([])
       setOverlay(null)
@@ -534,12 +540,87 @@ export function AccountsProvider({ children }) {
     return () => window.removeEventListener('supermap:vault-place', onVaultPlace)
   }, [user, createSavedItem])
 
+  const saveMapPin = useCallback(async ({ id, title, icon, listName, notes, lat, lon }) => {
+    if (!user) {
+      setOverlay('auth')
+      return { ok: false, needsAuth: true }
+    }
+    const latitude = Number(lat)
+    const longitude = Number(lon)
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return { ok: false, error: 'Missing location' }
+    const existing = vault.find((row) => row.id === id)
+    const item = normalizeSavedItem({
+      id,
+      type: 'place',
+      title: title || 'Pinned place',
+      summary: notes || '',
+      location: { lat: latitude, lon: longitude },
+      payload: { icon: icon || '📍', listName: listName || 'General', kind: 'map-pin' },
+      createdAtMs: existing?.createdAtMs,
+    }, user)
+    const f = getFirebase()
+    if (f) {
+      try {
+        await setDoc(doc(f.db, 'saved_items', item.id), {
+          ...item,
+          updatedAt: serverTimestamp(),
+          ...(existing ? {} : { createdAt: serverTimestamp() }),
+        }, { merge: true })
+        showToast({ tone: 'success', message: `Saved “${item.title}”` })
+        return { ok: true, id: item.id }
+      } catch (error) {
+        showToast({ tone: 'danger', message: error.message })
+        return { ok: false, error }
+      }
+    }
+    setLocal((s) => {
+      const rows = s.vault || []
+      const exists = rows.some((row) => row.id === item.id)
+      const next = exists ? rows.map((row) => (row.id === item.id ? { ...row, ...item } : row)) : [item, ...rows]
+      return { ...s, vault: sortVault(next) }
+    })
+    showToast({ tone: 'success', message: `Saved “${item.title}” on this device` })
+    return { ok: true, id: item.id }
+  }, [user, vault, showToast])
+
+  const createPinList = useCallback(async (name) => {
+    const clean = String(name || '').trim().slice(0, 80)
+    if (!clean) return { ok: false }
+    if (!user) {
+      setOverlay('auth')
+      return { ok: false, needsAuth: true }
+    }
+    if (pinLists.some((entry) => entry.toLowerCase() === clean.toLowerCase())) return { ok: true, name: clean }
+    const item = normalizeSavedItem({
+      id: `list-${uid()}`,
+      type: 'map',
+      title: clean,
+      summary: '',
+      payload: { kind: 'pin-list' },
+    }, user)
+    const f = getFirebase()
+    if (f) {
+      try {
+        await setDoc(doc(f.db, 'saved_items', item.id), { ...item, updatedAt: serverTimestamp(), createdAt: serverTimestamp() })
+        return { ok: true, name: clean, id: item.id }
+      } catch (error) {
+        showToast({ tone: 'danger', message: error.message })
+        return { ok: false, error }
+      }
+    }
+    setLocal((s) => ({ ...s, vault: sortVault([item, ...(s.vault || [])]) }))
+    return { ok: true, name: clean, id: item.id }
+  }, [user, pinLists, showToast])
+
   const deleteSavedItem = useCallback(async (id) => {
     const f = getFirebase()
     if (f) {
       try { await deleteDoc(doc(f.db, 'saved_items', id)) } catch (error) {
-        showToast({ tone: 'danger', message: error.message })
-        return { ok: false }
+        const code = String(error?.code || '')
+        if (code !== 'permission-denied' && code !== 'not-found') {
+          showToast({ tone: 'danger', message: error.message })
+          return { ok: false }
+        }
       }
     } else {
       setLocal((s) => ({ ...s, vault: (s.vault || []).filter((item) => item.id !== id) }))
@@ -575,6 +656,7 @@ export function AccountsProvider({ children }) {
     setToast,
     showToast,
     vault,
+    pinLists,
     workspaceTab,
     setWorkspaceTab,
     messageDraft,
@@ -589,6 +671,8 @@ export function AccountsProvider({ children }) {
     openMessages,
     beginAddPlace,
     createSavedItem,
+    saveMapPin,
+    createPinList,
     updateSavedItem,
     deleteSavedItem,
   }

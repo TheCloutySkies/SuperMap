@@ -38,13 +38,11 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
   const [visuals, setVisuals] = useState(() => getVisualsPrefs())
   const [osintXHandles, setOsintXHandles] = useState([])
   const [defaultOsintXHandles, setDefaultOsintXHandles] = useState([])
-  const [subreddits, setSubreddits] = useState([])
   const [stockTickers, setStockTickers] = useState([])
   const [configLoading, setConfigLoading] = useState(true)
   const [configSaving, setConfigSaving] = useState(false)
   const [configWriteError, setConfigWriteError] = useState('')
   const [newHandle, setNewHandle] = useState('')
-  const [newSubreddit, setNewSubreddit] = useState('')
 
   useEffect(() => setTabVisibility(tabPrefs), [tabPrefs])
   useEffect(() => {
@@ -63,13 +61,11 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
       .then((res) => {
         setOsintXHandles(res.data.osintXHandles || [])
         setDefaultOsintXHandles(res.data.defaultOsintXHandles || [])
-        setSubreddits(res.data.subreddits || [])
         setStockTickers(Array.isArray(res.data.stockTickers) ? res.data.stockTickers : [])
       })
       .catch(() => {
         setOsintXHandles([])
         setDefaultOsintXHandles([])
-        setSubreddits([])
         setStockTickers([])
       })
       .finally(() => setConfigLoading(false))
@@ -88,7 +84,6 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
       .post(`${apiBase}/api/config`, updates, { timeout: 5000, headers })
       .then((res) => {
         setOsintXHandles(res.data.osintXHandles || [])
-        setSubreddits(res.data.subreddits || [])
         if (res.data.stockTickers !== undefined) setStockTickers(res.data.stockTickers || [])
       })
       .catch((err) => {
@@ -119,21 +114,6 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
     saveConfig({ osintXHandles: defaultOsintXHandles })
   }
 
-  const addSubreddit = () => {
-    const sub = newSubreddit.trim().replace(/^r\//, '')
-    if (!sub || subreddits.includes(sub)) return
-    const next = [...subreddits, sub]
-    setSubreddits(next)
-    setNewSubreddit('')
-    saveConfig({ subreddits: next })
-  }
-
-  const removeSubreddit = (index) => {
-    const next = subreddits.filter((_, i) => i !== index)
-    setSubreddits(next)
-    saveConfig({ subreddits: next })
-  }
-
   const [newTickerSymbol, setNewTickerSymbol] = useState('')
   const [newTickerName, setNewTickerName] = useState('')
   const addStockTicker = () => {
@@ -156,7 +136,6 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
     { id: 'visuals', label: 'Visuals' },
     { id: 'tabs', label: 'Tab visibility' },
     { id: 'xhandles', label: 'X (Twitter) handles' },
-    { id: 'subreddits', label: 'Subreddits' },
     { id: 'stocktickers', label: 'Stock tickers' },
   ]
 
@@ -164,7 +143,7 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
     <div className="settings-view">
       <header className="settings-view-header">
         <h1 className="settings-view-title">Settings</h1>
-        <p className="settings-view-desc">Visuals and feed sources. X handles and subreddits are saved to the backend and used by the API.</p>
+        <p className="settings-view-desc">Visuals and feed sources. X handles are saved to the backend and used by the API.</p>
       </header>
 
       <nav className="settings-view-nav">
@@ -301,42 +280,6 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
                       <span className="settings-list-label">@{entry.handle}</span>
                       <span className="settings-list-meta">{entry.name !== entry.handle ? entry.name : ''}</span>
                       <button type="button" className="settings-remove-btn" onClick={() => removeHandle(i)} aria-label="Remove">
-                        ×
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </section>
-        )}
-
-        {activeSection === 'subreddits' && (
-          <section className="settings-view-section">
-            <h2>Subreddits</h2>
-            <p className="settings-hint">Reddit comment signals use these subreddits. Saved to backend.</p>
-            {configLoading ? (
-              <p className="settings-loading">Loading…</p>
-            ) : (
-              <>
-                <div className="settings-list-add">
-                  <input
-                    type="text"
-                    value={newSubreddit}
-                    onChange={(e) => setNewSubreddit(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && addSubreddit()}
-                    placeholder="subreddit name (e.g. worldnews)"
-                    className="settings-input"
-                  />
-                  <button type="button" className="settings-add-btn" onClick={addSubreddit} disabled={configSaving}>
-                    Add
-                  </button>
-                </div>
-                <ul className="settings-list">
-                  {subreddits.map((sub, i) => (
-                    <li key={sub} className="settings-list-item">
-                      <span className="settings-list-label">r/{sub}</span>
-                      <button type="button" className="settings-remove-btn" onClick={() => removeSubreddit(i)} aria-label="Remove">
                         ×
                       </button>
                     </li>

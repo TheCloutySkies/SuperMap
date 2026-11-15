@@ -1,0 +1,324 @@
+.print-map-view {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  background: var(--y2k-bg-deep, #050706);
+  color: var(--y2k-text, #e8f0ea);
+}
+
+.print-map-view.is-placing .print-map-canvas {
+  cursor: crosshair;
+}
+
+.print-panel {
+  width: 300px;
+  min-width: 260px;
+  max-width: 42vw;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--y2k-surface, #0c110e);
+  border-right: 1px solid var(--y2k-border, #1c2a22);
+  padding: 0 0 1.5rem;
+}
+
+.print-panel-head {
+  padding: 0.9rem 1rem 0.7rem;
+  border-bottom: 1px solid var(--y2k-border, #1c2a22);
+  position: sticky;
+  top: 0;
+  background: var(--y2k-surface, #0c110e);
+  z-index: 2;
+}
+
+.print-panel-head h2 {
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--y2k-accent, #3dd68c);
+}
+
+.print-panel-kicker {
+  margin: 0.2rem 0 0;
+  font-size: 0.72rem;
+  color: var(--y2k-text-muted, #8a9a90);
+}
+
+.print-panel-section {
+  padding: 0.85rem 1rem 0.4rem;
+  border-bottom: 1px solid rgba(28, 42, 34, 0.8);
+}
+
+.print-panel-section h3 {
+  margin: 0 0 0.45rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--y2k-text-muted, #8a9a90);
+}
+
+.print-panel-section h4 {
+  margin: 0.45rem 0 0.25rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--y2k-accent, #3dd68c);
+}
+
+.print-help {
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--y2k-text, #e8f0ea);
+}
+
+.print-help--muted {
+  color: var(--y2k-text-muted, #8a9a90);
+}
+
+.print-page-count {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--y2k-accent, #3dd68c);
+}
+
+.print-scale-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.print-scale-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  text-align: left;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--y2k-border, #1c2a22);
+  border-radius: 6px;
+  background: var(--y2k-surface-raised, #121a15);
+  color: var(--y2k-text-muted, #8a9a90);
+  cursor: pointer;
+}
+
+.print-scale-btn:hover {
+  color: var(--y2k-text);
+  border-color: var(--y2k-border-light, #2a3d32);
+}
+
+.print-scale-btn.is-on {
+  color: var(--y2k-text);
+  border-color: var(--y2k-accent, #3dd68c);
+  box-shadow: inset 2px 0 0 var(--y2k-accent, #3dd68c);
+  background: rgba(61, 214, 140, 0.1);
+}
+
+.print-scale-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.print-scale-note {
+  font-size: 0.68rem;
+  opacity: 0.8;
+}
+
+.print-orient {
+  display: flex;
+  gap: 4px;
+  margin-top: 0.5rem;
+}
+
+.print-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.print-actions .btn-y2k {
+  font-size: 0.78rem;
+  padding: 0.4rem 0.4rem;
+}
+
+.print-actions-primary {
+  color: var(--y2k-accent, #3dd68c) !important;
+}
+
+.print-status {
+  margin: 0.5rem 1rem 0;
+  font-size: 0.75rem;
+  color: var(--y2k-accent, #3dd68c);
+}
+
+.print-seg {
+  margin-bottom: 0.55rem;
+}
+
+.print-seg-label {
+  display: block;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--y2k-text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.print-seg-opts,
+.print-orient {
+  display: flex;
+  gap: 3px;
+}
+
+.print-seg-btn {
+  flex: 1;
+  border: 1px solid var(--y2k-border, #1c2a22);
+  background: var(--y2k-surface-raised, #121a15);
+  color: var(--y2k-text-muted, #8a9a90);
+  border-radius: 4px;
+  padding: 0.28rem 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.print-seg-btn.is-on {
+  color: #07140d;
+  background: var(--y2k-accent, #3dd68c);
+  border-color: var(--y2k-accent, #3dd68c);
+}
+
+.print-toggles,
+.print-basemap-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.print-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.28rem 0.2rem;
+  font-size: 0.82rem;
+  color: var(--y2k-text);
+  cursor: pointer;
+}
+
+.print-toggle.is-stub {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.print-toggle.is-on {
+  background: rgba(61, 214, 140, 0.08);
+  border-radius: 4px;
+}
+
+.print-stub-tag {
+  margin-left: auto;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--y2k-text-muted);
+  font-style: normal;
+}
+
+.print-more-btn {
+  margin-top: 0.45rem;
+  width: 100%;
+  border: 1px dashed var(--y2k-border-light, #2a3d32);
+  background: transparent;
+  color: var(--y2k-accent, #3dd68c);
+  border-radius: 6px;
+  padding: 0.4rem;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.print-more-groups {
+  margin-top: 0.4rem;
+}
+
+.print-map-stage {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}
+
+.print-map-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.print-map-canvas .maplibregl-ctrl-attrib {
+  background: rgba(7, 10, 8, 0.82);
+  color: var(--y2k-text-muted);
+}
+
+.print-busy {
+  position: absolute;
+  inset: 0;
+  background: rgba(5, 7, 6, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+}
+
+.print-busy-card {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.9rem 1.1rem;
+  background: var(--y2k-surface-raised, #121a15);
+  border: 1px solid var(--y2k-accent, #3dd68c);
+  border-radius: 8px;
+  max-width: 28rem;
+}
+
+.print-busy-card p {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.print-busy-pulse {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--y2k-accent, #3dd68c);
+  box-shadow: 0 0 12px var(--y2k-accent, #3dd68c);
+  animation: print-pulse 1s ease-in-out infinite;
+}
+
+@keyframes print-pulse {
+  50% { opacity: 0.35; transform: scale(0.85); }
+}
+
+.print-hidden-map {
+  pointer-events: none;
+}
+
+@media (max-width: 900px) {
+  .print-map-view {
+    flex-direction: column;
+  }
+  .print-panel {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    max-height: 42%;
+    border-right: 0;
+    border-bottom: 1px solid var(--y2k-border, #1c2a22);
+  }
+}

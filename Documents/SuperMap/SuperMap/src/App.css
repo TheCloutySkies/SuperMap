@@ -459,6 +459,12 @@
   height: 100%;
 }
 
+.main .print-map-view {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
 .main .map-view-wrapper .map-container {
   width: 100%;
   height: 100%;

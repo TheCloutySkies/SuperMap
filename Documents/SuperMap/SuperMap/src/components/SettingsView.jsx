@@ -15,6 +15,7 @@ const TAB_LABELS = {
   exploreMap: 'Explore',
   flockMap: 'Flock Cameras',
   liveWebcams: 'Live Webcams',
+  printMap: 'Print Map',
   osintFeeds: 'OSINT Feeds',
   newsFeeds: 'Glowie Report',
   osintX: 'OSINT (X)',

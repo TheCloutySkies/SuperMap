@@ -45,6 +45,7 @@ export const STORAGE_KEYS = {
   MAP_TOOLS_FAB_POS: 'supermap_map_tools_fab_pos',
   MAP_TOOLS_CHROME: 'supermap_map_tools_chrome',
   MAP_TOOLS_PANELS: 'supermap_map_tools_panels',
+  PRINT_STATE: 'supermap_printState',
 }
 
 function scopedKey(baseKey, userId) {
@@ -122,6 +123,7 @@ export const DEFAULT_TAB_VISIBILITY = {
   geolocateMap: true,
   flockMap: true,
   liveWebcams: true,
+  printMap: true,
   osintFeeds: true,
   newsFeeds: true,
   osintX: true,

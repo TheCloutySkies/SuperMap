@@ -67,6 +67,8 @@ function applyAssessmentToEvent(event, assessment, extraTags = []) {
   raw.risk_label = assessment.risk_label
   raw.assessment_source = assessment.assessment_source || 'heuristic'
   if (assessment.rationale) raw.risk_rationale = assessment.rationale
+  if (assessment.risk_baseline != null) raw.risk_baseline = assessment.risk_baseline
+  if (assessment.risk_delta != null) raw.risk_delta = assessment.risk_delta
   event.raw_data = JSON.stringify(raw)
 
   const tags = [
@@ -115,6 +117,8 @@ function ingestEvent(event, options = {}) {
     risk_label,
     assessment_source: assessment.assessment_source || 'heuristic',
     risk_rationale: assessment.rationale || undefined,
+    risk_baseline: assessment.risk_baseline ?? undefined,
+    risk_delta: assessment.risk_delta ?? undefined,
   })
 
   tags.forEach((t) => linkEventTag(event.id, t))
@@ -133,7 +137,14 @@ function ingestEvent(event, options = {}) {
     tags,
     entities: entities.map((e) => e.name),
   })
-  return { tags, risk_score, risk_label }
+  return {
+    tags,
+    risk_score,
+    risk_label,
+    risk_rationale: assessment.rationale || undefined,
+    risk_baseline: assessment.risk_baseline ?? undefined,
+    risk_delta: assessment.risk_delta ?? undefined,
+  }
 }
 
 /**
@@ -162,6 +173,9 @@ function eventToFeature(event) {
   if (risk_score != null) {
     props.risk_score = risk_score
     props.risk_label = raw.risk_label || undefined
+    props.risk_rationale = raw.risk_rationale || undefined
+    props.risk_baseline = raw.risk_baseline ?? undefined
+    props.risk_delta = raw.risk_delta ?? undefined
     props.alertLevel = risk_score >= 4 ? 'high' : risk_score >= 3 ? 'medium' : 'low'
   }
   if (event.lat != null && event.lon != null) {

@@ -700,12 +700,13 @@ export async function markConversationRead(conversationIdValue, userUid) {
   }).catch(() => {})
 }
 
-export async function fileReport({ reporter, reason, note, item }) {
+export async function fileReport({ reporter, reason, note, item, suggestedScore }) {
   const report = {
     id: uid(),
     reporterUid: reporter.uid,
     reporterName: reporter.displayName || 'Anonymous',
     reason,
+    suggestedScore: Number.isFinite(Number(suggestedScore)) ? Number(suggestedScore) : null,
     note: String(note || '').trim().slice(0, 2000),
     target: {
       type: item?.type || 'site',
@@ -715,7 +716,7 @@ export async function fileReport({ reporter, reason, note, item }) {
     },
     createdAtMs: Date.now(),
   }
-  if (!['broken', 'misleading', 'false'].includes(report.reason)) return { ok: false, error: 'Pick a reason.' }
+  if (!['broken', 'misleading', 'false', 'score'].includes(report.reason)) return { ok: false, error: 'Pick a reason.' }
   const firestore = db()
   if (!firestore) {
     const store = readStore()

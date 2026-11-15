@@ -110,13 +110,38 @@ async function callGroq(prompt, { model = GROQ_MODEL, timeoutMs = GROQ_TIMEOUT_M
 }
 
 function hasLlmConfigured() {
-  return Boolean(GROQ_API_KEY) || Boolean(OLLAMA_BASE)
+  return Boolean(GROQ_API_KEY) || Boolean(OLLAMA_BASE) || hasGenkitConfigured()
+}
+
+let genkitClient
+function loadGenkit() {
+  if (genkitClient !== undefined) return genkitClient
+  try {
+    genkitClient = require('./thielGenkit')
+  } catch (_) {
+    genkitClient = null
+  }
+  return genkitClient
+}
+
+function hasGenkitConfigured() {
+  const client = loadGenkit()
+  return Boolean(client?.hasGenkit?.())
+}
+
+/** Genkit (Gemini) first. Null means the caller should use Groq. */
+async function callGenkit(prompt, { maxTokens = 800 } = {}) {
+  const client = loadGenkit()
+  if (!client?.generateText) return null
+  return client.generateText(prompt, { maxTokens })
 }
 
 /**
  * Threat-summary path: Groq (rate-limited) or Ollama.
  */
 async function callThreatModel(prompt) {
+  const genkitText = await callGenkit(prompt, { maxTokens: 1400 })
+  if (genkitText) return genkitText
   if (!GROQ_API_KEY) return callOllama(prompt)
   if (!canCallThreat()) return null
   const primary = await callGroq(prompt, { model: GROQ_MODEL })
@@ -138,6 +163,8 @@ async function callThreatModel(prompt) {
  * Returns null when rate-limited or unreachable — callers use heuristics.
  */
 async function callTagModel(prompt, { maxTokens = 800 } = {}) {
+  const genkitText = await callGenkit(prompt, { maxTokens })
+  if (genkitText) return genkitText
   if (!GROQ_API_KEY) return callOllama(prompt, { maxTokens, timeoutMs: 45 * 1000 })
   if (!canCallTag()) return null
   const primary = await callGroq(prompt, { model: GROQ_MODEL, maxTokens, timeoutMs: 45 * 1000 })
@@ -177,6 +204,8 @@ function recordCrimeCall() {
  * Returns { text, provider } or null when both fail — callers use heuristics.
  */
 async function callCrimeModel(prompt, { maxTokens = 700 } = {}) {
+  const genkitText = await callGenkit(prompt, { maxTokens })
+  if (genkitText) return { text: genkitText, provider: 'genkit' }
   if (GROQ_API_KEY && canCallCrime()) {
     const primary = await callGroq(prompt, { model: GROQ_MODEL, maxTokens, timeoutMs: 25 * 1000 })
     if (primary) {
@@ -200,9 +229,11 @@ async function callCrimeModel(prompt, { maxTokens = 700 } = {}) {
 
 module.exports = {
   hasLlmConfigured,
+  hasGenkitConfigured,
   callThreatModel,
   callTagModel,
   callCrimeModel,
+  callGenkit,
   callOllama,
   callGroq,
   GROQ_API_KEY,

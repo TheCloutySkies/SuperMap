@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import axios from 'axios'
 import ArticlePreviewSheet from './ArticlePreviewSheet'
+import ThreatScoreButton from './ThreatScoreButton'
 import ItemMenu from '../features/accounts/ItemMenu'
 import { readHomeSnapshot, writeHomeSnapshot } from '../lib/homeBootstrap'
 import { isGlowieRelevant } from '../lib/glowieRelevance'
@@ -331,6 +332,7 @@ function NewsHeroStory({ item, onOpen }) {
         <span className="news-desk-meta">{formatStoryDate(item)}</span>
       </div>
     </button>
+    <ThreatScoreButton item={item} kind="news" placement="card" />
     <ItemMenu item={feedMenuItem(item)} />
     </div>
   )
@@ -356,6 +358,7 @@ function NewsTile({ item, size = 'md', onOpen }) {
         <span className="news-desk-meta">{formatStoryDate(item)}</span>
       </div>
     </button>
+    <ThreatScoreButton item={item} kind="news" placement="card" />
     <ItemMenu item={feedMenuItem(item)} />
     </div>
   )
@@ -363,7 +366,8 @@ function NewsTile({ item, size = 'md', onOpen }) {
 
 function NewsTextRow({ item, onOpen }) {
   return (
-    <div className="has-item-menu">
+    <div className="has-item-menu news-desk-text-wrap">
+    <ThreatScoreButton item={item} kind="news" placement="row" />
     <button
       type="button"
       className="news-desk-text-row"
@@ -395,11 +399,7 @@ function OsintDeskCard({ item, onOpen }) {
           <div className="feeds-osint-card-meta">
             <span className="feeds-osint-card-source">{osintSourceDisplayName(item.source)}</span>
             <span className="feeds-osint-card-time">{relativeOsintTime(item)}</span>
-            {item.risk_score != null ? (
-              <span className={`feeds-risk-badge feeds-risk-badge--${Number(item.risk_score)}`} title={item.risk_label || `Risk ${item.risk_score}/5`}>
-                {item.risk_score}/5
-              </span>
-            ) : item.alertLevel ? (
+            {item.risk_score == null && item.alertLevel ? (
               <span className="feeds-osint-card-risk-chip">{item.alertLevel}</span>
             ) : null}
           </div>
@@ -409,6 +409,7 @@ function OsintDeskCard({ item, onOpen }) {
           )}
         </div>
       </button>
+      <ThreatScoreButton item={item} kind="news" placement="card" />
     </article>
   )
 }

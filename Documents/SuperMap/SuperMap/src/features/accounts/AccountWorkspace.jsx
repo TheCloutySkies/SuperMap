@@ -1080,7 +1080,7 @@ function ReportsPanel() {
       <p className="sm-local-note">Reports sent to you. Other accounts cannot read this list.</p>
       {reports.map((report) => (
         <article key={report.id} className="sm-card">
-          <span className="sm-type-badge">{report.reason}</span>
+          <span className="sm-type-badge">{report.reason === 'score' ? `Score ${report.suggestedScore || '?'}/5` : report.reason}</span>
           <h3>{report.target?.title || 'Site'}</h3>
           <p className="sm-card-summary">{report.note || 'No note.'}</p>
           <p className="sm-card-summary">{report.reporterName} · {when(report.createdAtMs)}</p>

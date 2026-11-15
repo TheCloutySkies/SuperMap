@@ -101,7 +101,7 @@ service cloud.firestore {
     match /reports/{reportId} {
       allow create: if signedIn()
         && request.resource.data.reporterUid == request.auth.uid
-        && request.resource.data.reason in ['broken', 'misleading', 'false']
+        && request.resource.data.reason in ['broken', 'misleading', 'false', 'score']
         && request.resource.data.note is string
         && request.resource.data.note.size() <= 2000;
       allow read: if signedIn() && request.auth.token.email == 'lonnie034@gmail.com';

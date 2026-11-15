@@ -423,8 +423,8 @@
 }
 
 .main-content-scroll--weather .weather-desk {
-  flex: 1;
-  min-height: 0;
+  flex: 1 0 auto;
+  min-height: min-content;
 }
 
 /* Y2K page transition when switching footer sections */

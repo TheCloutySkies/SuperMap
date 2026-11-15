@@ -1,7 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
+import { CloudRain, Droplets, Gauge, Wind } from 'lucide-react'
 import { geocodePlaceQuery } from '../lib/placeGeocoding'
+import WeatherHourlyChart from './WeatherHourlyChart'
+import WmoIcon from './WmoIcon'
+import { compassFromDeg, wmoKind } from './weatherWmo'
 import './WeatherView.css'
 
 const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
@@ -106,6 +110,79 @@ function fmtPct(n) {
 function fmtMm(n) {
   if (n == null || Number.isNaN(Number(n))) return '—'
   return `${Number(n).toFixed(1)} mm`
+}
+
+function fmtHpa(n) {
+  if (n == null || Number.isNaN(Number(n))) return '—'
+  return `${Math.round(Number(n))} hPa`
+}
+
+function fmtWindWithDir(speed, deg) {
+  const speedLabel = fmtWind(speed)
+  const dir = compassFromDeg(deg)
+  if (speedLabel === '—') return dir || '—'
+  return dir ? `${speedLabel} ${dir}` : speedLabel
+}
+
+function hourTick(iso) {
+  if (!iso) return '—'
+  try {
+    return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric' })
+  } catch {
+    return String(iso)
+  }
+}
+
+function toDisplayTemp(c, unit = 'F') {
+  if (c == null || Number.isNaN(Number(c))) return null
+  const n = Number(c)
+  return unit === 'F' ? (n * 9) / 5 + 32 : n
+}
+
+function buildHourlyChartData({ span, hourly, daily, tempUnit }) {
+  if (span === '7d') {
+    const days = daily?.time || []
+    return days.slice(0, 7).map((iso, i) => ({
+      hour: formatDay(iso),
+      temp: toDisplayTemp(daily.temperature_2m_max?.[i], tempUnit),
+      precip: Number(daily.precipitation_probability_max?.[i]) || 0,
+    }))
+  }
+  const times = hourly?.time || []
+  if (!times.length) return []
+  const hours = span === 'now' ? 8 : span === '48h' ? 48 : 24
+  return times.slice(0, hours).map((iso, i) => ({
+    hour: hourTick(iso),
+    temp: toDisplayTemp(hourly.temperature_2m?.[i], tempUnit),
+    precip: Number(hourly.precipitation_probability?.[i]) || 0,
+  }))
+}
+
+function buildDailyStrip(daily, tempUnit) {
+  const days = daily?.time || []
+  return days.slice(0, 7).map((day, i) => ({
+    id: `d-${day}`,
+    title: formatDay(day),
+    code: daily.weather_code?.[i],
+    hi: fmtTempC(daily.temperature_2m_max?.[i], tempUnit),
+    lo: fmtTempC(daily.temperature_2m_min?.[i], tempUnit),
+    precip: fmtPct(daily.precipitation_probability_max?.[i]),
+  }))
+}
+
+function shortPlace(label) {
+  if (!label) return 'Selected location'
+  const parts = String(label).split(',').map((p) => p.trim()).filter(Boolean)
+  if (parts.length >= 2) return `${parts[0]}, ${parts[1]}`
+  return parts[0] || 'Selected location'
+}
+
+function alertItemsFromFc(fc) {
+  return (fc?.features || []).slice(0, 5).map((f, i) => ({
+    id: f.id || `alert-${i}`,
+    title: f.properties?.event || f.properties?.headline || 'Weather alert',
+    detail: f.properties?.headline || f.properties?.description || '',
+  }))
 }
 
 function emptyFC() {
@@ -224,7 +301,7 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
   )
   const [searchQuery, setSearchQuery] = useState('')
   const [searchError, setSearchError] = useState(null)
-  const [span, setSpan] = useState('now')
+  const [span, setSpan] = useState('24h')
   const [forecast, setForecast] = useState(null)
   const [forecastError, setForecastError] = useState(null)
   const [loadingForecast, setLoadingForecast] = useState(false)
@@ -708,9 +785,16 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
   const current = om?.current
   const hourly = om?.hourly
   const daily = om?.daily
-  const cards = locationReady
-    ? buildForecastCards({ span, current, hourly, daily, tempUnit })
-    : []
+  const chartData = useMemo(
+    () => (locationReady ? buildHourlyChartData({ span, hourly, daily, tempUnit }) : []),
+    [locationReady, span, hourly, daily, tempUnit],
+  )
+  const dailyStrip = useMemo(
+    () => (locationReady ? buildDailyStrip(daily, tempUnit) : []),
+    [locationReady, daily, tempUnit],
+  )
+  const alertItems = useMemo(() => alertItemsFromFc(alertsFc), [alertsFc])
+  const heroKind = wmoKind(current?.weather_code)
 
   const windLayerOn = Boolean(radarToggles.wind)
   const windyReady = windyStatus === 'ready'
@@ -769,7 +853,7 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
 
       {locationReady && (
         <>
-          <div className="weather-desk-location">
+          <div className="weather-desk-chrome">
             <span className="weather-desk-place">{placeLabel || 'Selected location'}</span>
             <span className="weather-desk-coords">{Number(lat).toFixed(3)}, {Number(lon).toFixed(3)}</span>
             <div className="weather-desk-unit" role="group" aria-label="Temperature unit">
@@ -778,10 +862,54 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
             </div>
           </div>
 
-          <div className="weather-desk-zones">
-            <section className="weather-desk-zone weather-desk-zone--forecast" aria-label="Forecast">
-              <div className="weather-desk-zone-head">
-                <h2>Forecast</h2>
+          <div className="weather-main">
+            {loadingForecast && <p className="weather-desk-status">Loading forecast…</p>}
+            {forecastError && <p className="weather-desk-status weather-desk-status--err">{forecastError}</p>}
+
+            {!loadingForecast && !forecastError && current && (
+              <section className={`weather-hero weather-hero--${heroKind}`} aria-label="Current conditions">
+                <div className="weather-hero-main">
+                  <WmoIcon code={current.weather_code} size={72} className="weather-hero-icon" />
+                  <div>
+                    <p className="weather-hero-place">{shortPlace(placeLabel)}</p>
+                    <p className="weather-hero-temp">{fmtTempC(current.temperature_2m, tempUnit)}</p>
+                    <p className="weather-hero-cond">{wmoLabel(current.weather_code)}</p>
+                  </div>
+                </div>
+                <div className="weather-hero-side">
+                  <span><em>Feels like</em>{fmtTempC(current.apparent_temperature, tempUnit)}</span>
+                  <span>
+                    <em>Today</em>
+                    {fmtTempC(daily?.temperature_2m_max?.[0], tempUnit)}
+                    {' / '}
+                    {fmtTempC(daily?.temperature_2m_min?.[0], tempUnit)}
+                  </span>
+                  {forecast?.openWeatherMap?.current && (
+                    <span>
+                      <em>OWM</em>
+                      {forecast.openWeatherMap.current.weather?.[0]?.description || '—'}
+                      {' · '}
+                      {fmtTempC(forecast.openWeatherMap.current.main?.temp, tempUnit)}
+                    </span>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {alertItems.length > 0 && (
+              <div className="weather-alerts" aria-label="Active alerts">
+                {alertItems.map((alert) => (
+                  <div key={alert.id} className="weather-alert">
+                    <strong>{alert.title}</strong>
+                    {alert.detail ? ` · ${alert.detail.slice(0, 140)}` : ''}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <section className="weather-section" aria-label="Hourly trend">
+              <div className="weather-section-head">
+                <h2>Hourly trend</h2>
                 <div className="weather-desk-span" role="tablist" aria-label="Forecast span">
                   {SPANS.map((s) => (
                     <button
@@ -795,183 +923,156 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
                   ))}
                 </div>
               </div>
-
-              {loadingForecast && <p className="weather-desk-status">Loading forecast…</p>}
-              {forecastError && <p className="weather-desk-status weather-desk-status--err">{forecastError}</p>}
               {!loadingForecast && !forecastError && (
-                <div className="weather-desk-cards">
-                  {cards.map((card) => (
-                    <article key={card.id} className="weather-desk-card">
-                      <h3>{card.title}</h3>
-                      <p className="weather-desk-card-cond">{card.condition}</p>
-                      <dl>
-                        <div><dt>Temp</dt><dd>{card.temp}</dd></div>
-                        <div><dt>Precip</dt><dd>{card.precip}</dd></div>
-                        <div><dt>Wind</dt><dd>{card.wind}</dd></div>
-                      </dl>
+                <WeatherHourlyChart data={chartData} tempUnit={tempUnit} />
+              )}
+            </section>
+
+            {!loadingForecast && !forecastError && current && (
+              <section className="weather-details" aria-label="Current details">
+                <article className="weather-detail">
+                  <div className="weather-detail-label"><Wind size={16} /> Wind</div>
+                  <div className="weather-detail-value">{fmtWindWithDir(current.wind_speed_10m, current.wind_direction_10m)}</div>
+                </article>
+                <article className="weather-detail">
+                  <div className="weather-detail-label"><Droplets size={16} /> Humidity</div>
+                  <div className="weather-detail-value">{fmtPct(current.relative_humidity_2m)}</div>
+                </article>
+                <article className="weather-detail">
+                  <div className="weather-detail-label"><Gauge size={16} /> Pressure</div>
+                  <div className="weather-detail-value">{fmtHpa(current.pressure_msl)}</div>
+                </article>
+                <article className="weather-detail">
+                  <div className="weather-detail-label"><CloudRain size={16} /> Precipitation</div>
+                  <div className="weather-detail-value">{fmtMm(current.precipitation)}</div>
+                </article>
+              </section>
+            )}
+
+            {!loadingForecast && !forecastError && dailyStrip.length > 0 && (
+              <section className="weather-section" aria-label="Seven-day forecast">
+                <div className="weather-section-head">
+                  <h2>7-day</h2>
+                </div>
+                <div className="weather-daily">
+                  {dailyStrip.map((day) => (
+                    <article key={day.id} className="weather-day">
+                      <strong>{day.title}</strong>
+                      <WmoIcon code={day.code} size={22} />
+                      <span className="weather-day-temps">{day.hi} / {day.lo}</span>
+                      <span>{day.precip}</span>
                     </article>
                   ))}
                 </div>
-              )}
-              {forecast?.openWeatherMap?.current && (
-                <p className="weather-desk-owm-hint">
-                  OWM: {forecast.openWeatherMap.current.weather?.[0]?.description || '—'}
-                  {' · '}
-                  {fmtTempC(forecast.openWeatherMap.current.main?.temp, tempUnit)}
-                </p>
-              )}
+              </section>
+            )}
 
-              <div className="weather-desk-panels" aria-label="Environment panels">
-                <div className="weather-desk-panel-tabs">
-                  {PANEL_TABS.map((t) => (
+            <div className="weather-desk-zones">
+              <section className="weather-desk-zone weather-desk-zone--radar" aria-label="Radar">
+                <div className="weather-desk-zone-head">
+                  <h2>Radar</h2>
+                  <div className="weather-desk-radar-actions">
+                    <div className="weather-desk-radar-toggles" role="group" aria-label="Radar layer toggles">
+                      {RADAR_LAYERS.map((layer) => (
+                        <button
+                          key={layer.id}
+                          type="button"
+                          className={radarToggles[layer.id] ? 'active' : ''}
+                          onClick={() => setRadarToggles((prev) => ({ ...prev, [layer.id]: !prev[layer.id] }))}
+                        >
+                          {layer.label}
+                        </button>
+                      ))}
+                    </div>
                     <button
-                      key={t.id}
                       type="button"
-                      className={panel === t.id ? 'active' : ''}
-                      onClick={() => setPanel(t.id)}
+                      className="weather-desk-fs-btn"
+                      onClick={toggleMapFullscreen}
+                      aria-pressed={mapFullscreen}
                     >
-                      {t.label}
+                      {mapFullscreen ? 'Exit full screen' : 'Full screen'}
                     </button>
-                  ))}
+                  </div>
                 </div>
-                <div className="weather-desk-panel-body">
-                  {loadingPanel && <p className="weather-desk-status">Loading…</p>}
-                  {panelError && <p className="weather-desk-status weather-desk-status--err">{panelError}</p>}
-                  {!loadingPanel && !panelError && panelData && (
-                    <PanelBody panel={panel} data={panelData} tempUnit={tempUnit} />
+
+                <div
+                  className={`weather-desk-map-shell${mapFullscreen ? ' is-fullscreen' : ''}`}
+                  ref={mapShellRef}
+                >
+                  <div
+                    className={`weather-desk-map${windyReady ? ' is-dimmed' : ''}`}
+                    ref={mapContainerRef}
+                  />
+                  {windLayerOn && windyStatus !== 'missing' && (
+                    <div
+                      className={`weather-desk-map-windy${windyReady ? ' is-visible' : ''}`}
+                      ref={windyContainerRef}
+                      aria-label="Windy wind layer"
+                      aria-hidden={!windyReady}
+                    />
+                  )}
+                  {mapFullscreen && (
+                    <button
+                      type="button"
+                      className="weather-desk-fs-exit"
+                      onClick={toggleMapFullscreen}
+                    >
+                      Exit full screen
+                    </button>
                   )}
                 </div>
-              </div>
-            </section>
 
-            <section className="weather-desk-zone weather-desk-zone--radar" aria-label="Radar">
-              <div className="weather-desk-zone-head">
-                <h2>Radar</h2>
-                <div className="weather-desk-radar-actions">
-                  <div className="weather-desk-radar-toggles" role="group" aria-label="Radar layer toggles">
-                    {RADAR_LAYERS.map((layer) => (
-                      <button
-                        key={layer.id}
-                        type="button"
-                        className={radarToggles[layer.id] ? 'active' : ''}
-                        onClick={() => setRadarToggles((prev) => ({ ...prev, [layer.id]: !prev[layer.id] }))}
-                      >
-                        {layer.label}
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    className="weather-desk-fs-btn"
-                    onClick={toggleMapFullscreen}
-                    aria-pressed={mapFullscreen}
-                  >
-                    {mapFullscreen ? 'Exit full screen' : 'Full screen'}
-                  </button>
+                {radarToggles.wind && windyStatus === 'missing' && (
+                  <p className="weather-desk-status weather-desk-status--err">
+                    {windyError || 'Set WINDY_API (Windy Map Forecast key) on the API for wind.'}
+                    {!radarMeta?.owmConfigured && ' OWM wind tiles are also unavailable.'}
+                  </p>
+                )}
+                {radarToggles.wind && windyError && windyStatus === 'error' && (
+                  <p className="weather-desk-status weather-desk-status--err">{windyError}</p>
+                )}
+                {radarToggles.wind && windUsesWindy && windyStatus === 'loading' && (
+                  <p className="weather-desk-status">Loading Windy wind particles…</p>
+                )}
+                {radarToggles.wind && windUsesWindy && windyStatus === 'ready' && (
+                  <p className="weather-desk-status">Wind: Windy Map Forecast particles</p>
+                )}
+              </section>
+
+              <section className="weather-desk-zone" aria-label="Advanced conditions">
+                <div className="weather-desk-zone-head">
+                  <h2>Advanced</h2>
                 </div>
-              </div>
-
-              <div
-                className={`weather-desk-map-shell${mapFullscreen ? ' is-fullscreen' : ''}`}
-                ref={mapShellRef}
-              >
-                <div
-                  className={`weather-desk-map${windyReady ? ' is-dimmed' : ''}`}
-                  ref={mapContainerRef}
-                />
-                {windLayerOn && windyStatus !== 'missing' && (
-                  <div
-                    className={`weather-desk-map-windy${windyReady ? ' is-visible' : ''}`}
-                    ref={windyContainerRef}
-                    aria-label="Windy wind layer"
-                    aria-hidden={!windyReady}
-                  />
-                )}
-                {mapFullscreen && (
-                  <button
-                    type="button"
-                    className="weather-desk-fs-exit"
-                    onClick={toggleMapFullscreen}
-                  >
-                    Exit full screen
-                  </button>
-                )}
-              </div>
-
-              {radarToggles.wind && windyStatus === 'missing' && (
-                <p className="weather-desk-status weather-desk-status--err">
-                  {windyError || 'Set WINDY_API (Windy Map Forecast key) on the API for wind.'}
-                  {!radarMeta?.owmConfigured && ' OWM wind tiles are also unavailable.'}
-                </p>
-              )}
-              {radarToggles.wind && windyError && windyStatus === 'error' && (
-                <p className="weather-desk-status weather-desk-status--err">{windyError}</p>
-              )}
-              {radarToggles.wind && windUsesWindy && windyStatus === 'loading' && (
-                <p className="weather-desk-status">Loading Windy wind particles…</p>
-              )}
-              {radarToggles.wind && windUsesWindy && windyStatus === 'ready' && (
-                <p className="weather-desk-status">Wind: Windy Map Forecast particles</p>
-              )}
-            </section>
+                <div className="weather-advanced">
+                  {PANEL_TABS.map((t) => (
+                    <details
+                      key={t.id}
+                      className="weather-acc"
+                      open={panel === t.id}
+                      onToggle={(e) => {
+                        if (e.currentTarget.open) setPanel(t.id)
+                      }}
+                    >
+                      <summary>{t.label}</summary>
+                      <div className="weather-acc-body">
+                        {panel === t.id && loadingPanel && <p className="weather-desk-status">Loading…</p>}
+                        {panel === t.id && panelError && (
+                          <p className="weather-desk-status weather-desk-status--err">{panelError}</p>
+                        )}
+                        {panel === t.id && !loadingPanel && !panelError && panelData && (
+                          <PanelBody panel={t.id} data={panelData} tempUnit={tempUnit} />
+                        )}
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              </section>
+            </div>
           </div>
         </>
       )}
     </div>
   )
-}
-
-function buildForecastCards({ span, current, hourly, daily, tempUnit }) {
-  if (span === 'now') {
-    return [{
-      id: 'now',
-      title: 'Now',
-      condition: wmoLabel(current?.weather_code),
-      temp: fmtTempC(current?.temperature_2m, tempUnit),
-      precip: fmtMm(current?.precipitation),
-      wind: fmtWind(current?.wind_speed_10m),
-    }]
-  }
-
-  if (span === '24h' || span === '48h') {
-    const hours = span === '24h' ? 24 : 48
-    const times = hourly?.time || []
-    const cards = []
-    const step = span === '24h' ? 3 : 6
-    for (let i = 0; i < Math.min(times.length, hours); i += step) {
-      cards.push({
-        id: `h-${i}`,
-        title: formatHour(times[i]),
-        condition: wmoLabel(hourly.weather_code?.[i]),
-        temp: fmtTempC(hourly.temperature_2m?.[i], tempUnit),
-        precip: `${fmtPct(hourly.precipitation_probability?.[i])} · ${fmtMm(hourly.precipitation?.[i])}`,
-        wind: fmtWind(hourly.wind_speed_10m?.[i]),
-      })
-    }
-    return cards.slice(0, 8)
-  }
-
-  const days = daily?.time || []
-  return days.slice(0, 7).map((day, i) => ({
-    id: `d-${day}`,
-    title: formatDay(day),
-    condition: wmoLabel(daily.weather_code?.[i]),
-    temp: `${fmtTempC(daily.temperature_2m_min?.[i], tempUnit)} – ${fmtTempC(daily.temperature_2m_max?.[i], tempUnit)}`,
-    precip: `${fmtPct(daily.precipitation_probability_max?.[i])} · ${fmtMm(daily.precipitation_sum?.[i])}`,
-    wind: fmtWind(daily.wind_speed_10m_max?.[i]),
-  }))
-}
-
-function formatHour(iso) {
-  if (!iso) return '—'
-  try {
-    return new Date(iso).toLocaleString(undefined, {
-      weekday: 'short',
-      hour: 'numeric',
-    })
-  } catch {
-    return String(iso)
-  }
 }
 
 function formatDay(iso) {
@@ -1021,14 +1122,19 @@ function PanelBody({ panel, data, tempUnit }) {
     const discharge = om?.daily?.river_discharge || []
     if (!times.length) return <p className="weather-desk-status">No flood discharge series for this point.</p>
     return (
-      <ul className="weather-desk-list">
-        {times.slice(0, 7).map((t, i) => (
-          <li key={t}>
-            <strong>{formatDay(t)}</strong>
-            <span>{discharge[i] != null ? `${Number(discharge[i]).toFixed(1)} m³/s` : '—'}</span>
-          </li>
-        ))}
-      </ul>
+      <table className="weather-table">
+        <thead>
+          <tr><th>Day</th><th>River discharge</th></tr>
+        </thead>
+        <tbody>
+          {times.slice(0, 7).map((t, i) => (
+            <tr key={t}>
+              <td>{formatDay(t)}</td>
+              <td>{discharge[i] != null ? `${Number(discharge[i]).toFixed(1)} m³/s` : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     )
   }
 
@@ -1038,11 +1144,29 @@ function PanelBody({ panel, data, tempUnit }) {
     if (!times.length) return <p className="weather-desk-status">No satellite radiation samples.</p>
     const last = times.length - 1
     return (
-      <dl className="weather-desk-kv">
-        <div><dt>Range</dt><dd>{data.startDate} → {data.endDate}</dd></div>
-        <div><dt>Latest shortwave</dt><dd>{sw[last] != null ? `${sw[last]} W/m²` : '—'}</dd></div>
-        <div><dt>Samples</dt><dd>{times.length}</dd></div>
-      </dl>
+      <>
+        <dl className="weather-desk-kv">
+          <div><dt>Range</dt><dd>{data.startDate} → {data.endDate}</dd></div>
+          <div><dt>Latest shortwave</dt><dd>{sw[last] != null ? `${sw[last]} W/m²` : '—'}</dd></div>
+          <div><dt>Samples</dt><dd>{times.length}</dd></div>
+        </dl>
+        <table className="weather-table">
+          <thead>
+            <tr><th>Hour</th><th>Shortwave</th></tr>
+          </thead>
+          <tbody>
+            {times.slice(-6).map((t, i, arr) => {
+              const idx = times.length - arr.length + i
+              return (
+                <tr key={t}>
+                  <td>{hourTick(t)}</td>
+                  <td>{sw[idx] != null ? `${sw[idx]} W/m²` : '—'}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </>
     )
   }
 
@@ -1053,18 +1177,20 @@ function PanelBody({ panel, data, tempUnit }) {
     const precip = om?.daily?.precipitation_sum || []
     if (!times.length) return <p className="weather-desk-status">No historical forecast data.</p>
     return (
-      <ul className="weather-desk-list">
-        {times.slice(0, 7).map((t, i) => (
-          <li key={t}>
-            <strong>{formatDay(t)}</strong>
-            <span>
-              {fmtTempC(tmin[i], tempUnit)} – {fmtTempC(tmax[i], tempUnit)}
-              {' · '}
-              {fmtMm(precip[i])}
-            </span>
-          </li>
-        ))}
-      </ul>
+      <table className="weather-table">
+        <thead>
+          <tr><th>Day</th><th>Low / High</th><th>Precip</th></tr>
+        </thead>
+        <tbody>
+          {times.slice(0, 7).map((t, i) => (
+            <tr key={t}>
+              <td>{formatDay(t)}</td>
+              <td>{fmtTempC(tmin[i], tempUnit)} – {fmtTempC(tmax[i], tempUnit)}</td>
+              <td>{fmtMm(precip[i])}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     )
   }
 

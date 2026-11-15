@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import axios from 'axios'
 import WidgetCard from './WidgetCard'
 import { getApiBase } from '../../lib/homeBootstrap'
+import { isGlowieRelevant } from '../../lib/glowieRelevance'
 
 const API_BASE = getApiBase()
 
@@ -15,7 +16,7 @@ function headlinesFromNews(news) {
       source: (f.properties?.source || '').trim(),
       description: (f.properties?.description || '').trim().slice(0, 500),
     }))
-    .filter((x) => x.title && x.title !== 'Untitled' && !excludeSources.test(x.source))
+    .filter((x) => x.title && x.title !== 'Untitled' && !excludeSources.test(x.source) && isGlowieRelevant(x))
     .slice(0, 6)
 }
 

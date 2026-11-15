@@ -127,7 +127,7 @@ export default function BulletinBoardView() {
       <header className="bb-mast">
         <p className="bb-kicker">Good Palantir</p>
         <h1>The Bulletin Board</h1>
-        <p className="bb-lede">Groups, threads, and replies. New posts show up on their own.</p>
+        <p className="bb-lede">An exclusive community to discuss world/local events.</p>
       </header>
 
       {error ? <p className="bb-error">{error}</p> : null}

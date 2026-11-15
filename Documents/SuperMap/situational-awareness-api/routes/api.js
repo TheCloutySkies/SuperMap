@@ -256,7 +256,7 @@ router.get('/news', async (req, res) => {
     }
 
     // Cache-first: serve last-good immediately (memory + disk).
-    const cached = newsService.getNewsCached()
+    const cached = newsService.filterNewsPayload(newsService.getNewsCached())
     if (!forceRefresh && cached && Array.isArray(cached.features) && cached.features.length > 0) {
       if (feedsDebugEnabled()) {
         console.log('[FEEDS API /news] OUTPUT', { cached: true, features: cached.features.length, ms: Date.now() - t0 })

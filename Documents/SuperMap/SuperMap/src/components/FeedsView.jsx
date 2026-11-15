@@ -3,6 +3,7 @@ import axios from 'axios'
 import ArticlePreviewSheet from './ArticlePreviewSheet'
 import ItemMenu from '../features/accounts/ItemMenu'
 import { readHomeSnapshot, writeHomeSnapshot } from '../lib/homeBootstrap'
+import { isGlowieRelevant } from '../lib/glowieRelevance'
 import './FeedsView.css'
 
 const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
@@ -62,11 +63,11 @@ const OSINT_SUB = { INTEL: 'intel' }
 const CATEGORY_OPTIONS = [
   { key: 'all', label: 'All topics' },
   { key: 'general', label: 'World' },
-  { key: 'business', label: 'Business' },
-  { key: 'technology', label: 'Technology' },
-  { key: 'health', label: 'Health' },
-  { key: 'science', label: 'Science' },
   { key: 'politics', label: 'Politics' },
+  { key: 'business', label: 'Markets' },
+  { key: 'technology', label: 'Technology' },
+  { key: 'weather', label: 'Weather' },
+  { key: 'science', label: 'Science' },
 ]
 
 const TOPIC_SECTION_ORDER = [
@@ -74,8 +75,8 @@ const TOPIC_SECTION_ORDER = [
   { key: 'politics', label: 'Politics & policy' },
   { key: 'business', label: 'Markets & economy' },
   { key: 'technology', label: 'Technology & cyber' },
-  { key: 'health', label: 'Health' },
-  { key: 'science', label: 'Science' },
+  { key: 'weather', label: 'Weather & hazards' },
+  { key: 'science', label: 'Science & space' },
 ]
 
 /** Display name for OSINT source (actual source, not alert type). */
@@ -159,6 +160,7 @@ function normalizeCategory(raw, title = '', snippet = '') {
     return c
   }
   const text = `${title} ${snippet}`.toLowerCase()
+  if (/\b(weather|storm|hurricane|typhoon|cyclone|tornado|earthquake|wildfire|flood|tsunami|blizzard)\b/.test(text)) return 'weather'
   if (/\b(election|congress|parliament|president|senate|white house|legislation)\b/.test(text)) return 'politics'
   if (/\b(cyber|hack|tech|chip|ai|software)\b/.test(text)) return 'technology'
   if (/\b(market|stock|economy|bank|oil|trade)\b/.test(text)) return 'business'
@@ -689,6 +691,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
 
   const filteredAndSortedNews = useMemo(() => {
     let list = newsItems.filter((item) => {
+      if (!isGlowieRelevant(item)) return false
       if (!matchesSource(item, sourceFilter, FEED_MODE.NEWS)) return false
       if (categoryFilter !== 'all' && item.category !== categoryFilter) return false
       if (!q) return true
@@ -880,7 +883,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
                 <span className="news-desk-glowie">Glowie</span>{' '}
                 <span className="news-desk-title-rest">Report</span>
               </h1>
-              <p className="news-desk-tagline">Image-led headlines from trusted publishers, sorted by topic.</p>
+              <p className="news-desk-tagline">War, weather, politics, technology, and markets.</p>
             </div>
             <button
               type="button"

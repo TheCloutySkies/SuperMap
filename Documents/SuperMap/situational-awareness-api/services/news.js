@@ -3,6 +3,7 @@ const axios = require('axios')
 const { geotagArticles } = require('./geotagger')
 const { normalizeToEvent, ingestEvent, eventToFeature } = require('./ingest')
 const { assessItemsBatch } = require('./riskScoring')
+const { isGlowieRelevant } = require('./glowieRelevance')
 
 /** Browser-like UA — many CDNs (GDACS, Google News) return 406 for bare bot UAs. */
 const BROWSER_UA =
@@ -133,6 +134,7 @@ function domainFavicon(url) {
 /** Heuristic category for RSS items (MediaStack provides its own). */
 function inferCategory(title = '', snippet = '', source = '') {
   const text = `${title} ${snippet} ${source}`.toLowerCase()
+  if (/\b(weather|storm|hurricane|typhoon|cyclone|tornado|earthquake|wildfire|flood|tsunami|blizzard)\b/.test(text)) return 'weather'
   if (/\b(cyber|hack|ransomware|breach|malware|chip|semiconductor|ai|tech)\b/.test(text)) return 'technology'
   if (/\b(health|hospital|vaccine|disease|outbreak|who|pandemic|covid)\b/.test(text)) return 'health'
   if (/\b(market|stock|oil|gas|economy|inflation|bank|trade|sanction)\b/.test(text)) return 'business'
@@ -196,7 +198,11 @@ function pickVideoUrlFromItem(item) {
 // RSS feeds (with parser) — only free, no-key sources that respond without auth
 const FEEDS = [
   { url: 'https://feeds.bbci.co.uk/news/world/rss.xml', name: 'BBC World' },
-  { url: 'https://news.google.com/rss', name: 'Google News' },
+  { url: 'https://news.google.com/rss/search?q=(war+OR+military+OR+missile+OR+ukraine+OR+gaza+OR+nato)+when:2d&hl=en-US&gl=US&ceid=US:en', name: 'Google News — conflict' },
+  { url: 'https://news.google.com/rss/search?q=(hurricane+OR+earthquake+OR+wildfire+OR+flood+OR+tornado)+when:2d&hl=en-US&gl=US&ceid=US:en', name: 'Google News — weather' },
+  { url: 'https://news.google.com/rss/search?q=(election+OR+congress+OR+sanctions+OR+diplomacy)+when:2d&hl=en-US&gl=US&ceid=US:en', name: 'Google News — politics' },
+  { url: 'https://news.google.com/rss/search?q=(cyber+OR+semiconductor+OR+%22artificial+intelligence%22+OR+satellite)+when:2d&hl=en-US&gl=US&ceid=US:en', name: 'Google News — tech' },
+  { url: 'https://news.google.com/rss/search?q=(%22stock+market%22+OR+%22federal+reserve%22+OR+inflation+OR+%22oil+prices%22)+when:2d&hl=en-US&gl=US&ceid=US:en', name: 'Google News — markets' },
   { url: 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml', name: 'NYT World' },
   { url: 'https://feeds.npr.org/1001/rss.xml', name: 'NPR' },
   { url: 'https://www.theguardian.com/world/rss', name: 'The Guardian' },
@@ -430,10 +436,7 @@ async function fetchFeed(feed) {
         category: inferCategory(title, contentSnippet, feed.name),
       }
     })
-    if (feed.name === 'Google News' || feed.name.startsWith('Reuters') || /Google News/i.test(feed.name)) {
-      return rows.filter(isRelevantGoogleNewsItem)
-    }
-    return rows.filter((r) => !isGloballyDeniedItem(r))
+    return rows.filter(isGlowieRelevant)
   } catch (err) {
     console.warn(`[news] Failed to fetch ${feed.name}:`, err.message)
     return []
@@ -577,7 +580,7 @@ function loadNewsCacheFromDisk() {
 function getMediaStackItems() {
   try {
     const mediastack = require('./mediastack')
-    return mediastack.getCachedArticles() || []
+    return (mediastack.getCachedArticles() || []).filter(isGlowieRelevant)
   } catch (_) {
     return []
   }
@@ -1123,9 +1126,21 @@ async function warmVideoFeedsCache() {
   }
 }
 
+function filterNewsPayload(payload) {
+  if (!payload || !Array.isArray(payload.features)) return payload
+  const features = payload.features.filter((feature) => isGlowieRelevant({
+    title: feature.properties?.title,
+    contentSnippet: feature.properties?.description || feature.properties?.contentSnippet || '',
+    source: feature.properties?.source,
+    category: feature.properties?.category,
+  }))
+  return { ...payload, features }
+}
+
 module.exports = {
   getNews,
   getNewsCached,
+  filterNewsPayload,
   getNewsFetchedAt,
   getVideoFeedItems,
   getRedditVideoItems,

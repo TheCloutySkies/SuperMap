@@ -36,6 +36,13 @@
   background: linear-gradient(135deg, #38e1ff, #4da3ff);
   color: #041018;
   font-weight: 800;
+  flex: 0 0 32px;
+}
+.sm-acct-avatar svg { display: block; }
+.sm-acct-avatar.is-google { background: #fff; }
+.sm-acct-avatar.is-anonymous {
+  background: linear-gradient(160deg, #2a3848, #121820);
+  color: #e7eef6;
 }
 .sm-acct-count {
   min-width: 20px;
@@ -69,16 +76,30 @@
   gap: 12px;
   align-items: center;
 }
+.sm-auth-brand { padding-right: 36px; align-items: flex-start; }
 .sm-auth-brand h2, .sm-workspace-title h2 { margin: 0 0 4px; }
+.sm-auth-brand h2 { font-size: 22px; line-height: 1.2; }
 .sm-auth-brand p, .sm-workspace-title p, .sm-card-summary { margin: 0; color: #8ea6ba; }
+.sm-auth-free { margin: 0 0 6px; color: #d7e6f4; font-size: 14px; }
 .sm-modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  max-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  margin: 0;
   border: 1px solid #1f3348;
   background: transparent;
   color: #8ea6ba;
-  width: 32px;
-  height: 32px;
   border-radius: 10px;
+  line-height: 0;
 }
+.sm-modal-close svg { display: block; width: 14px; height: 14px; }
 .sm-auth-card > .sm-modal-close { position: absolute; top: 16px; right: 16px; }
 .sm-auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 16px 0; }
 .sm-auth-tabs button { border: 0; border-radius: 9px; padding: 9px; background: transparent; color: #8ea6ba; }
@@ -96,7 +117,15 @@
 }
 .sm-primary-btn { background: linear-gradient(135deg, #38e1ff, #4da3ff); color: #041018; border: 0; padding: 10px 16px; }
 .sm-ghost-btn, .sm-google-btn { background: transparent; border: 1px solid #2c4a66; color: #e9f3fb; padding: 8px 12px; }
-.sm-google-btn { width: 100%; margin-top: 12px; }
+.sm-google-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 12px;
+}
+.sm-google-btn svg { width: 16px; height: 16px; flex: 0 0 auto; }
 .sm-danger-btn { background: rgba(255, 77, 94, 0.12); border: 1px solid rgba(255, 77, 94, 0.45); color: #ffb3bb; padding: 6px 10px; }
 .sm-save-btn { background: rgba(124, 255, 107, 0.12); border: 1px solid rgba(124, 255, 107, 0.45); color: #7cff6b; padding: 8px 12px; }
 .sm-auth-error { color: #ffb3bb; margin: 0; }

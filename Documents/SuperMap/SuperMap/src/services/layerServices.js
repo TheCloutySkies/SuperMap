@@ -9,6 +9,8 @@ const API_BASE = typeof import.meta !== 'undefined' && import.meta.env?.VITE_API
   : ''
 
 const FIRMS_MAP_KEY = '09415b5df0304c3802335984b511c111'
+const FIRMS_WORLD_TTL_MS = 5 * 60 * 1000
+let firmsWorldCache = { at: 0, headers: null, lines: null }
 const OVERPASS_ENDPOINT = 'https://overpass-api.de/api/interpreter'
 const OVERPASS_HEADERS = {
   'Content-Type': 'application/x-www-form-urlencoded',
@@ -160,19 +162,23 @@ export async function fetchOverpassCellTowers(bbox) {
 
 export async function fetchNasaFirmsArea(bbox) {
   // Free FIRMS map keys often only allow the `world` area slug (custom bboxes return header-only).
-  // Fetch world NRT then filter to the visible bbox client-side.
-  const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${FIRMS_MAP_KEY}/VIIRS_NOAA20_NRT/world/1`
-  const res = await fetch(url)
-  if (!res.ok) return { type: 'FeatureCollection', features: [] }
-  const text = await res.text()
-  const lines = text.trim().split('\n')
-  if (lines.length < 2) return { type: 'FeatureCollection', features: [] }
-  const headers = lines[0].split(',')
+  // Fetch world NRT then filter to the visible bbox client-side. Cache the CSV for a few minutes.
+  const now = Date.now()
+  if (!firmsWorldCache.lines || now - firmsWorldCache.at > FIRMS_WORLD_TTL_MS) {
+    const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${FIRMS_MAP_KEY}/VIIRS_NOAA20_NRT/world/1`
+    const res = await fetch(url)
+    if (!res.ok) return { type: 'FeatureCollection', features: [] }
+    const text = await res.text()
+    const lines = text.trim().split('\n')
+    if (lines.length < 2) return { type: 'FeatureCollection', features: [] }
+    firmsWorldCache = { at: now, headers: lines[0].split(','), lines: lines.slice(1) }
+  }
+  const headers = firmsWorldCache.headers || []
   const latIdx = headers.indexOf('latitude')
   const lonIdx = headers.indexOf('longitude')
   if (latIdx === -1 || lonIdx === -1) return { type: 'FeatureCollection', features: [] }
   const [w, s, e, n] = bbox || [-180, -90, 180, 90]
-  const features = lines.slice(1).map((line) => {
+  const features = firmsWorldCache.lines.map((line) => {
     const vals = line.split(',')
     const lat = parseFloat(vals[latIdx])
     const lon = parseFloat(vals[lonIdx])

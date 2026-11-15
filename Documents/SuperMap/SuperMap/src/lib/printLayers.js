@@ -20,16 +20,7 @@ export const PRINT_MORE_GROUPS = Object.freeze([
     id: 'terrain',
     label: 'Terrain',
     layers: [
-      { key: 'slope', label: 'Slope shading', status: 'stub' },
       { key: 'usgs3dep', label: 'USGS 3DEP relief', status: 'shipped', kind: 'raster' },
-    ],
-  },
-  {
-    id: 'cover',
-    label: 'Cover',
-    layers: [
-      { key: 'landcover', label: 'Land cover (ESA stub)', status: 'stub' },
-      { key: 'wetlands', label: 'Wetlands', status: 'stub' },
     ],
   },
   {
@@ -46,14 +37,6 @@ export const PRINT_MORE_GROUPS = Object.freeze([
     layers: [
       { key: 'roads', label: 'Roads overlay', status: 'shipped', kind: 'raster' },
       { key: 'railways', label: 'Railways', status: 'shipped', kind: 'raster' },
-    ],
-  },
-  {
-    id: 'structures',
-    label: 'Structures',
-    layers: [
-      { key: 'towers', label: 'Towers / masts', status: 'stub' },
-      { key: 'bridges', label: 'Bridges / tunnels', status: 'stub' },
     ],
   },
   {

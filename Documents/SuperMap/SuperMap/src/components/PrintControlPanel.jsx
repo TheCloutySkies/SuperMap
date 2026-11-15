@@ -216,15 +216,13 @@ export default function PrintControlPanel({
               <div key={g.id} className="print-more-group">
                 <h4>{g.label}</h4>
                 {g.layers.map((l) => (
-                  <label key={l.key} className={`print-toggle ${l.status === 'stub' ? 'is-stub' : ''}`}>
+                  <label key={l.key} className="print-toggle">
                     <input
                       type="checkbox"
                       checked={!!moreLayers[l.key]}
-                      disabled={l.status === 'stub'}
                       onChange={(e) => onToggleMore(l.key, e.target.checked)}
                     />
                     <span>{l.label}</span>
-                    {l.status === 'stub' && <em className="print-stub-tag">stub</em>}
                   </label>
                 ))}
               </div>

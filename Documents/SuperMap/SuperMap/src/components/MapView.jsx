@@ -6,6 +6,7 @@ import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css'
 import { BASEMAPS, STORAGE_KEYS, DEFAULT_LAYER_TOGGLES } from '../constants'
 import { getAoiFeatures, setAoiFeatures, getSavedPoints, setSavedPoints } from '../constants'
 import { MAPLIBRE_DRAW_STYLES } from '../lib/mapboxDrawStyles'
+import { capMapPixelRatio } from '../lib/mapPerf'
 import {
   fetchOverpassPower,
   fetchOverpassCellTowers,
@@ -46,6 +47,8 @@ MapboxDraw.constants.classes.CONTROL_GROUP = 'maplibregl-ctrl-group'
 MapboxDraw.constants.classes.ATTRIBUTION = 'maplibregl-ctrl-attrib'
 
 const MIN_POWER_ZOOM = 14
+const FETCH_DEBOUNCE_MS = 400
+const MOUSEMOVE_THROTTLE_MS = 60
 /** Windy bbox queries only after the user zooms in enough to keep requests local. */
 const MIN_WEBCAM_ZOOM = 8
 const WEBCAM_FETCH_DEBOUNCE_MS = 450
@@ -1957,6 +1960,7 @@ export default function MapView({
       style,
       center: Array.isArray(center) && center.length >= 2 ? center : [0, 20],
       zoom: typeof zoom === 'number' && zoom >= 0 ? zoom : 2,
+      pixelRatio: capMapPixelRatio(1.5),
       transformRequest: (url, resourceType) => {
         // OSM tiles use resourceType 'Tile' (not only 'Source'). Prefer a friendly UA.
         if (
@@ -2146,7 +2150,11 @@ export default function MapView({
       popup.setLngLat(coords).setHTML(html).addTo(map)
     }
 
+    let lastMoveQuery = 0
     const handleMapMousemove = (e) => {
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
+      if (now - lastMoveQuery < MOUSEMOVE_THROTTLE_MS) return
+      lastMoveQuery = now
       const layers = existingClickableLayers()
       const features = layers.length ? map.queryRenderedFeatures(e.point, { layers }) : []
       map.getCanvas().style.cursor = features.length ? 'pointer' : ''
@@ -2229,7 +2237,15 @@ export default function MapView({
         toggles.dataCenters ||
         toggles.surveillanceCapabilities ||
         (toggles.powerGrid && map.getZoom() >= MIN_POWER_ZOOM)
-      if (needsRefresh) doFetch(map, toggles, onLoadingChange)
+      if (needsRefresh) {
+        if (moveendPendingRef.current) clearTimeout(moveendPendingRef.current)
+        moveendPendingRef.current = setTimeout(() => {
+          moveendPendingRef.current = null
+          const live = mapRef.current
+          if (!live) return
+          doFetch(live, layerTogglesRef.current || {}, onLoadingChange)
+        }, FETCH_DEBOUNCE_MS)
+      }
     }
 
     map.on('moveend', onMoveend)
@@ -2278,6 +2294,10 @@ export default function MapView({
     if (resizeObserver && containerEl) resizeObserver.observe(containerEl)
 
     return () => {
+      if (moveendPendingRef.current) {
+        clearTimeout(moveendPendingRef.current)
+        moveendPendingRef.current = null
+      }
       if (resizeObserver && containerEl) resizeObserver.unobserve(containerEl)
       map.off('click', handleMapClick)
       map.off('mousemove', handleMapMousemove)
@@ -2358,15 +2378,23 @@ export default function MapView({
     const map = mapRef.current
     if (!map || !mapReadyRef.current) return
 
-    const onStyleData = () => {
+    let styleTimer = null
+    const run = () => {
       if (!map.isStyleLoaded() || !mapReadyRef.current) return
       doFetch(map, layerToggles || {}, onLoadingChange)
     }
+    const onStyleData = () => {
+      if (styleTimer) clearTimeout(styleTimer)
+      styleTimer = setTimeout(run, FETCH_DEBOUNCE_MS)
+    }
 
-    if (map.isStyleLoaded()) doFetch(map, layerToggles || {}, onLoadingChange)
+    if (map.isStyleLoaded()) run()
 
     map.on('styledata', onStyleData)
-    return () => map.off('styledata', onStyleData)
+    return () => {
+      if (styleTimer) clearTimeout(styleTimer)
+      map.off('styledata', onStyleData)
+    }
   }, [layerToggles, doFetch, onLoadingChange, activeView])
 
   // Ensure Flock cameras load when entering the dedicated view (activeView drives the layer).

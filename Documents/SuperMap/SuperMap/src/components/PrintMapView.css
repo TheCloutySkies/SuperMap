@@ -211,23 +211,9 @@
   cursor: pointer;
 }
 
-.print-toggle.is-stub {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
 .print-toggle.is-on {
   background: rgba(61, 214, 140, 0.08);
   border-radius: 4px;
-}
-
-.print-stub-tag {
-  margin-left: auto;
-  font-size: 0.62rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--y2k-text-muted);
-  font-style: normal;
 }
 
 .print-more-btn {

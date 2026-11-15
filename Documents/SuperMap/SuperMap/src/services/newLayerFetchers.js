@@ -22,12 +22,19 @@ function normalizeMilAircraftList(data) {
   return []
 }
 
+const MIL_AIRCRAFT_TTL_MS = 45000
+let milAircraftCache = { at: 0, fc: null }
+
 export async function fetchMilitaryAircraft() {
+  const now = Date.now()
+  if (milAircraftCache.fc && now - milAircraftCache.at < MIL_AIRCRAFT_TTL_MS) {
+    return milAircraftCache.fc
+  }
   try {
     const url = API_BASE ? `${API_BASE}/api/adsb/mil` : 'https://api.adsb.lol/v2/mil'
     const data = await fetchJsonWithTimeout(url, 15000)
     const aircraft = normalizeMilAircraftList(data)
-    return {
+    const fc = {
       type: 'FeatureCollection',
       features: aircraft
         .filter((a) => a && (a.lat != null && a.lon != null))
@@ -44,8 +51,11 @@ export async function fetchMilitaryAircraft() {
           geometry: { type: 'Point', coordinates: [Number(a.lon), Number(a.lat)] },
         })),
     }
+    milAircraftCache = { at: now, fc }
+    return fc
   } catch (err) {
     console.warn('[SuperMap Mil Aircraft]', err?.message || err)
+    if (milAircraftCache.fc) return milAircraftCache.fc
     return { type: 'FeatureCollection', features: [] }
   }
 }

@@ -4,6 +4,7 @@
  */
 
 import maplibregl from 'maplibre-gl'
+import { isGeckoEngine } from './mapPerf'
 import { buildPrintStyle } from './printMapStyle'
 import {
   LETTER_IN,
@@ -17,18 +18,38 @@ import {
 import { formatMgrsPretty, latLngToMgrs, latLngToUtm } from './utmMgrs'
 
 const MM_PER_IN = 25.4
+/** Soft cap: more pages need an explicit confirm (LibreWolf / Firefox). */
+export const PRINT_PAGE_WARN_CAP = 12
+const JPEG_QUALITY = 0.85
+const HIDDEN_CHROME_LAYERS = [
+  'print-pages-fill',
+  'print-pages-line',
+  'print-pages-label',
+  'print-ghost-fill',
+  'print-ghost-line',
+  'print-box-fill',
+  'print-box-line',
+  'print-grid-line',
+  'print-mgrs-label',
+]
 
 export function pickPrintDpi() {
+  const gecko = isGeckoEngine()
+  let dpi = gecko ? 120 : 150
   try {
     const canvas = document.createElement('canvas')
     const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl')
     const max = gl ? gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) : 4096
-    const letterPx = 11 * 200
-    if (letterPx > max) return 150
-    return 200
+    const letterPx = 11 * dpi
+    if (letterPx > max) dpi = Math.max(96, Math.floor(max / 11))
   } catch {
-    return 150
+    dpi = gecko ? 120 : 150
   }
+  return dpi
+}
+
+function yieldUi() {
+  return new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 function waitIdle(map, timeoutMs = 25000) {
@@ -143,15 +164,15 @@ function applyPreviewPaint(map, ink, hillshade, contours, labels) {
   }
 }
 
-async function renderPageMap(page, options) {
-  const { basemapId, dpi, ink, hillshade, contours, labels, extraVisibility } = options
-  const scale = getScale(page.scaleId)
+function pageCssSize(page) {
   const frame = frameMm(page.orientation)
-  const cssW = (frame.width / MM_PER_IN) * 96
-  const cssH = (frame.height / MM_PER_IN) * 96
-  const pixelRatio = dpi / 96
-  const canvasW = (frame.width / MM_PER_IN) * dpi
+  return {
+    cssW: (frame.width / MM_PER_IN) * 96,
+    cssH: (frame.height / MM_PER_IN) * 96,
+  }
+}
 
+function createHiddenPrintMap(basemapId, pixelRatio, cssW, cssH) {
   const hidden = document.createElement('div')
   hidden.className = 'print-hidden-map'
   hidden.style.cssText = 'position:fixed;left:-20000px;top:0;width:0;height:0;overflow:hidden;'
@@ -160,12 +181,11 @@ async function renderPageMap(page, options) {
   container.style.height = `${cssH}px`
   hidden.appendChild(container)
   document.body.appendChild(hidden)
-
   const map = new maplibregl.Map({
     container,
     style: buildPrintStyle(basemapId),
-    center: [page.lng, page.lat],
-    zoom: zoomForScale(page.lat, pageGeometry(page.lng, page.lat, scale.ratio, page.orientation).widthM, canvasW),
+    center: [0, 0],
+    zoom: 2,
     interactive: false,
     attributionControl: false,
     fadeDuration: 0,
@@ -174,53 +194,92 @@ async function renderPageMap(page, options) {
     pitch: 0,
     bearing: 0,
   })
+  return { hidden, container, map }
+}
 
+function destroyHiddenPrintMap(session) {
+  if (!session) return
   try {
-    await new Promise((resolve, reject) => {
-      map.once('load', resolve)
-      map.once('error', (e) => reject(e?.error || e))
-      setTimeout(() => resolve(), 12000)
-    })
-    applyPreviewPaint(map, ink, hillshade, contours, labels)
-    Object.entries(extraVisibility || {}).forEach(([layerId, on]) => {
-      if (map.getLayer(layerId)) {
-        map.setLayoutProperty(layerId, 'visibility', on ? 'visible' : 'none')
-      }
-    })
-    ;['print-pages-fill', 'print-pages-line', 'print-pages-label', 'print-ghost-fill', 'print-ghost-line', 'print-box-fill', 'print-box-line', 'print-grid-line', 'print-mgrs-label'].forEach((id) => {
-      if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none')
-    })
-    await waitIdle(map)
-    const srcCanvas = map.getCanvas()
-    const bmp = document.createElement('canvas')
-    bmp.width = srcCanvas.width
-    bmp.height = srcCanvas.height
-    const bctx = bmp.getContext('2d')
-    if (ink === 'bw') {
-      bctx.filter = 'grayscale(1) contrast(1.15)'
-    }
-    bctx.drawImage(srcCanvas, 0, 0)
-    return bmp
-  } finally {
-    try {
-      map.remove()
-    } catch {
-      /* ignore */
-    }
-    hidden.remove()
+    session.map.remove()
+  } catch {
+    /* ignore */
   }
+  session.hidden?.remove()
 }
 
-function canvasToJpeg(canvas, quality = 0.92) {
-  return canvas.toDataURL('image/jpeg', quality)
+async function waitMapLoad(map) {
+  if (map.loaded()) return
+  await new Promise((resolve) => {
+    map.once('load', resolve)
+    setTimeout(resolve, 12000)
+  })
 }
 
-function jpegDataUrlToBytes(dataUrl) {
-  const b64 = dataUrl.split(',')[1]
-  const bin = atob(b64)
-  const bytes = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i)
-  return bytes
+function hideChromeLayers(map) {
+  HIDDEN_CHROME_LAYERS.forEach((id) => {
+    if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none')
+  })
+}
+
+function snapshotMapCanvas(map, ink) {
+  const srcCanvas = map.getCanvas()
+  const bmp = document.createElement('canvas')
+  bmp.width = srcCanvas.width
+  bmp.height = srcCanvas.height
+  const bctx = bmp.getContext('2d')
+  if (ink === 'bw') bctx.filter = 'grayscale(1) contrast(1.15)'
+  bctx.drawImage(srcCanvas, 0, 0)
+  return bmp
+}
+
+async function capturePageOnMap(session, page, options) {
+  const { dpi, ink, hillshade, contours, labels, extraVisibility } = options
+  const { map, container } = session
+  const scale = getScale(page.scaleId)
+  const { cssW, cssH } = pageCssSize(page)
+  const canvasW = (frameMm(page.orientation).width / MM_PER_IN) * dpi
+  if (container.style.width !== `${cssW}px` || container.style.height !== `${cssH}px`) {
+    container.style.width = `${cssW}px`
+    container.style.height = `${cssH}px`
+    map.resize()
+  }
+  map.jumpTo({
+    center: [page.lng, page.lat],
+    zoom: zoomForScale(page.lat, pageGeometry(page.lng, page.lat, scale.ratio, page.orientation).widthM, canvasW),
+    pitch: 0,
+    bearing: 0,
+  })
+  applyPreviewPaint(map, ink, hillshade, contours, labels)
+  Object.entries(extraVisibility || {}).forEach(([layerId, on]) => {
+    if (map.getLayer(layerId)) {
+      map.setLayoutProperty(layerId, 'visibility', on ? 'visible' : 'none')
+    }
+  })
+  hideChromeLayers(map)
+  await waitIdle(map)
+  return snapshotMapCanvas(map, ink)
+}
+
+function canvasToJpegBlob(canvas, quality = JPEG_QUALITY) {
+  return new Promise((resolve, reject) => {
+    if (typeof canvas.toBlob === 'function') {
+      canvas.toBlob((blob) => {
+        if (!blob) reject(new Error('Could not encode page'))
+        else resolve(blob)
+      }, 'image/jpeg', quality)
+      return
+    }
+    try {
+      const dataUrl = canvas.toDataURL('image/jpeg', quality)
+      const b64 = dataUrl.split(',')[1]
+      const bin = atob(b64)
+      const bytes = new Uint8Array(bin.length)
+      for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i)
+      resolve(new Blob([bytes], { type: 'image/jpeg' }))
+    } catch (err) {
+      reject(err)
+    }
+  })
 }
 
 function buildJpegPdf(pages) {
@@ -305,44 +364,62 @@ function buildJpegPdf(pages) {
 
 export async function renderPrintPages(pages, options, onProgress) {
   const dpi = options.dpi || pickPrintDpi()
+  const pixelRatio = dpi / 96
   const sheets = []
-  for (let i = 0; i < pages.length; i += 1) {
-    onProgress?.({ index: i, total: pages.length, message: `Rendering page ${i + 1} of ${pages.length}… keep this tab open.` })
-    const page = pages[i]
-    const bmp = await renderPageMap(page, { ...options, dpi })
-    const landscape = page.orientation === 'landscape'
-    const pageW = (landscape ? LETTER_IN.height : LETTER_IN.width) * dpi
-    const pageH = (landscape ? LETTER_IN.width : LETTER_IN.height) * dpi
-    const sheet = document.createElement('canvas')
-    sheet.width = Math.round(pageW)
-    sheet.height = Math.round(pageH)
-    const ctx = sheet.getContext('2d')
-    drawCollar(ctx, page, dpi, bmp, options.attribution)
-    sheets.push({
-      canvas: sheet,
-      jpeg: canvasToJpeg(sheet, 0.92),
-      png: sheet.toDataURL('image/png'),
-      orientation: page.orientation,
-      w: sheet.width,
-      h: sheet.height,
-    })
+  let session = null
+  try {
+    for (let i = 0; i < pages.length; i += 1) {
+      onProgress?.({
+        index: i,
+        total: pages.length,
+        message: `Rendering page ${i + 1} of ${pages.length}… keep this tab open.`,
+      })
+      if (i > 0) await yieldUi()
+      const page = pages[i]
+      const { cssW, cssH } = pageCssSize(page)
+      if (!session) {
+        session = createHiddenPrintMap(options.basemapId, pixelRatio, cssW, cssH)
+        await waitMapLoad(session.map)
+      }
+      const bmp = await capturePageOnMap(session, page, { ...options, dpi })
+      const landscape = page.orientation === 'landscape'
+      const pageW = (landscape ? LETTER_IN.height : LETTER_IN.width) * dpi
+      const pageH = (landscape ? LETTER_IN.width : LETTER_IN.height) * dpi
+      const sheet = document.createElement('canvas')
+      sheet.width = Math.round(pageW)
+      sheet.height = Math.round(pageH)
+      const ctx = sheet.getContext('2d')
+      drawCollar(ctx, page, dpi, bmp, options.attribution)
+      const jpegBlob = await canvasToJpegBlob(sheet, JPEG_QUALITY)
+      sheets.push({
+        canvas: sheet,
+        jpegBlob,
+        orientation: page.orientation,
+        w: sheet.width,
+        h: sheet.height,
+      })
+    }
+  } finally {
+    destroyHiddenPrintMap(session)
   }
   return sheets
 }
 
-export function sheetsToPdfBlob(sheets) {
-  const pages = sheets.map((s) => {
+export async function sheetsToPdfBlob(sheets) {
+  const pages = []
+  for (const s of sheets) {
     const landscape = s.orientation === 'landscape'
     const ptW = (landscape ? LETTER_IN.height : LETTER_IN.width) * 72
     const ptH = (landscape ? LETTER_IN.width : LETTER_IN.height) * 72
-    return {
-      bytes: jpegDataUrlToBytes(s.jpeg),
+    const buf = await s.jpegBlob.arrayBuffer()
+    pages.push({
+      bytes: new Uint8Array(buf),
       w: s.w,
       h: s.h,
       ptW,
       ptH,
-    }
-  })
+    })
+  }
   const bytes = buildJpegPdf(pages)
   return new Blob([bytes], { type: 'application/pdf' })
 }
@@ -359,13 +436,14 @@ export function downloadBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 4000)
 }
 
-export function printSheets(sheets) {
+export async function printSheets(sheets) {
   const w = window.open('', '_blank')
   if (!w) throw new Error('Popup blocked — allow popups to print.')
-  const imgs = sheets
+  const urls = sheets.map((s) => URL.createObjectURL(s.jpegBlob))
+  const imgs = urls
     .map(
-      (s) =>
-        `<div class="sheet ${s.orientation}"><img src="${s.jpeg}" alt="print page" /></div>`,
+      (url, i) =>
+        `<div class="sheet ${sheets[i].orientation}"><img src="${url}" alt="print page" /></div>`,
     )
     .join('')
   w.document.write(`<!doctype html><html><head><title>Print map</title>
@@ -378,7 +456,26 @@ export function printSheets(sheets) {
     </style></head><body>${imgs}</body></html>`)
   w.document.close()
   w.focus()
+  const revoke = () => {
+    urls.forEach((url) => {
+      try {
+        URL.revokeObjectURL(url)
+      } catch {
+        /* ignore */
+      }
+    })
+  }
+  const onAfter = () => {
+    w.removeEventListener('afterprint', onAfter)
+    revoke()
+  }
+  w.addEventListener('afterprint', onAfter)
   setTimeout(() => {
-    w.print()
-  }, 400)
+    try {
+      w.print()
+    } catch {
+      revoke()
+    }
+  }, 500)
+  setTimeout(revoke, 120000)
 }

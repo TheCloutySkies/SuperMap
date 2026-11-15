@@ -82,8 +82,20 @@ service cloud.firestore {
           && request.resource.data.fromUid == request.auth.uid
           && request.resource.data.body is string
           && request.resource.data.body.size() > 0
-          && request.resource.data.body.size() <= 4000;
-        allow update, delete: if false;
+          && request.resource.data.body.size() <= 4000
+          && (
+            !request.resource.data.keys().hasAny(['expiresAtMs'])
+            || (
+              request.resource.data.expiresAtMs is number
+              && request.resource.data.expiresAtMs >= request.time.toMillis() - 120000
+              && request.resource.data.expiresAtMs <= request.time.toMillis() + 2764800000
+            )
+          );
+        allow update: if false;
+        allow delete: if signedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.memberUids
+          && resource.data.expiresAtMs is number
+          && resource.data.expiresAtMs <= request.time.toMillis();
       }
     }
     match /reports/{reportId} {

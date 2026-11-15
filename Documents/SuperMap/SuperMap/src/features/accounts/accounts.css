@@ -414,12 +414,96 @@ button.sm-msg-go {
 .sm-msg-empty-pane h3 { margin: 0 0 8px; color: #e9f3fb; }
 .sm-reply-form {
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
+  align-items: stretch;
   gap: 8px;
   padding: 12px;
   border-top: 1px solid #1f3348;
   background: #0d1824;
 }
+.sm-reply-tools { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+.sm-reply-tools label { display: flex; flex-direction: column; gap: 4px; color: #8ea6ba; font-size: 12px; min-width: 0; }
+.sm-reply-tools select { max-width: 220px; }
+.sm-reply-tools .sm-primary-btn { margin-left: auto; }
+.sm-msg-row { position: relative; }
+.sm-msg-more {
+  border: 0;
+  background: transparent;
+  color: #8ea6ba;
+  font: inherit;
+  font-weight: 700;
+  padding: 6px;
+  cursor: pointer;
+}
+.sm-msg-menu { position: relative; flex: 0 0 auto; }
+.sm-msg-menu-pop {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+  padding: 6px;
+  border-radius: 10px;
+  background: #132232;
+  border: 1px solid #2c4a66;
+}
+.sm-msg-menu-pop button {
+  border: 0;
+  background: transparent;
+  color: #e9f3fb;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+}
+.sm-msg-menu-pop button:hover { background: rgba(56, 225, 255, 0.12); }
+.sm-msg-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #1f3348;
+  background: #101c2a;
+}
+.sm-msg-settings label { display: flex; flex-direction: column; gap: 4px; color: #8ea6ba; font-size: 13px; }
+.sm-emoji-pop { position: relative; }
+.sm-emoji-launch { display: inline-flex; align-items: center; gap: 6px; }
+.sm-emoji-panel {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 8px);
+  z-index: 6;
+  width: min(320px, 70vw);
+  padding: 10px;
+  border-radius: 12px;
+  background: #132232;
+  border: 1px solid #2c4a66;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+}
+.sm-emoji-panel.is-up { top: auto; bottom: calc(100% + 8px); }
+.sm-emoji-panel p { margin: 0 0 8px; color: #8ea6ba; font-size: 12px; }
+.sm-emoji-capture { width: 100%; margin-bottom: 8px; }
+.sm-vault-toolbar, .sm-vault-create, .sm-organize { display: flex; flex-direction: column; gap: 10px; }
+.sm-vault-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sm-organize label, .sm-vault-filters label, .sm-vault-create label { display: flex; flex-direction: column; gap: 4px; color: #8ea6ba; font-size: 12px; }
+.sm-tag-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.sm-tag-row button {
+  border: 1px solid #2c4a66;
+  background: #0f1b2a;
+  color: #e9f3fb;
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.sm-tag-row button.active { border-color: #38e1ff; color: #38e1ff; }
+.sm-pin-form { max-width: 280px; }
+.sm-account-reports .report-maker { background: transparent; padding: 8px 0 24px; }
+.sm-msg-head .sm-ghost-btn { margin-left: auto; flex: 0 0 auto; }
 .sm-reply-form textarea {
   flex: 1;
   width: auto;
@@ -439,6 +523,7 @@ button.sm-msg-go {
 }
 @media (max-width: 800px) {
   .sm-workspace-body { grid-template-columns: 1fr; }
-  .sm-workspace-nav { flex-direction: row; border-right: 0; border-bottom: 1px solid #1f3348; }
+  .sm-workspace-nav { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid #1f3348; }
+  .sm-vault-filters { grid-template-columns: 1fr; }
   .sm-acct-dock-label { display: none; }
 }

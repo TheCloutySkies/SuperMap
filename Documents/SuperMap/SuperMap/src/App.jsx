@@ -121,6 +121,25 @@ function App() {
     return () => clearTimeout(id)
   }, [mapLoadingPending])
 
+  useEffect(() => {
+    function onToggle(event) {
+      const key = event.detail?.key
+      if (!key) return
+      const on = !!event.detail.on
+      setLayerToggles((prev) => (prev[key] === on ? prev : { ...prev, [key]: on }))
+    }
+    function onRequest() {
+      window.dispatchEvent(new CustomEvent('supermap:layers', { detail: layerToggles }))
+    }
+    window.addEventListener('supermap:layer-toggle', onToggle)
+    window.addEventListener('supermap:layers-request', onRequest)
+    window.dispatchEvent(new CustomEvent('supermap:layers', { detail: layerToggles }))
+    return () => {
+      window.removeEventListener('supermap:layer-toggle', onToggle)
+      window.removeEventListener('supermap:layers-request', onRequest)
+    }
+  }, [layerToggles])
+
   // Flock Cameras is a dedicated map: force the layer on only in that view.
   useEffect(() => {
     setLayerToggles((prev) => {

@@ -28,11 +28,13 @@ import {
   onSnapshot,
   query,
   serverTimestamp,
+  deleteField,
   setDoc,
   updateDoc,
   where,
 } from 'firebase/firestore'
 import { firebaseReady, getAccountsFirebase } from './firebaseClient'
+import { readVaultLock, setVaultUnlocked } from './vaultLock'
 import { accountHandle, accountNumber, personHandle, personNumber, personTitle } from './accountIdentity'
 import { getModeVisibility, setModeVisibility } from './menuCatalog'
 import { deleteOwnedContent, subscribeConversations } from './socialData'
@@ -250,6 +252,7 @@ export function AccountsProvider({ children }) {
         presence: stored.presence === 'online' || stored.presence === 'incognito' ? stored.presence : 'offline',
         anonymous: Boolean(fbUser.isAnonymous),
         provider: signInProvider(fbUser),
+        vaultLock: readVaultLock(stored),
       }
       if (stored.modeVisibility && typeof stored.modeVisibility === 'object') {
         setModeVisibility({ ...getModeVisibility(), ...stored.modeVisibility })
@@ -290,7 +293,10 @@ export function AccountsProvider({ children }) {
   useEffect(() => {
     if (!user?.uid) return undefined
     return subscribeConversations(user.uid, (rows) => {
-      const count = rows.reduce((sum, row) => sum + (Number(row.unread?.[user.uid]) || 0), 0)
+      const count = rows.reduce((sum, row) => {
+        if (row.box?.[user.uid] === 'deleted') return sum
+        return sum + (Number(row.unread?.[user.uid]) || 0)
+      }, 0)
       setUnread(count)
     })
   }, [user?.uid])
@@ -434,6 +440,31 @@ export function AccountsProvider({ children }) {
         bulletinTagline: next.bulletinTagline,
         presence: next.presence,
         modeVisibility: patch.modeVisibility || getModeVisibility(),
+        updatedAt: serverTimestamp(),
+        updatedAtMs: Date.now(),
+      }, { merge: true })
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, error: friendlyAuthError(error) }
+    }
+  }, [user])
+
+  const setVaultLock = useCallback(async (lock) => {
+    if (!user?.uid) return { ok: false, error: 'Sign in first.' }
+    const nextLock = lock && (lock.digits === 4 || lock.digits === 6) && typeof lock.hash === 'string'
+      ? { digits: lock.digits, hash: lock.hash }
+      : null
+    const next = { ...user, vaultLock: nextLock }
+    setUser(next)
+    setVaultUnlocked(user.uid, Boolean(nextLock))
+    if (!firebaseReady) {
+      setLocal((current) => ({ ...current, user: next, account: { ...(current.account || {}), ...next } }))
+      return { ok: true }
+    }
+    const f = getFirebase()
+    try {
+      await setDoc(doc(f.db, 'users', user.uid), {
+        vaultLock: nextLock || deleteField(),
         updatedAt: serverTimestamp(),
         updatedAtMs: Date.now(),
       }, { merge: true })
@@ -588,7 +619,7 @@ export function AccountsProvider({ children }) {
     return { ok: true, id: item.id }
   }, [user, vault, showToast])
 
-  const createPinList = useCallback(async (name) => {
+  const createPinList = useCallback(async (name, extra = {}) => {
     const clean = String(name || '').trim().slice(0, 80)
     if (!clean) return { ok: false }
     if (!user) {
@@ -601,7 +632,11 @@ export function AccountsProvider({ children }) {
       type: 'map',
       title: clean,
       summary: '',
-      payload: { kind: 'pin-list' },
+      payload: {
+        kind: 'pin-list',
+        folder: String(extra?.folder || '').trim().slice(0, 80),
+        icon: String(extra?.icon || '📋').slice(0, 16),
+      },
     }, user)
     const f = getFirebase()
     if (f) {
@@ -616,6 +651,34 @@ export function AccountsProvider({ children }) {
     setLocal((s) => ({ ...s, vault: sortVault([item, ...(s.vault || [])]) }))
     return { ok: true, name: clean, id: item.id }
   }, [user, pinLists, showToast])
+
+  const createVaultFolder = useCallback(async (name, icon = '📁') => {
+    const clean = String(name || '').trim().slice(0, 80)
+    if (!clean) return { ok: false }
+    if (!user) {
+      setOverlay('auth')
+      return { ok: false, needsAuth: true }
+    }
+    const item = normalizeSavedItem({
+      id: `folder-${uid()}`,
+      type: 'map',
+      title: clean,
+      summary: '',
+      payload: { kind: 'vault-folder', icon: String(icon || '📁').slice(0, 16) },
+    }, user)
+    const f = getFirebase()
+    if (f) {
+      try {
+        await setDoc(doc(f.db, 'saved_items', item.id), { ...item, updatedAt: serverTimestamp(), createdAt: serverTimestamp() })
+        return { ok: true, name: clean, id: item.id }
+      } catch (error) {
+        showToast({ tone: 'danger', message: error.message })
+        return { ok: false, error }
+      }
+    }
+    setLocal((s) => ({ ...s, vault: sortVault([item, ...(s.vault || [])]) }))
+    return { ok: true, name: clean, id: item.id }
+  }, [user, showToast])
 
   const deleteSavedItem = useCallback(async (id) => {
     const f = getFirebase()
@@ -695,6 +758,8 @@ export function AccountsProvider({ children }) {
     createSavedItem,
     saveMapPin,
     createPinList,
+    createVaultFolder,
+    setVaultLock,
     updateSavedItem,
     deleteSavedItem,
     publicProfile,

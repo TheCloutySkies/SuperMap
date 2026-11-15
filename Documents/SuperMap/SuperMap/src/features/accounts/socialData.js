@@ -1,6 +1,7 @@
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -76,6 +77,54 @@ function db() {
 
 export function conversationId(a, b) {
   return [String(a), String(b)].sort().join('__')
+}
+
+export const DISAPPEAR_CHOICES = Object.freeze([
+  { id: '1m', label: '1 minute', ms: 60 * 1000, short: true },
+  { id: '10m', label: '10 minutes', ms: 10 * 60 * 1000, short: true },
+  { id: '30m', label: '30 minutes', ms: 30 * 60 * 1000, short: true },
+  { id: '1h', label: '1 hour', ms: 60 * 60 * 1000, short: false },
+  { id: '12h', label: '12 hours', ms: 12 * 60 * 60 * 1000, short: false },
+  { id: '24h', label: '24 hours', ms: 24 * 60 * 60 * 1000, short: false },
+  { id: '3d', label: '3 days', ms: 3 * 24 * 60 * 60 * 1000, short: false },
+  { id: '7d', label: '7 days', ms: 7 * 24 * 60 * 60 * 1000, short: false },
+  { id: '30d', label: '30 days', ms: 30 * 24 * 60 * 60 * 1000, short: false },
+])
+
+const MAX_DISAPPEAR_MS = DISAPPEAR_CHOICES[DISAPPEAR_CHOICES.length - 1].ms
+const purgeTried = new Set()
+
+export function normalizeDisappearMs(value) {
+  const ms = Number(value)
+  if (!Number.isFinite(ms) || ms < 60 * 1000 || ms > MAX_DISAPPEAR_MS) return 0
+  return ms
+}
+
+export function disappearLabel(ms) {
+  const match = DISAPPEAR_CHOICES.find((choice) => choice.ms === Number(ms))
+  return match?.label || ''
+}
+
+function messageIsLive(row, now = Date.now()) {
+  return !row?.expiresAtMs || Number(row.expiresAtMs) > now
+}
+
+function purgeExpiredMessages(conversationIdValue, rows) {
+  const now = Date.now()
+  for (const row of rows) {
+    if (messageIsLive(row, now) || !row?.id) continue
+    const key = `${conversationIdValue}:${row.id}`
+    if (purgeTried.has(key)) continue
+    purgeTried.add(key)
+    const firestore = db()
+    if (!firestore) {
+      const store = readStore()
+      store.messages = store.messages.filter((item) => item.id !== row.id)
+      writeStore(store)
+      continue
+    }
+    deleteDoc(doc(firestore, 'conversations', conversationIdValue, 'messages', row.id)).catch(() => {})
+  }
 }
 
 /** Create or refresh a two-person thread in Firebase before the first message. */
@@ -507,7 +556,10 @@ export function subscribeMessages(conversationIdValue, cb) {
       (store) => store.messages
         .filter((row) => row.conversationId === conversationIdValue)
         .sort((a, b) => (a.createdAtMs || 0) - (b.createdAtMs || 0)),
-      cb,
+      (rows) => {
+        queueMicrotask(() => purgeExpiredMessages(conversationIdValue, rows))
+        cb(rows.filter((row) => messageIsLive(row)))
+      },
     )
   }
   const q = query(
@@ -516,11 +568,13 @@ export function subscribeMessages(conversationIdValue, cb) {
     limit(200),
   )
   return onSnapshot(q, (snap) => {
-    cb(snap.docs.map((row) => ({ id: row.id, ...row.data() })))
+    const rows = snap.docs.map((row) => ({ id: row.id, ...row.data() }))
+    purgeExpiredMessages(conversationIdValue, rows)
+    cb(rows.filter((row) => messageIsLive(row)))
   }, () => cb([]))
 }
 
-export async function sendDirectMessage({ from, to, body, item }) {
+export async function sendDirectMessage({ from, to, body, item, expiresInMs }) {
   if (!to?.uid || to.uid === from.uid) return { ok: false, error: 'Pick someone else.' }
   const text = String(body || '').trim().slice(0, 4000)
   const card = item?.title ? {
@@ -532,6 +586,7 @@ export async function sendDirectMessage({ from, to, body, item }) {
   if (!text && !card) return { ok: false, error: 'Write a message.' }
   const id = conversationId(from.uid, to.uid)
   const now = Date.now()
+  const ttl = normalizeDisappearMs(expiresInMs)
   const message = {
     id: uid(),
     conversationId: id,
@@ -539,6 +594,7 @@ export async function sendDirectMessage({ from, to, body, item }) {
     body: text || (card ? `Sent “${card.title}”` : ''),
     item: card,
     createdAtMs: now,
+    ...(ttl ? { expiresAtMs: now + ttl } : {}),
   }
   const firestore = db()
   if (!firestore) {
@@ -559,6 +615,7 @@ export async function sendDirectMessage({ from, to, body, item }) {
     convo.updatedAtMs = now
     convo.lastBody = message.body.slice(0, 140)
     convo.unread = { ...(convo.unread || {}), [to.uid]: (convo.unread?.[to.uid] || 0) + 1 }
+    convo.box = { ...(convo.box || {}), [from.uid]: 'inbox', [to.uid]: 'inbox' }
     store.messages = [...store.messages, message]
     writeStore(store)
     return { ok: true, id }
@@ -574,12 +631,56 @@ export async function sendDirectMessage({ from, to, body, item }) {
     lastBody: message.body.slice(0, 140),
     updatedAt: serverTimestamp(),
   }, { merge: true })
-  await updateDoc(convoRef, { [`unread.${to.uid}`]: increment(1) })
+  await updateDoc(convoRef, {
+    [`unread.${to.uid}`]: increment(1),
+    [`box.${from.uid}`]: 'inbox',
+    [`box.${to.uid}`]: 'inbox',
+  })
   await setDoc(doc(firestore, 'conversations', id, 'messages', message.id), {
     ...message,
     createdAt: serverTimestamp(),
   })
   return { ok: true, id }
+}
+
+export async function setConversationBox(conversationIdValue, userUid, box) {
+  if (!conversationIdValue || !userUid) return { ok: false }
+  const value = box === 'archived' || box === 'deleted' ? box : 'inbox'
+  const firestore = db()
+  if (!firestore) {
+    const store = readStore()
+    store.conversations = store.conversations.map((row) => (
+      row.id === conversationIdValue
+        ? { ...row, box: { ...(row.box || {}), [userUid]: value } }
+        : row
+    ))
+    writeStore(store)
+    return { ok: true }
+  }
+  await updateDoc(doc(firestore, 'conversations', conversationIdValue), {
+    [`box.${userUid}`]: value,
+  })
+  return { ok: true }
+}
+
+export async function setConversationTimer(conversationIdValue, ms) {
+  if (!conversationIdValue) return { ok: false }
+  const ttl = normalizeDisappearMs(ms)
+  const firestore = db()
+  if (!firestore) {
+    const store = readStore()
+    store.conversations = store.conversations.map((row) => (
+      row.id === conversationIdValue
+        ? { ...row, disappearMs: ttl || null }
+        : row
+    ))
+    writeStore(store)
+    return { ok: true }
+  }
+  await updateDoc(doc(firestore, 'conversations', conversationIdValue), {
+    disappearMs: ttl || deleteField(),
+  })
+  return { ok: true }
 }
 
 export async function markConversationRead(conversationIdValue, userUid) {

@@ -101,7 +101,7 @@ function friendlyAuthError(error) {
   if (code.includes('weak-password')) return 'Password must be at least 6 characters.'
   if (code.includes('invalid-email')) return 'Enter a valid email address.'
   if (code.includes('popup-closed')) return 'Google sign-in was closed.'
-  if (code.includes('unauthorized-domain')) return 'Add this domain to Firebase Auth authorized domains.'
+  if (code.includes('unauthorized-domain')) return 'Sign-in is not available from this site.'
   if (code.includes('requires-recent-login')) return 'Sign in again, then delete the account.'
   return error?.message || 'Authentication failed.'
 }
@@ -299,7 +299,7 @@ export function AccountsProvider({ children }) {
       setLocal((current) => ({ ...current, account: profile, user: profile }))
       setUser(profile)
       setOverlay('workspace')
-      showToast({ tone: 'info', message: 'Account saved in this browser. Add Firebase keys to sync it.' })
+      showToast({ tone: 'info', message: 'Account saved on this device.' })
       return { ok: true }
     }
     try {
@@ -346,7 +346,7 @@ export function AccountsProvider({ children }) {
 
   const signInGoogle = useCallback(async () => {
     const f = getFirebase()
-    if (!f) return { ok: false, error: 'Google sign-in needs Firebase keys. Create an email account to continue locally.' }
+    if (!f) return { ok: false, error: 'Google sign-in is unavailable.' }
     try {
       await signInWithPopup(f.auth, new GoogleAuthProvider())
       setOverlay('workspace')
@@ -680,7 +680,7 @@ function AccountDock() {
 }
 
 function AuthModal() {
-  const { setOverlay, signInEmail, signUpEmail, signInGoogle, signInAnonymous, firebaseReady } = useSuperMapAccount()
+  const { setOverlay, signInEmail, signUpEmail, signInGoogle, signInAnonymous } = useSuperMapAccount()
   const [mode, setMode] = useState('signup')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -753,9 +753,6 @@ function AuthModal() {
         }}>
           Continue without an email
         </button>
-        {!firebaseReady ? (
-          <p className="sm-local-note">Firebase is not configured. Creating an account stores it in this browser so you can try the workspace.</p>
-        ) : null}
       </div>
     </div>
   )

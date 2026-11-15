@@ -33,8 +33,8 @@ export default function NewsTopicSearch({ onResults }) {
         const data = res.data?.data ?? res.data?.news ?? (Array.isArray(res.data) ? res.data : [])
         onResults?.(Array.isArray(data) ? data : [])
       })
-      .catch((err) => {
-        setError(err.response?.status === 503 ? 'Set RAPIDAPI_KEY in backend .env' : err.message)
+      .catch(() => {
+        setError('Search is unavailable.')
         onResults?.([])
       })
       .finally(() => setLoading(false))

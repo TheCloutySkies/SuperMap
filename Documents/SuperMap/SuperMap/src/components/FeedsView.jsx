@@ -863,7 +863,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
               className="feeds-refresh-btn"
               onClick={refreshFeeds}
               disabled={refreshing || loading}
-              title="Reload feeds from the API"
+              title="Refresh"
             >
               {refreshing || loading ? '…' : '↻'} Refresh
             </button>
@@ -912,7 +912,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
             />
             {quotaExhausted && (
               <p className="news-desk-quota-note">
-                Live MediaStack pulls are paused until the monthly quota resets. RSS and last-good cache stay available below.
+                Live search is paused. Saved headlines are still below.
               </p>
             )}
             {(localQ || omnibarQ) && (

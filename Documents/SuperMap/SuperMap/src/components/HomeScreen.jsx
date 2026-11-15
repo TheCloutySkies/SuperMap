@@ -33,7 +33,7 @@ const QUICK_LINKS = [
   { id: WEATHER_VIEW_ID, label: 'Weather', desc: 'Forecast, radar layers, air quality & marine', icon: '☁', path: WEATHER_VIEW_ID },
   { id: 'news-feeds', label: 'Glowie Report', desc: 'Image-led headlines from trusted publishers', icon: '📰', path: 'news-feeds' },
   { id: 'osint-feeds', label: 'OSINT Feeds', desc: 'Bellingcat, CISA, DW, tactical intel', icon: '📡', path: 'osint-feeds' },
-  { id: 'osint-x', label: 'OSINT (X)', desc: 'Posts from OSINT X/Twitter accounts via FxTwitter', icon: '𝕏', path: 'osint-x' },
+  { id: 'osint-x', label: 'OSINT (X)', desc: 'Posts from OSINT accounts', icon: '𝕏', path: 'osint-x' },
   { id: 'report-maker', label: 'Report Maker', desc: 'Build and save intelligence reports', icon: '📝', path: 'report-maker' },
   { id: 'resources', label: 'Resources', desc: 'Open OSINT tools and reference resources', icon: '📚', path: 'resources' },
 ]
@@ -690,7 +690,7 @@ export default function HomeScreen({
                   className="home-screen-photos-refresh btn-y2k"
                   onClick={() => fetchHomeXImages(true)}
                   disabled={homeXImagesLoading}
-                  title="Force refresh images from FxTwitter"
+                  title="Refresh images"
                 >
                   {homeXImagesLoading ? 'Refreshing…' : 'Refresh images'}
                 </button>
@@ -720,8 +720,8 @@ export default function HomeScreen({
               ) : (
                 <p className="home-screen-hint">
                   {homeXImagesLoading
-                    ? 'Loading OSINT images from FxTwitter…'
-                    : 'No live OSINT images right now. Photos load from public FxTwitter timelines (no API key) — tap Refresh images to try again.'}
+                    ? 'Loading images…'
+                    : 'No images right now.'}
                 </p>
               )}
             </section>

@@ -25,8 +25,8 @@ export default function StockSearch() {
         const arr = Array.isArray(body) ? body : body?.data ?? body?.quotes ?? []
         setResults(Array.isArray(arr) ? arr.slice(0, 20) : [])
       })
-      .catch((err) => {
-        setError(err.response?.status === 503 ? 'Set RAPIDAPI_KEY in backend .env' : err.message)
+      .catch(() => {
+        setError('Search is unavailable.')
       })
       .finally(() => setLoading(false))
   }

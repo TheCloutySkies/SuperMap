@@ -86,9 +86,8 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
         setOsintXHandles(res.data.osintXHandles || [])
         if (res.data.stockTickers !== undefined) setStockTickers(res.data.stockTickers || [])
       })
-      .catch((err) => {
-        const msg = err?.response?.data?.error || err?.response?.data?.hint || 'Could not save config'
-        setConfigWriteError(msg)
+      .catch(() => {
+        setConfigWriteError('Could not save.')
       })
       .finally(() => setConfigSaving(false))
   }
@@ -143,7 +142,6 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
     <div className="settings-view">
       <header className="settings-view-header">
         <h1 className="settings-view-title">Settings</h1>
-        <p className="settings-view-desc">Visuals and feed sources. X handles are saved to the backend and used by the API.</p>
       </header>
 
       <nav className="settings-view-nav">
@@ -244,13 +242,11 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
         {activeSection === 'xhandles' && (
           <section className="settings-view-section">
             <h2>X (Twitter) handles</h2>
-            <p className="settings-hint">OSINT (X) feed uses these accounts. Saved to backend; next ingest will include them.</p>
             {configWriteError && <p className="settings-hint settings-hint--warn">{configWriteError}</p>}
             {configLoading ? (
               <p className="settings-loading">Loading…</p>
             ) : (
               <>
-                <p className="settings-hint">OSINT (X) feeds are fetched via FxTwitter (no API key). If you only see a few creators, click below to restore all default feeds.</p>
                 {defaultOsintXHandles.length > 0 && (
                   <button
                     type="button"
@@ -293,7 +289,6 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
         {activeSection === 'stocktickers' && (
           <section className="settings-view-section">
             <h2>Stock tickers</h2>
-            <p className="settings-hint">Symbols shown in the homepage Stocks widget (e.g. SPY, AAPL, GC=F). Finnhub symbols; save to backend.</p>
             {configLoading ? (
               <p className="settings-loading">Loading…</p>
             ) : (

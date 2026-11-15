@@ -36,6 +36,13 @@
   background: linear-gradient(135deg, #38e1ff, #4da3ff);
   color: #041018;
   font-weight: 800;
+  flex: 0 0 32px;
+}
+.sm-acct-avatar svg { display: block; }
+.sm-acct-avatar.is-google { background: #fff; }
+.sm-acct-avatar.is-anonymous {
+  background: linear-gradient(160deg, #2a3848, #121820);
+  color: #e7eef6;
 }
 .sm-acct-count {
   min-width: 20px;

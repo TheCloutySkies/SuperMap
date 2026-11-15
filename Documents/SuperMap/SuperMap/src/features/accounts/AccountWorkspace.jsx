@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSuperMapAccount } from './SuperMapAccounts'
+import ItemMenu from './ItemMenu'
 import { MODE_CATALOG, PROFILE_EMOJIS, REPORT_OWNER_EMAIL, getModeVisibility, setModeVisibility } from './menuCatalog'
 import { firebaseReady } from './firebaseClient'
 import { personHandle, personNumber, personTitle } from './accountIdentity'
@@ -11,9 +12,21 @@ import {
   sendDirectMessage,
   subscribeConversations,
   subscribeMessages,
+  createProfilePost,
+  deleteProfilePost,
   subscribeProfilePosts,
   subscribeReports,
 } from './socialData'
+
+function presenceValue(value) {
+  return value === 'online' || value === 'incognito' ? value : 'offline'
+}
+
+function PresenceDot({ presence }) {
+  const value = presenceValue(presence)
+  const label = value === 'online' ? 'Online' : value === 'incognito' ? 'Incognito' : 'Offline'
+  return <span className={`sm-presence sm-presence--${value}`} title={label} aria-label={label} />
+}
 
 function when(ms) {
   if (!ms) return ''
@@ -38,7 +51,7 @@ export default function AccountWorkspace() {
           <div className="sm-workspace-title">
             <span className="sm-auth-mark">{user?.emoji || '◈'}</span>
             <div>
-              <h2>{personTitle(user)}</h2>
+              <h2><PresenceDot presence={user?.presence} />{personTitle(user)}</h2>
               <p>{personHandle(user)} · #{personNumber(user)} · {user?.anonymous ? 'Anonymous account' : (user?.email || 'Signed in')}</p>
             </div>
           </div>
@@ -110,20 +123,73 @@ function VaultPanel() {
 }
 
 function ProfilePanel() {
-  const { user } = useSuperMapAccount()
+  const { user, showToast } = useSuperMapAccount()
   const [posts, setPosts] = useState([])
+  const [thought, setThought] = useState('')
+  const [posting, setPosting] = useState(false)
   useEffect(() => subscribeProfilePosts(user?.uid, setPosts), [user?.uid])
+  const thoughts = posts.filter((post) => post.type === 'thought' && post.parentId)
+  const visible = posts.filter((post) => !post.parentId)
+
+  async function postThought(event) {
+    event.preventDefault()
+    const text = thought.trim()
+    if (!text || !user) return
+    setPosting(true)
+    try {
+      await createProfilePost(user, { type: 'thought', title: text, summary: text })
+      setThought('')
+      showToast({ tone: 'success', message: 'Thought posted' })
+    } catch (error) {
+      showToast({ tone: 'danger', message: error.message || 'Could not post that' })
+    } finally {
+      setPosting(false)
+    }
+  }
+
   return (
     <section className="sm-vault">
-      <p className="sm-local-note">{user?.emoji || '◈'} {personTitle(user)} · {personHandle(user)}. Posts you send with “Post to Profile” land here.</p>
-      {posts.map((post) => (
-        <article key={post.id} className="sm-card">
-          <h3>{post.title}</h3>
-          {post.summary ? <p className="sm-card-summary">{post.summary}</p> : null}
-          {post.sourceUrl ? <a href={post.sourceUrl} target="_blank" rel="noopener noreferrer">Source</a> : null}
-        </article>
-      ))}
-      {posts.length === 0 ? <p className="sm-local-note">No profile posts yet.</p> : null}
+      <div className="sm-profile-head">
+        <h2><PresenceDot presence={user?.presence} />{user?.emoji || '◈'} {personTitle(user)}</h2>
+        <p className="sm-local-note">{personHandle(user)}</p>
+        {user?.bio ? <p className="sm-bio">{user.bio}</p> : null}
+      </div>
+      <form className="sm-form sm-thought-form" onSubmit={postThought}>
+        <label>
+          Leave a thought
+          <textarea value={thought} onChange={(event) => setThought(event.target.value)} maxLength={600} rows={3} placeholder="Write something" />
+        </label>
+        <button type="submit" className="sm-primary-btn" disabled={posting || !thought.trim()}>{posting ? '…' : 'Post'}</button>
+      </form>
+      {visible.map((post) => {
+        const notes = thoughts.filter((row) => row.parentId === post.id)
+        const menuItem = {
+          id: post.id,
+          ownerUid: post.ownerUid,
+          type: post.type || 'article',
+          title: post.title,
+          summary: post.summary || '',
+          url: post.sourceUrl || '',
+          lat: post.lat,
+          lon: post.lon,
+        }
+        return (
+          <article key={post.id} className="sm-card has-item-menu">
+            <ItemMenu item={menuItem} profilePost />
+            {post.type === 'thought' ? <span className="sm-type-badge">Thought</span> : null}
+            <h3>{post.type === 'thought' ? (post.summary || post.title) : post.title}</h3>
+            {post.type !== 'thought' && post.summary ? <p className="sm-card-summary">{post.summary}</p> : null}
+            {post.sourceUrl ? <a href={post.sourceUrl} target="_blank" rel="noopener noreferrer">Source</a> : null}
+            {notes.map((note) => (
+              <p key={note.id} className="sm-thought">
+                {note.summary || note.title}
+                <button type="button" className="sm-ghost-btn" onClick={() => deleteProfilePost(note).catch((error) => showToast({ tone: 'danger', message: error.message || 'Could not remove it' }))}>Remove</button>
+              </p>
+            ))}
+          </article>
+        )
+      })}
+      {visible.length === 0 ? <p className="sm-local-note">No profile posts yet.</p> : null}
     </section>
   )
 }
@@ -269,8 +335,8 @@ function MessagesPanel() {
             <button key={person.uid} type="button" className="sm-msg-row sm-msg-person" onClick={() => choose(person)}>
               <span className="sm-msg-avatar" aria-hidden>{person.emoji || '◈'}</span>
               <span className="sm-msg-copy">
-                <strong>{personTitle(person)}</strong>
-                <em>{personHandle(person)}</em>
+                <strong><PresenceDot presence={person.presence} />{personTitle(person)}</strong>
+                <em>{personHandle(person)}{person.bio ? ` · ${String(person.bio).slice(0, 80)}` : ''}</em>
               </span>
               <span className="sm-msg-go">Message</span>
             </button>
@@ -366,6 +432,8 @@ function SettingsPanel() {
   const { user, updateAccount, deleteAccount } = useSuperMapAccount()
   const [name, setName] = useState(user?.displayName || '')
   const [emoji, setEmoji] = useState(user?.emoji || '◈')
+  const [bio, setBio] = useState(user?.bio || '')
+  const [presence, setPresence] = useState(presenceValue(user?.presence))
   const [discoverable, setDiscoverable] = useState(user?.discoverable !== false)
   const [modes, setModes] = useState(getModeVisibility)
   const [confirm, setConfirm] = useState('')
@@ -375,7 +443,7 @@ function SettingsPanel() {
   async function onSave(event) {
     event.preventDefault()
     setError('')
-    const result = await updateAccount({ displayName: name, emoji, discoverable })
+    const result = await updateAccount({ displayName: name, emoji, discoverable, bio, presence })
     setSaved(result.ok ? 'Saved' : '')
     if (!result.ok) setError(result.error || 'Could not save')
   }
@@ -391,6 +459,15 @@ function SettingsPanel() {
     <section className="sm-vault">
       <form className="sm-form" onSubmit={onSave}>
         <label>Display name<input value={name} onChange={(event) => setName(event.target.value)} maxLength={60} required /></label>
+        <label>Bio<textarea value={bio} onChange={(event) => setBio(event.target.value)} maxLength={280} rows={3} placeholder="A short bio other people can see" /></label>
+        <label>
+          Status
+          <select value={presence} onChange={(event) => setPresence(event.target.value)}>
+            <option value="online">Online</option>
+            <option value="offline">Offline</option>
+            <option value="incognito">Incognito</option>
+          </select>
+        </label>
         <div>
           <span>Profile emoji</span>
           <div className="sm-emoji-grid">

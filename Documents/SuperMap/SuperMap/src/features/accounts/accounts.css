@@ -141,6 +141,30 @@
 .sm-workspace-main:has(.sm-messages) { overflow: hidden; display: flex; flex-direction: column; }
 .sm-vault, .sm-forum { display: flex; flex-direction: column; gap: 14px; padding: 16px; }
 .sm-card-grid, .sm-thread-list { display: grid; gap: 12px; }
+.sm-presence {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+.sm-presence--online { background: #3dd68c; box-shadow: 0 0 0 2px rgba(61, 214, 140, 0.28); }
+.sm-presence--offline { background: #6e7c8a; }
+.sm-presence--incognito { background: #f0a04b; box-shadow: 0 0 0 2px rgba(240, 160, 75, 0.28); }
+.sm-profile-head h2 { margin: 0; }
+.sm-bio { margin: 0; color: #d5e4f0; white-space: pre-wrap; }
+.sm-thought {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-left: 2px solid #3dd68c;
+  color: #d5e4f0;
+}
+.sm-card.has-item-menu { position: relative; padding-right: 44px; }
 .sm-card, .sm-thread-card, .sm-thread-full, .sm-reply {
   border: 1px solid #1f3348;
   border-radius: 14px;

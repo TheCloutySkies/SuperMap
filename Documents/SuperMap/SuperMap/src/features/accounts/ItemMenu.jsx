@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useSuperMapAccount } from './SuperMapAccounts'
 import { personHandle, personTitle } from './accountIdentity'
-import { createProfilePost, fileReport, queueReportClip, searchDiscoverableUsers, sendDirectMessage } from './socialData'
+import { createProfilePost, deleteProfilePost, fileReport, queueReportClip, searchDiscoverableUsers, sendDirectMessage } from './socialData'
 import { firebaseReady } from './firebaseClient'
 import './ItemMenu.css'
 
@@ -11,13 +11,14 @@ function num(value) {
   return Number.isFinite(n) ? n : null
 }
 
-export default function ItemMenu({ item, inline = false }) {
+export default function ItemMenu({ item, inline = false, profilePost = false }) {
   const { user, setOverlay, createSavedItem, openMessages, showToast } = useSuperMapAccount()
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState('actions')
   const [people, setPeople] = useState([])
   const [query, setQuery] = useState('')
   const [note, setNote] = useState('')
+  const [thought, setThought] = useState('')
   const [reason, setReason] = useState('broken')
   const [busy, setBusy] = useState(false)
   const rootRef = useRef(null)
@@ -96,6 +97,39 @@ export default function ItemMenu({ item, inline = false }) {
       payload: item.payload || {},
     })
     setOpen(false)
+  }
+
+  async function removeFromProfile() {
+    if (!requireUser()) return
+    if (item.ownerUid && item.ownerUid !== user.uid) return
+    setBusy(true)
+    try {
+      await deleteProfilePost(item)
+      showToast({ tone: 'success', message: 'Removed from your profile' })
+      setOpen(false)
+    } catch (error) {
+      showToast({ tone: 'danger', message: error.message || 'Could not remove it' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function submitThought(event) {
+    event.preventDefault()
+    if (!requireUser()) return
+    const text = thought.trim()
+    if (!text) return
+    setBusy(true)
+    try {
+      await createProfilePost(user, { type: 'thought', title: text, summary: text, parentId: item.id || null })
+      showToast({ tone: 'success', message: 'Thought posted' })
+      setThought('')
+      setOpen(false)
+    } catch (error) {
+      showToast({ tone: 'danger', message: error.message || 'Could not post that' })
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function postToProfile() {
@@ -197,7 +231,11 @@ export default function ItemMenu({ item, inline = false }) {
         <div className={`item-menu-pop${step === 'actions' ? '' : ' is-wide'}`} role="menu" ref={popRef}>
           {step === 'actions' ? (
             <>
-              <button type="button" onClick={postToProfile}>Post to Profile</button>
+              {profilePost ? <button type="button" onClick={() => setStep('thought')}>Leave a thought</button> : null}
+              {profilePost && (!item.ownerUid || item.ownerUid === user?.uid) ? (
+                <button type="button" onClick={removeFromProfile} disabled={busy}>Remove from profile</button>
+              ) : null}
+              {!profilePost ? <button type="button" onClick={postToProfile}>Post to Profile</button> : null}
               <button type="button" onClick={() => { setStep('send'); loadPeople('') }}>Send to User</button>
               <button type="button" onClick={addToVault}>Add to vault</button>
               <button type="button" onClick={addToReport}>Add to report</button>
@@ -229,6 +267,16 @@ export default function ItemMenu({ item, inline = false }) {
                 </>
               ) : <p>Other people are available once Firebase sign-in is on.</p>}
             </div>
+          ) : null}
+          {step === 'thought' ? (
+            <form className="item-menu-step" onSubmit={submitThought}>
+              <button type="button" className="item-menu-back" onClick={() => setStep('actions')}>Back</button>
+              <label>
+                Thought
+                <textarea value={thought} onChange={(event) => setThought(event.target.value)} rows={3} maxLength={600} placeholder="Leave a thought" />
+              </label>
+              <button type="submit" disabled={busy || !thought.trim()}>{busy ? '…' : 'Post'}</button>
+            </form>
           ) : null}
           {step === 'report' ? (
             <form className="item-menu-step" onSubmit={submitReport}>

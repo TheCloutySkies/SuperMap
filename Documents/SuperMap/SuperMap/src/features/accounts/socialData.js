@@ -374,15 +374,18 @@ export function subscribeProfilePosts(ownerUid, cb) {
 }
 
 export async function createProfilePost(author, item) {
+  const thought = item.type === 'thought'
+  const thoughtText = String(item.summary || item.title || '').trim().slice(0, 600)
   const post = {
     id: uid(),
     ownerUid: author.uid,
     authorName: author.displayName || 'Anonymous',
     authorEmoji: author.emoji || '◈',
-    type: item.type || 'article',
-    title: String(item.title || 'Untitled').trim().slice(0, 180),
-    summary: String(item.summary || '').trim().slice(0, 600),
-    sourceUrl: item.url || null,
+    type: thought ? 'thought' : (item.type || 'article'),
+    title: thought ? (thoughtText.slice(0, 180) || 'Thought') : String(item.title || 'Untitled').trim().slice(0, 180),
+    summary: thought ? (thoughtText.length > 180 ? thoughtText : '') : String(item.summary || '').trim().slice(0, 600),
+    sourceUrl: thought ? null : (item.url || null),
+    parentId: item.parentId || null,
     lat: Number.isFinite(Number(item.lat)) ? Number(item.lat) : null,
     lon: Number.isFinite(Number(item.lon)) ? Number(item.lon) : null,
     createdAtMs: Date.now(),
@@ -396,6 +399,22 @@ export async function createProfilePost(author, item) {
   }
   await setDoc(doc(firestore, 'profile_posts', post.id), { ...post, createdAt: serverTimestamp() })
   return { ok: true, id: post.id }
+}
+
+export async function deleteProfilePost(post) {
+  const id = post?.id
+  if (!id) return { ok: false }
+  const firestore = db()
+  if (!firestore) {
+    const store = readStore()
+    store.profilePosts = store.profilePosts.filter((row) => row.id !== id && row.parentId !== id)
+    writeStore(store)
+    return { ok: true }
+  }
+  const children = await getDocs(query(collection(firestore, 'profile_posts'), where('parentId', '==', id)))
+  await Promise.all(children.docs.map((row) => deleteDoc(row.ref)))
+  await deleteDoc(doc(firestore, 'profile_posts', id))
+  return { ok: true }
 }
 
 export async function searchDiscoverableUsers(text) {

@@ -237,6 +237,8 @@ export function AccountsProvider({ children }) {
         handle: stored.handle || accountHandle(fbUser.uid),
         accountNumber: stored.accountNumber || accountNumber(fbUser.uid),
         discoverable: stored.discoverable !== false && !fbUser.isAnonymous ? true : stored.discoverable === true,
+        bio: String(stored.bio || '').slice(0, 280),
+        presence: stored.presence === 'online' || stored.presence === 'incognito' ? stored.presence : 'offline',
         anonymous: Boolean(fbUser.isAnonymous),
         provider: signInProvider(fbUser),
       }
@@ -399,6 +401,10 @@ export function AccountsProvider({ children }) {
       handle: user?.handle || accountHandle(user?.uid),
       accountNumber: user?.accountNumber || accountNumber(user?.uid),
       discoverable: patch.discoverable != null ? Boolean(patch.discoverable) : user?.discoverable !== false,
+      bio: patch.bio != null ? String(patch.bio).trim().slice(0, 280) : (user?.bio || ''),
+      presence: patch.presence === 'online' || patch.presence === 'incognito' || patch.presence === 'offline'
+        ? patch.presence
+        : (user?.presence || 'offline'),
     }
     setUser(next)
     if (!firebaseReady) {
@@ -414,6 +420,8 @@ export function AccountsProvider({ children }) {
         handle: next.handle,
         accountNumber: next.accountNumber,
         discoverable: next.discoverable,
+        bio: next.bio,
+        presence: next.presence,
         modeVisibility: patch.modeVisibility || getModeVisibility(),
         updatedAt: serverTimestamp(),
         updatedAtMs: Date.now(),

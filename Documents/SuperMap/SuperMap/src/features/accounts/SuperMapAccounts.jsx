@@ -32,6 +32,7 @@ import {
   where,
 } from 'firebase/firestore'
 import { firebaseReady, getAccountsFirebase } from './firebaseClient'
+import { accountHandle, accountNumber, personHandle, personNumber, personTitle } from './accountIdentity'
 import { getModeVisibility, setModeVisibility } from './menuCatalog'
 import { deleteOwnedContent, subscribeConversations } from './socialData'
 import AccountWorkspace from './AccountWorkspace'
@@ -233,6 +234,8 @@ export function AccountsProvider({ children }) {
         displayName: stored.displayName || fbUser.displayName || (fbUser.isAnonymous ? 'Anonymous' : (fbUser.email ? fbUser.email.split('@')[0] : 'Operator')),
         photoURL: fbUser.photoURL || null,
         emoji: stored.emoji || '◈',
+        handle: stored.handle || accountHandle(fbUser.uid),
+        accountNumber: stored.accountNumber || accountNumber(fbUser.uid),
         discoverable: stored.discoverable !== false && !fbUser.isAnonymous ? true : stored.discoverable === true,
         anonymous: Boolean(fbUser.isAnonymous),
         provider: signInProvider(fbUser),
@@ -246,6 +249,8 @@ export function AccountsProvider({ children }) {
           email: profile.email,
           displayName: profile.displayName,
           emoji: profile.emoji,
+          handle: profile.handle,
+          accountNumber: profile.accountNumber,
           discoverable: profile.discoverable,
           anonymous: profile.anonymous,
           provider: profile.provider,
@@ -289,7 +294,8 @@ export function AccountsProvider({ children }) {
     const f = getFirebase()
     const name = displayName || email.split('@')[0]
     if (!f) {
-      const profile = { uid: `local-${email.toLowerCase()}`, email, displayName: name, photoURL: null, provider: 'password', local: true }
+      const localUid = `local-${email.toLowerCase()}`
+      const profile = { uid: localUid, email, displayName: name, handle: accountHandle(localUid), accountNumber: accountNumber(localUid), photoURL: null, provider: 'password', local: true }
       setLocal((current) => ({ ...current, account: profile, user: profile }))
       setUser(profile)
       setOverlay('workspace')
@@ -303,6 +309,8 @@ export function AccountsProvider({ children }) {
         uid: cred.user.uid,
         email,
         displayName: name,
+        handle: accountHandle(cred.user.uid),
+        accountNumber: accountNumber(cred.user.uid),
         provider: 'password',
         createdAt: serverTimestamp(),
         createdAtMs: Date.now(),
@@ -351,7 +359,8 @@ export function AccountsProvider({ children }) {
   const signInAnonymous = useCallback(async () => {
     const f = getFirebase()
     if (!f) {
-      const profile = { uid: `local-anon-${uid()}`, email: null, displayName: 'Anonymous', emoji: '🎭', discoverable: false, anonymous: true, provider: 'anonymous', local: true }
+      const localUid = `local-anon-${uid()}`
+      const profile = { uid: localUid, email: null, displayName: 'Anonymous', handle: accountHandle(localUid), accountNumber: accountNumber(localUid), emoji: '🎭', discoverable: false, anonymous: true, provider: 'anonymous', local: true }
       setLocal((current) => ({ ...current, account: profile, user: profile }))
       setUser(profile)
       setOverlay('workspace')
@@ -364,6 +373,8 @@ export function AccountsProvider({ children }) {
         email: null,
         displayName: 'Anonymous',
         emoji: '🎭',
+        handle: accountHandle(cred.user.uid),
+        accountNumber: accountNumber(cred.user.uid),
         discoverable: false,
         anonymous: true,
         provider: 'anonymous',
@@ -385,6 +396,8 @@ export function AccountsProvider({ children }) {
       ...user,
       displayName: name || user?.displayName || 'Anonymous',
       emoji: patch.emoji || user?.emoji || '◈',
+      handle: user?.handle || accountHandle(user?.uid),
+      accountNumber: user?.accountNumber || accountNumber(user?.uid),
       discoverable: patch.discoverable != null ? Boolean(patch.discoverable) : user?.discoverable !== false,
     }
     setUser(next)
@@ -398,6 +411,8 @@ export function AccountsProvider({ children }) {
       await setDoc(doc(f.db, 'users', user.uid), {
         displayName: next.displayName,
         emoji: next.emoji,
+        handle: next.handle,
+        accountNumber: next.accountNumber,
         discoverable: next.discoverable,
         modeVisibility: patch.modeVisibility || getModeVisibility(),
         updatedAt: serverTimestamp(),
@@ -411,8 +426,12 @@ export function AccountsProvider({ children }) {
 
   const deleteAccount = useCallback(async (typedName) => {
     if (!user) return { ok: false, error: 'Sign in first.' }
-    if (String(typedName || '').trim() !== String(user.displayName || '').trim()) {
-      return { ok: false, error: 'Type your display name to confirm.' }
+    const typed = String(typedName || '').trim().toLowerCase()
+    const accepted = [user.displayName, personHandle(user), personNumber(user)]
+      .map((value) => String(value || '').trim().toLowerCase())
+      .filter(Boolean)
+    if (!accepted.includes(typed)) {
+      return { ok: false, error: 'Type your display name or username to confirm.' }
     }
     const f = getFirebase()
     try {
@@ -641,7 +660,7 @@ function AccountDock() {
     : kind === 'anonymous'
       ? <VenetianMask size={18} strokeWidth={2.25} />
       : <UserRound size={18} strokeWidth={2.25} />
-  const label = user ? user.displayName : 'Account'
+  const label = user ? personTitle(user) : 'Account'
   return (
     <div className="sm-acct-dock">
       <button type="button" className="sm-acct-dock-btn" aria-label={label} onClick={() => {

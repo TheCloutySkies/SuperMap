@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useSuperMapAccount } from './SuperMapAccounts'
 import { MODE_CATALOG, PROFILE_EMOJIS, REPORT_OWNER_EMAIL, getModeVisibility, setModeVisibility } from './menuCatalog'
 import { firebaseReady } from './firebaseClient'
+import { personHandle, personNumber, personTitle } from './accountIdentity'
 import {
   conversationId,
   markConversationRead,
@@ -37,8 +38,8 @@ export default function AccountWorkspace() {
           <div className="sm-workspace-title">
             <span className="sm-auth-mark">{user?.emoji || '◈'}</span>
             <div>
-              <h2>{user?.displayName || 'Anonymous'}</h2>
-              <p>{user?.anonymous ? 'Anonymous account' : (user?.email || 'Signed in')} · {firebaseReady ? 'Firebase' : 'This browser'}</p>
+              <h2>{personTitle(user)}</h2>
+              <p>{personHandle(user)} · #{personNumber(user)} · {user?.anonymous ? 'Anonymous account' : (user?.email || 'Signed in')}</p>
             </div>
           </div>
           <div className="sm-workspace-user">
@@ -114,7 +115,7 @@ function ProfilePanel() {
   useEffect(() => subscribeProfilePosts(user?.uid, setPosts), [user?.uid])
   return (
     <section className="sm-vault">
-      <p className="sm-local-note">{user?.emoji || '◈'} {user?.displayName}. Posts you send with “Post to Profile” land here.</p>
+      <p className="sm-local-note">{user?.emoji || '◈'} {personTitle(user)} · {personHandle(user)}. Posts you send with “Post to Profile” land here.</p>
       {posts.map((post) => (
         <article key={post.id} className="sm-card">
           <h3>{post.title}</h3>
@@ -158,6 +159,7 @@ function MessagesPanel() {
       uid: messageDraft.uid,
       displayName: messageDraft.displayName || 'Anonymous',
       emoji: messageDraft.emoji || '◈',
+      handle: personHandle(messageDraft),
     }
     const id = conversationId(user.uid, person.uid)
     setActivePerson(person)
@@ -206,7 +208,7 @@ function MessagesPanel() {
   const active = conversations.find((row) => row.id === activeId) || null
   const partnerId = active?.memberUids?.find((id) => id !== user?.uid) || activePerson?.uid || null
   const partner = (partnerId && active?.members?.[partnerId]) || (activePerson?.uid === partnerId ? activePerson : null)
-  const other = partner ? { uid: partnerId, displayName: partner.displayName || 'Anonymous', emoji: partner.emoji || '◈' } : null
+  const other = partner ? { uid: partnerId, displayName: partner.displayName || 'Anonymous', emoji: partner.emoji || '◈', handle: personHandle({ ...partner, uid: partnerId }) } : null
   const knownIds = new Set(conversations.map((row) => row.id))
 
   async function choose(person) {
@@ -215,6 +217,7 @@ function MessagesPanel() {
       uid: person.uid,
       displayName: person.displayName || 'Anonymous',
       emoji: person.emoji || '◈',
+      handle: personHandle(person),
     }
     const id = conversationId(user.uid, next.uid)
     setSendError('')
@@ -266,8 +269,8 @@ function MessagesPanel() {
             <button key={person.uid} type="button" className="sm-msg-row sm-msg-person" onClick={() => choose(person)}>
               <span className="sm-msg-avatar" aria-hidden>{person.emoji || '◈'}</span>
               <span className="sm-msg-copy">
-                <strong>{person.displayName || 'Anonymous'}</strong>
-                <em>Open direct message</em>
+                <strong>{personTitle(person)}</strong>
+                <em>{personHandle(person)}</em>
               </span>
               <span className="sm-msg-go">Message</span>
             </button>
@@ -278,8 +281,8 @@ function MessagesPanel() {
             <button type="button" className="sm-msg-row is-active" aria-current="true">
               <span className="sm-msg-avatar" aria-hidden>{other.emoji}</span>
               <span className="sm-msg-copy">
-                <strong>{other.displayName}</strong>
-                <em>New message</em>
+                <strong>{personTitle(other)}</strong>
+                <em>{personHandle(other)}</em>
               </span>
             </button>
           ) : null}
@@ -294,12 +297,12 @@ function MessagesPanel() {
                 type="button"
                 className={`sm-msg-row${row.id === activeId ? ' is-active' : ''}`}
                 aria-current={row.id === activeId ? 'true' : undefined}
-                onClick={() => choose({ uid: id, displayName: person.displayName, emoji: person.emoji })}
+                onClick={() => choose({ uid: id, displayName: person.displayName, emoji: person.emoji, handle: person.handle })}
               >
                 <span className="sm-msg-avatar" aria-hidden>{person.emoji || '◈'}</span>
                 <span className="sm-msg-copy">
-                  <strong>{person.displayName || 'Person'}</strong>
-                  <em>{preview}</em>
+                  <strong>{personTitle({ ...person, uid: id })}</strong>
+                  <em>{personTitle({ ...person, uid: id }) === personHandle({ ...person, uid: id }) ? preview : `${personHandle({ ...person, uid: id })} · ${preview}`}</em>
                 </span>
                 <span className="sm-msg-meta">
                   {row.updatedAtMs ? <time>{ago(row.updatedAtMs)}</time> : null}
@@ -318,13 +321,13 @@ function MessagesPanel() {
               <button type="button" className="sm-msg-back" onClick={() => { setPickedId(null); setActivePerson(null) }}>Chats</button>
               <span className="sm-msg-avatar sm-msg-avatar-lg" aria-hidden>{other.emoji}</span>
               <div>
-                <h3>{other.displayName}</h3>
-                <p>Direct message</p>
+                <h3>{personTitle(other)}</h3>
+                <p>{personHandle(other)} · Direct message</p>
               </div>
             </header>
             <div className="sm-message-log" ref={logRef}>
               {messages.length === 0 ? (
-                <p className="sm-msg-empty">This is the start of your conversation with {other.displayName}.</p>
+                <p className="sm-msg-empty">This is the start of your conversation with {personTitle(other)}.</p>
               ) : null}
               {messages.map((message) => (
                 <article key={message.id} className={message.fromUid === user.uid ? 'is-mine' : ''}>
@@ -341,8 +344,8 @@ function MessagesPanel() {
                 value={text}
                 onChange={(event) => setText(event.target.value)}
                 onKeyDown={onComposerKey}
-                placeholder={`Message ${other.displayName}`}
-                aria-label={`Message ${other.displayName}`}
+                placeholder={`Message ${personTitle(other)}`}
+                aria-label={`Message ${personTitle(other)}`}
               />
               <button type="submit" className="sm-primary-btn" disabled={!text.trim()}>Send</button>
             </form>
@@ -400,7 +403,7 @@ function SettingsPanel() {
           <input type="checkbox" checked={discoverable} onChange={(event) => setDiscoverable(event.target.checked)} />
           Let other people find me and send messages
         </label>
-        <p className="sm-local-note">Your email stays off your public profile.</p>
+        <p className="sm-local-note">Username {personHandle(user)} · Account #{personNumber(user)}. Assigned to this account and saved with it. Your email stays off your public profile.</p>
         {error ? <p className="sm-auth-error">{error}</p> : null}
         {saved ? <p className="sm-local-note">{saved}</p> : null}
         <button type="submit" className="sm-primary-btn">Save profile</button>
@@ -422,7 +425,7 @@ function SettingsPanel() {
         if (!result.ok) setError(result.error || 'Could not delete the account')
       }}>
         <h3>Delete account</h3>
-        <p className="sm-local-note">Type your display name. This removes the account, saved items, and profile posts.</p>
+        <p className="sm-local-note">Type your display name or username. This removes the account, saved items, and profile posts.</p>
         <label>Display name<input value={confirm} onChange={(event) => setConfirm(event.target.value)} /></label>
         <button type="submit" className="sm-danger-btn">Delete account</button>
       </form>

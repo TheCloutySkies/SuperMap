@@ -82,13 +82,24 @@
 .sm-auth-brand p, .sm-workspace-title p, .sm-card-summary { margin: 0; color: #8ea6ba; }
 .sm-auth-free { margin: 0 0 6px; color: #d7e6f4; font-size: 14px; }
 .sm-modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  max-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  margin: 0;
   border: 1px solid #1f3348;
   background: transparent;
   color: #8ea6ba;
-  width: 32px;
-  height: 32px;
   border-radius: 10px;
+  line-height: 0;
 }
+.sm-modal-close svg { display: block; width: 14px; height: 14px; }
 .sm-auth-card > .sm-modal-close { position: absolute; top: 16px; right: 16px; }
 .sm-auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 16px 0; }
 .sm-auth-tabs button { border: 0; border-radius: 9px; padding: 9px; background: transparent; color: #8ea6ba; }

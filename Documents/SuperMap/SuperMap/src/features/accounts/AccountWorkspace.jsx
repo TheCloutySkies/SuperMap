@@ -41,7 +41,11 @@ export default function AccountWorkspace() {
           </div>
           <div className="sm-workspace-user">
             <button type="button" className="sm-ghost-btn" onClick={account.signOutUser}>Sign out</button>
-            <button type="button" className="sm-modal-close" onClick={() => account.setOverlay(null)} aria-label="Close">×</button>
+            <button type="button" className="sm-modal-close" onClick={() => account.setOverlay(null)} aria-label="Close">
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+              </svg>
+            </button>
           </div>
         </header>
         <div className="sm-workspace-body">

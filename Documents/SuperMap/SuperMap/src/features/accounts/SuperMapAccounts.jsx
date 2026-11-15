@@ -668,7 +668,11 @@ function AuthModal() {
   return (
     <div className="sm-modal-scrim" role="dialog" aria-modal="true">
       <div className="sm-auth-card">
-        <button type="button" className="sm-modal-close" onClick={() => setOverlay(null)} aria-label="Close">×</button>
+        <button type="button" className="sm-modal-close" onClick={() => setOverlay(null)} aria-label="Close">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          </svg>
+        </button>
         <div className="sm-auth-brand">
           <span className="sm-auth-mark">◈</span>
           <div>

@@ -133,26 +133,52 @@ export function formatMgrsPretty(mgrs) {
 }
 
 /**
- * 1 km UTM grid lines covering a WGS84 bbox, in the zone of the bbox center.
+ * Grid spacing from viewport span so country zoom is not a 1 km mesh.
+ * 50 km / 10 km / 5 km / 1 km.
  */
-export function utmGridFeatures(west, south, east, north, stepM = 1000) {
+export function utmGridStepM(west, south, east, north) {
+  const midLat = (south + north) / 2
+  const midLng = (west + east) / 2
+  const { zone } = latLngToUtm(midLat, midLng)
+  const sw = latLngToUtm(south, west, zone)
+  const ne = latLngToUtm(north, east, zone)
+  const spanM = Math.max(Math.abs(ne.easting - sw.easting), Math.abs(ne.northing - sw.northing))
+  if (spanM > 500000) return 50000
+  if (spanM > 150000) return 10000
+  if (spanM > 50000) return 5000
+  return 1000
+}
+
+/**
+ * UTM grid lines covering a WGS84 bbox, in the zone of the bbox center.
+ */
+export function utmGridFeatures(west, south, east, north, stepM) {
+  const step = stepM || utmGridStepM(west, south, east, north)
   const midLat = (south + north) / 2
   const midLng = (west + east) / 2
   const { zone, north: hem } = latLngToUtm(midLat, midLng)
   const sw = latLngToUtm(south, west, zone)
   const ne = latLngToUtm(north, east, zone)
-  const minE = Math.min(sw.easting, ne.easting) - stepM
-  const maxE = Math.max(sw.easting, ne.easting) + stepM
-  const minN = Math.min(sw.northing, ne.northing) - stepM
-  const maxN = Math.max(sw.northing, ne.northing) + stepM
+  const minE = Math.min(sw.easting, ne.easting) - step
+  const maxE = Math.max(sw.easting, ne.easting) + step
+  const minN = Math.min(sw.northing, ne.northing) - step
+  const maxN = Math.max(sw.northing, ne.northing) + step
   const features = []
-  const startE = Math.floor(minE / stepM) * stepM
-  const startN = Math.floor(minN / stepM) * stepM
-  for (let e = startE; e <= maxE; e += stepM) {
+  const startE = Math.floor(minE / step) * step
+  const startN = Math.floor(minN / step) * step
+  const nAlongN = Math.max(1, Math.round((maxN - minN) / step))
+  const nAlongE = Math.max(1, Math.round((maxE - minE) / step))
+  const sampleN = Math.max(1, Math.ceil(nAlongN / 24))
+  const sampleE = Math.max(1, Math.ceil(nAlongE / 24))
+  for (let e = startE; e <= maxE; e += step) {
     const coords = []
-    for (let n = startN; n <= maxN; n += stepM) {
+    for (let n = startN; n <= maxN; n += step * sampleN) {
       const p = utmToLatLng(e, n, zone, hem)
       coords.push([p.lng, p.lat])
+    }
+    if (coords.length < 2) {
+      const p2 = utmToLatLng(e, maxN, zone, hem)
+      coords.push([p2.lng, p2.lat])
     }
     features.push({
       type: 'Feature',
@@ -160,11 +186,15 @@ export function utmGridFeatures(west, south, east, north, stepM = 1000) {
       geometry: { type: 'LineString', coordinates: coords },
     })
   }
-  for (let n = startN; n <= maxN; n += stepM) {
+  for (let n = startN; n <= maxN; n += step) {
     const coords = []
-    for (let e = startE; e <= maxE; e += stepM) {
+    for (let e = startE; e <= maxE; e += step * sampleE) {
       const p = utmToLatLng(e, n, zone, hem)
       coords.push([p.lng, p.lat])
+    }
+    if (coords.length < 2) {
+      const p2 = utmToLatLng(maxE, n, zone, hem)
+      coords.push([p2.lng, p2.lat])
     }
     features.push({
       type: 'Feature',
@@ -216,18 +246,19 @@ export function latLongGridFeatures(west, south, east, north, stepDeg) {
   return { type: 'FeatureCollection', features }
 }
 
-export function mgrsLabelFeatures(west, south, east, north, stepM = 1000) {
+export function mgrsLabelFeatures(west, south, east, north, stepM) {
+  const step = stepM || utmGridStepM(west, south, east, north)
   const midLat = (south + north) / 2
   const midLng = (west + east) / 2
   const { zone, north: hem } = latLngToUtm(midLat, midLng)
   const sw = latLngToUtm(south, west, zone)
   const ne = latLngToUtm(north, east, zone)
-  const minE = Math.floor(Math.min(sw.easting, ne.easting) / stepM) * stepM
-  const maxE = Math.ceil(Math.max(sw.easting, ne.easting) / stepM) * stepM
-  const minN = Math.floor(Math.min(sw.northing, ne.northing) / stepM) * stepM
-  const maxN = Math.ceil(Math.max(sw.northing, ne.northing) / stepM) * stepM
+  const minE = Math.floor(Math.min(sw.easting, ne.easting) / step) * step
+  const maxE = Math.ceil(Math.max(sw.easting, ne.easting) / step) * step
+  const minN = Math.floor(Math.min(sw.northing, ne.northing) / step) * step
+  const maxN = Math.ceil(Math.max(sw.northing, ne.northing) / step) * step
   const features = []
-  const labelStep = stepM >= 10000 ? stepM : 10000
+  const labelStep = Math.max(step, 10000)
   for (let e = minE; e <= maxE; e += labelStep) {
     for (let n = minN; n <= maxN; n += labelStep) {
       const p = utmToLatLng(e + labelStep / 2, n + labelStep / 2, zone, hem)

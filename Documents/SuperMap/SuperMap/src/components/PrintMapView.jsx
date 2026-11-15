@@ -20,6 +20,7 @@ import {
   latLongGridFeatures,
   mgrsLabelFeatures,
   utmGridFeatures,
+  utmGridStepM,
 } from '../lib/utmMgrs'
 import {
   defaultMoreToggles,
@@ -29,11 +30,13 @@ import {
 import { createHistory, pushHistory, redoHistory, undoHistory } from '../lib/printHistory'
 import { copyShareUrl, loadSavedPrintState, writePrintHash } from '../lib/printShare'
 import {
+  PRINT_PAGE_WARN_CAP,
   downloadBlob,
   printSheets,
   renderPrintPages,
   sheetsToPdfBlob,
 } from '../lib/printRender'
+import { capMapPixelRatio } from '../lib/mapPerf'
 import './PrintMapView.css'
 
 const OVERPASS_MIN_ZOOM = {
@@ -63,6 +66,8 @@ export default function PrintMapView({
   const lastTouchedRef = useRef(null)
   const historyRef = useRef(createHistory([]))
   const optsRef = useRef({})
+  const gridTimerRef = useRef(null)
+  const overpassTimerRef = useRef(null)
 
   const restored = useRef(null)
   if (restored.current === null && typeof window !== 'undefined') {
@@ -78,7 +83,7 @@ export default function PrintMapView({
   const [ink, setInk] = useState(saved.ink || 'colour')
   const [hillshade, setHillshade] = useState(saved.hillshade || 'soft')
   const [contours, setContours] = useState(saved.contours || 'sparse')
-  const [secondary, setSecondary] = useState(saved.secondary || 'utm')
+  const [secondary, setSecondary] = useState(saved.secondary || 'off')
   const [layerToggles, setLayerToggles] = useState(() => ({
     ...defaultOptionalToggles(),
     ...(saved.layerToggles || {}),
@@ -142,7 +147,7 @@ export default function PrintMapView({
     const sec = optsRef.current.secondary
     const wantMgrs = !!optsRef.current.moreLayers.mgrs
     if (sec === 'utm') {
-      setGeojson('print-grid', utmGridFeatures(west, south, east, north, 1000))
+      setGeojson('print-grid', utmGridFeatures(west, south, east, north, utmGridStepM(west, south, east, north)))
     } else if (sec === 'latlong') {
       const span = Math.max(east - west, north - south)
       const step = span > 2 ? 0.5 : span > 0.5 ? 0.1 : 0.05
@@ -151,11 +156,16 @@ export default function PrintMapView({
       setGeojson('print-grid', emptyFc())
     }
     if (wantMgrs) {
-      setGeojson('print-mgrs', mgrsLabelFeatures(west, south, east, north, 1000))
+      setGeojson('print-mgrs', mgrsLabelFeatures(west, south, east, north))
     } else {
       setGeojson('print-mgrs', emptyFc())
     }
   }, [])
+
+  const scheduleGrid = useCallback(() => {
+    clearTimeout(gridTimerRef.current)
+    gridTimerRef.current = setTimeout(() => refreshGrid(), 350)
+  }, [refreshGrid])
 
   const applyStyleToggles = useCallback(() => {
     const map = mapObjRef.current
@@ -213,6 +223,11 @@ export default function PrintMapView({
     }
   }, [])
 
+  const scheduleOverpass = useCallback(() => {
+    clearTimeout(overpassTimerRef.current)
+    overpassTimerRef.current = setTimeout(() => loadOverpass(), 400)
+  }, [loadOverpass])
+
   useEffect(() => {
     const el = mapRef.current
     if (!el) return undefined
@@ -225,6 +240,7 @@ export default function PrintMapView({
       zoom: startZoom,
       maxPitch: 0,
       attributionControl: true,
+      pixelRatio: capMapPixelRatio(1.5),
     })
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), 'top-right')
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 140, unit: 'metric' }), 'bottom-left')
@@ -248,8 +264,8 @@ export default function PrintMapView({
     map.on('moveend', () => {
       const c = map.getCenter()
       onMapCenterChange?.({ lat: c.lat, lon: c.lng })
-      refreshGrid()
-      loadOverpass()
+      scheduleGrid()
+      scheduleOverpass()
       const o = optsRef.current
       writePrintHash({
         ...o,
@@ -344,6 +360,13 @@ export default function PrintMapView({
           optsRef.current.scaleId,
           optsRef.current.orientation,
         )
+        const nextCount = pagesRef.current.length + filled.length
+        if (nextCount > PRINT_PAGE_WARN_CAP) {
+          const ok = window.confirm(
+            `This fill would queue ${nextCount} pages. Rendering that many can freeze Firefox/LibreWolf. Continue?`,
+          )
+          if (!ok) return
+        }
         commitPages([...pagesRef.current, ...filled])
         refreshPagesLayer([...pagesRef.current])
         return
@@ -404,6 +427,8 @@ export default function PrintMapView({
     })
 
     return () => {
+      clearTimeout(gridTimerRef.current)
+      clearTimeout(overpassTimerRef.current)
       map.remove()
       mapObjRef.current = null
     }
@@ -545,6 +570,12 @@ export default function PrintMapView({
       setStatus('Pick at least one page on the map.')
       return
     }
+    if (pagesRef.current.length > PRINT_PAGE_WARN_CAP) {
+      const ok = window.confirm(
+        `Rendering ${pagesRef.current.length} pages may freeze Firefox/LibreWolf. Continue?`,
+      )
+      if (!ok) return
+    }
     setBusy(true)
     setStatus('Keep this tab open while it renders…')
     try {
@@ -563,10 +594,10 @@ export default function PrintMapView({
         ({ message }) => setStatus(message),
       )
       if (mode === 'print') {
-        printSheets(sheets)
+        await printSheets(sheets)
         setStatus('Print dialog opened. Choose Actual size / 100%.')
       } else {
-        const blob = sheetsToPdfBlob(sheets)
+        const blob = await sheetsToPdfBlob(sheets)
         downloadBlob(blob, `supermap-print-${getScale(scaleId).id}.pdf`)
         setStatus(`Downloaded ${sheets.length} page PDF.`)
       }

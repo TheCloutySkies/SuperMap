@@ -42,6 +42,8 @@ export const STORAGE_KEYS = {
   RAPIDAPI_KEYS: 'supermap_rapidapiKeys',
   VISUALS_PREFS: 'supermap_visualsPrefs',
   MOBILE_PROMPT_SEEN: 'supermap_mobilePromptSeen',
+  ACCOUNT_PROMPT_SEEN: 'supermap_accountPromptSeen',
+  ACCOUNT_PROMPT_PENDING: 'supermap_accountPromptPending',
   MAP_TOOLS_FAB_POS: 'supermap_map_tools_fab_pos',
   MAP_TOOLS_CHROME: 'supermap_map_tools_chrome',
   MAP_TOOLS_PANELS: 'supermap_map_tools_panels',

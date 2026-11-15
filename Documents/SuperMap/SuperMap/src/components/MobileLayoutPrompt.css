@@ -64,6 +64,63 @@
   transform: scale(0.98);
 }
 
+.mobile-layout-prompt-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.mobile-layout-prompt-tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.mobile-layout-prompt-tabs button {
+  flex: 1;
+  min-height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--y2k-border);
+  background: transparent;
+  color: var(--y2k-text-muted);
+  cursor: pointer;
+}
+
+.mobile-layout-prompt-tabs button.is-on {
+  color: var(--y2k-text);
+  border-color: color-mix(in srgb, var(--y2k-accent) 55%, transparent);
+}
+
+.mobile-layout-prompt-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-bottom: 0.55rem;
+}
+
+.mobile-layout-prompt-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--y2k-text-muted);
+}
+
+.mobile-layout-prompt-form input {
+  min-height: 42px;
+  padding: 0.45rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid var(--y2k-border);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--y2k-text);
+  font: inherit;
+}
+
+.mobile-layout-prompt-error {
+  margin: 0;
+  color: #ffb3bb;
+  font-size: 0.85rem;
+}
+
 @keyframes mobile-prompt-fade {
   from { opacity: 0; }
   to { opacity: 1; }

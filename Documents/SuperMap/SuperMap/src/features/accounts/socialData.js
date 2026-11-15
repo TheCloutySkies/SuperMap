@@ -442,22 +442,38 @@ export async function deleteProfilePost(post) {
   return { ok: true }
 }
 
+function canBeFound(user) {
+  if (user?.anonymous === true) return user.discoverable === true
+  return user?.discoverable !== false
+}
+
+function profileMatches(user, needle) {
+  if (!needle) return true
+  const handle = personHandle(user).toLowerCase()
+  const number = personNumber(user)
+  const hay = `${user.displayName || ''} ${handle} ${number} ${user.bulletinTagline || ''} ${user.bio || ''}`.toLowerCase()
+  const q = needle.replace(/^@/, '').replace(/^#/, '')
+  return hay.includes(needle) || hay.includes(q)
+}
+
 export async function searchDiscoverableUsers(text) {
-  const needle = String(text || '').trim().toLowerCase()
+  const raw = String(text || '').trim()
+  const needle = raw.toLowerCase()
   const firestore = db()
-  if (!firestore) return []
-  const q = query(collection(firestore, 'users'), where('discoverable', '==', true), limit(60))
-  const snap = await getDocs(q)
-  return snap.docs
-    .map((row) => ({ uid: row.id, ...row.data() }))
-    .filter((user) => {
-      if (!needle) return true
-      const handle = personHandle(user).toLowerCase()
-      const number = personNumber(user)
-      const hay = `${user.displayName || ''} ${handle} ${number} ${user.bulletinTagline || ''}`.toLowerCase()
-      const q = needle.replace(/^@/, '').replace(/^#/, '')
-      return hay.includes(needle) || hay.includes(q)
-    })
+  if (!firestore || !needle) return []
+  const readDocs = (request) => request.catch(() => ({ docs: [] }))
+  const listed = readDocs(getDocs(query(collection(firestore, 'users'), where('discoverable', '==', true), limit(60))))
+  const exactName = readDocs(getDocs(query(collection(firestore, 'users'), where('displayName', '==', raw), limit(8))))
+  const exactHandle = raw.startsWith('@')
+    ? readDocs(getDocs(query(collection(firestore, 'users'), where('handle', '==', raw), limit(8))))
+    : Promise.resolve({ docs: [] })
+  const [listedSnap, nameSnap, handleSnap] = await Promise.all([listed, exactName, exactHandle])
+  const byId = new Map()
+  for (const snap of [listedSnap, nameSnap, handleSnap]) {
+    snap.docs.forEach((row) => byId.set(row.id, { uid: row.id, ...row.data() }))
+  }
+  return [...byId.values()]
+    .filter((user) => canBeFound(user) && profileMatches(user, needle))
     .slice(0, 12)
 }
 

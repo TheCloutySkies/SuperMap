@@ -7,7 +7,38 @@
 const axios = require('axios')
 const NodeCache = require('node-cache')
 
-const cache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 })
+const cache = new NodeCache({ stdTTL: 60 * 60, checkperiod: 120 })
+const inflight = new Map()
+
+function dedupe(key, fn) {
+  const existing = inflight.get(key)
+  if (existing) return existing
+  const pending = Promise.resolve()
+    .then(fn)
+    .finally(() => {
+      if (inflight.get(key) === pending) inflight.delete(key)
+    })
+  inflight.set(key, pending)
+  return pending
+}
+
+function openMeteoKey() {
+  return String(process.env.OPEN_METEO_API_KEY || '').trim()
+}
+
+function isDailyLimitError(err) {
+  const msg = `${err?.message || ''} ${err?.body?.reason || ''} ${err?.body?.message || ''}`.toLowerCase()
+  return /daily api request limit|request limit exceeded|try again tomorrow/.test(msg)
+}
+
+function friendlyLimitError(err) {
+  const next = new Error(
+    'Daily API request limit exceeded. Please try again tomorrow. Weather calls are cached on the server so a later visit today should reuse the last good forecast.',
+  )
+  next.status = 429
+  next.body = err?.body
+  return next
+}
 
 const OM = {
   forecast: 'https://api.open-meteo.com/v1/forecast',
@@ -53,6 +84,35 @@ function cacheSet(key, value, ttl) {
   return value
 }
 
+function omEndpoint(kind) {
+  const key = openMeteoKey()
+  if (!key) return OM[kind]
+  const customer = {
+    forecast: 'https://customer-api.open-meteo.com/v1/forecast',
+    historical: 'https://customer-historical-forecast-api.open-meteo.com/v1/forecast',
+    marine: 'https://customer-marine-api.open-meteo.com/v1/marine',
+    airQuality: 'https://customer-air-quality-api.open-meteo.com/v1/air-quality',
+    flood: 'https://customer-flood-api.open-meteo.com/v1/flood',
+    satellite: 'https://customer-satellite-api.open-meteo.com/v1/archive',
+  }
+  return customer[kind] || OM[kind]
+}
+
+function withOmKey(params) {
+  const key = openMeteoKey()
+  if (!key) return params
+  return { ...params, apikey: key }
+}
+
+async function omGet(kind, params) {
+  try {
+    return await getJson(omEndpoint(kind), withOmKey(params))
+  } catch (err) {
+    if (isDailyLimitError(err)) throw friendlyLimitError(err)
+    throw err
+  }
+}
+
 async function getJson(url, params, headers = {}, timeout = 20000) {
   const res = await axios.get(url, {
     params,
@@ -76,11 +136,21 @@ async function getJson(url, params, headers = {}, timeout = 20000) {
 async function getForecast({ lat, lon, days = 7, timezone } = {}) {
   const d = Math.min(16, Math.max(1, Number(days) || 7))
   const tz = timezone || 'auto'
-  const cacheKey = `fc:${lat.toFixed(3)},${lon.toFixed(3)}:${d}:${tz}`
+  const cacheKey = `fc:${lat.toFixed(2)},${lon.toFixed(2)}:${d}:${tz}`
   const hit = cacheGet(cacheKey)
   if (hit) return { ...hit, _cached: true }
+  const blocked = cacheGet(`${cacheKey}:limit`)
+  if (blocked) throw friendlyLimitError(blocked)
 
-  const om = await getJson(OM.forecast, {
+  return dedupe(cacheKey, () => getForecastUncached({ lat, lon, days: d, timezone: tz, cacheKey }))
+}
+
+async function getForecastUncached({ lat, lon, days, timezone, cacheKey }) {
+  const d = days
+  const tz = timezone
+  let om
+  try {
+    om = await getJson(omEndpoint('forecast'), withOmKey({
     latitude: lat,
     longitude: lon,
     timezone: tz,
@@ -123,11 +193,19 @@ async function getForecast({ lat, lon, days = 7, timezone } = {}) {
     ].join(','),
     forecast_days: d,
     wind_speed_unit: 'kmh',
-  })
+  }))
+  } catch (err) {
+    if (isDailyLimitError(err)) {
+      cacheSet(`${cacheKey}:limit`, { message: err.message, body: err.body }, 30 * 60)
+      throw friendlyLimitError(err)
+    }
+    throw err
+  }
 
   let openWeather = null
   const key = owmKey()
-  if (key) {
+  const supplement = String(process.env.OWM_SUPPLEMENT || '').trim() === '1'
+  if (key && supplement) {
     try {
       const [current, forecast] = await Promise.all([
         getJson('https://api.openweathermap.org/data/2.5/weather', {
@@ -172,7 +250,7 @@ async function getHistorical({ lat, lon, startDate, endDate, timezone } = {}) {
   const hit = cacheGet(cacheKey)
   if (hit) return { ...hit, _cached: true }
 
-  const om = await getJson(OM.historical, {
+  const om = await getJson(omEndpoint('historical'), withOmKey({
     latitude: lat,
     longitude: lon,
     start_date: start,
@@ -190,7 +268,7 @@ async function getHistorical({ lat, lon, startDate, endDate, timezone } = {}) {
       'temperature_2m_min',
       'precipitation_sum',
     ].join(','),
-  })
+  }))
 
   return cacheSet(cacheKey, {
     lat,
@@ -208,7 +286,7 @@ async function getMarine({ lat, lon, days = 7 } = {}) {
   const hit = cacheGet(cacheKey)
   if (hit) return { ...hit, _cached: true }
 
-  const om = await getJson(OM.marine, {
+  const om = await omGet('marine', {
     latitude: lat,
     longitude: lon,
     timezone: 'auto',
@@ -244,7 +322,7 @@ async function getAirQuality({ lat, lon, days = 5 } = {}) {
   const hit = cacheGet(cacheKey)
   if (hit) return { ...hit, _cached: true }
 
-  const om = await getJson(OM.airQuality, {
+  const om = await omGet('airQuality', {
     latitude: lat,
     longitude: lon,
     timezone: 'auto',
@@ -283,7 +361,7 @@ async function getFlood({ lat, lon, days = 7 } = {}) {
   const hit = cacheGet(cacheKey)
   if (hit) return { ...hit, _cached: true }
 
-  const om = await getJson(OM.flood, {
+  const om = await omGet('flood', {
     latitude: lat,
     longitude: lon,
     daily: [
@@ -315,7 +393,7 @@ async function getSatelliteRadiation({ lat, lon, startDate, endDate } = {}) {
   const hit = cacheGet(cacheKey)
   if (hit) return { ...hit, _cached: true }
 
-  const om = await getJson(OM.satellite, {
+  const om = await omGet('satellite', {
     latitude: lat,
     longitude: lon,
     start_date: start,
@@ -424,7 +502,8 @@ async function getRadarMeta() {
   }
 
   const key = owmKey()
-  const owmTiles = key
+  const tilesOn = String(process.env.OWM_TILES || '').trim() === '1'
+  const owmTiles = key && tilesOn
     ? {
         precipitation: `https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=${key}`,
         wind: `https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=${key}`,

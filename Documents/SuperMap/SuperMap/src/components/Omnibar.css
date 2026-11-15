@@ -65,6 +65,54 @@
   border-color: var(--y2k-accent-hover);
 }
 
+.omnibar-thiel {
+  color: var(--y2k-text-muted);
+  background: transparent;
+  border: 1px solid var(--y2k-border);
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.omnibar-thiel.is-on {
+  color: #06100a;
+  background: var(--y2k-accent, #3dd68c);
+  border-color: var(--y2k-accent, #3dd68c);
+}
+
+.omnibar-thiel-card {
+  padding: 0.55rem 0.75rem 0.7rem;
+  border-bottom: 1px solid var(--y2k-border);
+}
+
+.omnibar-thiel-card p {
+  margin: 0.25rem 0 0;
+  font-size: 0.84rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.omnibar-thiel-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+
+.omnibar-thiel-links button {
+  border: 1px solid var(--y2k-border);
+  background: var(--y2k-accent-soft, rgba(61, 214, 140, 0.12));
+  color: var(--y2k-text);
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
 .omnibar-cmd-btn {
   color: var(--y2k-accent);
   background: var(--y2k-surface-raised);

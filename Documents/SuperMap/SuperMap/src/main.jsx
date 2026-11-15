@@ -7,6 +7,7 @@ import './index.css'
 import './theme-y2k.css'
 import App from './App.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
+import { AccountsOverlay, AccountsProvider } from './features/accounts/SuperMapAccounts.jsx'
 
 // Overlap Render cold start with JS parse / React mount
 wakeApiEarly()
@@ -14,9 +15,12 @@ wakeApiEarly()
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ErrorBoundary>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      <AccountsProvider>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+        <AccountsOverlay />
+      </AccountsProvider>
       <Analytics />
     </ErrorBoundary>
   </StrictMode>,

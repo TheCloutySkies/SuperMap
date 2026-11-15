@@ -37,6 +37,7 @@ import {
   sheetsToPdfBlob,
 } from '../lib/printRender'
 import { capMapPixelRatio } from '../lib/mapPerf'
+import { SaveMapRecipeButton, buildMapPrintRecipe, onMapRecipeRequest } from '../features/accounts/SuperMapAccounts'
 import './PrintMapView.css'
 
 const OVERPASS_MIN_ZOOM = {
@@ -97,6 +98,19 @@ export default function PrintMapView({
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState('')
   const [placing, setPlacing] = useState(false)
+  const [mapTitle, setMapTitle] = useState(saved.mapTitle || '')
+  const [qualityId, setQualityId] = useState(saved.qualityId || 'standard')
+
+  useEffect(() => onMapRecipeRequest((recipe) => {
+    const map = mapObjRef.current
+    if (!map || !Array.isArray(recipe?.center)) return
+    map.jumpTo({
+      center: recipe.center,
+      zoom: recipe.zoom ?? map.getZoom(),
+      bearing: recipe.bearing ?? 0,
+      pitch: recipe.pitch ?? 0,
+    })
+  }), [])
 
   pagesRef.current = pages
   placingRef.current = placing
@@ -112,6 +126,8 @@ export default function PrintMapView({
     layerToggles,
     moreLayers,
     basemapId,
+    mapTitle,
+    qualityId,
   }
 
   const commitPages = useCallback((next, { record = true } = {}) => {
@@ -480,11 +496,13 @@ export default function PrintMapView({
       secondary,
       layerToggles,
       moreLayers,
+      mapTitle,
+      qualityId,
       pages,
       center,
       zoom,
     })
-  }, [basemapId, scaleId, orientation, units, labels, ink, hillshade, contours, secondary, layerToggles, moreLayers, pages, saved.center, saved.zoom])
+  }, [basemapId, scaleId, orientation, units, labels, ink, hillshade, contours, secondary, layerToggles, moreLayers, mapTitle, qualityId, pages, saved.center, saved.zoom])
 
   useEffect(() => {
     if (!flyToTarget?.lng || !flyToTarget?.lat) return
@@ -590,6 +608,8 @@ export default function PrintMapView({
           labels,
           extraVisibility: extraVisibilityFromToggles(),
           attribution: basemap?.attribution,
+          title: mapTitle,
+          qualityId,
         },
         ({ message }) => setStatus(message),
       )
@@ -627,7 +647,7 @@ export default function PrintMapView({
       setStatus('Share URL copied.')
       if (navigator.share) {
         try {
-          await navigator.share({ title: 'Good Palantir print map', url })
+          await navigator.share({ title: mapTitle.trim() || 'Good Palantir print map', url })
         } catch {
           /* user cancelled share sheet */
         }
@@ -664,6 +684,21 @@ export default function PrintMapView({
         onMoreOpen={setMoreOpen}
         basemapId={basemapId}
         onBasemapId={(id) => onBasemapChange?.(id)}
+        mapTitle={mapTitle}
+        onMapTitle={setMapTitle}
+        qualityId={qualityId}
+        onQualityId={setQualityId}
+        sheetExtra={(
+          <SaveMapRecipeButton
+            getRecipe={() => buildMapPrintRecipe({
+              map: mapObjRef.current,
+              styleId: basemapId,
+              page: { size: 'letter', orientation },
+              scaleDenominator: getScale(scaleId).ratio,
+              extras: { title: mapTitle, qualityId },
+            })}
+          />
+        )}
         pageCount={pages.length}
         history={history}
         onUndo={() => {

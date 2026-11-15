@@ -305,7 +305,7 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
   const [forecast, setForecast] = useState(null)
   const [forecastError, setForecastError] = useState(null)
   const [loadingForecast, setLoadingForecast] = useState(false)
-  const [panel, setPanel] = useState('air')
+  const [panel, setPanel] = useState(null)
   const [panelData, setPanelData] = useState(null)
   const [panelError, setPanelError] = useState(null)
   const [loadingPanel, setLoadingPanel] = useState(false)
@@ -426,7 +426,7 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
   }, [lat, lon, locationReady])
 
   useEffect(() => {
-    if (!locationReady || !Number.isFinite(lat) || !Number.isFinite(lon)) return undefined
+    if (!panel || !locationReady || !Number.isFinite(lat) || !Number.isFinite(lon)) return undefined
     let cancelled = false
     setLoadingPanel(true)
     setPanelError(null)

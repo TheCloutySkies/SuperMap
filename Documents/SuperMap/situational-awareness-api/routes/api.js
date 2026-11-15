@@ -2556,6 +2556,24 @@ router.get('/cache/stats', (_req, res) => {
   })
 })
 
+/**
+ * POST /api/ask
+ * Site-wide ThielBot. Optional from the omnibar switch.
+ * Body: { question }
+ */
+router.post('/ask', async (req, res) => {
+  try {
+    const siteAsk = require('../services/siteAsk')
+    const question = req.body?.question ?? req.body?.q ?? ''
+    const result = await siteAsk.askSite(question)
+    return res.json({ data: result })
+  } catch (err) {
+    if (err.code === 'BAD_REQUEST') return res.status(400).json({ error: err.message })
+    console.error('[API /ask]', err.message)
+    return res.status(500).json({ error: err.message || 'Ask failed' })
+  }
+})
+
 module.exports = router
 module.exports.invalidateHomeBootstrapCache = function invalidateHomeBootstrapCache() {
   try {

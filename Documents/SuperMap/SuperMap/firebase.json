@@ -1,6 +1,7 @@
 {
   "auth": {
     "providers": {
+      "anonymous": true,
       "emailPassword": true,
       "googleSignIn": {
         "oAuthBrandDisplayName": "Good Palantir",

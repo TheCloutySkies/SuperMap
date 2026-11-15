@@ -16,8 +16,8 @@ export const RADIAL_ORBIT_ITEMS = [
  * Circular menu: center Clouty Skies / Good Palantir (Home), orbit items equally spaced.
  * onSelectMode(item) — item may include viewId for direct views (e.g. Crime).
  */
-export default function RadialMenu({ onSelectHome, onSelectMode, activeMode, activeView }) {
-  const n = RADIAL_ORBIT_ITEMS.length
+export default function RadialMenu({ onSelectHome, onSelectMode, activeMode, activeView, items = RADIAL_ORBIT_ITEMS }) {
+  const n = items.length || 1
 
   return (
     <nav className="radial-menu" aria-label="Good Palantir modes">
@@ -37,7 +37,7 @@ export default function RadialMenu({ onSelectHome, onSelectMode, activeMode, act
         />
         <span className="radial-menu-center-sub">Home</span>
       </button>
-      {RADIAL_ORBIT_ITEMS.map((item, i) => {
+      {items.map((item, i) => {
         const angle = (360 / n) * i - 90
         const active = item.viewId
           ? activeView === item.viewId

@@ -14,7 +14,7 @@ const MODES = [
   { id: 'SETTINGS', label: 'Settings', icon: '⚙' },
 ]
 
-export default function ModeRail({ appMode, onModeSelect }) {
+export default function ModeRail({ appMode, onModeSelect, modes = MODES }) {
   return (
     <nav className="mode-rail" aria-label="Primary modes">
       <div className="mode-rail-brand" title={PRODUCT_NAME}>
@@ -28,7 +28,7 @@ export default function ModeRail({ appMode, onModeSelect }) {
         <span className="mode-rail-brand-text">{PRODUCT_NAME}</span>
       </div>
       <div className="mode-rail-list">
-        {MODES.map((m) => {
+        {modes.map((m) => {
           const active = appMode === m.id
           return (
             <button

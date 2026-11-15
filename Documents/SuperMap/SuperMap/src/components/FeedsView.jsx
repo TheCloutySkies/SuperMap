@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import axios from 'axios'
 import ArticlePreviewSheet from './ArticlePreviewSheet'
+import ItemMenu from '../features/accounts/ItemMenu'
 import { readHomeSnapshot, writeHomeSnapshot } from '../lib/homeBootstrap'
 import './FeedsView.css'
 
@@ -214,6 +215,7 @@ function VideoCard({ item, onExpand }) {
         )}
         <span className="feeds-video-card-expand-hint">Click to expand and play</span>
       </div>
+      <ItemMenu item={feedMenuItem(item)} />
     </div>
   )
 }
@@ -291,9 +293,21 @@ function relativeOsintTime(item) {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
+function feedMenuItem(item) {
+  return {
+    type: 'article',
+    title: item.title || 'Untitled',
+    summary: item.contentSnippet || item.description || item.source || '',
+    url: item.link || item.url || '',
+    lat: item.lat ?? item.latitude,
+    lon: item.lon ?? item.lng ?? item.longitude,
+  }
+}
+
 function NewsHeroStory({ item, onOpen }) {
   const img = articleImage(item)
   return (
+    <div className="has-item-menu">
     <button
       type="button"
       className="news-desk-hero-story"
@@ -315,12 +329,15 @@ function NewsHeroStory({ item, onOpen }) {
         <span className="news-desk-meta">{formatStoryDate(item)}</span>
       </div>
     </button>
+    <ItemMenu item={feedMenuItem(item)} />
+    </div>
   )
 }
 
 function NewsTile({ item, size = 'md', onOpen }) {
   const img = articleImage(item)
   return (
+    <div className="has-item-menu">
     <button
       type="button"
       className={`news-desk-tile news-desk-tile--${size}`}
@@ -337,11 +354,14 @@ function NewsTile({ item, size = 'md', onOpen }) {
         <span className="news-desk-meta">{formatStoryDate(item)}</span>
       </div>
     </button>
+    <ItemMenu item={feedMenuItem(item)} />
+    </div>
   )
 }
 
 function NewsTextRow({ item, onOpen }) {
   return (
+    <div className="has-item-menu">
     <button
       type="button"
       className="news-desk-text-row"
@@ -351,16 +371,18 @@ function NewsTextRow({ item, onOpen }) {
       <span className="news-desk-text-row-title">{item.title || 'Untitled'}</span>
       <span className="news-desk-text-row-date">{formatStoryDate(item)}</span>
     </button>
+    <ItemMenu item={feedMenuItem(item)} />
+    </div>
   )
 }
 
-function OsintDeskCard({ item, onOpen, onPin, pinningId, showPin }) {
+function OsintDeskCard({ item, onOpen }) {
   const img = articleImage(item)
-  const id = item.id || item.link
   return (
     <article
-      className={`feeds-osint-card feeds-osint-alert-${item.alertLevel || 'medium'}`}
+      className={`feeds-osint-card feeds-osint-alert-${item.alertLevel || 'medium'} has-item-menu`}
     >
+      <ItemMenu item={feedMenuItem(item)} />
       <button type="button" className="feeds-osint-card-main" onClick={() => onOpen?.(item)}>
         {img && (
           <div className="feeds-osint-card-media" aria-hidden>
@@ -385,19 +407,6 @@ function OsintDeskCard({ item, onOpen, onPin, pinningId, showPin }) {
           )}
         </div>
       </button>
-      {showPin && (
-        <div className="feeds-osint-card-actions">
-          <button
-            type="button"
-            className="feeds-pin-to-map-btn"
-            onClick={() => onPin?.(item)}
-            disabled={pinningId === id}
-            title="Find location from text and pin to Conflict Map"
-          >
-            {pinningId === id ? '…' : 'Pin to map'}
-          </button>
-        </div>
-      )}
     </article>
   )
 }

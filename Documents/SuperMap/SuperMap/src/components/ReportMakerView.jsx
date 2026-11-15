@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { REPORT_CLIPS_KEY } from '../features/accounts/socialData'
 import './ReportMakerView.css'
 
 const REPORT_X_POSTS_KEY = 'supermap_report_x_posts'
@@ -69,6 +70,22 @@ export default function ReportMakerView() {
       }
       localStorage.removeItem(REPORT_DRAFT_KEY)
     } catch {}
+    try {
+      const clips = JSON.parse(localStorage.getItem(REPORT_CLIPS_KEY) || '[]')
+      localStorage.removeItem(REPORT_CLIPS_KEY)
+      if (Array.isArray(clips)) {
+        clips.forEach((clip) => {
+          const line = [clip.title, clip.summary, clip.url].filter(Boolean).join(' — ')
+          if (line) setBody((prev) => (prev ? `${prev}\n\n${line}` : line))
+          const lat = Number(clip.lat)
+          const lon = Number(clip.lon)
+          if (Number.isFinite(lat) && Number.isFinite(lon)) {
+            setLocations((prev) => [...prev, { name: clip.title || 'Location', lat, lon }])
+          }
+          if (clip.url) setArticles((prev) => (prev.includes(clip.url) ? prev : [...prev, clip.url]))
+        })
+      }
+    } catch { /* clips are optional */ }
   }, [])
 
   const addArticle = () => {

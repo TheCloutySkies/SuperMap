@@ -1587,6 +1587,15 @@ export default function MapView({
     const next = { type: 'FeatureCollection', features }
     setSavedPoints(next)
     upsertSavedPointsLayer(next)
+    if (sessionStorage.getItem('supermap.vault-place') === '1') {
+      const saved = features.find((feature) => feature.id === pinId)
+      const [lon, lat] = saved?.geometry?.coordinates || []
+      if (Number.isFinite(lat) && Number.isFinite(lon)) {
+        window.dispatchEvent(new CustomEvent('supermap:vault-place', {
+          detail: { title: updates.title || saved?.properties?.title || 'Place', lat, lon },
+        }))
+      }
+    }
   }, [upsertSavedPointsLayer])
 
   const handlePinEditorDelete = useCallback(async (pinId) => {
@@ -1999,11 +2008,13 @@ export default function MapView({
         const lng = Number(e?.lngLat?.lng)
         const lat = Number(e?.lngLat?.lat)
         if (Number.isFinite(lng) && Number.isFinite(lat)) {
+          const pendingTitle = sessionStorage.getItem('supermap.pending-pin-title')
+          if (pendingTitle) sessionStorage.removeItem('supermap.pending-pin-title')
           const current = getSavedPoints()
           const feature = {
             type: 'Feature',
             id: `pt-${Date.now()}`,
-            properties: { title: 'Saved point', icon: pointIcon || '📍', source: 'General' },
+            properties: { title: pendingTitle || 'Saved point', icon: pointIcon || '📍', source: 'General' },
             geometry: { type: 'Point', coordinates: [lng, lat] },
           }
           const next = { type: 'FeatureCollection', features: [...(current.features || []), feature] }
@@ -2255,13 +2266,13 @@ export default function MapView({
     }
     window.addEventListener('supermap-toggle-tap-pin', onTapPinToggle)
 
-    const dropPinAt = (lng, lat) => {
+    const dropPinAt = (lng, lat, title) => {
       if (!Number.isFinite(lng) || !Number.isFinite(lat)) return
       const current = getSavedPoints()
       const feature = {
         type: 'Feature',
         id: `pt-${Date.now()}`,
-        properties: { title: 'Saved point', icon: pointIcon || '📍', source: 'General' },
+        properties: { title: title || 'Saved point', icon: pointIcon || '📍', source: 'General' },
         geometry: { type: 'Point', coordinates: [lng, lat] },
       }
       const next = { type: 'FeatureCollection', features: [...(current.features || []), feature] }
@@ -2282,7 +2293,7 @@ export default function MapView({
     const onDropPin = (ev) => {
       const lng = Number(ev?.detail?.lng)
       const lat = Number(ev?.detail?.lat)
-      dropPinAt(lng, lat)
+      dropPinAt(lng, lat, ev?.detail?.title)
     }
     window.addEventListener('supermap-drop-pin', onDropPin)
 
@@ -2995,7 +3006,16 @@ export default function MapView({
       )}
       <PinEditorDialog
         open={pinEditorOpen}
-        onClose={() => { setPinEditorOpen(false); setPinEditorPin(null) }}
+        onClose={() => {
+          setPinEditorOpen(false)
+          setPinEditorPin(null)
+          if (sessionStorage.getItem('supermap.one-shot-pin') === '1' || sessionStorage.getItem('supermap.vault-place') === '1') {
+            sessionStorage.removeItem('supermap.one-shot-pin')
+            sessionStorage.removeItem('supermap.vault-place')
+            sessionStorage.removeItem('supermap.pending-pin-title')
+            window.dispatchEvent(new CustomEvent('supermap-toggle-tap-pin', { detail: { enabled: false } }))
+          }
+        }}
         pin={pinEditorPin}
         isNew={pinEditorIsNew}
         listNames={pinEditorOpen ? Array.from(new Set([...(getSavedPoints().features || []).map((f) => f.properties?.source).filter(Boolean), 'General'])).sort() : []}

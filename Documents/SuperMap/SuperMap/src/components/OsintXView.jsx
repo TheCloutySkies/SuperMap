@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import axios from 'axios'
 import { getApiBase, readHomeSnapshot, writeHomeSnapshot } from '../lib/homeBootstrap'
+import ItemMenu from '../features/accounts/ItemMenu'
 import './OsintXView.css'
 
 const API_BASE = getApiBase()
@@ -106,8 +107,6 @@ const SORT_OPTIONS = [
   { value: 'tags', label: 'Tags' },
 ]
 
-const REPORT_X_POSTS_KEY = 'supermap_report_x_posts'
-
 function EngagementIcon({ kind }) {
   if (kind === 'reply') {
     return (
@@ -138,7 +137,7 @@ function EngagementIcon({ kind }) {
   )
 }
 
-export default function OsintXView({ keywordFilter = '', onClearFilter, onPinnedToMap }) {
+export default function OsintXView({ keywordFilter = '', onClearFilter }) {
   const snapshotPosts = useRef(typeof window !== 'undefined' ? readSnapshotPosts() : [])
   const [posts, setPosts] = useState(() => snapshotPosts.current)
   const [loading, setLoading] = useState(() => snapshotPosts.current.length === 0)
@@ -147,8 +146,6 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
   const [sortBy, setSortBy] = useState('time')
   const [filterTag, setFilterTag] = useState('')
   const [filterCreator, setFilterCreator] = useState('')
-  const [pinningId, setPinningId] = useState(null)
-  const [pinError, setPinError] = useState(null)
   const [videoDialog, setVideoDialog] = useState(null)
   const [imageDialog, setImageDialog] = useState(null)
   const [imageDownloading, setImageDownloading] = useState(false)
@@ -342,47 +339,6 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
     return list
   }, [posts, q, filterTag, filterCreator, sortBy])
 
-  const handlePinToMap = (post) => {
-    if (!API_BASE || !onPinnedToMap) return
-    setPinError(null)
-    setPinningId(post.id)
-    axios
-      .post(`${API_BASE}/api/events/pin-from-text`, {
-        title: post.title || post.content?.slice(0, 200) || 'Post',
-        description: post.content || '',
-        source: 'x',
-        url: post.url,
-      }, { timeout: 12000 })
-      .then((res) => {
-        if (res.data?.error) {
-          setPinError(res.data.error)
-          return
-        }
-        if (res.data && onPinnedToMap) onPinnedToMap(res.data)
-      })
-      .catch((err) => setPinError(err.response?.data?.error || err.message || 'Could not find location'))
-      .finally(() => setPinningId(null))
-  }
-
-  const handlePinToReport = (post) => {
-    try {
-      const current = JSON.parse(localStorage.getItem(REPORT_X_POSTS_KEY) || '[]')
-      const next = Array.isArray(current) ? current : []
-      const url = String(post?.url || '').trim()
-      if (!url) return
-      if (!next.some((p) => p.url === url)) {
-        next.unshift({
-          url,
-          account: post?.account || '',
-          title: post?.title || '',
-          content: post?.content || '',
-          timestamp: post?.timestamp || null,
-        })
-      }
-      localStorage.setItem(REPORT_X_POSTS_KEY, JSON.stringify(next.slice(0, 100)))
-    } catch {}
-  }
-
   const openVideoDialog = (post, src) => {
     setVideoDialog({
       src: String(src || '').trim(),
@@ -521,7 +477,6 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
             </button>
           )}
         </div>
-        {pinError && <p className="x-feed-status x-feed-status--error">{pinError}</p>}
         {loadError && !loading && <p className="x-feed-status" role="status">{loadError}</p>}
       </header>
 
@@ -579,6 +534,14 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
                     <time className="x-post-time" dateTime={post.timestamp ? new Date(post.timestamp).toISOString() : undefined}>
                       {relativeTime(post.timestamp)}
                     </time>
+                    <ItemMenu inline item={{
+                      type: 'article',
+                      title: post.title || displayName,
+                      summary: post.content || '',
+                      url: post.url || '',
+                      lat: post.lat ?? post.latitude,
+                      lon: post.lon ?? post.lng,
+                    }} />
                     {post.risk_score != null && Number(post.risk_score) >= 2 && (
                       <span
                         className={`x-post-risk x-post-risk--${Number(post.risk_score)}`}
@@ -638,23 +601,6 @@ export default function OsintXView({ keywordFilter = '', onClearFilter, onPinned
                         Open on X
                       </a>
                     )}
-                    {onPinnedToMap && API_BASE && (
-                      <button
-                        type="button"
-                        className="x-post-action-btn"
-                        onClick={() => handlePinToMap(post)}
-                        disabled={pinningId === post.id}
-                      >
-                        {pinningId === post.id ? '…' : 'Pin to map'}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="x-post-action-btn"
-                      onClick={() => handlePinToReport(post)}
-                    >
-                      Pin to report
-                    </button>
                   </div>
                 </div>
               </li>

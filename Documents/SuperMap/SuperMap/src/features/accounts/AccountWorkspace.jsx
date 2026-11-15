@@ -192,6 +192,7 @@ function ProfilePanel() {
       <div className="sm-profile-head">
         <h2><PresenceDot presence={user?.presence} />{user?.emoji || '◈'} {personTitle(user)}</h2>
         <p className="sm-local-note">{personHandle(user)}</p>
+        {user?.bulletinTagline ? <p className="sm-public-tagline">{user.bulletinTagline}</p> : null}
         {user?.bio ? <p className="sm-bio">{user.bio}</p> : null}
       </div>
       <form className="sm-form sm-thought-form" onSubmit={postThought}>
@@ -244,7 +245,7 @@ function ago(ms) {
 }
 
 function MessagesPanel() {
-  const { user, messageDraft, firebaseReady: ready } = useSuperMapAccount()
+  const { user, messageDraft, firebaseReady: ready, openPublicProfile } = useSuperMapAccount()
   const [conversations, setConversations] = useState([])
   const [pickedId, setPickedId] = useState(null)
   const [activePerson, setActivePerson] = useState(null)
@@ -372,49 +373,55 @@ function MessagesPanel() {
         <div className="sm-msg-scroll">
           {find.trim() ? <p className="sm-msg-section">People</p> : null}
           {people.map((person) => (
-            <button key={person.uid} type="button" className="sm-msg-row sm-msg-person" onClick={() => choose(person)}>
-              <span className="sm-msg-avatar" aria-hidden>{person.emoji || '◈'}</span>
-              <span className="sm-msg-copy">
-                <strong><PresenceDot presence={person.presence} />{personTitle(person)}</strong>
-                <em>{personHandle(person)}{person.bio ? ` · ${String(person.bio).slice(0, 80)}` : ''}</em>
-              </span>
-              <span className="sm-msg-go">Message</span>
-            </button>
+            <div key={person.uid} className="sm-msg-row sm-msg-person">
+              <button type="button" className="sm-msg-main" onClick={() => openPublicProfile(person)} aria-label={`View ${personTitle(person)}'s profile`}>
+                <span className="sm-msg-avatar" aria-hidden>{person.emoji || '◈'}</span>
+                <span className="sm-msg-copy">
+                  <strong><PresenceDot presence={person.presence} />{personTitle(person)}</strong>
+                  <em>{personHandle(person)}{person.bulletinTagline ? ` · ${person.bulletinTagline}` : ''}</em>
+                </span>
+              </button>
+              <button type="button" className="sm-msg-go" onClick={() => choose(person)}>Message</button>
+            </div>
           ))}
           {find.trim() && !searching && people.length === 0 ? <p className="sm-local-note">No accounts match.</p> : null}
           <p className="sm-msg-section">Chats</p>
           {other && activeId && !knownIds.has(activeId) ? (
-            <button type="button" className="sm-msg-row is-active" aria-current="true">
-              <span className="sm-msg-avatar" aria-hidden>{other.emoji}</span>
-              <span className="sm-msg-copy">
-                <strong>{personTitle(other)}</strong>
-                <em>{personHandle(other)}</em>
-              </span>
-            </button>
+            <div className="sm-msg-row is-active" aria-current="true">
+              <button type="button" className="sm-msg-avatar sm-msg-avatar-btn" onClick={() => openPublicProfile(other)} aria-label={`View ${personTitle(other)}'s profile`}>{other.emoji}</button>
+              <button type="button" className="sm-msg-main" onClick={() => choose(other)}>
+                <span className="sm-msg-copy">
+                  <strong>{personTitle(other)}</strong>
+                  <em>{personHandle(other)}</em>
+                </span>
+              </button>
+            </div>
           ) : null}
           {conversations.map((row) => {
             const id = row.memberUids?.find((uid) => uid !== user.uid)
             const person = row.members?.[id] || {}
+            const card = { uid: id, displayName: person.displayName, emoji: person.emoji, handle: person.handle }
             const unread = row.unread?.[user.uid] || 0
             const preview = row.lastBody || 'Start of the conversation'
+            const title = personTitle(card)
             return (
-              <button
+              <div
                 key={row.id}
-                type="button"
                 className={`sm-msg-row${row.id === activeId ? ' is-active' : ''}`}
                 aria-current={row.id === activeId ? 'true' : undefined}
-                onClick={() => choose({ uid: id, displayName: person.displayName, emoji: person.emoji, handle: person.handle })}
               >
-                <span className="sm-msg-avatar" aria-hidden>{person.emoji || '◈'}</span>
-                <span className="sm-msg-copy">
-                  <strong>{personTitle({ ...person, uid: id })}</strong>
-                  <em>{personTitle({ ...person, uid: id }) === personHandle({ ...person, uid: id }) ? preview : `${personHandle({ ...person, uid: id })} · ${preview}`}</em>
-                </span>
-                <span className="sm-msg-meta">
-                  {row.updatedAtMs ? <time>{ago(row.updatedAtMs)}</time> : null}
-                  {unread > 0 ? <strong className="sm-msg-unread">{unread}</strong> : null}
-                </span>
-              </button>
+                <button type="button" className="sm-msg-avatar sm-msg-avatar-btn" onClick={() => openPublicProfile(card)} aria-label={`View ${title}'s profile`}>{person.emoji || '◈'}</button>
+                <button type="button" className="sm-msg-main" onClick={() => choose(card)}>
+                  <span className="sm-msg-copy">
+                    <strong>{title}</strong>
+                    <em>{title === personHandle(card) ? preview : `${personHandle(card)} · ${preview}`}</em>
+                  </span>
+                  <span className="sm-msg-meta">
+                    {row.updatedAtMs ? <time>{ago(row.updatedAtMs)}</time> : null}
+                    {unread > 0 ? <strong className="sm-msg-unread">{unread}</strong> : null}
+                  </span>
+                </button>
+              </div>
             )
           })}
           {conversations.length === 0 && !other ? <p className="sm-local-note">No chats yet. Search for someone to message.</p> : null}
@@ -425,11 +432,13 @@ function MessagesPanel() {
           <>
             <header className="sm-msg-head" aria-live="polite">
               <button type="button" className="sm-msg-back" onClick={() => { setPickedId(null); setActivePerson(null) }}>Chats</button>
-              <span className="sm-msg-avatar sm-msg-avatar-lg" aria-hidden>{other.emoji}</span>
-              <div>
-                <h3>{personTitle(other)}</h3>
-                <p>{personHandle(other)} · Direct message</p>
-              </div>
+              <button type="button" className="sm-msg-main" onClick={() => openPublicProfile(other)} aria-label={`View ${personTitle(other)}'s profile`}>
+                <span className="sm-msg-avatar sm-msg-avatar-lg" aria-hidden>{other.emoji}</span>
+                <span className="sm-msg-copy">
+                  <h3>{personTitle(other)}</h3>
+                  <p>{personHandle(other)} · Profile</p>
+                </span>
+              </button>
             </header>
             <div className="sm-message-log" ref={logRef}>
               {messages.length === 0 ? (
@@ -473,6 +482,7 @@ function SettingsPanel() {
   const [name, setName] = useState(user?.displayName || '')
   const [emoji, setEmoji] = useState(user?.emoji || '◈')
   const [bio, setBio] = useState(user?.bio || '')
+  const [tagline, setTagline] = useState(user?.bulletinTagline || '')
   const [presence, setPresence] = useState(presenceValue(user?.presence))
   const [discoverable, setDiscoverable] = useState(user?.discoverable !== false)
   const [modes, setModes] = useState(getModeVisibility)
@@ -483,7 +493,7 @@ function SettingsPanel() {
   async function onSave(event) {
     event.preventDefault()
     setError('')
-    const result = await updateAccount({ displayName: name, emoji, discoverable, bio, presence })
+    const result = await updateAccount({ displayName: name, emoji, discoverable, bio, presence, bulletinTagline: tagline })
     setSaved(result.ok ? 'Saved' : '')
     if (!result.ok) setError(result.error || 'Could not save')
   }
@@ -500,6 +510,19 @@ function SettingsPanel() {
       <form className="sm-form" onSubmit={onSave}>
         <label>Display name<input value={name} onChange={(event) => setName(event.target.value)} maxLength={60} required /></label>
         <label>Bio<textarea value={bio} onChange={(event) => setBio(event.target.value)} maxLength={280} rows={3} placeholder="A short bio other people can see" /></label>
+        <fieldset className="sm-bulletin-settings">
+          <legend>Bulletin profile</legend>
+          <label>
+            Tagline
+            <input value={tagline} onChange={(event) => setTagline(event.target.value)} maxLength={80} placeholder="A title under your name on the board" />
+          </label>
+          <p className="sm-local-note">Shows under your name on The Bulletin Board, like a custom title on an old forum.</p>
+          <div className="sm-bulletin-preview" aria-hidden="true">
+            <span>{emoji || '◈'}</span>
+            <strong>{name.trim() || personTitle(user)}</strong>
+            {tagline.trim() ? <em>{tagline.trim()}</em> : null}
+          </div>
+        </fieldset>
         <label>
           Status
           <select value={presence} onChange={(event) => setPresence(event.target.value)}>

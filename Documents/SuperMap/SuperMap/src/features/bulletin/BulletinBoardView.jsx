@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSuperMapAccount } from '../accounts/SuperMapAccounts'
+import { personTitle } from '../accounts/accountIdentity'
 import {
   addThreadPost,
   createBoard,
   createThread,
   ensureStarterBoards,
+  loadUserProfile,
   setThreadSticky,
   subscribeBoards,
   subscribeLatestThreads,
@@ -50,8 +52,51 @@ export function LatestBulletin({ onOpen }) {
   )
 }
 
+function personFromPost(post, live) {
+  return {
+    uid: post.authorUid,
+    displayName: live?.displayName || post.authorName,
+    emoji: live?.emoji || post.authorEmoji || '◈',
+    handle: live?.handle,
+    accountNumber: live?.accountNumber,
+    bio: live?.bio || '',
+    presence: live?.presence,
+    bulletinTagline: live?.bulletinTagline || post.authorTagline || '',
+  }
+}
+
+function AuthorCard({ post, live, onOpen }) {
+  const person = personFromPost(post, live)
+  const tagline = String(person.bulletinTagline || '').trim()
+  const inner = (
+    <>
+      <span className="bb-emoji" aria-hidden>{person.emoji}</span>
+      <strong>{personTitle(person)}</strong>
+      {tagline ? <em>{tagline}</em> : null}
+      <time>{when(post.createdAtMs)}</time>
+    </>
+  )
+  if (!person.uid) return <div className="bb-author">{inner}</div>
+  return (
+    <button type="button" className="bb-author" onClick={() => onOpen(person)}>
+      {inner}
+    </button>
+  )
+}
+
+function PersonButton({ uid, name, emoji, onOpen }) {
+  const person = { uid, displayName: name, emoji: emoji || '◈' }
+  const label = personTitle(person)
+  if (!uid) return <>{emoji || '◈'} {label}</>
+  return (
+    <button type="button" className="bb-person" onClick={() => onOpen(person)}>
+      {emoji || '◈'} {label}
+    </button>
+  )
+}
+
 export default function BulletinBoardView() {
-  const { user, setOverlay } = useSuperMapAccount()
+  const { user, setOverlay, openPublicProfile } = useSuperMapAccount()
   const [boards, setBoards] = useState([])
   const [boardId, setBoardId] = useState(null)
   const [threadId, setThreadId] = useState(null)
@@ -63,6 +108,7 @@ export default function BulletinBoardView() {
   const [body, setBody] = useState('')
   const [reply, setReply] = useState('')
   const [error, setError] = useState('')
+  const [authors, setAuthors] = useState({})
 
   useEffect(() => {
     ensureStarterBoards().catch(() => {})
@@ -81,6 +127,22 @@ export default function BulletinBoardView() {
     if (!threadId) return undefined
     return subscribePosts(threadId, setPosts)
   }, [threadId])
+
+  useEffect(() => {
+    const ids = [...new Set(posts.map((post) => post.authorUid).filter(Boolean))]
+    if (ids.length === 0) return undefined
+    let stop = false
+    Promise.all(ids.map(async (id) => [id, id === user?.uid ? user : await loadUserProfile(id)]))
+      .then((rows) => {
+        if (stop) return
+        const next = {}
+        rows.forEach(([id, profile]) => {
+          if (profile) next[id] = profile
+        })
+        setAuthors(next)
+      })
+    return () => { stop = true }
+  }, [posts, user])
 
   const orderedThreads = useMemo(() => {
     return [...threads].sort((a, b) => {
@@ -158,7 +220,7 @@ export default function BulletinBoardView() {
                   <td className="bb-last">
                     {item.lastTitle ? (
                       <>
-                        <span>{item.lastEmoji || '◈'} {item.lastAuthorName}</span>
+                        <PersonButton uid={item.lastAuthorUid} name={item.lastAuthorName} emoji={item.lastEmoji} onOpen={openPublicProfile} />
                         <em>{item.lastTitle}</em>
                         <time>{when(item.lastPostAtMs)}</time>
                       </>
@@ -200,10 +262,10 @@ export default function BulletinBoardView() {
                       {item.title}
                     </button>
                   </td>
-                  <td>{item.authorEmoji || '◈'} {item.authorName}</td>
+                  <td><PersonButton uid={item.authorUid} name={item.authorName} emoji={item.authorEmoji} onOpen={openPublicProfile} /></td>
                   <td className="bb-num">{item.replyCount || 0}</td>
                   <td className="bb-last">
-                    <span>{item.lastEmoji || item.authorEmoji || '◈'} {item.lastAuthorName || item.authorName}</span>
+                    <PersonButton uid={item.lastAuthorUid || item.authorUid} name={item.lastAuthorName || item.authorName} emoji={item.lastEmoji || item.authorEmoji} onOpen={openPublicProfile} />
                     <time>{when(item.lastPostAtMs)}</time>
                   </td>
                 </tr>
@@ -234,11 +296,7 @@ export default function BulletinBoardView() {
           <ol className="bb-posts">
             {posts.map((post) => (
               <li key={post.id} className={post.original ? 'is-original' : ''}>
-                <div className="bb-author">
-                  <span className="bb-emoji" aria-hidden>{post.authorEmoji || '◈'}</span>
-                  <strong>{post.authorName}</strong>
-                  <time>{when(post.createdAtMs)}</time>
-                </div>
+                <AuthorCard post={post} live={authors[post.authorUid]} onOpen={openPublicProfile} />
                 <div className="bb-post-body">{post.body}</div>
               </li>
             ))}

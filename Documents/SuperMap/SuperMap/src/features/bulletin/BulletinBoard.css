@@ -111,8 +111,29 @@
 }
 .bb-posts li.is-original { border-color: #b08968; }
 .bb-author { padding: 12px; background: #f3e7d4; border-right: 1px solid var(--bb-rule); }
-.bb-author strong, .bb-author time { display: block; }
+button.bb-author {
+  width: 100%;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+button.bb-author:hover { background: #ead9c0; }
+.bb-author strong, .bb-author em, .bb-author time { display: block; }
+.bb-author em { margin-top: 4px; color: #6a5846; font-size: 13px; }
 .bb-author time { margin-top: 6px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 12px; color: #6a5846; }
+.bb-person {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.bb-person:hover { text-decoration: underline; }
+.bb-last .bb-person { display: block; }
 .bb-post-body { padding: 12px 14px; white-space: pre-wrap; line-height: 1.45; }
 .bb-home {
   margin: 0 0 16px;

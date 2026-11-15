@@ -17,6 +17,7 @@
     "axios": "^1.13.6",
     "echarts": "^6.0.0",
     "fuse.js": "^7.1.0",
+    "lucide-react": "^1.73.0",
     "mapbox-gl-draw-additional-tools": "^0.6.1",
     "mapbox-gl-globe-minimap": "^1.2.0",
     "mapboxgl-legend": "^1.16.0",
@@ -26,7 +27,8 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-draggable": "^4.5.0",
-    "react-router-dom": "^7.18.4"
+    "react-router-dom": "^7.18.4",
+    "recharts": "^3.10.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

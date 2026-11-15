@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useSuperMapAccount } from './SuperMapAccounts'
+import { personHandle, personTitle } from './accountIdentity'
 import { createProfilePost, fileReport, queueReportClip, searchDiscoverableUsers, sendDirectMessage } from './socialData'
 import { firebaseReady } from './firebaseClient'
 import './ItemMenu.css'
@@ -151,8 +152,8 @@ export default function ItemMenu({ item, inline = false }) {
       showToast({ tone: 'danger', message: result.error || 'Could not send' })
       return
     }
-    showToast({ tone: 'success', message: `Sent to ${person.displayName || 'user'}` })
-    openMessages?.({ uid: person.uid, displayName: person.displayName, emoji: person.emoji })
+    showToast({ tone: 'success', message: `Sent to ${personTitle(person)}` })
+    openMessages?.({ uid: person.uid, displayName: person.displayName, emoji: person.emoji, handle: personHandle(person) })
     setOpen(false)
   }
 
@@ -219,7 +220,7 @@ export default function ItemMenu({ item, inline = false }) {
                     {people.map((person) => (
                       <li key={person.uid}>
                         <button type="button" disabled={busy} onClick={() => sendTo(person)}>
-                          <span>{person.emoji || '◈'}</span> {person.displayName || 'Anonymous'}
+                          <span>{person.emoji || '◈'}</span> {personTitle(person)} <em>{personHandle(person)}</em>
                         </button>
                       </li>
                     ))}

@@ -3,6 +3,7 @@ import axios from 'axios'
 import { onAuthStateChanged } from 'firebase/auth'
 import { firebaseReady, getAccountsFirebase } from '../features/accounts/firebaseClient'
 import { searchDiscoverableUsers } from '../features/accounts/socialData'
+import { personHandle, personTitle } from '../features/accounts/accountIdentity'
 import {
   DEFAULT_COMMANDS,
   searchOmnibarIndex,
@@ -418,6 +419,7 @@ export default function Omnibar({
         uid: person.uid,
         displayName: person.displayName || person.label || 'Anonymous',
         emoji: person.emoji || '◈',
+        handle: personHandle(person),
       },
     }))
     setShowDropdown(false)
@@ -586,7 +588,8 @@ export default function Omnibar({
               <div className="omnibar-results-head">Accounts</div>
               {people.map((person, i) => {
                 const idx = i
-                const name = person.displayName || 'Anonymous'
+                const name = personTitle(person)
+                const handle = personHandle(person)
                 return (
                   <button
                     key={person.uid}
@@ -604,7 +607,7 @@ export default function Omnibar({
                     <span className="omnibar-result-type">Account</span>
                     <span className="omnibar-result-main">
                       <span className="omnibar-result-title">{person.emoji || '◈'} {name}</span>
-                      <span className="omnibar-result-sub">Direct message</span>
+                      <span className="omnibar-result-sub">{name === handle ? 'Direct message' : `${handle} · Direct message`}</span>
                     </span>
                     <span className="omnibar-result-action">Message</span>
                   </button>

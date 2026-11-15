@@ -15,6 +15,7 @@ import {
   where,
 } from 'firebase/firestore'
 import { getAccountsFirebase } from './firebaseClient'
+import { personHandle, personNumber } from './accountIdentity'
 import { STARTER_BOARDS } from './menuCatalog'
 
 const LOCAL_KEY = 'supermap.social.local.v1'
@@ -83,8 +84,8 @@ export async function openDirectConversation({ from, to }) {
   const id = conversationId(from.uid, to.uid)
   const now = Date.now()
   const members = {
-    [from.uid]: { displayName: from.displayName || 'Anonymous', emoji: from.emoji || '◈' },
-    [to.uid]: { displayName: to.displayName || 'Anonymous', emoji: to.emoji || '◈' },
+    [from.uid]: { displayName: from.displayName || 'Anonymous', emoji: from.emoji || '◈', handle: personHandle(from) },
+    [to.uid]: { displayName: to.displayName || 'Anonymous', emoji: to.emoji || '◈', handle: personHandle(to) },
   }
   const memberUids = [from.uid, to.uid].sort()
   const firestore = db()
@@ -405,7 +406,14 @@ export async function searchDiscoverableUsers(text) {
   const snap = await getDocs(q)
   return snap.docs
     .map((row) => ({ uid: row.id, ...row.data() }))
-    .filter((user) => !needle || String(user.displayName || '').toLowerCase().includes(needle))
+    .filter((user) => {
+      if (!needle) return true
+      const handle = personHandle(user).toLowerCase()
+      const number = personNumber(user)
+      const hay = `${user.displayName || ''} ${handle} ${number}`.toLowerCase()
+      const q = needle.replace(/^@/, '').replace(/^#/, '')
+      return hay.includes(needle) || hay.includes(q)
+    })
     .slice(0, 12)
 }
 
@@ -481,8 +489,8 @@ export async function sendDirectMessage({ from, to, body, item }) {
         id,
         memberUids: [from.uid, to.uid].sort(),
         members: {
-          [from.uid]: { displayName: from.displayName, emoji: from.emoji || '◈' },
-          [to.uid]: { displayName: to.displayName, emoji: to.emoji || '◈' },
+          [from.uid]: { displayName: from.displayName, emoji: from.emoji || '◈', handle: personHandle(from) },
+          [to.uid]: { displayName: to.displayName, emoji: to.emoji || '◈', handle: personHandle(to) },
         },
         unread: { [from.uid]: 0, [to.uid]: 0 },
       }
@@ -499,8 +507,8 @@ export async function sendDirectMessage({ from, to, body, item }) {
   await setDoc(convoRef, {
     memberUids: [from.uid, to.uid].sort(),
     members: {
-      [from.uid]: { displayName: from.displayName || 'Anonymous', emoji: from.emoji || '◈' },
-      [to.uid]: { displayName: to.displayName || 'Anonymous', emoji: to.emoji || '◈' },
+      [from.uid]: { displayName: from.displayName || 'Anonymous', emoji: from.emoji || '◈', handle: personHandle(from) },
+      [to.uid]: { displayName: to.displayName || 'Anonymous', emoji: to.emoji || '◈', handle: personHandle(to) },
     },
     updatedAtMs: now,
     lastBody: message.body.slice(0, 140),

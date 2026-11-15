@@ -187,6 +187,16 @@ export const OMNIBAR_CORE_ENTRIES = Object.freeze([
     viewId: 'live-webcams',
     weight: 10,
   },
+  {
+    id: 'map-print',
+    label: 'Print Map',
+    category: 'Maps',
+    keywords: ['print', 'pdf', 'letter', 'scale', 'orienteering', 'usgs', '1:24k', '1:25k', 'land nav'],
+    synonyms: ['printable map', 'topo print', 'us letter'],
+    action: 'navigate',
+    viewId: 'print-map',
+    weight: 9,
+  },
 
   // Crime sections
   {

@@ -25,6 +25,7 @@ import HomeScreen from './components/HomeScreen'
 import CrimeIntelligenceView from './components/CrimeIntelligenceView'
 import WeatherView from './components/WeatherView'
 import MapView from './components/MapView'
+import PrintMapView from './components/PrintMapView'
 import FeedsView from './components/FeedsView'
 import RightSidebar from './components/RightSidebar'
 import Omnibar from './components/Omnibar'
@@ -71,6 +72,7 @@ const MAP_VIEWS = [
   { id: 'geolocate-map', label: 'Geolocate', tabKey: 'geolocateMap' },
   { id: 'flock-map', label: 'Flock Cameras', tabKey: 'flockMap' },
   { id: 'live-webcams', label: 'Live Webcams', tabKey: 'liveWebcams' },
+  { id: 'print-map', label: 'Print', tabKey: 'printMap' },
 ]
 
 const MAP_VIEW_IDS = MAP_VIEWS.map((v) => v.id)
@@ -249,7 +251,9 @@ function App() {
     } catch {}
   }, [])
 
+  const isPrintView = activeView === 'print-map'
   const isMapView = MAP_VIEW_IDS.includes(activeView)
+  const isLiveMapView = isMapView && !isPrintView
   const isCrimeView = isCrimeIntelligenceView(activeView)
   const isWeatherPage = isWeatherView(activeView)
   const isFeedView = ['osint-feeds', 'news-feeds', 'recent-videos', 'osint-x', 'advanced-search', 'broadcasts'].includes(activeView)
@@ -444,7 +448,19 @@ function App() {
                 onHomeBootstrap={handleHomeBootstrap}
               />
             )}
-          {isMapView && (
+          {isPrintView && (
+            <PrintMapView
+              basemapId={basemapId}
+              onBasemapChange={setBasemapId}
+              flyToTarget={flyToTarget}
+              onFlyToComplete={clearFlyToTarget}
+              onMapCenterChange={(coord) => {
+                setMapCenter(coord)
+                setWeatherCoords(coord)
+              }}
+            />
+          )}
+          {isLiveMapView && (
           <>
             <MapView
               basemapId={activeView === 'geolocate-map' ? 'arcgis-topo' : basemapId}
@@ -561,7 +577,7 @@ function App() {
   const sidebar = (
         <RightSidebar
         visible={
-          isMapView &&
+          isLiveMapView &&
           (isMobileLayout
             ? isRightSidebarOpen
             : activeView === 'geolocate-map'

@@ -27,6 +27,8 @@ const MAP_TOOL_TO_VIEW = Object.freeze({
   'flock-map': 'flock-map',
   webcams: 'live-webcams',
   'live-webcams': 'live-webcams',
+  print: 'print-map',
+  'print-map': 'print-map',
 })
 
 const VIEW_TO_MAP_TOOL = Object.freeze({
@@ -36,6 +38,7 @@ const VIEW_TO_MAP_TOOL = Object.freeze({
   'geolocate-map': 'geolocate',
   'flock-map': 'flock',
   'live-webcams': 'webcams',
+  'print-map': 'print',
 })
 
 const VIEW_TO_PATH = Object.freeze({
@@ -46,6 +49,7 @@ const VIEW_TO_PATH = Object.freeze({
   'geolocate-map': '/maps/geolocate',
   'flock-map': '/maps/flock',
   'live-webcams': '/maps/webcams',
+  'print-map': '/maps/print',
   [CRIME_VIEW_ID]: '/crime',
   'crime-intel': '/crime',
   'crime-map': '/crime',

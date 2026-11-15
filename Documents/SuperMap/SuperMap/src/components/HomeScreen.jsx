@@ -25,6 +25,7 @@ const DOOMSDAY_CLOCK_URL = 'https://thebulletin.org/doomsday-clock/#nav_menu'
 
 const QUICK_LINKS = [
   { id: 'osint-map', label: 'OSINT Map', desc: 'View news, intel, and events on the map', icon: '🗺️', path: 'osint-map' },
+  { id: 'print-map', label: 'Print Map', desc: 'US Letter land-nav / orienteering pages at true scale', icon: '🖨', path: 'print-map' },
   { id: 'conflict-map', label: 'Conflict Map', desc: 'Tactical and conflict layers', icon: '⚔️', path: 'conflict-map' },
   { id: CRIME_VIEW_ID, label: 'Crime Intelligence', desc: 'National snapshot, state & city detail, ask ThielBot', icon: '📉', path: CRIME_VIEW_ID },
   { id: WEATHER_VIEW_ID, label: 'Weather', desc: 'Forecast, radar layers, air quality & marine', icon: '☁', path: WEATHER_VIEW_ID },

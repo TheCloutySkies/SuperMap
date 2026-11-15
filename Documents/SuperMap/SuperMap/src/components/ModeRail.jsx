@@ -10,7 +10,6 @@ const MODES = [
   { id: 'FEEDS', label: 'News', icon: '☰' },
   { id: 'TOOLS', label: 'Tools', icon: '⚒' },
   { id: 'RESOURCES', label: 'Resources', icon: '▣' },
-  { id: 'REPORTS', label: 'Reports', icon: '✎' },
   { id: 'SETTINGS', label: 'Settings', icon: '⚙' },
 ]
 

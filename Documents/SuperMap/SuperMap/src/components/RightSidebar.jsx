@@ -6,14 +6,6 @@ import './RightSidebar.css'
 
 const OSINT_LAYER_SECTIONS = [
   {
-    title: 'Infrastructure',
-    layers: [
-      { key: 'openRailwayMap', label: 'Open Railway Map' },
-      { key: 'powerGrid', label: 'Power Grid (Worldwide)', hint: 'Overpass: lines & substations' },
-      { key: 'commsInfrastructure', label: 'Comms Infrastructure' },
-    ],
-  },
-  {
     title: 'Live Threat Monitoring',
     layers: [
       { key: 'liveWildfires', label: 'Live Wildfires' },

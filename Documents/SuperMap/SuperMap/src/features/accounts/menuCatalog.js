@@ -12,7 +12,6 @@ export const MODE_CATALOG = [
   { id: APP_MODES.BULLETIN, label: 'Bulletin', icon: '▤' },
   { id: APP_MODES.TOOLS, label: 'Tools', icon: '⚒' },
   { id: APP_MODES.RESOURCES, label: 'Resources', icon: '▣' },
-  { id: APP_MODES.REPORTS, label: 'Reports', icon: '✎' },
   { id: APP_MODES.SETTINGS, label: 'Settings', icon: '⚙', pinned: true },
 ]
 

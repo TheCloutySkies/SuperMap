@@ -1,0 +1,47 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow create, update: if isOwner(uid);
+      allow delete: if false;
+    }
+    match /saved_items/{itemId} {
+      allow read: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.type in ['article', 'place', 'map', 'report']
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 180;
+      allow update, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+    match /forum_posts/{postId} {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 180
+        && request.resource.data.body is string
+        && request.resource.data.body.size() <= 12000;
+      allow update, delete: if signedIn() && resource.data.authorUid == request.auth.uid;
+    }
+    match /forum_replies/{replyId} {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.postId is string
+        && request.resource.data.body is string
+        && request.resource.data.body.size() > 0
+        && request.resource.data.body.size() <= 6000;
+      allow update, delete: if signedIn() && resource.data.authorUid == request.auth.uid;
+    }
+  }
+}

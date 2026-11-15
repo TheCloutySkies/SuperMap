@@ -80,6 +80,29 @@
   color: var(--y2k-text-muted, #8a9a90);
 }
 
+.print-field {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0 0 0.65rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--y2k-text-muted, #8a9a90);
+}
+
+.print-field input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.45rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid rgba(140, 190, 160, 0.28);
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--y2k-text, #e8f0ea);
+  font-size: 0.9rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .print-page-count {
   margin: 0;
   font-size: 0.75rem;

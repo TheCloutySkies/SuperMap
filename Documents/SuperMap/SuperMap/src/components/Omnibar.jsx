@@ -6,6 +6,7 @@ import {
   mergeOmnibarResults,
   omnibarDisplayCategory,
 } from '../lib/omnibarIndex'
+import { AI_ASSISTANT_NAME } from '../constants'
 import './Omnibar.css'
 
 const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
@@ -84,6 +85,11 @@ export default function Omnibar({
   const [activeIndex, setActiveIndex] = useState(0)
   const [contentHits, setContentHits] = useState([])
   const [contentLoading, setContentLoading] = useState(false)
+  const [thielOn, setThielOn] = useState(() => {
+    try { return sessionStorage.getItem('supermap-thielbot') === '1' } catch { return false }
+  })
+  const [thielAnswer, setThielAnswer] = useState(null)
+  const [thielBusy, setThielBusy] = useState(false)
   const debounceRef = useRef(null)
   const contentDebounceRef = useRef(null)
   const contentAbortRef = useRef(null)
@@ -160,6 +166,35 @@ export default function Omnibar({
       if (contentDebounceRef.current) clearTimeout(contentDebounceRef.current)
     }
   }, [query, commandMode])
+
+  useEffect(() => {
+    try { sessionStorage.setItem('supermap-thielbot', thielOn ? '1' : '0') } catch { /* ignore */ }
+  }, [thielOn])
+
+  useEffect(() => {
+    if (!thielOn) return undefined
+    const q = String(query).trim()
+    if (q.length < 3 || !API_BASE) return undefined
+    const controller = new AbortController()
+    const timer = setTimeout(() => {
+      setThielBusy(true)
+      axios
+        .post(`${API_BASE}/api/ask`, { question: q }, { timeout: 25000, signal: controller.signal })
+        .then((res) => setThielAnswer(res.data?.data || null))
+        .catch((err) => {
+          if (axios.isCancel?.(err) || err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED') return
+          const message = err?.response?.data?.error || 'ThielBot could not reach the desk.'
+          setThielAnswer({ answer: message, provider: 'error' })
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setThielBusy(false)
+        })
+    }, 480)
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
+    }
+  }, [query, thielOn])
 
   const mergedMatches = useMemo(() => {
     const q = String(query).trim()
@@ -348,7 +383,8 @@ export default function Omnibar({
   const hasAny = places.length > 0 || mapResults.length > 0
   const totalCount = places.length + mapResults.length
   const showCommands = commandMode && mergedMatches.length > 0
-  const showDropdownPanel = showDropdown && (showCommands || hasAny || (commandMode && contentLoading && String(query).trim()))
+  const showThiel = thielOn && (thielBusy || thielAnswer?.answer)
+  const showDropdownPanel = showDropdown && (showCommands || hasAny || showThiel || (commandMode && contentLoading && String(query).trim()))
 
   const onInputKeyDown = (e) => {
     if (!showDropdownPanel && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
@@ -415,6 +451,27 @@ export default function Omnibar({
         />
         <button
           type="button"
+          className={`omnibar-thiel${thielOn ? ' is-on' : ''}`}
+          role="switch"
+          aria-checked={thielOn}
+          title={`${AI_ASSISTANT_NAME} is optional. Turn it on to search the whole site.`}
+          onMouseDown={(ev) => ev.preventDefault()}
+          onClick={() => {
+            setThielOn((on) => {
+              if (on) {
+                setThielAnswer(null)
+                setThielBusy(false)
+              }
+              return !on
+            })
+            setShowDropdown(true)
+            setCommandMode(true)
+          }}
+        >
+          {AI_ASSISTANT_NAME}
+        </button>
+        <button
+          type="button"
           className="omnibar-search-btn omnibar-cmd-btn"
           onClick={openCommandPalette}
           title="Command jump (Ctrl/Cmd+K)"
@@ -438,6 +495,29 @@ export default function Omnibar({
           role="listbox"
           ref={listRef}
         >
+          {showThiel && (
+            <div className="omnibar-thiel-card">
+              <div className="omnibar-results-head">{AI_ASSISTANT_NAME}{thielBusy ? ' · thinking…' : ''}</div>
+              {thielAnswer?.answer ? <p>{thielAnswer.answer}</p> : null}
+              {Array.isArray(thielAnswer?.pages) && thielAnswer.pages.length > 0 && (
+                <div className="omnibar-thiel-links">
+                  {thielAnswer.pages.map((page) => (
+                    <button
+                      key={page.id}
+                      type="button"
+                      onMouseDown={(ev) => {
+                        ev.preventDefault()
+                        onCommandNavigate?.({ viewId: page.id, label: page.label, action: 'navigate' })
+                        setShowDropdown(false)
+                      }}
+                    >
+                      {page.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {showCommands && (
             <>
               <div className="omnibar-results-head">

@@ -2,6 +2,7 @@ import { BASEMAPS } from '../constants'
 import { PRINT_SCALES } from '../lib/printScale'
 import { PRINT_MORE_GROUPS, PRINT_OPTIONAL_LAYERS } from '../lib/printLayers'
 import { canRedo, canUndo } from '../lib/printHistory'
+import { PRINT_QUALITIES } from '../lib/printRender'
 
 function Seg({ label, value, options, onChange }) {
   return (
@@ -50,6 +51,11 @@ export default function PrintControlPanel({
   onMoreOpen,
   basemapId,
   onBasemapId,
+  mapTitle,
+  onMapTitle,
+  qualityId,
+  onQualityId,
+  sheetExtra,
   pageCount,
   history,
   onUndo,
@@ -66,6 +72,30 @@ export default function PrintControlPanel({
         <h2>Print</h2>
         <p className="print-panel-kicker">US Letter · actual scale</p>
       </header>
+
+      <section className="print-panel-section">
+        <h3>Sheet</h3>
+        <label className="print-field">
+          <span>Title</span>
+          <input
+            type="text"
+            value={mapTitle}
+            maxLength={64}
+            placeholder="Good Palantir"
+            onChange={(e) => onMapTitle(e.target.value)}
+          />
+        </label>
+        <Seg
+          label="Quality"
+          value={qualityId}
+          onChange={onQualityId}
+          options={PRINT_QUALITIES.map((q) => ({ value: q.id, label: q.label }))}
+        />
+        <p className="print-help print-help--muted">
+          Standard is sharper than the old 150 DPI sheets. High is 300 DPI — use it when the page count is small.
+        </p>
+        {sheetExtra}
+      </section>
 
       <section className="print-panel-section">
         <h3>Pages</h3>

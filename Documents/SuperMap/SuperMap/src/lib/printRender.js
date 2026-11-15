@@ -20,7 +20,13 @@ import { formatMgrsPretty, latLngToMgrs, latLngToUtm } from './utmMgrs'
 const MM_PER_IN = 25.4
 /** Soft cap: more pages need an explicit confirm (LibreWolf / Firefox). */
 export const PRINT_PAGE_WARN_CAP = 12
-const JPEG_QUALITY = 0.85
+const JPEG_QUALITY = 0.92
+
+export const PRINT_QUALITIES = [
+  { id: 'draft', label: 'Draft', dpi: 120, jpeg: 0.82 },
+  { id: 'standard', label: 'Standard', dpi: 220, jpeg: 0.92 },
+  { id: 'high', label: 'High', dpi: 300, jpeg: 0.95 },
+]
 const HIDDEN_CHROME_LAYERS = [
   'print-pages-fill',
   'print-pages-line',
@@ -33,19 +39,30 @@ const HIDDEN_CHROME_LAYERS = [
   'print-mgrs-label',
 ]
 
-export function pickPrintDpi() {
-  const gecko = isGeckoEngine()
-  let dpi = gecko ? 120 : 150
+function capDpiToGpu(dpi) {
   try {
     const canvas = document.createElement('canvas')
     const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl')
     const max = gl ? gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) : 4096
     const letterPx = 11 * dpi
-    if (letterPx > max) dpi = Math.max(96, Math.floor(max / 11))
+    if (letterPx > max * 0.92) return Math.max(96, Math.floor((max * 0.92) / 11))
   } catch {
-    dpi = gecko ? 120 : 150
+    /* keep requested dpi */
   }
   return dpi
+}
+
+/** Resolve a user quality preset to DPI + JPEG quality. High stays sharp; Firefox/LibreWolf stays a step below High unless the user picks High. */
+export function resolvePrintQuality(qualityId) {
+  const preset = PRINT_QUALITIES.find((q) => q.id === qualityId) || PRINT_QUALITIES[1]
+  let dpi = preset.dpi
+  if (isGeckoEngine() && preset.id === 'standard') dpi = 180
+  if (isGeckoEngine() && preset.id === 'draft') dpi = 120
+  return { ...preset, dpi: capDpiToGpu(dpi) }
+}
+
+export function pickPrintDpi() {
+  return resolvePrintQuality('standard').dpi
 }
 
 function yieldUi() {
@@ -88,7 +105,7 @@ function drawScaleBar(ctx, x, y, widthPx, label, color = '#111') {
   ctx.restore()
 }
 
-function drawCollar(ctx, page, dpi, mapBitmap, attribution) {
+function drawCollar(ctx, page, dpi, mapBitmap, attribution, mapTitle) {
   const scale = getScale(page.scaleId)
   const landscape = page.orientation === 'landscape'
   const pageW = (landscape ? LETTER_IN.height : LETTER_IN.width) * dpi
@@ -115,10 +132,11 @@ function drawCollar(ctx, page, dpi, mapBitmap, attribution) {
   const barM = scaleBarGroundM(scale.ratio)
   const barLabel = barM >= 1000 ? `${barM / 1000} km` : `${Math.round(barM)} m`
 
+  const title = String(mapTitle || 'Good Palantir').trim().slice(0, 64) || 'Good Palantir'
   ctx.fillStyle = '#111'
-  ctx.font = `bold ${Math.round(dpi * 0.14)}px "Trebuchet MS", sans-serif`
+  ctx.font = `bold ${Math.round(dpi * 0.13)}px "Trebuchet MS", sans-serif`
   ctx.textAlign = 'left'
-  ctx.fillText('GOOD PALANTIR', ox, oy - 8)
+  ctx.fillText(title, ox, oy - 8)
   ctx.font = `${Math.round(dpi * 0.11)}px "Trebuchet MS", sans-serif`
   ctx.textAlign = 'right'
   ctx.fillText(scale.short, ox + mapW, oy - 8)
@@ -363,7 +381,9 @@ function buildJpegPdf(pages) {
 }
 
 export async function renderPrintPages(pages, options, onProgress) {
-  const dpi = options.dpi || pickPrintDpi()
+  const quality = resolvePrintQuality(options.qualityId || (options.dpi ? null : 'standard'))
+  const dpi = options.dpi || quality.dpi
+  const jpegQuality = options.jpegQuality || quality.jpeg || JPEG_QUALITY
   const pixelRatio = dpi / 96
   const sheets = []
   let session = null
@@ -389,8 +409,8 @@ export async function renderPrintPages(pages, options, onProgress) {
       sheet.width = Math.round(pageW)
       sheet.height = Math.round(pageH)
       const ctx = sheet.getContext('2d')
-      drawCollar(ctx, page, dpi, bmp, options.attribution)
-      const jpegBlob = await canvasToJpegBlob(sheet, JPEG_QUALITY)
+      drawCollar(ctx, page, dpi, bmp, options.attribution, options.title)
+      const jpegBlob = await canvasToJpegBlob(sheet, jpegQuality)
       sheets.push({
         canvas: sheet,
         jpegBlob,

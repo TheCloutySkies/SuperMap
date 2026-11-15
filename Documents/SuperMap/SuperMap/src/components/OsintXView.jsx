@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import axios from 'axios'
 import { getApiBase, readHomeSnapshot, writeHomeSnapshot } from '../lib/homeBootstrap'
 import ItemMenu from '../features/accounts/ItemMenu'
+import ThreatScoreButton from './ThreatScoreButton'
 import './OsintXView.css'
 
 const API_BASE = getApiBase()
@@ -537,14 +538,7 @@ export default function OsintXView({ keywordFilter = '', onClearFilter }) {
                       lat: post.lat ?? post.latitude,
                       lon: post.lon ?? post.lng,
                     }} />
-                    {post.risk_score != null && Number(post.risk_score) >= 2 && (
-                      <span
-                        className={`x-post-risk x-post-risk--${Number(post.risk_score)}`}
-                        title={post.risk_label || `Risk ${post.risk_score}/5`}
-                      >
-                        {post.risk_score}/5
-                      </span>
-                    )}
+                    <ThreatScoreButton item={post} kind="x" placement="inline" />
                   </div>
                   {tags.length > 0 && (
                     <div className="x-post-tags">

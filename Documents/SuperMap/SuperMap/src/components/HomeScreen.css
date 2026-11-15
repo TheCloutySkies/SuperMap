@@ -281,6 +281,16 @@
   border-radius: 4px;
 }
 
+.home-screen-threat-average {
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  color: #e6edf3;
+  background: rgba(158, 203, 255, 0.12);
+}
+
 .home-screen-threat-level--low {
   color: #81c784;
   background: rgba(129, 199, 132, 0.15);

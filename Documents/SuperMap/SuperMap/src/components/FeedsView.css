@@ -1856,6 +1856,18 @@
   border-top: 1px solid var(--nd-line);
 }
 
+.news-desk-text-wrap {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--nd-line);
+}
+
+.news-desk-text-wrap .news-desk-text-row {
+  flex: 1;
+  min-width: 0;
+  border-bottom: none;
+}
+
 .news-desk-text-row {
   display: grid;
   grid-template-columns: 8.5rem 1fr auto;

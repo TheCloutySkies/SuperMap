@@ -1,0 +1,115 @@
+.threat-score {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.threat-score--card {
+  position: absolute;
+  z-index: 4;
+  left: 8px;
+  bottom: 8px;
+}
+
+.threat-score--row {
+  align-self: center;
+  margin: 0 0.35rem 0 0.15rem;
+}
+
+.threat-score--inline {
+  margin-left: 0.15rem;
+  align-self: center;
+}
+
+.threat-score-chip {
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  padding: 0.14rem 0.4rem;
+  border-radius: 4px;
+  border: 1px solid #30363d;
+  background: #21262d;
+  color: #c9d1d9;
+  cursor: pointer;
+}
+
+.threat-score-chip--1 { color: #8b949e; }
+.threat-score-chip--2 { color: #9ecbff; border-color: #24527a; background: #12202c; }
+.threat-score-chip--3 { color: #d29922; border-color: #9e6a03; background: #2a2111; }
+.threat-score-chip--4 { color: #f0883e; border-color: #bd561d; background: #2a1810; }
+.threat-score-chip--5 { color: #f85149; border-color: #da3633; background: #2a1215; }
+
+.threat-score-panel {
+  position: fixed;
+  z-index: 80;
+  box-sizing: border-box;
+  padding: 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #30363d;
+  background: #161b22;
+  color: #e6edf3;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.threat-score-panel p {
+  margin: 0 0 0.5rem;
+}
+
+.threat-score-panel-kicker {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.threat-score-panel form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.threat-score-panel label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.threat-score-panel select,
+.threat-score-panel textarea,
+.threat-score-panel button {
+  font: inherit;
+  color: inherit;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+}
+
+.threat-score-panel select,
+.threat-score-panel button {
+  padding: 0.3rem 0.45rem;
+}
+
+.threat-score-panel textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 0.4rem;
+  box-sizing: border-box;
+}
+
+.threat-score-panel button {
+  cursor: pointer;
+  background: #1f3b2c;
+  border-color: #2ea043;
+}
+
+.threat-score-panel button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.threat-score-status {
+  color: #9ecbff;
+}

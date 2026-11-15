@@ -1,3 +1,4 @@
+import ThreatScoreButton from './ThreatScoreButton'
 import './ArticlePreviewSheet.css'
 
 function isRealImage(url) {
@@ -66,6 +67,7 @@ export default function ArticlePreviewSheet({
           <div className="article-preview-meta">
             <span className="article-preview-source">{source}</span>
             {timeLabel && <span>{timeLabel}</span>}
+            <ThreatScoreButton item={item} kind="news" placement="inline" />
           </div>
           <h2 className="article-preview-title">{title}</h2>
           {snippet && (

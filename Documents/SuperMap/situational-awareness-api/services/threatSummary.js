@@ -8,6 +8,7 @@
 const { getEventsWithAnyTagInTimeRange, getEvents, getEventTagNames } = require('../database')
 const { callThreatModel } = require('./llmClient')
 const { readRiskScore, riskLabel, clampScore } = require('./riskScoring')
+const { sheetSummary } = require('./scoreLedger')
 
 const THREAT_TAGS = ['geopolitics', 'war', 'conflict', 'military', 'osint', 'intelligence', 'security']
 const MAX_ARTICLES_FOR_PROMPT = 40
@@ -144,7 +145,7 @@ function buildInputFromArticles(articles) {
  */
 function aggregateThreatFromScores(articles) {
   if (!articles.length) {
-    return { threat_level: 'LOW', threat_score: 1 }
+    return { threat_level: 'LOW', threat_score: 1, average_score: 1, high_risk_count: 0, scored_items: 0 }
   }
   const scores = articles.map((a) => a.risk_score || 1)
   const highCount = scores.filter((s) => s >= 4).length
@@ -158,29 +159,38 @@ function aggregateThreatFromScores(articles) {
   else if (elevCount >= 3) threat_score = Math.max(threat_score, 3)
   else if (elevCount >= 1) threat_score = Math.max(threat_score, 2)
 
-  const levels = ['LOW', 'GUARDED', 'ELEVATED', 'HIGH', 'CRITICAL']
   return {
-    threat_level: levels[threat_score - 1],
+    threat_level: publicThreatLevel(threat_score),
     threat_score,
+    average_score: Math.round(avg * 10) / 10,
     high_risk_count: highCount,
     scored_items: scores.length,
   }
 }
 
+const LEVEL_WORDS = { 1: 'LOW', 3: 'ELEVATED', 4: 'HIGH', 5: 'CRITICAL' }
+
+function publicThreatLevel(score) {
+  return LEVEL_WORDS[clampScore(score)] || ''
+}
+
 /**
  * Parse AI output: narrative (1-3 paragraphs), optional bullets, and Threat Level.
  */
-const THREAT_LEVELS = ['LOW', 'GUARDED', 'ELEVATED', 'HIGH', 'CRITICAL']
+const THREAT_LEVELS = ['LOW', 'ELEVATED', 'HIGH', 'CRITICAL']
 function parseThreatResponse(text) {
-  const out = { summary: '', narrative: '', bullets: [], threat_level: 'GUARDED', threat_score: 2 }
+  const out = { summary: '', narrative: '', bullets: [], threat_level: '', threat_score: 2 }
   if (!text || typeof text !== 'string') return out
 
   const levelMatch = text.match(/\b(?:Threat Level|threat level):\s*(\w+)/i)
   if (levelMatch) {
     const level = levelMatch[1].toUpperCase()
-    if (THREAT_LEVELS.includes(level)) {
+    if (level === 'GUARDED') {
+      out.threat_level = ''
+      out.threat_score = 2
+    } else if (THREAT_LEVELS.includes(level)) {
       out.threat_level = level
-      out.threat_score = Math.min(5, Math.max(1, THREAT_LEVELS.indexOf(level) + 1))
+      out.threat_score = { LOW: 1, ELEVATED: 3, HIGH: 4, CRITICAL: 5 }[level]
     }
   }
   const scoreMatch = text.match(/\b(?:numeric|score|value)\s*(?:from\s*)?1-5[:\s]*(\d)/i) || text.match(/\b(\d)\s*\/\s*5\b/)
@@ -225,25 +235,34 @@ function parseThreatResponse(text) {
 function fallbackSummaryFromTitles(articles) {
   const ranked = prioritizeForPrompt(articles)
   const agg = aggregateThreatFromScores(ranked)
-  const titles = ranked.slice(0, 15).map((a) => {
-    const t = a.title || ''
-    const prefix = (a.risk_score || 1) >= 4 ? `[${a.risk_score}/5] ` : ''
-    return prefix + t
-  }).filter(Boolean)
-  if (titles.length === 0) {
+  if (ranked.length === 0) {
     return {
       summary: 'No threat-tagged articles in the last 24 hours.',
-      bullets: ['No recent geopolitical or conflict-related events to summarize.'],
+      narrative: '',
+      bullets: [],
       threat_level: 'LOW',
       threat_score: 1,
+      average_score: 1,
     }
   }
-  const bullets = titles.map((t) => (t.length > 120 ? t.slice(0, 117) + '...' : t))
+  const top = ranked[0]
+  const sources = [...new Set(ranked.map((item) => item.source).filter(Boolean))].slice(0, 4)
+  const narrative = [
+    `Across ${agg.scored_items} scored items the average is ${agg.average_score}/5.`,
+    agg.high_risk_count
+      ? `${agg.high_risk_count} of them score 4 or 5, which is what pulls the day up.`
+      : 'Nothing in the pile is a 4 or a 5.',
+    top?.title
+      ? `The strongest thread is “${top.title}”${sources.length ? `, carried by ${sources.join(', ')}` : ''}.`
+      : '',
+  ].filter(Boolean).join(' ')
   return {
-    summary: bullets.join('\n'),
-    bullets,
+    summary: narrative,
+    narrative,
+    bullets: [],
     threat_level: agg.threat_level,
     threat_score: agg.threat_score,
+    average_score: agg.average_score,
   }
 }
 
@@ -295,8 +314,10 @@ Threat Summary:
 - 3 to 5 short bullet points (optional; only the most critical follow-ups). Prefer items scored 4–5.
 
 Threat Level:
-Return one of: LOW, GUARDED, ELEVATED, HIGH, CRITICAL. Also output a numeric value from 1-5 (1=LOW, 5=CRITICAL).
+Return one of: LOW, ELEVATED, HIGH, CRITICAL, and a numeric value from 1-5.
+Do not use the word Guarded. A routine day is a number near the item average, not a new label.
 Bias the level toward the highest-weighted article scores (many 4–5s ⇒ HIGH/CRITICAL).
+Say what is new compared with the recent score baseline. Do not paste headlines.
 
 Articles:
 
@@ -324,6 +345,7 @@ async function getThreatSummary() {
       bullets: ['No recent geopolitical or conflict-related events to summarize.'],
       threat_level: 'LOW',
       threat_score: 1,
+      average_score: 1,
       sources: [],
       high_risk_count: 0,
       timestamp: new Date().toISOString(),
@@ -340,9 +362,14 @@ async function getThreatSummary() {
   } catch (_) { /* optional */ }
 
   const inputText = buildInputFromArticles(prioritized)
-  const scoreHint = `\n(Item score aggregate hint: ${scoreAgg.high_risk_count} high-risk (4–5) of ${scoreAgg.scored_items}; suggested floor ${scoreAgg.threat_level} / ${scoreAgg.threat_score})\n`
+  const sheet = sheetSummary()
+  const sheetHint = sheet.count
+    ? `\nScore sheet from the last 3 days: ${sheet.count} records, average ${sheet.average}/5. Compare today with that norm. Do not restate headlines.\n`
+    : '\nScore sheet: no records from the last 3 days yet.\n'
+  const levelHint = scoreAgg.threat_level || 'number only'
+  const scoreHint = `\n(Item score aggregate: average ${scoreAgg.average_score}/5, ${scoreAgg.high_risk_count} high-risk (4–5) of ${scoreAgg.scored_items}; suggested level ${levelHint}, floor ${scoreAgg.threat_score})\n`
   const tagBlock = keywordTagHint ? `\n${keywordTagHint}\nUse these recurring headline themes when weighing what dominates the day.\n` : '\n'
-  const fullPrompt = PROMPT_PREFIX + scoreHint + tagBlock + '\n' + inputText
+  const fullPrompt = PROMPT_PREFIX + scoreHint + sheetHint + tagBlock + '\n' + inputText
   const rawResponse = await callThreatModel(fullPrompt)
   const parsed = rawResponse ? parseThreatResponse(rawResponse) : null
 
@@ -352,14 +379,16 @@ async function getThreatSummary() {
     let threat_level = parsed.threat_level
     if (scoreAgg.threat_score > threat_score && scoreAgg.high_risk_count > 0) {
       threat_score = Math.max(threat_score, Math.min(scoreAgg.threat_score, threat_score + 1))
-      threat_level = THREAT_LEVELS[threat_score - 1]
+      threat_level = publicThreatLevel(threat_score)
     }
+    if (threat_level === 'GUARDED') threat_level = ''
     return {
       summary: parsed.summary,
       narrative: parsed.narrative || '',
       bullets: parsed.bullets.length ? parsed.bullets : [],
       threat_level,
       threat_score,
+      average_score: scoreAgg.average_score,
       sources,
       high_risk_count: scoreAgg.high_risk_count,
       keyword_tags: keywordTags.slice(0, 20),
@@ -375,10 +404,11 @@ async function getThreatSummary() {
   const fallback = fallbackSummaryFromTitles(prioritized)
   return {
     summary: fallback.summary,
-    narrative: '',
+    narrative: fallback.narrative || fallback.summary,
     bullets: fallback.bullets,
     threat_level: fallback.threat_level,
     threat_score: fallback.threat_score,
+    average_score: fallback.average_score ?? scoreAgg.average_score,
     sources,
     high_risk_count: scoreAgg.high_risk_count,
     keyword_tags: keywordTags.slice(0, 20),

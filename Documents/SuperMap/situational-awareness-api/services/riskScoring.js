@@ -6,9 +6,8 @@
  * ---------------------------------------------------------------------------
  * 1 LOW       Routine reporting, soft news, analysis without acute danger.
  *             Opinion, markets chatter, historical retrospectives.
- * 2 GUARDED   Notable geopolitical, defense, or security developments worth
- *             monitoring. Protests, sanctions talk, troop movements without
- *             confirmed kinetic action, cyber advisories (non-critical).
+ * 2           Notable, but not a named level. Compared with the last few days
+ *             and shown as a number out of 5.
  * 3 ELEVATED  Active conflict, disasters, or cyber incidents with clear
  *             impact: strikes, casualties possible, evacuations, major outages,
  *             significant infrastructure disruption.
@@ -27,10 +26,11 @@ const { callTagModel, hasLlmConfigured } = require('./llmClient')
 const { tagEvent } = require('./tagging')
 const { tagOsintPost } = require('./osintTagger')
 const { detectSignals } = require('./signalDetector')
+const { baselineFor, reconcileScore, rememberScore } = require('./scoreLedger')
 
 const RISK_LABELS = {
   1: 'LOW',
-  2: 'GUARDED',
+  2: '',
   3: 'ELEVATED',
   4: 'HIGH',
   5: 'CRITICAL',
@@ -134,7 +134,7 @@ function clampScore(n) {
 }
 
 function riskLabel(score) {
-  return RISK_LABELS[clampScore(score)] || 'LOW'
+  return RISK_LABELS[clampScore(score)] || ''
 }
 
 function riskTagName(score) {
@@ -213,22 +213,25 @@ function heuristicTags(item) {
   return [...tags].filter((t) => !/^risk-[1-5]$/i.test(t))
 }
 
-const AI_BATCH_PROMPT = `You are a situational-awareness analyst. Score each item for risk/danger/importance using this rubric:
+const AI_BATCH_PROMPT = `You are a situational-awareness analyst. Read each item and score it against the recent baseline, not by pasting the headline.
 
-1 LOW — Routine/soft news, no acute danger.
-2 GUARDED — Notable geopolitics/security worth monitoring.
+1 LOW — Routine or soft news, no acute danger.
+2 — Notable, but do not invent a label for it. Use the number.
 3 ELEVATED — Active conflict, disaster, or cyber with clear impact.
 4 HIGH — Mass casualties, major strikes, catastrophic disaster, critical-infra attack, nuclear/CBRN concern.
 5 CRITICAL — WMD use, great-power kinetic escalation, existential-scale failure.
 
+If the item continues a story that the baseline already reflects, stay near that average. Raise the score only when this text adds a real change: new place, new actor, a jump in casualties, or a kind of event the last few days did not already contain.
+
 For each item return JSON ONLY (no markdown):
-{"items":[{"i":0,"score":1,"tags":["war","military"],"why":"short reason"}]}
+{"items":[{"i":0,"score":1,"tags":["war"],"why":"what changed versus the recent norm"}]}
 
 Rules:
 - score is integer 1-5
-- tags: 1-5 short lowercase topical tags (no "risk-N")
-- why: ≤12 words
-- Be conservative: do not inflate scores for opinion or speculative chatter.
+- tags: 1-4 short lowercase topical tags (no "risk-N")
+- why: one sentence, at most 40 words, about the article itself
+- Do not use the word Guarded
+- Be conservative: opinion and repeat coverage stay near the baseline
 
 Items:
 `
@@ -251,17 +254,42 @@ function extractJsonObject(text) {
  * Sync assess: heuristic tags + score. No network.
  * @returns {{ tags: string[], risk_score: number, risk_label: string, assessment_source: 'heuristic', rationale: string }}
  */
-function assessItemHeuristic(item) {
-  const tags = heuristicTags(item)
-  const risk_score = heuristicRiskScore(item, tags)
-  const allTags = [...new Set([...tags, riskTagName(risk_score)])]
+function itemKind(item) {
+  const source = String(item?.source || item?.type || '').toLowerCase()
+  return source === 'x' || item?.kind === 'x' ? 'x' : 'news'
+}
+
+function finishScore(item, tags, rawScore, reading, source) {
+  const text = itemText(item)
+  const baseline = baselineFor(text)
+  const settled = reconcileScore(rawScore, baseline)
+  const rationale = [reading, settled.note].filter(Boolean).join(' ').slice(0, 320)
+  const allTags = [...new Set([...tags.filter((tag) => !/^risk-[1-5]$/i.test(tag)), riskTagName(settled.score)])]
+  rememberScore({
+    title: item.title,
+    text,
+    source: item.source,
+    kind: itemKind(item),
+    score: settled.score,
+    baseline: settled.baseline,
+    delta: settled.delta,
+    rationale,
+  })
   return {
     tags: allTags,
-    risk_score,
-    risk_label: riskLabel(risk_score),
-    assessment_source: 'heuristic',
-    rationale: 'keyword/heuristic assessment',
+    risk_score: settled.score,
+    risk_label: riskLabel(settled.score),
+    assessment_source: source,
+    rationale,
+    risk_baseline: settled.baseline,
+    risk_delta: settled.delta,
   }
+}
+
+function assessItemHeuristic(item) {
+  const tags = heuristicTags(item)
+  const raw = heuristicRiskScore(item, tags)
+  return finishScore(item, tags, raw, 'Read from the article text.', 'heuristic')
 }
 
 /**
@@ -269,10 +297,8 @@ function assessItemHeuristic(item) {
  * For throughput, prefer assessItemsBatch for multiple items.
  */
 async function assessItem(item, { preferAi = false } = {}) {
-  const base = assessItemHeuristic(item)
-  if (!preferAi || !hasLlmConfigured()) return base
-  const batch = await assessItemsBatch([item], { preferAi: true })
-  return batch[0] || base
+  const batch = await assessItemsBatch([item], { preferAi })
+  return batch[0] || assessItemHeuristic(item)
 }
 
 /**
@@ -282,42 +308,53 @@ async function assessItem(item, { preferAi = false } = {}) {
 async function assessItemsBatch(items, { preferAi = true, maxAiItems = 12 } = {}) {
   if (!Array.isArray(items) || items.length === 0) return []
 
-  const heuristics = items.map((it) => assessItemHeuristic(it))
-  if (!preferAi || !hasLlmConfigured()) return heuristics
+  const previews = items.map((item) => {
+    const tags = heuristicTags(item)
+    return { tags, raw: heuristicRiskScore(item, tags) }
+  })
+  if (!preferAi || !hasLlmConfigured()) {
+    return items.map((item, idx) => finishScore(
+      item,
+      previews[idx].tags,
+      previews[idx].raw,
+      'Read from the article text.',
+      'heuristic',
+    ))
+  }
 
   const slice = items.slice(0, maxAiItems)
   const promptBody = slice
     .map((it, i) => {
-      const title = (it.title || '').slice(0, 160)
-      const desc = (it.description || it.content || it.contentSnippet || '').slice(0, 280)
-      return `[${i}] Title: ${title}\nText: ${desc || '(none)'}\nSource: ${it.source || 'unknown'}`
+      const title = (it.title || '').slice(0, 180)
+      const desc = (it.description || it.content || it.contentSnippet || '').slice(0, 700)
+      const baseline = baselineFor(itemText(it))
+      const norm = baseline.average == null
+        ? 'Recent baseline: none yet'
+        : `Recent baseline: ${baseline.average}/5 across ${baseline.count} similar records in the last 3 days`
+      return `[${i}] Title: ${title}\nText: ${desc || '(none)'}\nSource: ${it.source || 'unknown'}\n${norm}`
     })
     .join('\n\n')
 
-  const raw = await callTagModel(AI_BATCH_PROMPT + promptBody, { maxTokens: 900 })
+  const raw = await callTagModel(AI_BATCH_PROMPT + promptBody, { maxTokens: 1200 })
   const parsed = extractJsonObject(raw)
   const aiItems = Array.isArray(parsed?.items) ? parsed.items : []
 
-  return heuristics.map((h, idx) => {
-    if (idx >= slice.length) return h
-    const ai = aiItems.find((a) => Number(a.i) === idx) || aiItems[idx]
-    if (!ai) return h
-    const score = clampScore(ai.score != null ? ai.score : h.risk_score)
-    const aiTags = Array.isArray(ai.tags)
-      ? ai.tags.map((t) => String(t).trim().toLowerCase().replace(/\s+/g, '-')).filter(Boolean)
-      : []
-    const merged = [...new Set([
-      ...h.tags.filter((t) => !/^risk-[1-5]$/i.test(t)),
-      ...aiTags.filter((t) => !/^risk-[1-5]$/i.test(t)),
-      riskTagName(score),
-    ])]
-    return {
-      tags: merged,
-      risk_score: score,
-      risk_label: riskLabel(score),
-      assessment_source: 'ai',
-      rationale: typeof ai.why === 'string' ? ai.why.slice(0, 120) : 'ai assessment',
+  return items.map((item, idx) => {
+    const preview = previews[idx]
+    const ai = idx < slice.length
+      ? (aiItems.find((row) => Number(row.i) === idx) || aiItems[idx])
+      : null
+    if (!ai) {
+      return finishScore(item, preview.tags, preview.raw, 'Read from the article text.', 'heuristic')
     }
+    const tags = [
+      ...preview.tags.filter((tag) => !/^risk-[1-5]$/i.test(tag)),
+      ...(Array.isArray(ai.tags) ? ai.tags : []),
+    ]
+    const reading = typeof ai.why === 'string' && ai.why.trim()
+      ? ai.why.trim().slice(0, 220)
+      : 'Read from the article text.'
+    return finishScore(item, tags, ai.score != null ? ai.score : preview.raw, reading, 'genkit')
   })
 }
 

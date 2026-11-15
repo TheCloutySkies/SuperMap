@@ -2,8 +2,11 @@
  * Site-wide ThielBot. Uses the omnibar content index (news, OSINT, X, crime)
  * plus a page catalog. Optional from the omnibar switch — crime Ask stays on /api/crime/ask.
  */
+const fs = require('fs')
 const omnibarContent = require('./omnibarContent')
 const { callCrimeModel } = require('./llmClient')
+const { sheetSummary } = require('./scoreLedger')
+const { threatSummaryPath } = require('./dataPaths')
 
 const PAGES = [
   { id: 'osint-map', label: 'OSINT map', about: 'Live map with layers, cameras, aircraft, and events.' },
@@ -57,19 +60,34 @@ async function askSite(question) {
     err.code = 'BAD_REQUEST'
     throw err
   }
-  const searched = omnibarContent.searchOmnibarContent(q, { limit: 8 })
+  const searched = omnibarContent.searchOmnibarContent(q, { limit: 14 })
   const hits = Array.isArray(searched?.results) ? searched.results : []
   const pages = matchingPages(q)
+  let threatLine = 'Threat summary: not ready yet.'
+  try {
+    const saved = JSON.parse(fs.readFileSync(threatSummaryPath(), 'utf8'))
+    const level = saved.threat_level && saved.threat_level !== 'GUARDED' ? saved.threat_level : 'no named level'
+    const average = saved.average_score ?? saved.threat_score
+    const brief = String(saved.narrative || saved.summary || '').replace(/\s+/g, ' ').slice(0, 700)
+    threatLine = `Threat summary: ${level}, average ${average}/5. ${brief}`
+  } catch (_) { /* no sheet yet */ }
+  const sheet = sheetSummary()
+  const sheetLine = sheet.count
+    ? `Score sheet, last 3 days: ${sheet.count} items, average ${sheet.average}/5. High scores: ${sheet.highs.map((row) => `${row.score}/5 ${row.title}`).join(' | ') || 'none'}`
+    : 'Score sheet: no scored items from the last 3 days.'
   const context = [
+    threatLine,
+    sheetLine,
     'Pages:',
-    ...(pages.length ? pages : PAGES.slice(0, 6)).map((page) => `- ${page.label} (${page.id}): ${page.about}`),
+    ...[...pages, ...PAGES.filter((page) => !pages.includes(page))].map((page) => `- ${page.label} (${page.id}): ${page.about}`),
     'Indexed items:',
-    ...hits.slice(0, 8).map((hit) => `- [${hit.category || 'item'}] ${hit.label}${hit.subtitle ? ` — ${hit.subtitle}` : ''}`),
+    ...hits.slice(0, 12).map((hit) => `- [${hit.category || 'item'}] ${hit.label}${hit.subtitle ? ` — ${hit.subtitle}` : ''}`),
   ].join('\n')
   const prompt = [
-    'You are ThielBot, the optional site-wide assistant for Good Palantir (SuperMap).',
-    'Answer using only the context. Be concise. If the context does not contain the fact, say so and name the page to open.',
-    'Do not invent statistics.',
+    'You are ThielBot, the site assistant for Good Palantir (SuperMap).',
+    'Use the threat summary, the score sheet, the page list, and the indexed items. Be concise.',
+    'If the context does not contain the fact, say so and name the page to open.',
+    'Do not invent statistics. Do not use the word Guarded.',
     '',
     'Context:',
     context,

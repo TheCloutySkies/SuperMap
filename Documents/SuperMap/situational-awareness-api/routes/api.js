@@ -309,19 +309,26 @@ function scheduleHomeBackgroundRefresh() {
  * Order: memory → disk last-good → piece caches → live with ≤8s deadline.
  * Catch-up always continues in background; never blank multi-minute waits.
  */
+function withFreshThreat(payload) {
+  if (!payload || typeof payload !== 'object') return payload
+  const fresh = readPersistedThreatSummary()
+  if (!fresh?.summary) return payload
+  return { ...payload, threatSummary: presentThreat(fresh) }
+}
+
 router.get('/home', async (req, res) => {
   setHomeCacheHeaders(res)
   const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
   if (!forceRefresh) {
     const cached = homeBootstrapCache.get('home')
     if (cached && payloadHasContent(cached)) {
-      return res.json({ ...cached, _cached: true })
+      return res.json(withFreshThreat({ ...cached, _cached: true }))
     }
     const disk = loadHomeLastGood()
     if (disk) {
       homeBootstrapCache.set('home', disk)
       scheduleHomeBackgroundRefresh()
-      return res.json({ ...disk, _cached: true, _fromDisk: true })
+      return res.json(withFreshThreat({ ...disk, _cached: true, _fromDisk: true }))
     }
     // Piece caches (news/threat/stocks/gas/osint-x) — sync, no live upstream waits
     try {
@@ -546,19 +553,46 @@ function writePersistedThreatSummary(payload) {
   }
 }
 
+function averageFromVisibleFeeds() {
+  try {
+    const { sheetSummary } = require('../services/scoreLedger')
+    const sheet = sheetSummary()
+    if (sheet.average != null) return sheet.average
+  } catch (_) { /* sheet not ready */ }
+  try {
+    const news = require('../services/news')
+    const features = news.getNewsCached()?.features || []
+    const scores = features
+      .map((feature) => Number(feature.properties?.risk_score))
+      .filter((score) => score >= 1 && score <= 5)
+    if (!scores.length) return null
+    return Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 10) / 10
+  } catch (_) {
+    return null
+  }
+}
+
+function presentThreat(payload) {
+  if (!payload || typeof payload !== 'object') return payload
+  const threat_level = payload.threat_level === 'GUARDED' ? '' : (payload.threat_level || '')
+  const average_score = payload.average_score ?? averageFromVisibleFeeds()
+  return { ...payload, threat_level, average_score: average_score ?? null }
+}
+
 function threatPayloadFromResult(result) {
-  return {
+  return presentThreat({
     summary: result.summary,
     narrative: result.narrative,
     threat_level: result.threat_level,
     threat_score: result.threat_score,
+    average_score: result.average_score ?? null,
     sources: result.sources || [],
     timestamp: result.timestamp || new Date().toISOString(),
     bullets: result.bullets,
     fallback: result.fallback,
     high_risk_count: result.high_risk_count || 0,
     top_risks: Array.isArray(result.top_risks) ? result.top_risks : [],
-  }
+  })
 }
 
 /** Background rebuild after 8/15 batch (and optional callers). */
@@ -611,7 +645,7 @@ router.get('/threat-summary', async (req, res) => {
     if (forceRefresh || !cached) {
       rebuildThreatSummaryBackground(forceRefresh ? 'refresh' : 'disk-seed')
     }
-    return res.json(lastGood)
+    return res.json(presentThreat(lastGood))
   }
 
   if (!forceRefresh || !waitForNew) {
@@ -620,8 +654,9 @@ router.get('/threat-summary', async (req, res) => {
     return res.json({
       summary: 'Threat assessment is warming up. Last-good is not on this instance yet — it will appear shortly.',
       narrative: '',
-      threat_level: 'GUARDED',
+      threat_level: '',
       threat_score: 2,
+      average_score: null,
       sources: [],
       timestamp: new Date().toISOString(),
       bullets: [],
@@ -643,20 +678,21 @@ router.get('/threat-summary', async (req, res) => {
     }
     if (lastGood && isGoodThreatSummary(lastGood)) {
       console.log('[API /threat-summary] regenerate empty; returning last-good')
-      return res.json({ ...lastGood, _staleOnEmpty: true })
+      return res.json(presentThreat({ ...lastGood, _staleOnEmpty: true }))
     }
     threatSummaryCache.set(cacheKey, payload)
     return res.json(payload)
   } catch (err) {
     console.error('[API /threat-summary]', err.message)
-    if (lastGood) return res.json(lastGood)
+    if (lastGood) return res.json(presentThreat(lastGood))
     const fallbackPersisted = readPersistedThreatSummary()
-    if (fallbackPersisted) return res.json(fallbackPersisted)
+    if (fallbackPersisted) return res.json(presentThreat(fallbackPersisted))
     res.status(500).json({
       error: 'Failed to generate threat summary',
       summary: '',
-      threat_level: 'GUARDED',
+      threat_level: '',
       threat_score: 2,
+      average_score: null,
       sources: [],
       timestamp: new Date().toISOString(),
     })
@@ -802,6 +838,9 @@ function mapOsintXRows(rows, cutoff) {
         tags,
         risk_score: Number.isFinite(risk_score) ? risk_score : null,
         risk_label: raw.risk_label || undefined,
+        risk_rationale: raw.risk_rationale || undefined,
+        risk_baseline: raw.risk_baseline ?? undefined,
+        risk_delta: raw.risk_delta ?? undefined,
         priority,
         url: raw.link || raw.url,
         tweetId: raw.tweetId || null,
@@ -2561,6 +2600,19 @@ router.get('/cache/stats', (_req, res) => {
  * Site-wide ThielBot. Optional from the omnibar switch.
  * Body: { question }
  */
+/** A reader’s suggested score for one news item or X post. */
+router.post('/threat-score-report', (req, res) => {
+  try {
+    const { addScoreReport } = require('../services/scoreLedger')
+    const saved = addScoreReport(req.body || {})
+    res.json({ ok: true, at: saved.at })
+  } catch (err) {
+    if (err.code === 'BAD_REQUEST') return res.status(400).json({ error: err.message })
+    console.error('[API /threat-score-report]', err.message)
+    res.status(500).json({ error: 'Could not save that report' })
+  }
+})
+
 router.post('/ask', async (req, res) => {
   try {
     const siteAsk = require('../services/siteAsk')

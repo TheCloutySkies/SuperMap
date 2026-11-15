@@ -426,9 +426,16 @@ export default function HomeScreen({
                 <div className="home-screen-threat-card card-y2k">
                   <div className="home-screen-threat-level-wrap">
                     <span className="home-screen-threat-level-label">Threat Level</span>
-                    <span className={`home-screen-threat-level home-screen-threat-level--${(threatSummary.threat_level || 'GUARDED').toLowerCase()}`}>
-                      {threatSummary.threat_level || 'GUARDED'}
-                    </span>
+                    {threatSummary.threat_level && threatSummary.threat_level !== 'GUARDED' ? (
+                      <span className={`home-screen-threat-level home-screen-threat-level--${threatSummary.threat_level.toLowerCase()}`}>
+                        {threatSummary.threat_level}
+                      </span>
+                    ) : null}
+                    {Number.isFinite(Number(threatSummary.average_score)) ? (
+                      <span className="home-screen-threat-average" title="Average of the scored articles and posts">
+                        {Number(threatSummary.average_score).toFixed(1)}/5
+                      </span>
+                    ) : null}
                     {threatSummary.high_risk_count > 0 && (
                       <span className="home-screen-threat-high-count" title="Items scored 4–5 in the last 24h">
                         {threatSummary.high_risk_count} high-risk

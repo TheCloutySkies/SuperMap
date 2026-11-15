@@ -291,20 +291,22 @@ export default function Omnibar({
     inputRef.current?.focus()
   }, [])
 
+  const closeJumpMenu = useCallback(() => {
+    setShowDropdown(false)
+    setCommandMode(false)
+  }, [])
+
   useEffect(() => {
     const onKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         openCommandPalette()
       }
-      if (e.key === 'Escape') {
-        setShowDropdown(false)
-        setCommandMode(false)
-      }
+      if (e.key === 'Escape') closeJumpMenu()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [openCommandPalette])
+  }, [openCommandPalette, closeJumpMenu])
 
   const handleInputChange = (e) => {
     setQueryValue(e.target.value)
@@ -505,7 +507,7 @@ export default function Omnibar({
           onFocus={() => {
             if (hasAny || mergedMatches.length || commandMode) setShowDropdown(true)
           }}
-          onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+          onBlur={() => setTimeout(closeJumpMenu, 200)}
           onKeyDown={onInputKeyDown}
           placeholder={placeholder}
           className="omnibar-input"
@@ -536,14 +538,6 @@ export default function Omnibar({
           }}
         >
           {AI_ASSISTANT_NAME}
-        </button>
-        <button
-          type="button"
-          className="omnibar-search-btn omnibar-cmd-btn"
-          onClick={openCommandPalette}
-          title="Command jump (Ctrl/Cmd+K)"
-        >
-          ⌘K
         </button>
         <button
           type="button"
@@ -619,9 +613,22 @@ export default function Omnibar({
           )}
           {showCommands && (
             <>
-              <div className="omnibar-results-head">
-                {String(query).trim() ? 'Results' : 'Jump to'}
-                {contentLoading ? <span className="omnibar-results-head-hint"> · searching…</span> : null}
+              <div className="omnibar-results-head omnibar-results-head--jump">
+                <span>
+                  {String(query).trim() ? 'Results' : 'Jump to'}
+                  {contentLoading ? <span className="omnibar-results-head-hint"> · searching…</span> : null}
+                </span>
+                <button
+                  type="button"
+                  className="omnibar-results-close"
+                  aria-label="Close jump menu"
+                  onMouseDown={(ev) => {
+                    ev.preventDefault()
+                    closeJumpMenu()
+                  }}
+                >
+                  ×
+                </button>
               </div>
               {mergedMatches.map((cmd, i) => {
                 const idx = jumpOffset + i

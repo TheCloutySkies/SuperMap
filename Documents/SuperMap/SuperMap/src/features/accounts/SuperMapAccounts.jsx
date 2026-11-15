@@ -4,15 +4,14 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useMemo,
   useState,
 } from 'react'
-import { initializeApp, getApp, getApps } from 'firebase/app'
 import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
-  getAuth,
+  deleteUser,
   onAuthStateChanged,
+  signInAnonymously,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
@@ -22,42 +21,23 @@ import {
   collection,
   deleteDoc,
   doc,
-  getFirestore,
-  limit,
+  getDoc,
+  getDocs,
   onSnapshot,
-  orderBy,
   query,
   serverTimestamp,
   setDoc,
   updateDoc,
   where,
 } from 'firebase/firestore'
+import { firebaseReady, getAccountsFirebase } from './firebaseClient'
+import { getModeVisibility, setModeVisibility } from './menuCatalog'
+import { deleteOwnedContent, subscribeConversations } from './socialData'
+import AccountWorkspace from './AccountWorkspace'
 import './accounts.css'
 
-const ENV = import.meta.env
-const firebaseConfig = {
-  apiKey: ENV.VITE_FIREBASE_API_KEY,
-  authDomain: ENV.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: ENV.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: ENV.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: ENV.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: ENV.VITE_FIREBASE_APP_ID,
-}
-const firebaseReady = Boolean(
-  firebaseConfig.apiKey &&
-    firebaseConfig.authDomain &&
-    firebaseConfig.projectId &&
-    firebaseConfig.appId,
-)
-
-let firebaseSingleton = null
 function getFirebase() {
-  if (!firebaseReady) return null
-  if (!firebaseSingleton) {
-    const app = getApps().length ? getApp() : initializeApp(firebaseConfig)
-    firebaseSingleton = { app, auth: getAuth(app), db: getFirestore(app) }
-  }
-  return firebaseSingleton
+  return getAccountsFirebase()
 }
 
 const AccountsContext = createContext(null)
@@ -95,6 +75,7 @@ function friendlyAuthError(error) {
   if (code.includes('invalid-email')) return 'Enter a valid email address.'
   if (code.includes('popup-closed')) return 'Google sign-in was closed.'
   if (code.includes('unauthorized-domain')) return 'Add this domain to Firebase Auth authorized domains.'
+  if (code.includes('requires-recent-login')) return 'Sign in again, then delete the account.'
   return error?.message || 'Authentication failed.'
 }
 
@@ -197,13 +178,12 @@ export function AccountsProvider({ children }) {
   const [authReady, setAuthReady] = useState(!firebaseReady)
   const [overlay, setOverlay] = useState(null)
   const [toast, setToast] = useState(null)
+  const [workspaceTab, setWorkspaceTab] = useState('vault')
+  const [messageDraft, setMessageDraft] = useState(null)
+  const [unread, setUnread] = useState(0)
   const [remoteVault, setRemoteVault] = useState([])
-  const [remotePosts, setRemotePosts] = useState([])
-  const [remoteReplies, setRemoteReplies] = useState([])
 
   const vault = firebaseReady ? remoteVault : local.vault
-  const posts = firebaseReady ? remotePosts : local.posts
-  const replies = firebaseReady ? remoteReplies : local.replies
 
   const showToast = useCallback((next) => setToast({ id: uid(), ...next }), [])
 
@@ -216,15 +196,31 @@ export function AccountsProvider({ children }) {
         setAuthReady(true)
         return
       }
+      let stored = {}
+      try {
+        const snap = await getDoc(doc(f.db, 'users', fbUser.uid))
+        stored = snap.exists() ? snap.data() : {}
+      } catch { stored = {} }
       const profile = {
         uid: fbUser.uid,
         email: fbUser.email || null,
-        displayName: fbUser.displayName || (fbUser.email ? fbUser.email.split('@')[0] : 'Operator'),
+        displayName: stored.displayName || fbUser.displayName || (fbUser.isAnonymous ? 'Anonymous' : (fbUser.email ? fbUser.email.split('@')[0] : 'Operator')),
         photoURL: fbUser.photoURL || null,
+        emoji: stored.emoji || '◈',
+        discoverable: stored.discoverable !== false && !fbUser.isAnonymous ? true : stored.discoverable === true,
+        anonymous: Boolean(fbUser.isAnonymous),
+      }
+      if (stored.modeVisibility && typeof stored.modeVisibility === 'object') {
+        setModeVisibility({ ...getModeVisibility(), ...stored.modeVisibility })
       }
       try {
         await setDoc(doc(f.db, 'users', fbUser.uid), {
-          ...profile,
+          uid: profile.uid,
+          email: profile.email,
+          displayName: profile.displayName,
+          emoji: profile.emoji,
+          discoverable: profile.discoverable,
+          anonymous: profile.anonymous,
           updatedAt: serverTimestamp(),
           updatedAtMs: Date.now(),
         }, { merge: true })
@@ -248,18 +244,12 @@ export function AccountsProvider({ children }) {
   }, [user, showToast])
 
   useEffect(() => {
-    if (!firebaseReady) return undefined
-    const f = getFirebase()
-    const postsQuery = query(collection(f.db, 'forum_posts'), orderBy('createdAtMs', 'desc'), limit(200))
-    const repliesQuery = query(collection(f.db, 'forum_replies'), orderBy('createdAtMs', 'asc'), limit(1000))
-    const unsubPosts = onSnapshot(postsQuery, (snap) => {
-      setRemotePosts(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-    }, (error) => showToast({ tone: 'danger', message: error.message }))
-    const unsubReplies = onSnapshot(repliesQuery, (snap) => {
-      setRemoteReplies(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-    }, () => {})
-    return () => { unsubPosts(); unsubReplies() }
-  }, [showToast])
+    if (!user?.uid) return undefined
+    return subscribeConversations(user.uid, (rows) => {
+      const count = rows.reduce((sum, row) => sum + (Number(row.unread?.[user.uid]) || 0), 0)
+      setUnread(count)
+    })
+  }, [user?.uid])
 
   const openLocalUser = useCallback((profile) => {
     setLocal((current) => ({ ...current, user: profile }))
@@ -329,6 +319,103 @@ export function AccountsProvider({ children }) {
     }
   }, [])
 
+  const signInAnonymous = useCallback(async () => {
+    const f = getFirebase()
+    if (!f) {
+      const profile = { uid: `local-anon-${uid()}`, email: null, displayName: 'Anonymous', emoji: '🎭', discoverable: false, anonymous: true, local: true }
+      setLocal((current) => ({ ...current, account: profile, user: profile }))
+      setUser(profile)
+      setOverlay('workspace')
+      return { ok: true }
+    }
+    try {
+      const cred = await signInAnonymously(f.auth)
+      await setDoc(doc(f.db, 'users', cred.user.uid), {
+        uid: cred.user.uid,
+        email: null,
+        displayName: 'Anonymous',
+        emoji: '🎭',
+        discoverable: false,
+        anonymous: true,
+        createdAt: serverTimestamp(),
+        createdAtMs: Date.now(),
+        updatedAt: serverTimestamp(),
+        updatedAtMs: Date.now(),
+      }, { merge: true })
+      setOverlay('workspace')
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, error: friendlyAuthError(error) }
+    }
+  }, [])
+
+  const updateAccount = useCallback(async (patch) => {
+    const name = patch.displayName != null ? String(patch.displayName).trim().slice(0, 60) : user?.displayName
+    const next = {
+      ...user,
+      displayName: name || user?.displayName || 'Anonymous',
+      emoji: patch.emoji || user?.emoji || '◈',
+      discoverable: patch.discoverable != null ? Boolean(patch.discoverable) : user?.discoverable !== false,
+    }
+    setUser(next)
+    if (!firebaseReady) {
+      setLocal((current) => ({ ...current, user: next, account: { ...(current.account || {}), ...next } }))
+      return { ok: true }
+    }
+    const f = getFirebase()
+    try {
+      if (f?.auth.currentUser && patch.displayName) await updateProfile(f.auth.currentUser, { displayName: next.displayName })
+      await setDoc(doc(f.db, 'users', user.uid), {
+        displayName: next.displayName,
+        emoji: next.emoji,
+        discoverable: next.discoverable,
+        modeVisibility: patch.modeVisibility || getModeVisibility(),
+        updatedAt: serverTimestamp(),
+        updatedAtMs: Date.now(),
+      }, { merge: true })
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, error: friendlyAuthError(error) }
+    }
+  }, [user])
+
+  const deleteAccount = useCallback(async (typedName) => {
+    if (!user) return { ok: false, error: 'Sign in first.' }
+    if (String(typedName || '').trim() !== String(user.displayName || '').trim()) {
+      return { ok: false, error: 'Type your display name to confirm.' }
+    }
+    const f = getFirebase()
+    try {
+      if (f?.auth.currentUser) {
+        await deleteOwnedContent(user.uid)
+        const saved = await getDocs(query(collection(f.db, 'saved_items'), where('ownerUid', '==', user.uid)))
+        await Promise.all(saved.docs.map((row) => deleteDoc(row.ref)))
+        await deleteUser(f.auth.currentUser)
+      }
+      setLocal({ account: null, user: null, vault: [], posts: [], replies: [] })
+      setUser(null)
+      setRemoteVault([])
+      setOverlay(null)
+      showToast({ tone: 'info', message: 'Account deleted' })
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, error: friendlyAuthError(error) }
+    }
+  }, [user, showToast])
+
+  const openMessages = useCallback((person) => {
+    setMessageDraft(person || null)
+    setWorkspaceTab('messages')
+    setOverlay('workspace')
+  }, [])
+
+  const beginAddPlace = useCallback(() => {
+    sessionStorage.setItem('supermap.vault-place', '1')
+    sessionStorage.setItem('supermap.one-shot-pin', '1')
+    window.dispatchEvent(new CustomEvent('supermap:begin-pin'))
+    setOverlay(null)
+  }, [])
+
   const signOutUser = useCallback(async () => {
     const f = getFirebase()
     if (f) await signOut(f.auth)
@@ -359,6 +446,21 @@ export function AccountsProvider({ children }) {
     showToast({ tone: 'success', message: `Saved “${item.title}” on this device` })
     return { ok: true, id: item.id, item }
   }, [user, showToast])
+
+  useEffect(() => {
+    const onVaultPlace = async (event) => {
+      const detail = event.detail || {}
+      if (!user) return
+      await createSavedItem({
+        type: 'place',
+        title: detail.title || 'Place',
+        summary: '',
+        location: { lat: Number(detail.lat), lon: Number(detail.lon) },
+      })
+    }
+    window.addEventListener('supermap:vault-place', onVaultPlace)
+    return () => window.removeEventListener('supermap:vault-place', onVaultPlace)
+  }, [user, createSavedItem])
 
   const deleteSavedItem = useCallback(async (id) => {
     const f = getFirebase()
@@ -391,66 +493,6 @@ export function AccountsProvider({ children }) {
     return { ok: true }
   }, [showToast])
 
-  const createForumPost = useCallback(async (input) => {
-    if (!user) {
-      setOverlay('auth')
-      return { ok: false, needsAuth: true }
-    }
-    const post = {
-      id: uid(),
-      authorUid: user.uid,
-      authorName: user.displayName || 'Operator',
-      title: String(input.title || 'Untitled thread').trim().slice(0, 180),
-      body: String(input.body || '').trim().slice(0, 12000),
-      tags: cleanTags(input.tags),
-      createdAtMs: Date.now(),
-    }
-    const f = getFirebase()
-    if (f) {
-      try {
-        await setDoc(doc(f.db, 'forum_posts', post.id), { ...post, createdAt: serverTimestamp() })
-        showToast({ tone: 'success', message: 'Posted' })
-        return { ok: true, id: post.id }
-      } catch (error) {
-        showToast({ tone: 'danger', message: error.message })
-        return { ok: false, error }
-      }
-    }
-    setLocal((s) => ({ ...s, posts: [post, ...(s.posts || [])] }))
-    showToast({ tone: 'success', message: 'Posted on this device' })
-    return { ok: true, id: post.id }
-  }, [user, showToast])
-
-  const addReply = useCallback(async (postId, body) => {
-    if (!user) return { ok: false, needsAuth: true }
-    const reply = {
-      id: uid(),
-      postId,
-      authorUid: user.uid,
-      authorName: user.displayName || 'Operator',
-      body: String(body || '').trim().slice(0, 6000),
-      createdAtMs: Date.now(),
-    }
-    if (!reply.body) return { ok: false }
-    const f = getFirebase()
-    if (f) {
-      try { await setDoc(doc(f.db, 'forum_replies', reply.id), { ...reply, createdAt: serverTimestamp() }) }
-      catch (error) { return { ok: false, error } }
-    } else {
-      setLocal((s) => ({ ...s, replies: [...(s.replies || []), reply] }))
-    }
-    return { ok: true }
-  }, [user])
-
-  const repliesByPost = useMemo(() => {
-    const grouped = {}
-    for (const reply of replies) {
-      if (!grouped[reply.postId]) grouped[reply.postId] = []
-      grouped[reply.postId].push(reply)
-    }
-    return grouped
-  }, [replies])
-
   const value = {
     firebaseReady,
     authReady,
@@ -459,18 +501,24 @@ export function AccountsProvider({ children }) {
     setOverlay,
     toast,
     setToast,
+    showToast,
     vault,
-    posts,
-    repliesByPost,
+    workspaceTab,
+    setWorkspaceTab,
+    messageDraft,
+    unread,
     signInEmail,
     signUpEmail,
     signInGoogle,
+    signInAnonymous,
     signOutUser,
+    updateAccount,
+    deleteAccount,
+    openMessages,
+    beginAddPlace,
     createSavedItem,
     updateSavedItem,
     deleteSavedItem,
-    createForumPost,
-    addReply,
   }
 
   return <AccountsContext.Provider value={value}>{children}</AccountsContext.Provider>
@@ -534,28 +582,35 @@ export function AccountsOverlay() {
     <>
       <AccountDock />
       {overlay === 'auth' ? <AuthModal /> : null}
-      {overlay === 'workspace' ? <Workspace /> : null}
+      {overlay === 'workspace' ? <AccountWorkspace /> : null}
       <Toast />
     </>
   )
 }
 
 function AccountDock() {
-  const { user, setOverlay, vault } = useSuperMapAccount()
-  const initial = user?.displayName?.charAt(0)?.toUpperCase() || '◉'
+  const { user, setOverlay, vault, unread, setWorkspaceTab } = useSuperMapAccount()
+  const mark = user?.emoji || user?.displayName?.charAt(0)?.toUpperCase() || '◉'
   return (
     <div className="sm-acct-dock">
-      <button type="button" className="sm-acct-dock-btn" onClick={() => setOverlay(user ? 'workspace' : 'auth')}>
-        <span className="sm-acct-avatar">{initial}</span>
+      <button type="button" className="sm-acct-dock-btn" onClick={() => {
+        if (!user) setOverlay('auth')
+        else {
+          if (unread > 0) setWorkspaceTab('messages')
+          setOverlay('workspace')
+        }
+      }}>
+        <span className="sm-acct-avatar">{mark}</span>
         <span className="sm-acct-dock-label">{user ? user.displayName : 'Account'}</span>
-        {vault.length > 0 ? <span className="sm-acct-count">{vault.length}</span> : null}
+        {unread > 0 ? <span className="sm-acct-count">{unread}</span> : null}
+        {unread === 0 && vault.length > 0 ? <span className="sm-acct-count">{vault.length}</span> : null}
       </button>
     </div>
   )
 }
 
 function AuthModal() {
-  const { setOverlay, signInEmail, signUpEmail, signInGoogle, firebaseReady } = useSuperMapAccount()
+  const { setOverlay, signInEmail, signUpEmail, signInGoogle, signInAnonymous, firebaseReady } = useSuperMapAccount()
   const [mode, setMode] = useState('signup')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -616,128 +671,16 @@ function AuthModal() {
         }}>
           Continue with Google
         </button>
+        <button type="button" className="sm-ghost-btn sm-anon-btn" onClick={async () => {
+          setError('')
+          const result = await signInAnonymous()
+          if (!result.ok) setError(result.error || 'Anonymous sign-in failed.')
+        }}>
+          Continue without an email
+        </button>
         {!firebaseReady ? (
           <p className="sm-local-note">Firebase is not configured. Creating an account stores it in this browser so you can try the workspace.</p>
         ) : null}
-      </div>
-    </div>
-  )
-}
-
-function Workspace() {
-  const { user, setOverlay, signOutUser, firebaseReady, vault, posts, createSavedItem, deleteSavedItem, updateSavedItem, createForumPost, addReply, repliesByPost } = useSuperMapAccount()
-  const [tab, setTab] = useState('vault')
-  const [title, setTitle] = useState('')
-  const [summary, setSummary] = useState('')
-  const [type, setType] = useState('place')
-  const [threadTitle, setThreadTitle] = useState('')
-  const [threadBody, setThreadBody] = useState('')
-  const [openPost, setOpenPost] = useState(null)
-  const [reply, setReply] = useState('')
-
-  return (
-    <div className="sm-workspace-scrim" role="dialog" aria-modal="true">
-      <div className="sm-workspace">
-        <header className="sm-workspace-header">
-          <div className="sm-workspace-title">
-            <span className="sm-auth-mark">◈</span>
-            <div>
-              <h2>{user?.displayName || 'Operator'}</h2>
-              <p>{firebaseReady ? 'Firebase sync' : 'Saved in this browser'} · {user?.email}</p>
-            </div>
-          </div>
-          <div className="sm-workspace-user">
-            <button type="button" className="sm-ghost-btn" onClick={signOutUser}>Sign out</button>
-            <button type="button" className="sm-modal-close" onClick={() => setOverlay(null)} aria-label="Close">×</button>
-          </div>
-        </header>
-        <div className="sm-workspace-body">
-          <nav className="sm-workspace-nav">
-            <button type="button" className={tab === 'vault' ? 'active' : ''} onClick={() => setTab('vault')}><span>▦</span> Vault <em>{vault.length}</em></button>
-            <button type="button" className={tab === 'forum' ? 'active' : ''} onClick={() => setTab('forum')}><span>◉</span> Community <em>{posts.length}</em></button>
-          </nav>
-          <main className="sm-workspace-main">
-            {tab === 'vault' ? (
-              <section className="sm-vault">
-                <form className="sm-form" onSubmit={async (e) => {
-                  e.preventDefault()
-                  const result = await createSavedItem({ type, title, summary })
-                  if (result.ok) { setTitle(''); setSummary('') }
-                }}>
-                  <label>Title<input required value={title} onChange={(e) => setTitle(e.target.value)} /></label>
-                  <label>Type
-                    <select value={type} onChange={(e) => setType(e.target.value)}>
-                      <option value="place">Place</option>
-                      <option value="map">Map recipe</option>
-                      <option value="article">Article</option>
-                      <option value="report">Report</option>
-                    </select>
-                  </label>
-                  <label>Summary<textarea rows={2} value={summary} onChange={(e) => setSummary(e.target.value)} /></label>
-                  <button type="submit" className="sm-primary-btn">Save item</button>
-                </form>
-                <div className="sm-card-grid">
-                  {vault.map((item) => (
-                    <article key={item.id} className="sm-card">
-                      <span className={`sm-type-badge sm-type-${item.type}`}>{TYPE_META[item.type]?.label || item.type}</span>
-                      <h3>{item.title}</h3>
-                      {item.summary ? <p className="sm-card-summary">{item.summary}</p> : null}
-                      <div className="sm-card-actions">
-                        {item.type === 'map' ? (
-                          <button type="button" className="sm-ghost-btn" onClick={() => dispatchMapRecipe(item.payload)}>Load in Print</button>
-                        ) : null}
-                        <button type="button" className="sm-ghost-btn" onClick={() => updateSavedItem(item.id, { pinned: !item.pinned })}>{item.pinned ? 'Unpin' : 'Pin'}</button>
-                        <button type="button" className="sm-danger-btn" onClick={() => deleteSavedItem(item.id)}>Delete</button>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-                {vault.length === 0 ? <p className="sm-local-note">Nothing saved yet. Add an item, or save a print recipe from the Print tab.</p> : null}
-              </section>
-            ) : (
-              <section className="sm-forum">
-                {openPost ? (
-                  <div className="sm-thread-full">
-                    <button type="button" className="sm-ghost-btn" onClick={() => setOpenPost(null)}>Back</button>
-                    <h2>{openPost.title}</h2>
-                    <p>{openPost.body}</p>
-                    {(repliesByPost[openPost.id] || []).map((item) => (
-                      <article key={item.id} className="sm-reply"><strong>{item.authorName}</strong><p>{item.body}</p></article>
-                    ))}
-                    <form className="sm-reply-form" onSubmit={async (e) => {
-                      e.preventDefault()
-                      const result = await addReply(openPost.id, reply)
-                      if (result.ok) setReply('')
-                    }}>
-                      <textarea rows={3} value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Reply" />
-                      <button type="submit" className="sm-primary-btn">Reply</button>
-                    </form>
-                  </div>
-                ) : (
-                  <>
-                    <form className="sm-form" onSubmit={async (e) => {
-                      e.preventDefault()
-                      const result = await createForumPost({ title: threadTitle, body: threadBody })
-                      if (result.ok) { setThreadTitle(''); setThreadBody('') }
-                    }}>
-                      <label>Thread<input required value={threadTitle} onChange={(e) => setThreadTitle(e.target.value)} /></label>
-                      <label>Body<textarea required rows={4} value={threadBody} onChange={(e) => setThreadBody(e.target.value)} /></label>
-                      <button type="submit" className="sm-primary-btn">Post</button>
-                    </form>
-                    <div className="sm-thread-list">
-                      {posts.map((post) => (
-                        <button key={post.id} type="button" className="sm-thread-card" onClick={() => setOpenPost(post)}>
-                          <h3>{post.title}</h3>
-                          <p>{post.authorName}</p>
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </section>
-            )}
-          </main>
-        </div>
       </div>
     </div>
   )

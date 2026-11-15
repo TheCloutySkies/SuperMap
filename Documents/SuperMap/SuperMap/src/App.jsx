@@ -40,6 +40,8 @@ import { TOOLS_LIST } from './components/toolsList'
 import SearchResultsView from './components/SearchResultsView'
 import { getWidgetMatches } from './components/widgetSearchIndex'
 import ReportMakerView from './components/ReportMakerView'
+import BulletinBoardView from './features/bulletin/BulletinBoardView'
+import { getModeVisibility, visibleModes } from './features/accounts/menuCatalog'
 import QuickTutorialModal from './components/QuickTutorialModal'
 import AmbientBackground from './components/AmbientBackground'
 import AmbientBgLight from './components/AmbientBgLight'
@@ -131,6 +133,7 @@ function App() {
   const [overpassResults, setOverpassResults] = useState(null)
   const [sentinelTime, setSentinelTime] = useState('24h')
   const [flyToTarget, setFlyToTarget] = useState(null)
+  const [modeVisibility, setModeVisibilityState] = useState(getModeVisibility)
   const [mapPointEntries, setMapPointEntries] = useState([])
   const [userCoords, setUserCoords] = useState({ lat: null, lon: null })
   const [weatherCoords, setWeatherCoords] = useState({ lat: null, lon: null })
@@ -200,6 +203,42 @@ function App() {
       () => {}
     )
   }, [])
+
+  useEffect(() => {
+    const sync = () => setModeVisibilityState(getModeVisibility())
+    window.addEventListener('supermap:modes-changed', sync)
+    return () => window.removeEventListener('supermap:modes-changed', sync)
+  }, [])
+
+  useEffect(() => {
+    const onBeginPin = () => {
+      navigate(pathFromView('osint-map'))
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('supermap-toggle-tap-pin', { detail: { enabled: true } }))
+      }, 350)
+    }
+    const onShowPlace = (event) => {
+      const detail = event.detail || {}
+      const lat = Number(detail.lat)
+      const lon = Number(detail.lon)
+      navigate(pathFromView('osint-map'))
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return
+      setFlyToTarget({ lng: lon, lat, zoom: detail.zoom || 12, properties: { title: detail.title || '' } })
+      if (detail.drop) {
+        window.setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('supermap-drop-pin', { detail: { lng: lon, lat, title: detail.title } }))
+        }, 350)
+      }
+    }
+    window.addEventListener('supermap:begin-pin', onBeginPin)
+    window.addEventListener('supermap:show-place', onShowPlace)
+    return () => {
+      window.removeEventListener('supermap:begin-pin', onBeginPin)
+      window.removeEventListener('supermap:show-place', onShowPlace)
+    }
+  }, [navigate])
+
+  const menuModes = visibleModes(modeVisibility)
 
   const handleFlyTo = useCallback((opts) => {
     if (opts?.lng != null && opts?.lat != null) {
@@ -420,7 +459,8 @@ function App() {
         setTimeout(() => resourcesScrollRef.current?.scrollToSection?.(s.id), 50)
       },
     }))
-  } else if (appMode === APP_MODES.REPORTS) mobilePageTitle = 'Report Maker'
+  }   else if (appMode === APP_MODES.REPORTS) mobilePageTitle = 'Report Maker'
+  else if (appMode === APP_MODES.BULLETIN) mobilePageTitle = 'The Bulletin Board'
   else if (appMode === APP_MODES.SETTINGS) mobilePageTitle = 'Settings'
   else if (activeView === 'search-results') mobilePageTitle = 'Search'
 
@@ -431,17 +471,8 @@ function App() {
                 onNavigate={setActiveViewWithMode}
                 footerMode={appMode}
                 onFooterNav={handleFooterNav}
-                footerTabs={[
-                  { key: APP_MODES.HOME, label: 'HOME' },
-                  { key: APP_MODES.MAPS, label: 'MAPS' },
-                  { key: APP_MODES.CRIME, label: 'CRIME' },
-                  { key: APP_MODES.WEATHER, label: 'WEATHER' },
-                  { key: APP_MODES.FEEDS, label: 'NEWS' },
-                  { key: APP_MODES.TOOLS, label: 'TOOLS' },
-                  { key: APP_MODES.RESOURCES, label: 'RESOURCES' },
-                  { key: APP_MODES.REPORTS, label: 'REPORT MAKER' },
-                  { key: APP_MODES.SETTINGS, label: 'SETTINGS' },
-                ]}
+                footerTabs={menuModes.map((mode) => ({ key: mode.id, label: mode.label.toUpperCase() }))}
+                menuModes={menuModes}
                 isMobileLayout={isMobileLayout}
                 activeView={activeView}
                 onShowLocationOnMap={handleShowLocationOnMap}
@@ -542,6 +573,11 @@ function App() {
         {activeView === 'tools' && (
           <div className="main-content-scroll main-content-scroll--tools">
             <ToolsView activeToolId={activeToolId} onToolChange={setActiveToolId} />
+          </div>
+        )}
+        {activeView === 'bulletin' && (
+          <div className="main-content-scroll">
+            <BulletinBoardView />
           </div>
         )}
         {activeView === 'report-maker' && (
@@ -651,7 +687,7 @@ function App() {
       </header>
       )}
       <div className={`app-body ${isMobileLayout ? 'app-body--mobile' : ''}`}>
-      {!isMobileLayout && <ModeRail appMode={appMode} onModeSelect={handleFooterNav} />}
+      {!isMobileLayout && <ModeRail appMode={appMode} onModeSelect={handleFooterNav} modes={menuModes} />}
       {!isMobileLayout && (() => {
         const showSubnav =
           subnavOpen &&

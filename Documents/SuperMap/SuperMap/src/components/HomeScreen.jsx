@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import axios from 'axios'
 import RadialMenu from './RadialMenu'
+import { LatestBulletin } from '../features/bulletin/BulletinBoardView'
+import ItemMenu from '../features/accounts/ItemMenu'
 import { CRIME_VIEW_ID, WEATHER_VIEW_ID, BRAND_LOGO_SRC, BRAND_LOGO_ALT } from '../constants'
 import './HomeScreen.css'
 import './widgets/widgets.css'
@@ -146,6 +148,7 @@ export default function HomeScreen({
   activeView = null,
   onShowLocationOnMap,
   onHomeBootstrap,
+  menuModes = null,
 }) {
   const initialSnap = useRef(typeof window !== 'undefined' ? readHomeSnapshot() : null)
   const snap = initialSnap.current
@@ -384,6 +387,7 @@ export default function HomeScreen({
           <section className="home-screen-radial-wrap" aria-label="Mode menu">
             <p className="home-screen-radial-hint">Tap a mode to open it</p>
             <RadialMenu
+              items={menuModes ? menuModes.filter((mode) => mode.id !== 'HOME') : undefined}
               activeMode={footerMode === 'HOME' ? null : footerMode}
               activeView={activeView}
               onSelectHome={goHomeHub}
@@ -406,6 +410,7 @@ export default function HomeScreen({
                 <p className="home-screen-featured-sub">See current events, use the maps to see what&apos;s going on around you, and a huge library of OSINT resources, all at your fingertips. It&apos;s kind of like a personal Palantir if Palantir wasn&apos;t evil and ushering in a surveillance state.</p>
               </div>
             )}
+            <LatestBulletin onOpen={() => onNavigate?.('bulletin')} />
             <section className="home-screen-section home-screen-threat">
               <div className="home-screen-threat-head">
                 <h2 className="home-screen-section-title">Today&apos;s Threat Summary <span className="home-screen-threat-byline">by ThielBot</span></h2>
@@ -695,7 +700,7 @@ export default function HomeScreen({
                   {homeXImages.map((item, i) => (
                     <div
                       key={`${item.src}-${i}`}
-                      className="home-screen-photos-main-wrap"
+                      className="home-screen-photos-main-wrap has-item-menu"
                       onMouseEnter={(e) => e.currentTarget.classList.add('is-hover')}
                       onMouseLeave={(e) => e.currentTarget.classList.remove('is-hover')}
                     >
@@ -708,6 +713,7 @@ export default function HomeScreen({
                         <img src={item.src} alt="" loading="lazy" referrerPolicy="no-referrer" />
                         <span className="home-screen-photos-main-overlay">Expand</span>
                       </button>
+                      <ItemMenu item={{ type: 'article', title: item.caption || 'Photo', summary: item.caption || '', url: item.postUrl || '' }} />
                     </div>
                   ))}
                 </div>

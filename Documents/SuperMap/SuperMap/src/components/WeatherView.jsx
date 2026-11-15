@@ -6,6 +6,7 @@ import { geocodePlaceQuery } from '../lib/placeGeocoding'
 import WeatherHourlyChart from './WeatherHourlyChart'
 import WmoIcon from './WmoIcon'
 import { compassFromDeg, wmoKind } from './weatherWmo'
+import ItemMenu from '../features/accounts/ItemMenu'
 import './WeatherView.css'
 
 const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
@@ -867,7 +868,14 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
             {forecastError && <p className="weather-desk-status weather-desk-status--err">{forecastError}</p>}
 
             {!loadingForecast && !forecastError && current && (
-              <section className={`weather-hero weather-hero--${heroKind}`} aria-label="Current conditions">
+              <section className={`weather-hero weather-hero--${heroKind} has-item-menu`} aria-label="Current conditions">
+                <ItemMenu item={{
+                  type: 'article',
+                  title: `Weather at ${shortPlace(placeLabel) || 'selected location'}`,
+                  summary: `${fmtTempC(current.temperature_2m, tempUnit)} ${wmoLabel(current.weather_code)}`,
+                  lat,
+                  lon,
+                }} />
                 <div className="weather-hero-main">
                   <WmoIcon code={current.weather_code} size={72} className="weather-hero-icon" />
                   <div>

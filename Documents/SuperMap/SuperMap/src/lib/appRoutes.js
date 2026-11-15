@@ -7,6 +7,7 @@ export const APP_MODES = {
   CRIME: 'CRIME',
   WEATHER: 'WEATHER',
   FEEDS: 'FEEDS',
+  BULLETIN: 'BULLETIN',
   TOOLS: 'TOOLS',
   RESOURCES: 'RESOURCES',
   REPORTS: 'REPORTS',
@@ -62,6 +63,7 @@ const VIEW_TO_PATH = Object.freeze({
   tools: '/tools',
   resources: '/resources',
   'report-maker': '/reports',
+  bulletin: '/bulletin',
   settings: '/settings',
   'search-results': '/search',
 })
@@ -79,6 +81,7 @@ const PATH_TO_VIEW = Object.freeze({
   '/tools': 'tools',
   '/resources': 'resources',
   '/reports': 'report-maker',
+  '/bulletin': 'bulletin',
   '/settings': 'settings',
   '/search': 'search-results',
 })
@@ -159,6 +162,8 @@ export function pathFromMode(mode) {
       return '/weather'
     case APP_MODES.FEEDS:
       return '/news'
+    case APP_MODES.BULLETIN:
+      return '/bulletin'
     case APP_MODES.TOOLS:
       return '/tools'
     case APP_MODES.RESOURCES:
@@ -187,6 +192,7 @@ export function modeFromView(viewId) {
   if (resolved === 'tools') return APP_MODES.TOOLS
   if (resolved === 'resources') return APP_MODES.RESOURCES
   if (resolved === 'report-maker') return APP_MODES.REPORTS
+  if (resolved === 'bulletin') return APP_MODES.BULLETIN
   if (resolved === 'settings') return APP_MODES.SETTINGS
   return APP_MODES.HOME
 }

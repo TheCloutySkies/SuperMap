@@ -16,6 +16,7 @@ const PAGES = [
   { id: 'osint-x', label: 'X', about: 'OSINT posts from X.' },
   { id: 'recent-videos', label: 'Recent videos', about: 'Recent video desk.' },
   { id: 'tools', label: 'Tools', about: 'Map and research tools.' },
+  { id: 'bulletin', label: 'The Bulletin Board', about: 'Forum for groups, threads, and replies.' },
 ]
 
 const PAGE_STOP = new Set(['desk', 'page', 'where', 'what', 'show', 'open', 'find', 'with', 'from', 'that', 'this', 'about'])

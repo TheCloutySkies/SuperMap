@@ -1,0 +1,19 @@
+{
+  "auth": {
+    "providers": {
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Good Palantir",
+        "supportEmail": "lonnie034@gmail.com",
+        "authorizedRedirectUris": [
+          "https://good-palantir.firebaseapp.com/__/auth/handler",
+          "http://localhost"
+        ]
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  }
+}

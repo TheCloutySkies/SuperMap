@@ -1,5 +1,6 @@
 import { fetchGdacsEvents, fetchUsgsVolcanoes } from './layerServices'
 import { ensurePinEmoji } from '../lib/mapEmoji'
+import { ensureSidcIcon, WILDFIRE_SIDC } from '../lib/milSymbols'
 
 const API_BASE = typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
@@ -54,6 +55,13 @@ function quakeFeatures(collection) {
   }).filter(Boolean)
 }
 
+function isWildfire(props) {
+  const type = String(props.eventtype || '').trim().toUpperCase()
+  if (type === 'WF') return true
+  const name = `${props.eventname || ''} ${props.name || ''}`.toLowerCase()
+  return /forest fire|wild[\s-]?fire|bushfire|brush fire/.test(name)
+}
+
 function disasterFeatures(collection) {
   return (collection?.features || []).map((feature) => {
     const props = feature.properties || {}
@@ -61,6 +69,7 @@ function disasterFeatures(collection) {
     if (level !== 'orange' && level !== 'red') return null
     const coords = feature.geometry?.coordinates
     if (!coords || coords.length < 2) return null
+    const wildfire = isWildfire(props)
     return {
       type: 'Feature',
       properties: {
@@ -72,7 +81,8 @@ function disasterFeatures(collection) {
         date: props.fromdate || props.todate || '',
         alert: level,
         link: props.url || props.link || 'https://www.gdacs.org/',
-        icon: level === 'red' ? 'hazard-red' : 'hazard-orange',
+        sidc: wildfire ? WILDFIRE_SIDC : '',
+        icon: wildfire ? WILDFIRE_SIDC : (level === 'red' ? 'hazard-red' : 'hazard-orange'),
       },
       geometry: { type: 'Point', coordinates: [Number(coords[0]), Number(coords[1])] },
     }
@@ -141,7 +151,10 @@ export function stampHazardIcons(map, collection) {
   paintDisc(map, 'hazard-red', '#ef4444')
   const features = (collection?.features || []).map((feature) => {
     const icon = feature.properties?.icon || '💥'
-    const iconImage = icon.startsWith('hazard-') ? icon : ensurePinEmoji(map, icon)
+    const sidc = feature.properties?.sidc
+    const iconImage = sidc
+      ? ensureSidcIcon(map, sidc)
+      : (icon.startsWith('hazard-') ? icon : ensurePinEmoji(map, icon))
     return { ...feature, properties: { ...(feature.properties || {}), iconImage } }
   })
   return { type: 'FeatureCollection', features }

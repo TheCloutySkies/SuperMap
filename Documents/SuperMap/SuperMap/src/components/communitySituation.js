@@ -1,4 +1,5 @@
 import { ensurePinEmoji, pinIconImageId } from '../lib/mapEmoji'
+import { ensureSidcIcon, sidcIconId, WILDFIRE_SIDC } from '../lib/milSymbols'
 import {
   aircraftClusterIcon,
   aircraftClusterProperties,
@@ -83,6 +84,7 @@ export function installCommunitySituation(map) {
   ensurePinEmoji(map, '💥')
   ensurePinEmoji(map, '🌋')
   ensurePinEmoji(map, '📍')
+  ensureSidcIcon(map, WILDFIRE_SIDC)
   addMarkedLayer(map, 'community-conflicts', 'mark-conflict', {})
   addMarkedLayer(map, 'community-reports', 'mark-report', {})
   if (!map.getSource('community-hazards')) {
@@ -96,6 +98,7 @@ export function installCommunitySituation(map) {
         n_quake: ['+', ['case', ['==', ['get', 'kind'], 'quake'], 1, 0]],
         n_volcano: ['+', ['case', ['==', ['get', 'kind'], 'volcano'], 1, 0]],
         n_red: ['+', ['case', ['==', ['get', 'icon'], 'hazard-red'], 1, 0]],
+        n_fire: ['+', ['case', ['==', ['get', 'sidc'], WILDFIRE_SIDC], 1, 0]],
         n_orange: ['+', ['case', ['==', ['get', 'icon'], 'hazard-orange'], 1, 0]],
       },
     })
@@ -121,12 +124,18 @@ export function installCommunitySituation(map) {
         ['all',
           ['>=', ['to-number', ['get', 'n_volcano']], ['to-number', ['get', 'n_quake']]],
           ['>=', ['to-number', ['get', 'n_volcano']], ['to-number', ['get', 'n_red']]],
+          ['>=', ['to-number', ['get', 'n_volcano']], ['to-number', ['get', 'n_fire']]],
           ['>=', ['to-number', ['get', 'n_volcano']], ['to-number', ['get', 'n_orange']]],
         ], VOLCANO_ICON,
         ['all',
           ['>=', ['to-number', ['get', 'n_quake']], ['to-number', ['get', 'n_red']]],
+          ['>=', ['to-number', ['get', 'n_quake']], ['to-number', ['get', 'n_fire']]],
           ['>=', ['to-number', ['get', 'n_quake']], ['to-number', ['get', 'n_orange']]],
         ], QUAKE_ICON,
+        ['all',
+          ['>=', ['to-number', ['get', 'n_fire']], ['to-number', ['get', 'n_red']]],
+          ['>=', ['to-number', ['get', 'n_fire']], ['to-number', ['get', 'n_orange']]],
+        ], sidcIconId(WILDFIRE_SIDC),
         ['>=', ['to-number', ['get', 'n_red']], ['to-number', ['get', 'n_orange']]], 'hazard-red',
         'hazard-orange',
       ]),

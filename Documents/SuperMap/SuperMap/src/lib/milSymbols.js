@@ -56,9 +56,13 @@ export const MIL_SYMBOLS = [
   { group: 'Incident', label: 'Bomb', sidc: 'EHIPBA----' },
   { group: 'Incident', label: 'Shooting', sidc: 'EHIPBF----' },
   { group: 'Incident', label: 'Fire', sidc: 'EHIPC-----' },
+  { group: 'Incident', label: 'Wildfire', sidc: 'EHIPCH----' },
   { group: 'Incident', label: 'Electric power', sidc: 'SFGPIUE----' },
   { group: 'Incident', label: 'Nuclear power', sidc: 'SFGPIUEN--' },
 ]
+
+/** MIL-STD-2525C emergency incident: wild fire (E-I-CH). */
+export const WILDFIRE_SIDC = 'EHIPCH----'
 
 const thumbs = new Map()
 

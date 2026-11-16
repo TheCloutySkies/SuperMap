@@ -168,6 +168,7 @@ export default function ItemMenu({ item, inline = false, profilePost = false }) 
       const response = await fetch('/api/pins/locate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(20000),
         body: JSON.stringify({
           title: media.title,
           summary: media.summary,

@@ -904,7 +904,14 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
           onDestination={setDestination}
           onChange={(patch) => {
             if (patch.label != null) setLabel(patch.label)
-            setDraft((current) => (current ? { ...current, ...patch, label: undefined } : current))
+            setDraft((current) => {
+              if (!current) return current
+              const next = { ...current, ...patch, label: undefined }
+              if (Object.prototype.hasOwnProperty.call(patch, 'image') && current.media) {
+                next.media = { ...current.media, image: patch.image }
+              }
+              return next
+            })
           }}
           onSave={saveDraft}
           onRemove={() => {

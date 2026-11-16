@@ -240,6 +240,22 @@ function App() {
       }, 350)
     }
     const onBeginCommunity = () => navigate(pathFromView('community-map'))
+    const onDraftMap = (event) => {
+      navigate(pathFromView('osint-map'))
+      const lat = Number(event.detail?.lat)
+      const lon = Number(event.detail?.lon)
+      if (Number.isFinite(lat) && Number.isFinite(lon)) {
+        setFlyToTarget({ lng: lon, lat, zoom: 12 })
+      }
+    }
+    const onDraftCommunity = (event) => {
+      navigate(pathFromView('community-map'))
+      const lat = Number(event.detail?.lat)
+      const lon = Number(event.detail?.lon)
+      if (Number.isFinite(lat) && Number.isFinite(lon)) {
+        setFlyToTarget({ lng: lon, lat, zoom: 12 })
+      }
+    }
     const onShowPlace = (event) => {
       const detail = event.detail || {}
       const lat = Number(detail.lat)
@@ -255,10 +271,14 @@ function App() {
     }
     window.addEventListener('supermap:begin-pin', onBeginPin)
     window.addEventListener('supermap:begin-community-pin', onBeginCommunity)
+    window.addEventListener('supermap:draft-map-pin', onDraftMap)
+    window.addEventListener('supermap:draft-community-pin', onDraftCommunity)
     window.addEventListener('supermap:show-place', onShowPlace)
     return () => {
       window.removeEventListener('supermap:begin-pin', onBeginPin)
       window.removeEventListener('supermap:begin-community-pin', onBeginCommunity)
+      window.removeEventListener('supermap:draft-map-pin', onDraftMap)
+      window.removeEventListener('supermap:draft-community-pin', onDraftCommunity)
       window.removeEventListener('supermap:show-place', onShowPlace)
     }
   }, [navigate])

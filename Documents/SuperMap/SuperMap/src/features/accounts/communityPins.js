@@ -87,6 +87,8 @@ export async function createCommunityPin(input) {
     summary: String(input.summary || '').slice(0, 500),
     kind,
     icon: input.icon || '📍',
+    category: String(input.category || '').slice(0, 24),
+    sidc: String(input.sidc || '').slice(0, 20),
     url: String(input.url || '').slice(0, 2000),
     image: String(input.image || '').slice(0, 2000),
     label: String(input.label || '').slice(0, 80),

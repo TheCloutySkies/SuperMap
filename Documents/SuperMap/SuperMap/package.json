@@ -25,6 +25,7 @@
     "mapboxgl-legend": "^1.16.0",
     "maplibre-gl": "^5.19.0",
     "metallicss": "^4.0.3",
+    "milsymbol": "^3.0.5",
     "moment-timezone": "^0.6.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

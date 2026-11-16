@@ -6,12 +6,19 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css'
 import { fetchUkraineFrontline } from '../services/newLayerFetchers'
 import { stampPinIcons } from '../lib/mapEmoji'
+import { categorySidc } from '../lib/milSymbols'
+import { clearDraftMarker, syncDraftMarker } from '../lib/draftMarker'
 import { useSuperMapAccount } from '../features/accounts/SuperMapAccounts'
 import { createCommunityPin, deleteCommunityPin, isSiteAdmin, subscribeCommunityPins } from '../features/accounts/communityPins'
+import DraftPinSheet from './DraftPinSheet'
 import './CommunityMapView.css'
+import './DraftPinSheet.css'
+
+const MAP_GLYPHS = 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf'
 
 const DARK_STYLE = {
   version: 8,
+  glyphs: MAP_GLYPHS,
   sources: {
     'dark-base': {
       type: 'raster',
@@ -64,6 +71,8 @@ function pinToFeature(pin) {
       summary: pin.summary || '',
       kind: pin.kind || 'pin',
       icon: pin.icon || '📍',
+      category: pin.category || '',
+      sidc: pin.sidc || '',
       url: pin.url || '',
       image: pin.image || '',
       label: pin.label || '',
@@ -122,6 +131,9 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
   const [label, setLabel] = useState('')
   const [destination, setDestination] = useState('community')
   const [saving, setSaving] = useState(false)
+  const [basemap, setBasemap] = useState('dark')
+  const markerRef = useRef(null)
+  const awaitingRef = useRef(false)
 
   useEffect(() => { filtersRef.current = filters }, [filters])
   useEffect(() => { toolRef.current = tool }, [tool])
@@ -193,12 +205,15 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
         type: 'symbol',
         source: 'community-pins',
         filter: ['!=', ['coalesce', ['get', 'label'], ''], ''],
+        minzoom: 12,
         layout: {
-          'text-field': ['get', 'label'],
+          'text-field': ['coalesce', ['get', 'title'], ['get', 'label'], ''],
+          'text-font': ['Open Sans Regular'],
           'text-size': 12,
-          'text-offset': [0, 1.3],
+          'text-max-width': 12,
+          'text-offset': [0, 1.6],
           'text-anchor': 'top',
-          'text-allow-overlap': true,
+          'text-allow-overlap': false,
         },
         paint: { 'text-color': '#e6edf3', 'text-halo-color': '#0d1117', 'text-halo-width': 1.4 },
       })
@@ -242,7 +257,37 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
         setLabel(pending.title || '')
         map.getCanvas().style.cursor = 'crosshair'
       }
+      if (!compact) {
+        const stored = readJson('supermap.draft-community-pin')
+        if (stored) openLocated(stored)
+      }
     })
+
+    const openLocated = (detail) => {
+      if (!detail || compact) return
+      const lat = Number(detail.lat)
+      const lon = Number(detail.lon)
+      const hasPoint = Number.isFinite(lat) && Number.isFinite(lon)
+      setDestination(detail.destination === 'mine' ? 'mine' : 'community')
+      setLabel(detail.label || detail.title || '')
+      setDraft({
+        geometry: hasPoint ? { type: 'Point', coordinates: [lon, lat] } : null,
+        kind: detail.kind || detail.mediaKind || 'news',
+        media: detail,
+        category: detail.category || (detail.kind === 'x' ? 'x' : 'news'),
+        sidc: detail.sidc || '',
+        place: detail.place || '',
+        reasoning: detail.reasoning || '',
+      })
+      awaitingRef.current = !hasPoint
+      map.getCanvas().style.cursor = hasPoint ? '' : 'crosshair'
+      if (hasPoint) map.flyTo({ center: [lon, lat], zoom: 12 })
+    }
+    const onLocated = (event) => {
+      sessionStorage.removeItem('supermap.draft-community-pin')
+      openLocated(event.detail)
+    }
+    if (!compact) window.addEventListener('supermap:draft-community-pin', onLocated)
 
     const openPopup = (feature, lngLat) => {
       const props = feature.properties || {}
@@ -250,15 +295,16 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
       const image = pin.image ? `<img class="community-popup-image" src="${esc(pin.image)}" alt="" />` : ''
       const summary = pin.summary ? `<p>${esc(pin.summary)}</p>` : ''
       const original = pin.url ? `<a href="${esc(pin.url)}" target="_blank" rel="noopener noreferrer">Open original</a>` : ''
-      const mediaUrl = pin.image || pin.url || ''
-      const verify = mediaUrl ? `<a href="/forensics?url=${encodeURIComponent(mediaUrl)}">Verify media</a>` : ''
+      const verify = pin.image ? `<a href="/forensics?url=${encodeURIComponent(pin.image)}">Verify media</a>` : ''
       const viewer = userRef.current
       const canDelete = viewer && (isSiteAdmin(viewer) || pin.ownerUid === viewer.uid)
-      const remove = canDelete ? `<button type="button" class="community-popup-delete" data-id="${esc(pin.id)}">Delete</button>` : ''
+      const remove = canDelete ? `<button type="button" class="community-popup-delete" data-id="${esc(pin.id)}">Remove pin</button>` : ''
+      const category = pin.category ? `<em>${esc(pin.category)}</em>` : ''
       popup.setLngLat(lngLat).setHTML(`
         <div class="community-popup">
           ${image}
           <strong>${esc(pin.title || pin.label || 'Community pin')}</strong>
+          ${category}
           ${summary}
           <div class="community-popup-links">${original}${verify}</div>
           ${remove}
@@ -284,7 +330,16 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
         map.getCanvas().style.cursor = ''
         return
       }
-      const hits = map.queryRenderedFeatures(event.point, { layers: ['community-pins-icon', 'community-pins-fill', 'community-pins-line'] })
+      if (awaitingRef.current) {
+        awaitingRef.current = false
+        map.getCanvas().style.cursor = ''
+        setDraft((current) => current ? {
+          ...current,
+          geometry: { type: 'Point', coordinates: [event.lngLat.lng, event.lngLat.lat] },
+        } : current)
+        return
+      }
+      const hits = map.queryRenderedFeatures(event.point, { layers: ['community-pins-icon', 'community-pins-label', 'community-pins-fill', 'community-pins-line'] })
       if (hits[0]) openPopup(hits[0], event.lngLat)
     })
 
@@ -300,6 +355,8 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
     resize.observe(el)
     return () => {
       window.removeEventListener('supermap:community-focus', onFocus)
+      if (!compact) window.removeEventListener('supermap:draft-community-pin', onLocated)
+      clearDraftMarker(markerRef)
       resize.disconnect()
       popup.remove()
       map.remove()
@@ -331,6 +388,46 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
     })
     return () => { cancelled = true }
   }, [filters.frontline, ready])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!ready || !map) return
+    const coords = draft?.geometry?.type === 'Point' ? draft.geometry.coordinates : null
+    if (!coords) {
+      clearDraftMarker(markerRef)
+      return
+    }
+    syncDraftMarker(map, markerRef, {
+      lng: coords[0],
+      lat: coords[1],
+      sidc: draft.sidc || categorySidc(draft.category),
+      onDrag: (lng, lat) => setDraft((current) => (current ? {
+        ...current,
+        geometry: { type: 'Point', coordinates: [lng, lat] },
+      } : current)),
+    })
+  }, [draft, ready])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!ready || !map?.getSource?.('dark-base')) return
+    const base = map.getSource('dark-base')
+    const labels = map.getSource('dark-labels')
+    if (basemap === 'osm') {
+      base.setTiles(['https://tile.openstreetmap.org/{z}/{x}/{y}.png'])
+      map.setLayoutProperty('dark-labels', 'visibility', 'none')
+      return
+    }
+    if (basemap === 'hybrid') {
+      base.setTiles(['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'])
+      labels.setTiles(['https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'])
+      map.setLayoutProperty('dark-labels', 'visibility', 'visible')
+      return
+    }
+    base.setTiles(['https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'])
+    labels.setTiles(['https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}'])
+    map.setLayoutProperty('dark-labels', 'visibility', 'visible')
+  }, [basemap, ready])
 
   function chooseTool(next) {
     const map = mapRef.current
@@ -365,6 +462,7 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
     setSaving(true)
     try {
       if (destination === 'mine') {
+        const placed = markerRef.current?.getLngLat()
         const result = await saveMapPin({
           id: `pt-${Date.now()}`,
           title: name,
@@ -375,8 +473,10 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
           url: draft.media?.url || '',
           image: draft.media?.image || '',
           mediaKind: draft.media?.kind || draft.media?.mediaKind || '',
-          lat: point.lat,
-          lon: point.lon,
+          category: draft.category || 'news',
+          sidc: draft.sidc || categorySidc(draft.category || 'news'),
+          lat: placed?.lat ?? point.lat,
+          lon: placed?.lng ?? point.lon,
           geometry: draft.geometry,
           label: label.trim(),
         })
@@ -390,10 +490,15 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
           summary: draft.media?.summary || '',
           kind: draft.geometry.type === 'Point' ? (draft.kind || 'pin') : 'shape',
           icon: '📍',
+          category: draft.category || 'news',
+          sidc: draft.sidc || categorySidc(draft.category || 'news'),
           url: draft.media?.url || '',
           image: draft.media?.image || '',
           label: label.trim(),
-          geometry: draft.geometry,
+          geometry: markerRef.current ? {
+            type: 'Point',
+            coordinates: [markerRef.current.getLngLat().lng, markerRef.current.getLngLat().lat],
+          } : draft.geometry,
         })
         if (result?.ok === false) {
           showToast?.({ tone: 'danger', message: result.error || 'Could not share that pin.' })
@@ -401,6 +506,7 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
         }
         showToast?.({ tone: 'success', message: 'Shared on the community map.' })
       }
+      clearDraftMarker(markerRef)
       setDraft(null)
       setLabel('')
     } catch (error) {
@@ -428,6 +534,17 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
         </button>
         {layersOpen ? (
           <div className="community-map-layers" role="menu">
+            <p>Base map</p>
+            {[
+              ['dark', 'Dark'],
+              ['osm', 'OpenStreetMap'],
+              ['hybrid', 'Hybrid'],
+            ].map(([id, name]) => (
+              <label key={id}>
+                <input type="radio" name="community-basemap" checked={basemap === id} onChange={() => setBasemap(id)} />
+                {name}
+              </label>
+            ))}
             {[
               ['x', 'X posts'],
               ['news', 'News'],
@@ -453,21 +570,31 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
         )}
       </div>
       {draft ? (
-        <form className="community-map-draft" onSubmit={(event) => { event.preventDefault(); saveDraft() }}>
-          <label>
-            Label
-            <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="Name this place" maxLength={80} />
-          </label>
-          <div className="community-map-destination">
-            <span>Save to</span>
-            <button type="button" className={destination === 'mine' ? 'is-on' : ''} onClick={() => setDestination('mine')}>My maps</button>
-            <button type="button" className={destination === 'community' ? 'is-on' : ''} onClick={() => setDestination('community')}>Community</button>
-          </div>
-          <div className="community-map-draft-actions">
-            <button type="button" onClick={() => setDraft(null)}>Cancel</button>
-            <button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
-          </div>
-        </form>
+        <DraftPinSheet
+          draft={{
+            ...draft,
+            label,
+            place: draft.place,
+            reasoning: draft.reasoning,
+            category: draft.category,
+            sidc: draft.sidc,
+          }}
+          saving={saving}
+          showDestination
+          destination={destination}
+          onDestination={setDestination}
+          onChange={(patch) => {
+            if (patch.label != null) setLabel(patch.label)
+            setDraft((current) => (current ? { ...current, ...patch, label: undefined } : current))
+          }}
+          onSave={saveDraft}
+          onRemove={() => {
+            awaitingRef.current = false
+            clearDraftMarker(markerRef)
+            setDraft(null)
+            setLabel('')
+          }}
+        />
       ) : null}
     </div>
   )

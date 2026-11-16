@@ -576,7 +576,7 @@ export function AccountsProvider({ children }) {
     return () => window.removeEventListener('supermap:vault-place', onVaultPlace)
   }, [user, createSavedItem])
 
-  const saveMapPin = useCallback(async ({ id, title, icon, listName, notes, lat, lon, url, image, summary, mediaKind, geometry, label }) => {
+  const saveMapPin = useCallback(async ({ id, title, icon, listName, notes, lat, lon, url, image, summary, mediaKind, geometry, label, category, sidc }) => {
     if (!user) {
       setOverlay('auth')
       return { ok: false, needsAuth: true }
@@ -599,6 +599,8 @@ export function AccountsProvider({ children }) {
         image: image || '',
         summary: summary || notes || '',
         mediaKind: mediaKind || '',
+        category: category || '',
+        sidc: sidc || '',
         label: label || '',
         ...(geometry ? { geometry } : {}),
       },

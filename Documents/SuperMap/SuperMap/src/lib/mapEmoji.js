@@ -1,3 +1,5 @@
+import { ensureSidcIcon } from './milSymbols'
+
 export function emojiToImageData(emoji, size = 64) {
   const canvas = document.createElement('canvas')
   canvas.width = size
@@ -33,8 +35,9 @@ export function ensurePinEmoji(map, emoji) {
 export function stampPinIcons(map, featureCollection) {
   const features = (featureCollection?.features || []).map((feature) => {
     if (feature?.geometry?.type !== 'Point') return feature
+    const sidc = feature.properties?.sidc
     const emoji = feature.properties?.icon || '📍'
-    const iconImage = ensurePinEmoji(map, emoji)
+    const iconImage = sidc ? ensureSidcIcon(map, sidc) : ensurePinEmoji(map, emoji)
     return {
       ...feature,
       properties: { ...(feature.properties || {}), icon: emoji, iconImage },

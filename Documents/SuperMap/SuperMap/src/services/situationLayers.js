@@ -63,6 +63,80 @@ function isWildfire(props) {
   return /forest fire|wild[\s-]?fire|bushfire|brush fire/.test(name)
 }
 
+const DISASTER_LABELS = {
+  TC: 'Tropical cyclone',
+  EQ: 'Earthquake',
+  FL: 'Flood',
+  WF: 'Wildfire',
+  VO: 'Volcanic eruption',
+  DR: 'Drought',
+  TS: 'Tsunami',
+}
+
+function cleanSpace(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim()
+}
+
+function namedStorm(eventname) {
+  const stem = String(eventname || '').trim().replace(/-\d{2,4}$/, '')
+  if (!/^[A-Za-z]{3,}$/.test(stem)) return ''
+  return stem.charAt(0) + stem.slice(1).toLowerCase()
+}
+
+function feedDate(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  const normalized = /[zZ]|[+-]\d{2}:?\d{2}$/.test(text) ? text : `${text}Z`
+  const date = new Date(normalized)
+  if (Number.isNaN(date.getTime())) return cleanSpace(text.replace('T', ' '))
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+}
+
+function disasterWhen(from, to) {
+  const start = feedDate(from)
+  const end = feedDate(to)
+  if (start && end && start !== end) return `${start} – ${end}`
+  return start || end
+}
+
+function windNote(severity) {
+  const speed = Number(severity?.severity)
+  const unit = String(severity?.severityunit || '')
+  if (!Number.isFinite(speed) || speed < 30 || !/km/i.test(unit)) return ''
+  const rounded = Math.round(speed)
+  let kind = 'a tropical depression'
+  if (rounded >= 252) kind = 'a category 5 hurricane'
+  else if (rounded >= 209) kind = 'a category 4 hurricane'
+  else if (rounded >= 178) kind = 'a category 3 hurricane'
+  else if (rounded >= 154) kind = 'a category 2 hurricane'
+  else if (rounded >= 119) kind = 'a category 1 hurricane'
+  else if (rounded >= 63) kind = 'a tropical storm'
+  return `Winds reached ${rounded} km/h, ${kind}.`
+}
+
+function severityNote(props) {
+  if (String(props.eventtype || '').toUpperCase() === 'TC') return windNote(props.severitydata)
+  const text = cleanSpace(props.severitydata?.severitytext)
+  if (!text || /^magnitude\s*0\b/i.test(text)) return ''
+  return /[.!?]$/.test(text) ? text : `${text}.`
+}
+
+function disasterTitle(props, label) {
+  const code = String(props.eventtype || '').toUpperCase()
+  const storm = namedStorm(props.eventname)
+  if (code === 'TC' && storm) return `Tropical cyclone ${storm}`
+  const name = cleanSpace(props.name)
+  if (name && !/^[A-Z0-9-]{2,16}$/.test(name)) return name
+  if (storm && label) return `${label} ${storm}`
+  return name || label || 'Disaster'
+}
+
+function disasterLink(url) {
+  if (!url) return 'https://www.gdacs.org/'
+  if (typeof url === 'string') return url
+  return url.report || url.details || 'https://www.gdacs.org/'
+}
+
 function disasterFeatures(collection) {
   return (collection?.features || []).map((feature) => {
     const props = feature.properties || {}
@@ -71,17 +145,21 @@ function disasterFeatures(collection) {
     const coords = feature.geometry?.coordinates
     if (!coords || coords.length < 2) return null
     const wildfire = isWildfire(props)
+    const code = String(props.eventtype || '').trim().toUpperCase()
+    const label = DISASTER_LABELS[code] || ''
+    const title = disasterTitle(props, label)
     return {
       type: 'Feature',
       properties: {
         kind: 'disaster',
         source: 'GDACS',
-        title: props.eventname || props.name || 'Disaster',
-        type: props.eventtype || 'Disaster',
-        place: props.country || '',
-        date: props.fromdate || props.todate || '',
+        title,
+        type: title.toLowerCase().includes(label.toLowerCase()) ? '' : label,
+        place: cleanSpace(props.country),
+        date: disasterWhen(props.fromdate, props.todate),
+        notes: severityNote(props),
         alert: level,
-        link: props.url || props.link || 'https://www.gdacs.org/',
+        link: disasterLink(props.url || props.link),
         sidc: wildfire ? WILDFIRE_SIDC : '',
         icon: wildfire ? WILDFIRE_SIDC : (level === 'red' ? 'hazard-red' : 'hazard-orange'),
       },

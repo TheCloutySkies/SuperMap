@@ -206,7 +206,7 @@ export function situationPopupHtml(props = {}) {
     props.fatalities != null && props.fatalities !== '' ? `<div><strong>Fatalities</strong>: ${esc(props.fatalities)}</div>` : '',
     props.actor ? `<div>${esc(props.actor)}</div>` : '',
     props.notes ? `<p>${esc(props.notes)}</p>` : '',
-    props.alert ? `<div>${esc(props.alert)} alert</div>` : '',
+    props.alert ? `<div>${esc(String(props.alert).charAt(0).toUpperCase() + String(props.alert).slice(1))} alert</div>` : '',
     props.link ? `<a href="${esc(props.link)}" target="_blank" rel="noopener noreferrer">Open source</a>` : '',
     props.source ? `<div class="map-popup-source">${esc(props.source)}</div>` : '',
   ].filter(Boolean).join('')

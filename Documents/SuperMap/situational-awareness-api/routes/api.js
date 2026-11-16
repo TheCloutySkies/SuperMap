@@ -28,7 +28,7 @@ const weatherRouter = require('./weather')
 const forensicsRouter = require('./forensics')
 const pinsRouter = require('./pins')
 const { searchPlaces } = require('../services/placeSearch')
-const { acledGeoJson, gdeltGeoJson } = require('../services/conflictData')
+const { conflictGeoJson, gdeltGeoJson } = require('../services/conflictData')
 const windyWebcamsCache = new NodeCache({ stdTTL: 90, checkperiod: 60 })
 
 const searchCache = new NodeCache({ stdTTL: 15 })
@@ -1681,10 +1681,10 @@ router.get('/adsb/mil', async (_req, res) => {
   }
 })
 
-/** Major ACLED events, last 14 days, 5 or more fatalities. */
+/** Major fights: ACLED when it is configured, plus the last day of heavily reported GDELT events. */
 router.get('/conflicts/acled', async (_req, res) => {
   try {
-    res.json(await acledGeoJson())
+    res.json(await conflictGeoJson())
   } catch (err) {
     console.warn('[API /conflicts/acled]', err.message)
     res.json({ type: 'FeatureCollection', features: [] })

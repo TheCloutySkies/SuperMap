@@ -38,7 +38,7 @@ function paintMark(map, id, color) {
   ctx.fillStyle = color
   ctx.fill()
   ctx.lineWidth = 6
-  ctx.strokeStyle = '#0b1220'
+  ctx.strokeStyle = '#f8fafc'
   ctx.stroke()
   try { map.addImage(id, ctx.getImageData(0, 0, 64, 64), { pixelRatio: 2 }) } catch { /* already added */ }
 }
@@ -62,6 +62,8 @@ function addMarkedLayer(map, id, icon, clusterProperties) {
     layout: {
       'icon-image': icon,
       'icon-size': detailIconSize(),
+      'icon-pitch-alignment': 'viewport',
+      'icon-rotation-alignment': 'viewport',
       'icon-allow-overlap': true,
       'icon-ignore-placement': true,
     },
@@ -71,15 +73,19 @@ function addMarkedLayer(map, id, icon, clusterProperties) {
     type: 'symbol',
     source: id,
     filter: ['has', 'point_count'],
-    layout: clusterCountLayout(icon),
+    layout: {
+      ...clusterCountLayout(icon),
+      'icon-pitch-alignment': 'viewport',
+      'icon-rotation-alignment': 'viewport',
+    },
     paint: { 'text-color': '#f8fafc', 'text-halo-color': '#0d1117', 'text-halo-width': 1.4 },
   })
 }
 
 export function installCommunitySituation(map) {
   ensureMovementIcons(map)
-  paintMark(map, 'mark-conflict', '#7f1d1d')
-  paintMark(map, 'mark-report', '#f59e0b')
+  paintMark(map, 'mark-conflict', '#ef4444')
+  paintMark(map, 'mark-report', '#fbbf24')
   paintMark(map, 'hazard-orange', '#f97316')
   paintMark(map, 'hazard-red', '#ef4444')
   ensureSidcIcon(map, EARTHQUAKE_SIDC)

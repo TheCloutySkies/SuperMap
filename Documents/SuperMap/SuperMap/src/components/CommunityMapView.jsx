@@ -36,6 +36,52 @@ import './DraftPinSheet.css'
 
 const MAP_GLYPHS = 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf'
 
+const HAZARD_MENU = [
+  ['earthquake', 'Earthquakes'],
+  ['wildfire', 'Wildfires'],
+  ['cyclone', 'Tropical cyclones'],
+  ['flood', 'Floods'],
+  ['volcano', 'Volcanoes'],
+  ['drought', 'Droughts'],
+  ['tsunami', 'Tsunamis'],
+  ['other', 'Other hazards'],
+]
+
+const LAYER_ROWS = [
+  ['x', 'X posts'],
+  ['news', 'News'],
+  ['images', 'Images'],
+  ['shapes', 'Shapes'],
+  ['frontline', 'Ukraine frontline'],
+  ['conflicts', 'Major conflicts'],
+  ['reports', 'Major reports'],
+  ['hazards', 'Hazards'],
+  ['aircraft', 'Military aircraft'],
+  ['ships', 'Military ships'],
+]
+
+function hazardCatalog(collection) {
+  const grouped = {}
+  ;(collection?.features || []).forEach((feature) => {
+    const props = feature.properties || {}
+    const group = props.hazardGroup || 'other'
+    if (!grouped[group]) grouped[group] = []
+    const title = props.title || 'Hazard'
+    const place = props.place && !title.includes(props.place) ? props.place : ''
+    const extra = place || props.date || ''
+    grouped[group].push({ id: props.hazardId, title: extra ? `${title} · ${extra}` : title })
+  })
+  Object.values(grouped).forEach((rows) => rows.sort((a, b) => a.title.localeCompare(b.title)))
+  return grouped
+}
+
+function visibleHazards(collection, hidden) {
+  return {
+    type: 'FeatureCollection',
+    features: (collection?.features || []).filter((feature) => !hidden[feature.properties?.hazardId]),
+  }
+}
+
 const DARK_STYLE = {
   version: 8,
   glyphs: MAP_GLYPHS,
@@ -165,6 +211,13 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
   const [destination, setDestination] = useState('community')
   const [saving, setSaving] = useState(false)
   const [basemap, setBasemap] = useState('dark')
+  const [hazardMenuOpen, setHazardMenuOpen] = useState(false)
+  const [openHazardGroups, setOpenHazardGroups] = useState({})
+  const [hiddenHazards, setHiddenHazards] = useState({})
+  const [hazardGroups, setHazardGroups] = useState({})
+  const hazardDataRef = useRef(null)
+  const hiddenHazardRef = useRef({})
+  hiddenHazardRef.current = hiddenHazards
   const markerRef = useRef(null)
   const awaitingRef = useRef(false)
 
@@ -654,15 +707,29 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
     const map = mapRef.current
     if (!ready || !map?.getSource?.('community-hazards')) return undefined
     let cancelled = false
+    const paint = (collection) => {
+      if (cancelled || !map.getSource('community-hazards')) return
+      setGeoSource(map, 'community-hazards', stampHazardIcons(map, collection))
+    }
     if (!filters.hazards) {
-      setGeoSource(map, 'community-hazards', { type: 'FeatureCollection', features: [] })
+      paint({ type: 'FeatureCollection', features: [] })
       return undefined
     }
     fetchMajorHazards().then((geo) => {
-      if (!cancelled) setGeoSource(map, 'community-hazards', stampHazardIcons(map, geo))
+      if (cancelled) return
+      hazardDataRef.current = geo
+      setHazardGroups(hazardCatalog(geo))
+      paint(visibleHazards(geo, hiddenHazardRef.current))
     }).catch(() => {})
     return () => { cancelled = true }
   }, [filters.hazards, ready])
+
+  useEffect(() => {
+    const map = mapRef.current
+    const loaded = hazardDataRef.current
+    if (!ready || !filters.hazards || !loaded || !map?.getSource?.('community-hazards')) return
+    setGeoSource(map, 'community-hazards', stampHazardIcons(map, visibleHazards(loaded, hiddenHazards)))
+  }, [hiddenHazards, filters.hazards, ready])
 
   useEffect(() => {
     const map = mapRef.current
@@ -856,22 +923,87 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
                 {name}
               </label>
             ))}
-            {[
-              ['x', 'X posts'],
-              ['news', 'News'],
-              ['images', 'Images'],
-              ['shapes', 'Shapes'],
-              ['frontline', 'Ukraine frontline'],
-              ['conflicts', 'Major conflicts'],
-              ['reports', 'Major reports'],
-              ['hazards', 'Hazards'],
-              ['aircraft', 'Military aircraft'],
-              ['ships', 'Military ships'],
-            ].map(([key, name]) => (
-              <label key={key}>
-                <input type="checkbox" checked={!!filters[key]} onChange={() => toggleFilter(key)} />
-                {name}
-              </label>
+            {LAYER_ROWS.map(([key, name]) => (
+              key === 'hazards' ? (
+                <div key={key} className="community-map-hazard-block">
+                  <div className="community-map-layer-row">
+                    <label>
+                      <input type="checkbox" checked={!!filters.hazards} onChange={() => toggleFilter('hazards')} />
+                      Hazards
+                    </label>
+                    <button
+                      type="button"
+                      className="community-map-layer-disclosure"
+                      aria-expanded={hazardMenuOpen}
+                      aria-label="Hazard types"
+                      onClick={() => setHazardMenuOpen((open) => !open)}
+                    >
+                      {hazardMenuOpen ? '▾' : '▸'}
+                    </button>
+                  </div>
+                  {hazardMenuOpen ? (
+                    <div className="community-map-hazard-list">
+                      {HAZARD_MENU.filter(([group]) => hazardGroups[group]?.length).map(([group, label]) => {
+                        const rows = hazardGroups[group]
+                        const hiddenCount = rows.filter((row) => hiddenHazards[row.id]).length
+                        const groupOn = hiddenCount === 0
+                        return (
+                          <div key={group}>
+                            <div className="community-map-layer-row">
+                              <label>
+                                <input
+                                  type="checkbox"
+                                  checked={groupOn}
+                                  onChange={() => setHiddenHazards((current) => {
+                                    const next = { ...current }
+                                    if (groupOn) rows.forEach((row) => { next[row.id] = true })
+                                    else rows.forEach((row) => { delete next[row.id] })
+                                    return next
+                                  })}
+                                />
+                                {label}
+                              </label>
+                              <button
+                                type="button"
+                                className="community-map-layer-disclosure"
+                                aria-expanded={!!openHazardGroups[group]}
+                                aria-label={`${label} events`}
+                                onClick={() => setOpenHazardGroups((current) => ({ ...current, [group]: !current[group] }))}
+                              >
+                                {openHazardGroups[group] ? '▾' : '▸'}
+                              </button>
+                            </div>
+                            {openHazardGroups[group] ? (
+                              <div className="community-map-hazard-items">
+                                {rows.map((row) => (
+                                  <label key={row.id} title={row.title}>
+                                    <input
+                                      type="checkbox"
+                                      checked={!hiddenHazards[row.id]}
+                                      onChange={() => setHiddenHazards((current) => {
+                                        const next = { ...current }
+                                        if (next[row.id]) delete next[row.id]
+                                        else next[row.id] = true
+                                        return next
+                                      })}
+                                    />
+                                    <span>{row.title}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <label key={key}>
+                  <input type="checkbox" checked={!!filters[key]} onChange={() => toggleFilter(key)} />
+                  {name}
+                </label>
+              )
             ))}
           </div>
         ) : null}

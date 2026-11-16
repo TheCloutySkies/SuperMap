@@ -32,26 +32,47 @@ function gdacsLevel(properties = {}) {
   return String(properties.alertlevel || properties.episodealertlevel || properties.alertLevel || '').toLowerCase()
 }
 
+const HAZARD_GROUPS = {
+  TC: 'cyclone',
+  EQ: 'earthquake',
+  FL: 'flood',
+  WF: 'wildfire',
+  VO: 'volcano',
+  DR: 'drought',
+  TS: 'tsunami',
+}
+
+function hazardIdentity(group, title, lon, lat) {
+  return {
+    hazardGroup: group,
+    hazardId: `${group}:${title}:${Number(lon).toFixed(2)},${Number(lat).toFixed(2)}`,
+  }
+}
+
 function quakeFeatures(collection) {
   return (collection?.features || []).map((feature) => {
     const props = feature.properties || {}
     const coords = feature.geometry?.coordinates
     if (!coords || coords.length < 2) return null
+    const lon = Number(coords[0])
+    const lat = Number(coords[1])
+    const title = props.title || props.place || 'Earthquake'
     const when = props.time ? new Date(props.time).toISOString().slice(0, 16).replace('T', ' ') : ''
     return {
       type: 'Feature',
       properties: {
         kind: 'quake',
         source: 'USGS',
-        title: props.title || props.place || 'Earthquake',
+        title,
         type: props.mag != null ? `M${props.mag}` : 'Earthquake',
         place: props.place || '',
         date: when,
         link: props.url || 'https://earthquake.usgs.gov/',
         sidc: EARTHQUAKE_SIDC,
         icon: EARTHQUAKE_SIDC,
+        ...hazardIdentity('earthquake', title, lon, lat),
       },
-      geometry: { type: 'Point', coordinates: [Number(coords[0]), Number(coords[1])] },
+      geometry: { type: 'Point', coordinates: [lon, lat] },
     }
   }).filter(Boolean)
 }
@@ -148,6 +169,9 @@ function disasterFeatures(collection) {
     const code = String(props.eventtype || '').trim().toUpperCase()
     const label = DISASTER_LABELS[code] || ''
     const title = disasterTitle(props, label)
+    const lon = Number(coords[0])
+    const lat = Number(coords[1])
+    const group = wildfire ? 'wildfire' : (HAZARD_GROUPS[code] || 'other')
     return {
       type: 'Feature',
       properties: {
@@ -162,8 +186,9 @@ function disasterFeatures(collection) {
         link: disasterLink(props.url || props.link),
         sidc: wildfire ? WILDFIRE_SIDC : '',
         icon: wildfire ? WILDFIRE_SIDC : (level === 'red' ? 'hazard-red' : 'hazard-orange'),
+        ...hazardIdentity(group, title, lon, lat),
       },
-      geometry: { type: 'Point', coordinates: [Number(coords[0]), Number(coords[1])] },
+      geometry: { type: 'Point', coordinates: [lon, lat] },
     }
   }).filter(Boolean)
 }
@@ -173,20 +198,24 @@ function volcanoFeatures(collection) {
     const props = feature.properties || {}
     const coords = feature.geometry?.coordinates
     if (!coords || coords.length < 2) return null
+    const lon = Number(coords[0])
+    const lat = Number(coords[1])
+    const title = props.title || props.name || 'Volcano'
     return {
       type: 'Feature',
       properties: {
         kind: 'volcano',
         source: 'USGS',
-        title: props.title || props.name || 'Volcano',
+        title,
         type: 'Volcano',
         place: props.name || '',
         date: '',
         notes: props.synopsis || '',
         link: props.link || 'https://volcanoes.usgs.gov/',
         icon: '🌋',
+        ...hazardIdentity('volcano', title, lon, lat),
       },
-      geometry: feature.geometry,
+      geometry: { type: 'Point', coordinates: [lon, lat] },
     }
   }).filter(Boolean)
 }

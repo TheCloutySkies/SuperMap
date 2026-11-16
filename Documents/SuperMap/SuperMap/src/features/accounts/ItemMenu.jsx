@@ -167,14 +167,31 @@ export default function ItemMenu({ item, inline = false, profilePost = false }) 
   async function locatePin(destination) {
     if (destination === 'community' && !requireUser()) return
     const media = pinMedia()
+    const key = destination === 'community' ? 'supermap.draft-community-pin' : 'supermap.draft-map-pin'
+    const eventName = destination === 'community' ? 'supermap:draft-community-pin' : 'supermap:draft-map-pin'
+    const publish = (draft) => {
+      sessionStorage.setItem(key, JSON.stringify(draft))
+      window.dispatchEvent(new CustomEvent(eventName, { detail: draft }))
+    }
     setBusy(true)
+    setOpen(false)
     showToast({ tone: 'info', message: 'Reading the headline for a place…' })
+    publish({
+      ...media,
+      place: '',
+      category: media.kind === 'x' ? 'x' : 'news',
+      sidc: '',
+      reasoning: '',
+      label: media.title || '',
+      destination,
+      locating: true,
+    })
     let located = {}
     try {
       const response = await fetch(`${API_BASE}/api/pins/locate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(20000),
+        signal: AbortSignal.timeout(45000),
         body: JSON.stringify({
           title: media.title,
           summary: media.summary,
@@ -184,13 +201,13 @@ export default function ItemMenu({ item, inline = false, profilePost = false }) 
         }),
       })
       const payload = await response.json()
-      located = payload && typeof payload === 'object' ? payload : {}
+      if (response.ok && payload && typeof payload === 'object') located = payload
     } catch {
       located = {}
     }
     const lat = num(located.lat) ?? media.lat
     const lon = num(located.lon) ?? media.lon
-    const draft = {
+    publish({
       ...media,
       lat,
       lon,
@@ -200,11 +217,8 @@ export default function ItemMenu({ item, inline = false, profilePost = false }) 
       reasoning: located.reasoning || '',
       label: media.title || '',
       destination,
-    }
-    const key = destination === 'community' ? 'supermap.draft-community-pin' : 'supermap.draft-map-pin'
-    const eventName = destination === 'community' ? 'supermap:draft-community-pin' : 'supermap:draft-map-pin'
-    sessionStorage.setItem(key, JSON.stringify(draft))
-    window.dispatchEvent(new CustomEvent(eventName, { detail: draft }))
+      locating: false,
+    })
     const searchText = located.query || located.place || ''
     if (searchText) {
       const detail = { query: searchText, lat, lon }
@@ -212,7 +226,6 @@ export default function ItemMenu({ item, inline = false, profilePost = false }) 
       window.dispatchEvent(new CustomEvent('supermap:place-search', { detail }))
     }
     setBusy(false)
-    setOpen(false)
     if (lat == null || lon == null) {
       showToast({ tone: 'info', message: 'No place stood out. Click the map to drop the pin.' })
     } else {

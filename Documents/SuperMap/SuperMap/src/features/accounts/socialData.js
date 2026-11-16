@@ -75,6 +75,18 @@ function db() {
   return getAccountsFirebase()?.db || null
 }
 
+async function banMessage(userUid) {
+  const firestore = db()
+  if (!firestore || !userUid) return null
+  try {
+    const snap = await getDoc(doc(firestore, 'bans', userUid))
+    if (snap.exists() && snap.data()?.active !== false) return 'This account is banned from posting.'
+  } catch {
+    return null
+  }
+  return null
+}
+
 export function conversationId(a, b) {
   return [String(a), String(b)].sort().join('__')
 }
@@ -278,6 +290,8 @@ export async function loadUserProfile(uid) {
 }
 
 export async function createBoard({ name, description, emoji, author }) {
+  const blocked = await banMessage(author?.uid)
+  if (blocked) return { ok: false, error: blocked }
   const board = {
     id: uid(),
     name: String(name || '').trim().slice(0, 80),
@@ -300,6 +314,8 @@ export async function createBoard({ name, description, emoji, author }) {
 }
 
 export async function createThread({ boardId, title, body, author }) {
+  const blocked = await banMessage(author?.uid)
+  if (blocked) return { ok: false, error: blocked }
   const now = Date.now()
   const thread = {
     id: uid(),
@@ -362,6 +378,8 @@ export async function createThread({ boardId, title, body, author }) {
 }
 
 export async function addThreadPost({ thread, body, author }) {
+  const blocked = await banMessage(author?.uid)
+  if (blocked) return { ok: false, error: blocked }
   const text = String(body || '').trim().slice(0, 6000)
   if (!text) return { ok: false, error: 'Write a reply first.' }
   const now = Date.now()
@@ -448,6 +466,8 @@ export function subscribeProfilePosts(ownerUid, cb) {
 }
 
 export async function createProfilePost(author, item) {
+  const blocked = await banMessage(author?.uid)
+  if (blocked) return { ok: false, error: blocked }
   const thought = item.type === 'thought'
   const thoughtText = String(item.summary || item.title || '').trim().slice(0, 600)
   const post = {
@@ -725,6 +745,14 @@ export async function fileReport({ reporter, reason, note, item, suggestedScore 
     return { ok: true }
   }
   await setDoc(doc(firestore, 'reports', report.id), { ...report, createdAt: serverTimestamp() })
+  return { ok: true }
+}
+
+export async function markReportReviewed(reportId) {
+  if (!reportId) return { ok: false }
+  const firestore = db()
+  if (!firestore) return { ok: false, error: 'Reports need the live account database.' }
+  await updateDoc(doc(firestore, 'reports', reportId), { status: 'reviewed', reviewedAtMs: Date.now() })
   return { ok: true }
 }
 

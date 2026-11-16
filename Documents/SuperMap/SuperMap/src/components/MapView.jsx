@@ -7,6 +7,8 @@ import { BASEMAPS, STORAGE_KEYS, DEFAULT_LAYER_TOGGLES } from '../constants'
 import { getAoiFeatures, setAoiFeatures, getSavedPoints, setSavedPoints } from '../constants'
 import { MAPLIBRE_DRAW_STYLES } from '../lib/mapboxDrawStyles'
 import { capMapPixelRatio } from '../lib/mapPerf'
+import { emojiToImageData, stampPinIcons } from '../lib/mapEmoji'
+import { createCommunityPin } from '../features/accounts/communityPins'
 import {
   fetchOverpassPower,
   fetchOverpassCellTowers,
@@ -75,20 +77,6 @@ const EMOJI_ICON_IDS = {
   milAircraft: 'emoji-mil-aircraft',
   fccTower: 'emoji-fcc-tower',
   osint: 'emoji-osint',
-}
-
-function emojiToImageData(emoji, size = 64) {
-  const canvas = document.createElement('canvas')
-  canvas.width = size
-  canvas.height = size
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return null
-  ctx.clearRect(0, 0, size, size)
-  ctx.font = `${Math.floor(size * 0.72)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText(emoji, size / 2, size / 2 + size * 0.04)
-  return ctx.getImageData(0, 0, size, size)
 }
 
 function ensureEmojiIcons(map) {
@@ -209,6 +197,7 @@ const CLICKABLE_POINT_LAYERS = [
   'mapped-conflict-events-layer',
   'search-results-layer',
   'intel-saved-points-layer',
+  'intel-saved-points-halo',
 ]
 
 const OSM_STYLE = {
@@ -1306,10 +1295,34 @@ const API_BASE = (import.meta.env?.VITE_API_URL !== undefined && import.meta.env
   ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
   : (import.meta.env?.DEV ? '' : 'http://localhost:3001')
 
+function readPendingPinMedia(detail) {
+  let pending = null
+  try {
+    const raw = sessionStorage.getItem('supermap.pending-pin')
+    if (raw) pending = JSON.parse(raw)
+  } catch {
+    pending = null
+  }
+  sessionStorage.removeItem('supermap.pending-pin')
+  const storedTitle = sessionStorage.getItem('supermap.pending-pin-title')
+  if (storedTitle) sessionStorage.removeItem('supermap.pending-pin-title')
+  const fromDetail = detail && typeof detail === 'object' ? detail : {}
+  return {
+    title: fromDetail.title || pending?.title || storedTitle || '',
+    url: fromDetail.url || pending?.url || '',
+    image: fromDetail.image || pending?.image || '',
+    summary: fromDetail.summary || pending?.summary || '',
+    mediaKind: fromDetail.mediaKind || pending?.mediaKind || pending?.kind || '',
+  }
+}
+
 function accountPlaceFeature(item) {
   const lat = Number(item?.location?.lat)
   const lon = Number(item?.location?.lon)
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
+  const geometry = item?.payload?.geometry
+  const pointOk = Number.isFinite(lat) && Number.isFinite(lon)
+  if (!geometry && !pointOk) return null
+  const summary = item.payload?.summary || item.summary || ''
   return {
     type: 'Feature',
     id: item.id,
@@ -1317,10 +1330,15 @@ function accountPlaceFeature(item) {
       title: item.title || 'Pinned place',
       icon: item.payload?.icon || '📍',
       source: item.payload?.listName || 'General',
-      notes: item.summary || '',
+      notes: summary,
+      summary,
+      url: item.payload?.url || '',
+      image: item.payload?.image || '',
+      mediaKind: item.payload?.mediaKind || '',
+      label: item.payload?.label || '',
       accountPin: true,
     },
-    geometry: { type: 'Point', coordinates: [lon, lat] },
+    geometry: geometry || { type: 'Point', coordinates: [lon, lat] },
   }
 }
 
@@ -1468,7 +1486,7 @@ export default function MapView({
   const [pinEditorOpen, setPinEditorOpen] = useState(false)
   const [pinEditorPin, setPinEditorPin] = useState(null)
   const [pinEditorIsNew, setPinEditorIsNew] = useState(false)
-  const { vault, pinLists, saveMapPin, deleteSavedItem, createPinList, authReady } = useSuperMapAccount()
+  const { vault, pinLists, saveMapPin, deleteSavedItem, createPinList, authReady, user, showToast } = useSuperMapAccount()
   const searchDataByLayerRef = useRef({})
   const onSearchDataUpdateRef = useRef(onSearchDataUpdate)
   onSearchDataUpdateRef.current = onSearchDataUpdate
@@ -1511,34 +1529,45 @@ export default function MapView({
   const upsertSavedPointsLayer = useCallback((fc) => {
     const map = mapRef.current
     if (!map || !mapReadyRef.current) return
-    if (map.getSource('intel-saved-points')) {
-      map.getSource('intel-saved-points').setData(fc)
+    const stamped = stampPinIcons(map, fc)
+    if (map.getLayer('intel-saved-points-base')) map.removeLayer('intel-saved-points-base')
+    if (!map.getSource('intel-saved-points')) {
+      map.addSource('intel-saved-points', { type: 'geojson', data: stamped })
+    } else {
+      map.getSource('intel-saved-points').setData(stamped)
+    }
+    if (!map.getLayer('intel-saved-points-halo')) {
+      map.addLayer({
+        id: 'intel-saved-points-halo',
+        type: 'circle',
+        source: 'intel-saved-points',
+        filter: ['==', ['geometry-type'], 'Point'],
+        paint: {
+          'circle-radius': 14,
+          'circle-color': '#e6edf3',
+          'circle-opacity': 0.16,
+        },
+      })
+    }
+    if (map.getLayer('intel-saved-points-layer')) {
+      try {
+        map.setLayoutProperty('intel-saved-points-layer', 'icon-image', ['get', 'iconImage'])
+        map.setLayoutProperty('intel-saved-points-layer', 'icon-size', 0.72)
+        map.setLayoutProperty('intel-saved-points-layer', 'text-field', '')
+      } catch (_) { /* older text layers still receive the icon image */ }
       return
     }
-    map.addSource('intel-saved-points', { type: 'geojson', data: fc })
-    map.addLayer({
-      id: 'intel-saved-points-base',
-      type: 'circle',
-      source: 'intel-saved-points',
-      filter: ['==', ['geometry-type'], 'Point'],
-      paint: {
-        'circle-radius': 9,
-        'circle-color': '#0d1117',
-        'circle-stroke-color': '#30363d',
-        'circle-stroke-width': 1.5,
-      },
-    })
     map.addLayer({
       id: 'intel-saved-points-layer',
       type: 'symbol',
       source: 'intel-saved-points',
       filter: ['==', ['geometry-type'], 'Point'],
       layout: {
-        'text-field': ['coalesce', ['get', 'icon'], '📍'],
-        'text-size': 14,
-        'text-allow-overlap': true,
+        'icon-image': ['get', 'iconImage'],
+        'icon-size': 0.72,
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
       },
-      paint: { 'text-color': '#e6edf3' },
     })
     map.addLayer({
       id: 'intel-saved-points-line',
@@ -1632,16 +1661,38 @@ export default function MapView({
     const next = { type: 'FeatureCollection', features }
     setSavedPoints(next)
     upsertSavedPointsLayer(next)
-    return saveMapPin({
+    const savedProps = saved?.properties || {}
+    const result = await saveMapPin({
       id: pinId,
-      title: updates.title || saved?.properties?.title || 'Pinned place',
-      icon: updates.icon || saved?.properties?.icon || '📍',
-      listName: updates.listName || saved?.properties?.source || 'General',
-      notes: updates.notes || '',
+      title: updates.title || savedProps.title || 'Pinned place',
+      icon: updates.icon || savedProps.icon || '📍',
+      listName: updates.listName || savedProps.source || 'General',
+      notes: updates.notes || savedProps.notes || '',
+      summary: updates.notes || savedProps.summary || savedProps.notes || '',
+      url: savedProps.url || '',
+      image: savedProps.image || '',
+      mediaKind: savedProps.mediaKind || '',
       lat,
       lon,
     })
-  }, [upsertSavedPointsLayer, saveMapPin])
+    if (updates.shareCommunity && user && Number.isFinite(lat) && Number.isFinite(lon)) {
+      const shared = await createCommunityPin({
+        ownerUid: user.uid,
+        ownerName: user.displayName || 'Anonymous',
+        ownerEmoji: user.emoji || '📍',
+        title: updates.title || savedProps.title || 'Pinned place',
+        summary: updates.notes || savedProps.summary || '',
+        kind: savedProps.mediaKind || 'pin',
+        icon: updates.icon || savedProps.icon || '📍',
+        url: savedProps.url || '',
+        image: savedProps.image || '',
+        geometry: { type: 'Point', coordinates: [lon, lat] },
+      })
+      if (shared?.ok === false) showToast?.({ tone: 'danger', message: shared.error || 'Could not share that pin.' })
+      else showToast?.({ tone: 'success', message: 'Shared on the community map.' })
+    }
+    return result
+  }, [upsertSavedPointsLayer, saveMapPin, showToast, user])
 
   const handlePinEditorDelete = useCallback(async (pinId) => {
     const removed = await deleteSavedItem(pinId)
@@ -2056,13 +2107,21 @@ export default function MapView({
         const lng = Number(e?.lngLat?.lng)
         const lat = Number(e?.lngLat?.lat)
         if (Number.isFinite(lng) && Number.isFinite(lat)) {
-          const pendingTitle = sessionStorage.getItem('supermap.pending-pin-title')
-          if (pendingTitle) sessionStorage.removeItem('supermap.pending-pin-title')
+          const media = readPendingPinMedia()
           const current = getSavedPoints()
           const feature = {
             type: 'Feature',
             id: `pt-${Date.now()}`,
-            properties: { title: pendingTitle || 'Saved point', icon: pointIcon || '📍', source: 'General' },
+            properties: {
+              title: media.title || 'Saved point',
+              icon: pointIcon || '📍',
+              source: 'General',
+              notes: media.summary || '',
+              summary: media.summary || '',
+              url: media.url || '',
+              image: media.image || '',
+              mediaKind: media.mediaKind || '',
+            },
             geometry: { type: 'Point', coordinates: [lng, lat] },
           }
           const next = { type: 'FeatureCollection', features: [...(current.features || []), feature] }
@@ -2175,23 +2234,37 @@ export default function MapView({
       }
       const coords = feat.geometry?.type === 'Point' ? feat.geometry.coordinates.slice() : null
       if (!coords) return
-      if (feat.layer.id === 'intel-saved-points-layer') {
+      if (feat.layer.id === 'intel-saved-points-layer' || feat.layer.id === 'intel-saved-points-halo') {
         const pid = feat.id
         const fc = getSavedPoints()
-        const f = (fc.features || []).find((featItem) => featItem.id === pid)
-        if (f) {
-          const [lon, lat] = f.geometry?.coordinates || []
+        const f = (fc.features || []).find((featItem) => featItem.id === pid) || feat
+        const props = f.properties || {}
+        const escPin = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+        const image = props.image ? `<img src="${escPin(props.image)}" alt="" style="width:100%;max-height:150px;object-fit:cover;border-radius:8px" />` : ''
+        const summary = props.summary || props.notes || ''
+        const original = props.url ? `<a href="${escPin(props.url)}" target="_blank" rel="noopener noreferrer" class="map-popup-read-more">Open original</a>` : ''
+        popup.setLngLat(coords).setHTML(`
+          <div class="map-popup-content">
+            ${image}
+            <div class="map-popup-title">${escPin(props.title || 'Pinned place')}</div>
+            ${summary ? `<div>${escPin(summary)}</div>` : ''}
+            ${original}
+            <button type="button" class="saved-pin-edit">Edit pin</button>
+          </div>
+        `).addTo(map)
+        popup.getElement()?.querySelector('.saved-pin-edit')?.addEventListener('click', () => {
+          const [lon, lat] = f.geometry?.coordinates || coords
           setPinEditorPin({
             id: f.id,
-            title: f.properties?.title,
-            icon: f.properties?.icon,
-            list_name: f.properties?.source,
+            title: props.title,
+            icon: props.icon,
+            list_name: props.source,
             lat,
             lon,
           })
           setPinEditorIsNew(false)
           setPinEditorOpen(true)
-        }
+        })
         return
       }
       const props = feat.properties || {}
@@ -2314,13 +2387,23 @@ export default function MapView({
     }
     window.addEventListener('supermap-toggle-tap-pin', onTapPinToggle)
 
-    const dropPinAt = (lng, lat, title) => {
+    const dropPinAt = (lng, lat, detail) => {
       if (!Number.isFinite(lng) || !Number.isFinite(lat)) return
+      const media = readPendingPinMedia(typeof detail === 'string' ? { title: detail } : detail)
       const current = getSavedPoints()
       const feature = {
         type: 'Feature',
         id: `pt-${Date.now()}`,
-        properties: { title: title || 'Saved point', icon: pointIcon || '📍', source: 'General' },
+        properties: {
+          title: media.title || 'Saved point',
+          icon: pointIcon || '📍',
+          source: 'General',
+          notes: media.summary || '',
+          summary: media.summary || '',
+          url: media.url || '',
+          image: media.image || '',
+          mediaKind: media.mediaKind || '',
+        },
         geometry: { type: 'Point', coordinates: [lng, lat] },
       }
       const next = { type: 'FeatureCollection', features: [...(current.features || []), feature] }
@@ -2341,7 +2424,7 @@ export default function MapView({
     const onDropPin = (ev) => {
       const lng = Number(ev?.detail?.lng)
       const lat = Number(ev?.detail?.lat)
-      dropPinAt(lng, lat, ev?.detail?.title)
+      dropPinAt(lng, lat, ev?.detail)
     }
     window.addEventListener('supermap-drop-pin', onDropPin)
 

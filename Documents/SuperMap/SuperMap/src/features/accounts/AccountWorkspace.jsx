@@ -28,7 +28,9 @@ import {
   deleteProfilePost,
   subscribeProfilePosts,
   subscribeReports,
+  markReportReviewed,
 } from './socialData'
+import ModerationPanel from './ModerationPanel'
 
 function presenceValue(value) {
   return value === 'online' || value === 'incognito' ? value : 'offline'
@@ -49,12 +51,12 @@ export default function AccountWorkspace() {
   const account = useSuperMapAccount()
   const { user, workspaceTab, setWorkspaceTab } = account
   const isOwner = String(user?.email || '').toLowerCase() === REPORT_OWNER_EMAIL
+  const tab = workspaceTab === 'infrastructure' ? 'reports' : workspaceTab
   const tabs = [
     ['vault', 'Vault'],
     ['profile', 'Profile'],
     ['messages', 'Messages'],
     ['reports', 'Reports'],
-    ['infrastructure', 'Infrastructure'],
     ['settings', 'Settings'],
   ]
   return (
@@ -80,23 +82,24 @@ export default function AccountWorkspace() {
         <div className="sm-workspace-body">
           <nav className="sm-workspace-nav">
             {tabs.map(([id, label]) => (
-              <button key={id} type="button" className={workspaceTab === id ? 'active' : ''} onClick={() => setWorkspaceTab(id)}>
+              <button key={id} type="button" className={tab === id ? 'active' : ''} onClick={() => setWorkspaceTab(id)}>
                 {label}
               </button>
             ))}
           </nav>
           <main className="sm-workspace-main">
-            {workspaceTab === 'vault' ? <VaultPanel /> : null}
-            {workspaceTab === 'profile' ? <ProfilePanel /> : null}
-            {workspaceTab === 'messages' ? <MessagesPanel /> : null}
-            {workspaceTab === 'settings' ? <SettingsPanel /> : null}
-            {workspaceTab === 'reports' ? (
+            {tab === 'vault' ? <VaultPanel /> : null}
+            {tab === 'profile' ? <ProfilePanel /> : null}
+            {tab === 'messages' ? <MessagesPanel /> : null}
+            {tab === 'settings' ? <SettingsPanel /> : null}
+            {tab === 'reports' ? (
               <section className="sm-account-reports">
                 <ReportMakerView />
+                <InfrastructurePanel />
                 {isOwner ? <ReportsPanel /> : null}
+                {isOwner ? <ModerationPanel /> : null}
               </section>
             ) : null}
-            {workspaceTab === 'infrastructure' ? <InfrastructurePanel /> : null}
           </main>
         </div>
       </div>
@@ -1060,8 +1063,8 @@ function InfrastructurePanel() {
 
   return (
     <section className="sm-vault">
-      <h3>Infrastructure</h3>
-      <p className="sm-local-note">Rail, power, and communications layers on the map.</p>
+      <h3>Map layers</h3>
+      <p className="sm-local-note">Rail, power, and communications layers on the OSINT map.</p>
       {INFRA_LAYERS.map((layer) => (
         <label key={layer.key} className="sm-check">
           <input type="checkbox" checked={!!layers[layer.key]} onChange={(event) => toggle(layer.key, event.target.checked)} />
@@ -1073,6 +1076,7 @@ function InfrastructurePanel() {
 }
 
 function ReportsPanel() {
+  const { showToast } = useSuperMapAccount()
   const [reports, setReports] = useState([])
   useEffect(() => subscribeReports(setReports), [])
   return (
@@ -1085,6 +1089,16 @@ function ReportsPanel() {
           <p className="sm-card-summary">{report.note || 'No note.'}</p>
           <p className="sm-card-summary">{report.reporterName} · {when(report.createdAtMs)}</p>
           {report.target?.url ? <a href={report.target.url} target="_blank" rel="noopener noreferrer">Open</a> : null}
+          {report.status === 'reviewed' ? <p className="sm-card-summary">Reviewed</p> : (
+            <button type="button" className="sm-ghost-btn" onClick={async () => {
+              try {
+                const result = await markReportReviewed(report.id)
+                if (result?.ok === false) showToast({ tone: 'danger', message: result.error || 'Could not update that report.' })
+              } catch (error) {
+                showToast({ tone: 'danger', message: error.message || 'Could not update that report.' })
+              }
+            }}>Mark reviewed</button>
+          )}
         </article>
       ))}
       {reports.length === 0 ? <p className="sm-local-note">No reports yet.</p> : null}

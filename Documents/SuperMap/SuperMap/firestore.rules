@@ -7,6 +7,12 @@ service cloud.firestore {
     function isOwner(uid) {
       return signedIn() && request.auth.uid == uid;
     }
+    function isAdmin() {
+      return signedIn() && request.auth.token.email == 'lonnie034@gmail.com';
+    }
+    function notBanned() {
+      return signedIn() && !exists(/databases/$(database)/documents/bans/$(request.auth.uid));
+    }
     match /users/{uid} {
       allow read: if signedIn();
       allow create, update, delete: if isOwner(uid);
@@ -23,16 +29,17 @@ service cloud.firestore {
     }
     match /profile_posts/{postId} {
       allow read: if true;
-      allow create: if signedIn()
+      allow create: if notBanned()
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.title is string
         && request.resource.data.title.size() > 0
         && request.resource.data.title.size() <= 180;
-      allow update, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow update: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow delete: if isAdmin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
     }
     match /boards/{boardId} {
       allow read: if true;
-      allow create: if signedIn() && (
+      allow create: if notBanned() && (
         request.resource.data.createdBy == 'starter'
         || (
           request.resource.data.createdBy == request.auth.uid
@@ -42,11 +49,11 @@ service cloud.firestore {
         )
       );
       allow update: if signedIn();
-      allow delete: if signedIn() && resource.data.createdBy == request.auth.uid;
+      allow delete: if isAdmin() || (signedIn() && resource.data.createdBy == request.auth.uid);
     }
     match /threads/{threadId} {
       allow read: if true;
-      allow create: if signedIn()
+      allow create: if notBanned()
         && request.resource.data.authorUid == request.auth.uid
         && request.resource.data.boardId is string
         && request.resource.data.title is string
@@ -55,17 +62,35 @@ service cloud.firestore {
         && request.resource.data.body is string
         && request.resource.data.body.size() <= 12000;
       allow update: if signedIn();
-      allow delete: if signedIn() && resource.data.authorUid == request.auth.uid;
+      allow delete: if isAdmin() || (signedIn() && resource.data.authorUid == request.auth.uid);
     }
     match /posts/{postId} {
       allow read: if true;
-      allow create: if signedIn()
+      allow create: if notBanned()
         && request.resource.data.authorUid == request.auth.uid
         && request.resource.data.threadId is string
         && request.resource.data.body is string
         && request.resource.data.body.size() > 0
         && request.resource.data.body.size() <= 12000;
-      allow update, delete: if signedIn() && resource.data.authorUid == request.auth.uid;
+      allow update: if signedIn() && resource.data.authorUid == request.auth.uid;
+      allow delete: if isAdmin() || (signedIn() && resource.data.authorUid == request.auth.uid);
+    }
+    match /community_pins/{pinId} {
+      allow read: if true;
+      allow create: if notBanned()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 180
+        && request.resource.data.kind in ['x', 'news', 'image', 'shape', 'pin']
+        && request.resource.data.geometryJson is string
+        && request.resource.data.geometryJson.size() > 2
+        && request.resource.data.geometryJson.size() <= 20000;
+      allow update, delete: if isAdmin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+    }
+    match /bans/{uid} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
     }
     match /conversations/{conversationId} {
       allow read: if signedIn() && request.auth.uid in resource.data.memberUids;
@@ -105,7 +130,8 @@ service cloud.firestore {
         && request.resource.data.note is string
         && request.resource.data.note.size() <= 2000;
       allow read: if signedIn() && request.auth.token.email == 'lonnie034@gmail.com';
-      allow update, delete: if false;
+      allow update: if isAdmin();
+      allow delete: if false;
     }
   }
 }

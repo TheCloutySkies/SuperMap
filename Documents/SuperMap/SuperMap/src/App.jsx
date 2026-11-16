@@ -25,6 +25,8 @@ import HomeScreen from './components/HomeScreen'
 import CrimeIntelligenceView from './components/CrimeIntelligenceView'
 import WeatherView from './components/WeatherView'
 import MapView from './components/MapView'
+import CommunityMapView from './components/CommunityMapView'
+import ForensicsView from './components/ForensicsView'
 import PrintMapView from './components/PrintMapView'
 import FeedsView from './components/FeedsView'
 import RightSidebar from './components/RightSidebar'
@@ -68,6 +70,7 @@ function initMetallicss() {
 const FOOTER_MODES = APP_MODES
 
 const MAP_VIEWS = [
+  { id: 'community-map', label: 'Community', tabKey: 'communityMap' },
   { id: 'osint-map', label: 'OSINT Map', tabKey: 'osintMap' },
   { id: 'conflict-map', label: 'Conflict Map', tabKey: 'conflictMap' },
   { id: 'explore-map', label: 'Explore', tabKey: 'exploreMap' },
@@ -236,6 +239,7 @@ function App() {
         window.dispatchEvent(new CustomEvent('supermap-toggle-tap-pin', { detail: { enabled: true } }))
       }, 350)
     }
+    const onBeginCommunity = () => navigate(pathFromView('community-map'))
     const onShowPlace = (event) => {
       const detail = event.detail || {}
       const lat = Number(detail.lat)
@@ -245,14 +249,16 @@ function App() {
       setFlyToTarget({ lng: lon, lat, zoom: detail.zoom || 12, properties: { title: detail.title || '' } })
       if (detail.drop) {
         window.setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('supermap-drop-pin', { detail: { lng: lon, lat, title: detail.title } }))
+          window.dispatchEvent(new CustomEvent('supermap-drop-pin', { detail }))
         }, 350)
       }
     }
     window.addEventListener('supermap:begin-pin', onBeginPin)
+    window.addEventListener('supermap:begin-community-pin', onBeginCommunity)
     window.addEventListener('supermap:show-place', onShowPlace)
     return () => {
       window.removeEventListener('supermap:begin-pin', onBeginPin)
+      window.removeEventListener('supermap:begin-community-pin', onBeginCommunity)
       window.removeEventListener('supermap:show-place', onShowPlace)
     }
   }, [navigate])
@@ -311,7 +317,8 @@ function App() {
 
   const isPrintView = activeView === 'print-map'
   const isMapView = MAP_VIEW_IDS.includes(activeView)
-  const isLiveMapView = isMapView && !isPrintView
+  const isCommunityMap = activeView === 'community-map'
+  const isLiveMapView = isMapView && !isPrintView && !isCommunityMap
   const isCrimeView = isCrimeIntelligenceView(activeView)
   const isWeatherPage = isWeatherView(activeView)
   const isFeedView = ['osint-feeds', 'news-feeds', 'recent-videos', 'osint-x', 'advanced-search', 'broadcasts'].includes(activeView)
@@ -510,6 +517,9 @@ function App() {
               }}
             />
           )}
+          {isCommunityMap && (
+            <CommunityMapView flyToTarget={flyToTarget} onFlyToComplete={clearFlyToTarget} />
+          )}
           {isLiveMapView && (
           <>
             <MapView
@@ -589,6 +599,11 @@ function App() {
           </div>
         )}
         {activeView === 'resources' && <ResourcesView resourcesScrollRef={resourcesScrollRef} />}
+        {activeView === 'forensics' && (
+          <div className="main-content-scroll main-content-scroll--tools">
+            <ForensicsView />
+          </div>
+        )}
         {activeView === 'tools' && (
           <div className="main-content-scroll main-content-scroll--tools">
             <ToolsView activeToolId={activeToolId} onToolChange={setActiveToolId} />
@@ -690,7 +705,7 @@ function App() {
             onFlyTo={handleFlyTo}
             onKeywordChange={setSearchQuery}
             onSearchResults={setSearchResultsGeoJson}
-            onNavigateToMap={() => setActiveViewWithMode('osint-map')}
+            onNavigateToMap={() => setActiveViewWithMode('community-map')}
             onNavigateToSearchResults={(q) => navigateSearch(q || searchQuery)}
             onNavigateToFeeds={(q) => { setSearchQuery(q || ''); setActiveViewWithMode('osint-feeds') }}
             onCommandNavigate={handleOmnibarNavigate}

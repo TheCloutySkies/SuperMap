@@ -576,7 +576,7 @@ export function AccountsProvider({ children }) {
     return () => window.removeEventListener('supermap:vault-place', onVaultPlace)
   }, [user, createSavedItem])
 
-  const saveMapPin = useCallback(async ({ id, title, icon, listName, notes, lat, lon }) => {
+  const saveMapPin = useCallback(async ({ id, title, icon, listName, notes, lat, lon, url, image, summary, mediaKind, geometry, label }) => {
     if (!user) {
       setOverlay('auth')
       return { ok: false, needsAuth: true }
@@ -589,9 +589,19 @@ export function AccountsProvider({ children }) {
       id,
       type: 'place',
       title: title || 'Pinned place',
-      summary: notes || '',
+      summary: summary || notes || '',
       location: { lat: latitude, lon: longitude },
-      payload: { icon: icon || '📍', listName: listName || 'General', kind: 'map-pin' },
+      payload: {
+        icon: icon || '📍',
+        listName: listName || 'General',
+        kind: geometry && geometry.type !== 'Point' ? 'shape' : 'map-pin',
+        url: url || '',
+        image: image || '',
+        summary: summary || notes || '',
+        mediaKind: mediaKind || '',
+        label: label || '',
+        ...(geometry ? { geometry } : {}),
+      },
       createdAtMs: existing?.createdAtMs,
     }, user)
     const f = getFirebase()

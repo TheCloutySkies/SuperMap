@@ -6,7 +6,8 @@
 const { genkit } = require('genkit')
 const { googleAI } = require('@genkit-ai/google-genai')
 
-const MODEL = process.env.GENKIT_MODEL || 'gemini-2.5-flash'
+const MODEL = process.env.GENKIT_MODEL || 'gemini-3.5-flash'
+const MODEL_FALLBACKS = ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite']
 
 function apiKey() {
   return (process.env.GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY || process.env.GOOGLE_API_KEY || '').trim()
@@ -36,15 +37,25 @@ function getFlow() {
   return flow
 }
 
-async function generateText(prompt, { maxTokens = 800 } = {}) {
+function redact(error) {
+  const key = apiKey()
+  const text = String(error?.message || error || 'Gemini request failed')
+  return (key ? text.split(key).join('[key]') : text).replace(/\s+/g, ' ').slice(0, 180)
+}
+
+async function generateText(prompt, { maxTokens = 800, model } = {}) {
   const run = getFlow()
   if (!run || !prompt) return null
-  try {
-    const text = await run({ prompt: String(prompt), maxTokens })
-    return text || null
-  } catch (_) {
-    return null
+  const models = [...new Set([model || MODEL, ...MODEL_FALLBACKS])]
+  for (const name of models) {
+    try {
+      const text = await run({ prompt: String(prompt), maxTokens, model: name })
+      if (text) return text
+    } catch (error) {
+      console.warn('[genkit]', name, redact(error))
+    }
   }
+  return null
 }
 
 function parseJson(text) {

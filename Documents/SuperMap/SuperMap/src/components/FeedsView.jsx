@@ -297,13 +297,17 @@ function relativeOsintTime(item) {
 }
 
 function feedMenuItem(item) {
+  const coords = Array.isArray(item.coordinates) ? item.coordinates : null
   return {
     type: 'article',
     title: item.title || 'Untitled',
     summary: item.contentSnippet || item.description || item.source || '',
     url: item.link || item.url || '',
-    lat: item.lat ?? item.latitude,
-    lon: item.lon ?? item.lng ?? item.longitude,
+    image: articleImage(item) || item.image || item.thumbnail || '',
+    kind: item.kind || item.type || 'news',
+    lat: item.lat ?? item.latitude ?? coords?.[1],
+    lon: item.lon ?? item.lng ?? item.longitude ?? coords?.[0],
+    coordinates: coords,
   }
 }
 

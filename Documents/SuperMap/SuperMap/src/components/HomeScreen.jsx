@@ -728,7 +728,7 @@ export default function HomeScreen({
                         <img src={item.src} alt="" loading="lazy" referrerPolicy="no-referrer" />
                         <span className="home-screen-photos-main-overlay">Expand</span>
                       </button>
-                      <ItemMenu item={{ type: 'article', title: item.caption || 'Photo', summary: item.caption || '', url: item.postUrl || '' }} />
+                      <ItemMenu item={{ type: 'article', kind: 'image', title: item.caption || 'Photo', summary: item.caption || '', url: item.postUrl || '', image: item.src || '' }} />
                     </div>
                   ))}
                 </div>

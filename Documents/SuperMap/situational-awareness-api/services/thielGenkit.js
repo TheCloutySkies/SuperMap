@@ -96,7 +96,8 @@ async function locatePin({ title, summary, url, kind } = {}) {
   if (!headline) return null
   const prompt = [
     'You place one news post, X post, or photo on a map.',
-    'Read the headline and text. Name the most specific real place the event happened: a town, airfield, port, neighborhood, or street. Prefer that over a country, and ignore datelines that are only where the story was written.',
+    'The headline already names the place. Copy the most specific town, airfield, port, neighborhood, or country written in the headline or text. A country is a valid place when no town is named.',
+    'Never answer that you cannot find a location. Never leave place empty when a place name is written in the headline.',
     'category must be one of: x, news, conflict, attack, planes, cars, drones, ships, explosion, outage.',
     'sidc must be a MIL-STD-2525C symbol code when one fits, otherwise an empty string. Examples: SFAPMF----- fixed wing, SFAPMFQ---- drone, SFAPMH----- helicopter, SFSPCL----- ship, SFGPUCI---- infantry, SHGPUCI---- hostile infantry, SFGPUCA---- armor, SFGPEVCA--- car, SFGPIUE---- electric power, EHIPBA---- bomb.',
     'Return only JSON: {"place":"","query":"","category":"news","sidc":"","reasoning":""}',

@@ -292,7 +292,7 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
     const openPopup = (feature, lngLat) => {
       const props = feature.properties || {}
       const pin = pinsRef.current.find((row) => row.id === (feature.id || props.id)) || props
-      const image = pin.image ? `<img class="community-popup-image" src="${esc(pin.image)}" alt="" />` : ''
+      const image = pin.image ? `<img class="community-popup-image" src="${esc(pin.image)}" alt="" referrerpolicy="no-referrer" />` : ''
       const summary = pin.summary ? `<p>${esc(pin.summary)}</p>` : ''
       const original = pin.url ? `<a href="${esc(pin.url)}" target="_blank" rel="noopener noreferrer">Open original</a>` : ''
       const verify = pin.image ? `<a href="/forensics?url=${encodeURIComponent(pin.image)}">Verify media</a>` : ''
@@ -573,11 +573,13 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
         <DraftPinSheet
           draft={{
             ...draft,
+            ...draft.media,
             label,
             place: draft.place,
             reasoning: draft.reasoning,
             category: draft.category,
             sidc: draft.sidc,
+            image: draft.media?.image || draft.image || '',
           }}
           saving={saving}
           showDestination

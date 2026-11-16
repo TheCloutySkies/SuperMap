@@ -185,7 +185,7 @@ function App() {
   const [deviceType, setDeviceType] = useState('desktop')
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true)
   const [mapChromePrefs, setMapChromePrefs] = useState(() => loadChromePrefs())
-  const [activeToolId, setActiveToolId] = useState(TOOLS_LIST[0]?.id ?? null)
+  const [activeToolId, setActiveToolId] = useState('adsb')
   const [crimeFocusSegment, setCrimeFocusSegment] = useState(null)
   const [crimeFocusEntity, setCrimeFocusEntity] = useState(null)
   const [isLeftSidebarMinimized, setIsLeftSidebarMinimized] = useState(false)
@@ -341,6 +341,12 @@ function App() {
     navigate(query ? `/search?q=${encodeURIComponent(query)}` : '/search')
   }, [navigate])
 
+  const openTool = useCallback((toolId) => {
+    setActiveToolId(toolId)
+    if (toolId === 'forensics') navigate('/forensics')
+    else setActiveViewWithMode('tools')
+  }, [navigate, setActiveViewWithMode])
+
   /** Omnibar jump: string viewId or rich target (crime section/entity, tool, resource, widget, news/OSINT). */
   const handleOmnibarNavigate = useCallback((target) => {
     if (target == null) return
@@ -356,7 +362,10 @@ function App() {
       setSearchQuery(String(target.focusQuery))
     }
 
-    if (target.toolId) setActiveToolId(target.toolId)
+    if (target.toolId) {
+      setActiveToolId(target.toolId)
+      if (target.toolId === 'forensics') viewId = 'forensics'
+    }
 
     if (target.crimeSegment || target.crimeAbbr || target.crimeCitySlug || target.nationalMetric) {
       const segment = target.crimeSegment
@@ -471,8 +480,8 @@ function App() {
     mobileChipItems = TOOLS_LIST.map((t) => ({
       id: t.id,
       label: t.title,
-      active: activeToolId === t.id,
-      onClick: () => { setActiveViewWithMode('tools'); setActiveToolId(t.id) },
+      active: activeView === 'forensics' ? t.id === 'forensics' : activeView === 'tools' && activeToolId === t.id,
+      onClick: () => openTool(t.id),
     }))
   } else if (appMode === APP_MODES.RESOURCES) {
     mobilePageTitle = 'Resources'
@@ -606,7 +615,7 @@ function App() {
         )}
         {activeView === 'tools' && (
           <div className="main-content-scroll main-content-scroll--tools">
-            <ToolsView activeToolId={activeToolId} onToolChange={setActiveToolId} />
+            <ToolsView activeToolId={activeToolId} onToolChange={openTool} />
           </div>
         )}
         {activeView === 'bulletin' && (
@@ -756,8 +765,8 @@ function App() {
           subnavItems = TOOLS_LIST.map((t) => ({
             id: t.id,
             label: t.title,
-            active: activeToolId === t.id,
-            onClick: () => { setActiveViewWithMode('tools'); setActiveToolId(t.id) },
+            active: activeView === 'forensics' ? t.id === 'forensics' : activeView === 'tools' && activeToolId === t.id,
+            onClick: () => openTool(t.id),
           }))
         } else if (appMode === APP_MODES.RESOURCES) {
           subnavTitle = 'Resources'

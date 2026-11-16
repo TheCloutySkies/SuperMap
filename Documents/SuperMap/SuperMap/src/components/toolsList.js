@@ -1,6 +1,12 @@
 // Only tools that work in iframes (no X-Frame-Options block). Non-embeddable sites (Flightradar24, Liveuamap, ADS-B Exchange, MarineTraffic, Open Infrastructure Map, Zoom.Earth, NASA FIRMS, USGS Earthquakes) are in Resources only.
 export const TOOLS_LIST = [
   {
+    id: 'forensics',
+    title: 'Media Forensics',
+    desc: 'Local image and audio bench. Files stay in the browser.',
+    native: 'forensics',
+  },
+  {
     id: 'adsb',
     title: 'ADSB.lol',
     desc: 'Live aircraft tracking (adsb.lol). Data via api.adsb.lol.',

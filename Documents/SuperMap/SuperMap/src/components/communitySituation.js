@@ -1,9 +1,17 @@
+import { ensurePinEmoji, pinIconImageId } from '../lib/mapEmoji'
 import {
+  aircraftClusterIcon,
+  aircraftClusterProperties,
   aircraftIconLayout,
+  clusterCountLayout,
+  detailIconSize,
   ensureMovementIcons,
   SHIP_TILES,
   shipIconLayout,
 } from '../lib/movementIcons'
+
+const QUAKE_ICON = pinIconImageId('💥')
+const VOLCANO_ICON = pinIconImageId('🌋')
 
 const EMPTY = { type: 'FeatureCollection', features: [] }
 
@@ -15,88 +23,81 @@ function esc(value) {
     .replace(/"/g, '&quot;')
 }
 
-function addClusterCircles(map, id, color) {
+function paintMark(map, id, color) {
+  if (!map || map.hasImage?.(id)) return
+  const canvas = document.createElement('canvas')
+  canvas.width = 64
+  canvas.height = 64
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  ctx.clearRect(0, 0, 64, 64)
+  ctx.beginPath()
+  ctx.arc(32, 32, 20, 0, Math.PI * 2)
+  ctx.fillStyle = color
+  ctx.fill()
+  ctx.lineWidth = 6
+  ctx.strokeStyle = '#0b1220'
+  ctx.stroke()
+  try { map.addImage(id, ctx.getImageData(0, 0, 64, 64), { pixelRatio: 2 }) } catch { /* already added */ }
+}
+
+function addMarkedLayer(map, id, icon, clusterProperties) {
   if (map.getSource(id)) return
-  map.addSource(id, {
+  const source = {
     type: 'geojson',
     data: EMPTY,
     cluster: true,
-    clusterRadius: 48,
-    clusterMaxZoom: 8,
+    clusterRadius: 52,
+    clusterMaxZoom: 6,
+  }
+  if (clusterProperties && Object.keys(clusterProperties).length) source.clusterProperties = clusterProperties
+  map.addSource(id, source)
+  map.addLayer({
+    id: `${id}-points`,
+    type: 'symbol',
+    source: id,
+    filter: ['!', ['has', 'point_count']],
+    layout: {
+      'icon-image': icon,
+      'icon-size': detailIconSize(),
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+    },
   })
   map.addLayer({
     id: `${id}-clusters`,
-    type: 'circle',
-    source: id,
-    filter: ['has', 'point_count'],
-    paint: {
-      'circle-color': color,
-      'circle-radius': ['step', ['get', 'point_count'], 14, 10, 18, 40, 24],
-      'circle-stroke-width': 1,
-      'circle-stroke-color': '#0b1220',
-    },
-  })
-  map.addLayer({
-    id: `${id}-count`,
     type: 'symbol',
     source: id,
     filter: ['has', 'point_count'],
-    layout: {
-      'text-field': ['get', 'point_count_abbreviated'],
-      'text-font': ['Open Sans Regular'],
-      'text-size': 11,
-    },
-    paint: { 'text-color': '#f8fafc' },
-  })
-  map.addLayer({
-    id: `${id}-points`,
-    type: 'circle',
-    source: id,
-    filter: ['!', ['has', 'point_count']],
-    paint: {
-      'circle-color': color,
-      'circle-radius': 6,
-      'circle-stroke-width': 1.5,
-      'circle-stroke-color': '#0b1220',
-    },
+    layout: clusterCountLayout(icon),
+    paint: { 'text-color': '#f8fafc', 'text-halo-color': '#0d1117', 'text-halo-width': 1.4 },
   })
 }
 
 export function installCommunitySituation(map) {
   ensureMovementIcons(map)
-  addClusterCircles(map, 'community-conflicts', '#7f1d1d')
-  addClusterCircles(map, 'community-reports', '#f59e0b')
+  paintMark(map, 'mark-conflict', '#7f1d1d')
+  paintMark(map, 'mark-report', '#f59e0b')
+  paintMark(map, 'hazard-orange', '#f97316')
+  paintMark(map, 'hazard-red', '#ef4444')
+  ensurePinEmoji(map, '💥')
+  ensurePinEmoji(map, '🌋')
+  ensurePinEmoji(map, '📍')
+  addMarkedLayer(map, 'community-conflicts', 'mark-conflict', {})
+  addMarkedLayer(map, 'community-reports', 'mark-report', {})
   if (!map.getSource('community-hazards')) {
     map.addSource('community-hazards', {
       type: 'geojson',
       data: EMPTY,
       cluster: true,
-      clusterRadius: 48,
-      clusterMaxZoom: 8,
-    })
-    map.addLayer({
-      id: 'community-hazards-clusters',
-      type: 'circle',
-      source: 'community-hazards',
-      filter: ['has', 'point_count'],
-      paint: {
-        'circle-color': '#334155',
-        'circle-radius': ['step', ['get', 'point_count'], 14, 8, 18, 24, 24],
-        'circle-stroke-width': 1,
-        'circle-stroke-color': '#0b1220',
+      clusterRadius: 52,
+      clusterMaxZoom: 6,
+      clusterProperties: {
+        n_quake: ['+', ['case', ['==', ['get', 'kind'], 'quake'], 1, 0]],
+        n_volcano: ['+', ['case', ['==', ['get', 'kind'], 'volcano'], 1, 0]],
+        n_red: ['+', ['case', ['==', ['get', 'icon'], 'hazard-red'], 1, 0]],
+        n_orange: ['+', ['case', ['==', ['get', 'icon'], 'hazard-orange'], 1, 0]],
       },
-    })
-    map.addLayer({
-      id: 'community-hazards-count',
-      type: 'symbol',
-      source: 'community-hazards',
-      filter: ['has', 'point_count'],
-      layout: {
-        'text-field': ['get', 'point_count_abbreviated'],
-        'text-font': ['Open Sans Regular'],
-        'text-size': 11,
-      },
-      paint: { 'text-color': '#f8fafc' },
     })
     map.addLayer({
       id: 'community-hazards-points',
@@ -105,27 +106,64 @@ export function installCommunitySituation(map) {
       filter: ['!', ['has', 'point_count']],
       layout: {
         'icon-image': ['get', 'iconImage'],
-        'icon-size': 0.72,
+        'icon-size': detailIconSize(),
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
       },
     })
+    map.addLayer({
+      id: 'community-hazards-clusters',
+      type: 'symbol',
+      source: 'community-hazards',
+      filter: ['has', 'point_count'],
+      layout: clusterCountLayout([
+        'case',
+        ['all',
+          ['>=', ['to-number', ['get', 'n_volcano']], ['to-number', ['get', 'n_quake']]],
+          ['>=', ['to-number', ['get', 'n_volcano']], ['to-number', ['get', 'n_red']]],
+          ['>=', ['to-number', ['get', 'n_volcano']], ['to-number', ['get', 'n_orange']]],
+        ], VOLCANO_ICON,
+        ['all',
+          ['>=', ['to-number', ['get', 'n_quake']], ['to-number', ['get', 'n_red']]],
+          ['>=', ['to-number', ['get', 'n_quake']], ['to-number', ['get', 'n_orange']]],
+        ], QUAKE_ICON,
+        ['>=', ['to-number', ['get', 'n_red']], ['to-number', ['get', 'n_orange']]], 'hazard-red',
+        'hazard-orange',
+      ]),
+      paint: { 'text-color': '#f8fafc', 'text-halo-color': '#0d1117', 'text-halo-width': 1.4 },
+    })
   }
   if (!map.getSource('community-aircraft')) {
-    map.addSource('community-aircraft', { type: 'geojson', data: EMPTY })
+    map.addSource('community-aircraft', {
+      type: 'geojson',
+      data: EMPTY,
+      cluster: true,
+      clusterRadius: 56,
+      clusterMaxZoom: 6,
+      clusterProperties: aircraftClusterProperties(),
+    })
     map.addLayer({
       id: 'community-aircraft-icon',
       type: 'symbol',
       source: 'community-aircraft',
+      filter: ['!', ['has', 'point_count']],
       layout: {
         ...aircraftIconLayout(),
-        'text-field': ['get', 'title'],
+        'text-field': ['step', ['zoom'], '', 8, ['get', 'title']],
         'text-font': ['Open Sans Regular'],
-        'text-size': 10,
-        'text-offset': [0, 1.2],
+        'text-size': 12,
+        'text-offset': [0, 1.35],
         'text-anchor': 'top',
       },
       paint: { 'text-color': '#fbbf24', 'text-halo-color': '#0d1117', 'text-halo-width': 1.4 },
+    })
+    map.addLayer({
+      id: 'community-aircraft-clusters',
+      type: 'symbol',
+      source: 'community-aircraft',
+      filter: ['has', 'point_count'],
+      layout: clusterCountLayout(aircraftClusterIcon()),
+      paint: { 'text-color': '#f8fafc', 'text-halo-color': '#0d1117', 'text-halo-width': 1.4 },
     })
   }
   if (!map.getSource('community-ship-track')) {
@@ -177,6 +215,8 @@ export const CLUSTER_LAYERS = [
   'community-conflicts-clusters',
   'community-reports-clusters',
   'community-hazards-clusters',
+  'community-aircraft-clusters',
+  'community-pins-clusters',
 ]
 
 export const SITUATION_POINT_LAYERS = [

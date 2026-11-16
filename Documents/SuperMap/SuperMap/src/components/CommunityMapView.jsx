@@ -6,6 +6,8 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css'
 import { fetchMilitaryAircraft, fetchUkraineFrontline, frontlinePopupHtml } from '../services/newLayerFetchers'
 import { fetchAcledEvents, fetchGdeltReports, fetchMajorHazards, nearestCorroboration, stampHazardIcons } from '../services/situationLayers'
+import { detailIconSize } from '../lib/movementIcons'
+import { ensurePinEmoji, pinIconImageId } from '../lib/mapEmoji'
 import { installCommunitySituation, setGeoSource, situationPopupHtml, CLUSTER_LAYERS, SITUATION_POINT_LAYERS } from './communitySituation'
 import { aircraftPopupHtml, fetchShipDetail, fetchShipTrack, refreshVectorTiles, shipDetailRows, shipPopupHtml } from '../lib/movementIcons'
 import { stampPinIcons } from '../lib/mapEmoji'
@@ -184,12 +186,26 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
       scrollZoom: !compact,
     })
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
-    const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true, className: 'maplibre-popup-dark', maxWidth: '280px' })
+    const popup = new maplibregl.Popup({
+      closeButton: true,
+      closeOnClick: true,
+      focusAfterOpen: false,
+      className: 'maplibre-popup-dark community-map-popup',
+      maxWidth: '260px',
+      offset: 22,
+      padding: { top: 72, bottom: 24, left: 12, right: 56 },
+    })
     popupRef.current = popup
     mapRef.current = map
 
     map.on('load', () => {
-      map.addSource('community-pins', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+      map.addSource('community-pins', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+        cluster: true,
+        clusterRadius: 50,
+        clusterMaxZoom: 6,
+      })
       map.addLayer({
         id: 'community-pins-fill',
         type: 'fill',
@@ -208,19 +224,39 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
         id: 'community-pins-icon',
         type: 'symbol',
         source: 'community-pins',
-        filter: ['==', ['geometry-type'], 'Point'],
+        filter: ['all', ['!', ['has', 'point_count']], ['==', ['geometry-type'], 'Point']],
         layout: {
           'icon-image': ['get', 'iconImage'],
-          'icon-size': 0.72,
+          'icon-size': detailIconSize(),
           'icon-allow-overlap': true,
           'icon-ignore-placement': true,
         },
+      })
+      ensurePinEmoji(map, '📍')
+      map.addLayer({
+        id: 'community-pins-clusters',
+        type: 'symbol',
+        source: 'community-pins',
+        filter: ['has', 'point_count'],
+        layout: {
+          'icon-image': pinIconImageId('📍'),
+          'icon-size': 1.15,
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true,
+          'text-field': ['get', 'point_count_abbreviated'],
+          'text-font': ['Open Sans Regular'],
+          'text-size': 13,
+          'text-offset': [0, 1.35],
+          'text-anchor': 'top',
+          'text-allow-overlap': true,
+        },
+        paint: { 'text-color': '#f8fafc', 'text-halo-color': '#0d1117', 'text-halo-width': 1.4 },
       })
       map.addLayer({
         id: 'community-pins-label',
         type: 'symbol',
         source: 'community-pins',
-        filter: ['!=', ['coalesce', ['get', 'label'], ''], ''],
+        filter: ['all', ['!', ['has', 'point_count']], ['!=', ['coalesce', ['get', 'label'], ''], '']],
         minzoom: 12,
         layout: {
           'text-field': ['coalesce', ['get', 'title'], ['get', 'label'], ''],

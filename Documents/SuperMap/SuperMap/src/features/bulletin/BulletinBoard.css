@@ -157,6 +157,15 @@ button.bb-author:hover { background: #ead9c0; }
 .bb-home-title { font-weight: 600; }
 .bb-home-meta { color: #6a5846; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 12px; }
 .bb-home-empty { margin: 8px 0 0; color: #5c4a3a; }
+.app--device-mobile .bb { padding: 16px 12px 48px; }
+.app--device-mobile .bb-mast h1 { font-size: 28px; }
+.app--device-mobile .bb-thread-head h2 { font-size: 24px; }
+.app--device-mobile .bb-posts li { grid-template-columns: 1fr; }
+.app--device-mobile .bb-author { border-right: 0; border-bottom: 1px solid var(--bb-rule); }
+.app--device-mobile .bb-last { width: auto; }
+.app--device-mobile .bb-home li button { grid-template-columns: 28px 1fr; }
+.app--device-mobile .bb-home-meta { grid-column: 2; }
+
 @media (max-width: 720px) {
   .bb-posts li { grid-template-columns: 1fr; }
   .bb-author { border-right: 0; border-bottom: 1px solid var(--bb-rule); }

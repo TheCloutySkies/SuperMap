@@ -153,11 +153,42 @@
 }
 
 .movement-popup {
-  max-height: 320px;
-  overflow: auto;
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.app--device-mobile .community-map-tools {
+  top: 8px;
+  left: 8px;
+  right: 56px;
+  max-width: none;
+  gap: 6px;
+}
+
+.app--device-mobile .community-map-layers-btn,
+.app--device-mobile .community-map-draw button,
+.app--device-mobile .community-map-open {
+  min-height: 40px;
+  padding: 8px 12px;
+}
+
+.app--device-mobile .community-map-layers {
+  max-height: 42vh;
+  max-width: min(240px, calc(100vw - 32px));
+}
+
+.app--device-mobile .community-map-draft,
+.app--device-mobile .draft-pin {
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  width: auto;
+  max-height: 46vh;
+}
+
+.app--device-mobile .draft-pin-symbols {
+  grid-template-columns: repeat(6, 1fr);
 }
 
 .movement-popup a,

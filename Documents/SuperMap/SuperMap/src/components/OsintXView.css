@@ -523,6 +523,24 @@ button.x-eng {
   align-items: center;
 }
 
+.app--device-mobile .x-post {
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 0.55rem;
+  padding: 0.75rem;
+}
+.app--device-mobile .x-post-avatar {
+  width: 36px;
+  height: 36px;
+}
+.app--device-mobile .osint-x-video-dialog {
+  width: min(100%, calc(100vw - 24px));
+  max-height: 70vh;
+  overflow: auto;
+}
+.app--device-mobile .x-post img {
+  max-width: 100%;
+}
+
 @media (max-width: 560px) {
   .x-post {
     grid-template-columns: 40px minmax(0, 1fr);

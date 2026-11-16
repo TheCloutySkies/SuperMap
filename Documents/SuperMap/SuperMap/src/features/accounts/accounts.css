@@ -515,6 +515,15 @@ button.sm-msg-go {
 .sm-reply-form .sm-primary-btn { border-radius: 999px; padding: 10px 16px; }
 .sm-message-thread > .sm-auth-error { margin: 0 12px 12px; }
 .sm-form input, .sm-form textarea, .sm-form select { width: 100%; box-sizing: border-box; }
+.app--device-mobile .sm-messages { grid-template-columns: 1fr; }
+.app--device-mobile .sm-messages.is-thread-open .sm-message-list { display: none; }
+.app--device-mobile .sm-messages:not(.is-thread-open) .sm-message-thread { display: none; }
+.app--device-mobile .sm-msg-back { display: inline-flex; }
+.app--device-mobile .sm-workspace-body { grid-template-columns: 1fr; }
+.app--device-mobile .sm-workspace-nav { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid #1f3348; }
+.app--device-mobile .sm-vault-filters { grid-template-columns: 1fr; }
+.app--device-mobile .sm-acct-dock-label { display: none; }
+
 @media (max-width: 800px) {
   .sm-messages { grid-template-columns: 1fr; }
   .sm-messages.is-thread-open .sm-message-list { display: none; }

@@ -540,18 +540,71 @@ export function refreshVectorTiles(map, sourceId) {
 
 export const SHIP_TILES = 'https://ais.openwaters.io/v1/vessels/tiles.json?kind=vessel&type=35,55'
 
+const AIR_FAMILIES = ['heli', 'tilt', 'fighter', 'transport', 'bizjet', 'prop', 'jet']
+
+/** Screen size grows as you zoom in. Pitch stays on the viewport so the icon does not shrink. */
+export function detailIconSize(factor = null) {
+  const stops = [[4, 1.05], [8, 1.5], [12, 1.95], [16, 2.25]]
+  const expression = ['interpolate', ['linear'], ['zoom']]
+  stops.forEach(([zoom, size]) => {
+    expression.push(zoom, factor ? ['*', size, factor] : size)
+  })
+  return expression
+}
+
+export function clusterIconSize() {
+  return 1.15
+}
+
+export function aircraftClusterProperties() {
+  return Object.fromEntries(AIR_FAMILIES.map((family) => [
+    `n_${family}`,
+    ['+', ['case', ['==', ['get', 'icon'], `ac-${family}`], 1, 0]],
+  ]))
+}
+
+function argmaxIcon(pairs, fallback) {
+  let expr = fallback
+  for (let index = pairs.length - 1; index >= 0; index -= 1) {
+    const [prop, image] = pairs[index]
+    const checks = pairs
+      .filter(([other]) => other !== prop)
+      .map(([other]) => ['>=', ['to-number', ['get', prop]], ['to-number', ['get', other]]])
+    expr = ['case', checks.length ? ['all', ...checks] : ['literal', true], image, expr]
+  }
+  return expr
+}
+
+export function aircraftClusterIcon() {
+  return argmaxIcon(
+    AIR_FAMILIES.map((family) => [`n_${family}`, `ac-${family}`]),
+    'ac-jet',
+  )
+}
+
+export function clusterCountLayout(iconImage) {
+  return {
+    'icon-image': iconImage,
+    'icon-size': clusterIconSize(),
+    'icon-allow-overlap': true,
+    'icon-ignore-placement': true,
+    'text-field': ['get', 'point_count_abbreviated'],
+    'text-font': ['Open Sans Regular'],
+    'text-size': 13,
+    'text-offset': [0, 1.35],
+    'text-anchor': 'top',
+    'text-allow-overlap': true,
+  }
+}
+
 export function shipIconLayout() {
+  const lengthFactor = ['step', ['coalesce', ['to-number', ['get', 'length']], 40], 0.82, 40, 0.95, 90, 1.05, 220, 1.18]
   return {
     'icon-image': ['case', ['==', ['to-number', ['get', 'type']], 55], 'ship-patrol', 'ship-war'],
-    'icon-size': [
-      'interpolate', ['linear'], ['coalesce', ['to-number', ['get', 'length']], 40],
-      15, 0.55,
-      80, 0.8,
-      250, 1.15,
-    ],
-    'icon-rotate': ['coalesce', ['get', 'hdg'], 0],
+    'icon-size': detailIconSize(lengthFactor),
+    'icon-rotate': ['coalesce', ['to-number', ['get', 'hdg']], 0],
     'icon-rotation-alignment': 'map',
-    'icon-pitch-alignment': 'map',
+    'icon-pitch-alignment': 'viewport',
     'icon-allow-overlap': true,
     'icon-ignore-placement': true,
   }
@@ -560,10 +613,10 @@ export function shipIconLayout() {
 export function aircraftIconLayout() {
   return {
     'icon-image': ['concat', ['get', 'icon'], ['case', ['==', ['get', 'alertMark'], 1], '-alert', '']],
-    'icon-size': 0.85,
-    'icon-rotate': ['coalesce', ['get', 'heading'], 0],
+    'icon-size': detailIconSize(),
+    'icon-rotate': ['coalesce', ['to-number', ['get', 'heading']], 0],
     'icon-rotation-alignment': 'map',
-    'icon-pitch-alignment': 'map',
+    'icon-pitch-alignment': 'viewport',
     'icon-allow-overlap': true,
     'icon-ignore-placement': true,
   }

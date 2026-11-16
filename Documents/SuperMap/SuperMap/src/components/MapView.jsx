@@ -2221,7 +2221,10 @@ export default function MapView({
     const popup = new maplibregl.Popup({
       closeButton: true,
       closeOnClick: false,
+      focusAfterOpen: false,
       className: 'maplibre-popup-dark',
+      maxWidth: '260px',
+      offset: 18,
     })
     const frontlineTip = new maplibregl.Popup({
       closeButton: false,

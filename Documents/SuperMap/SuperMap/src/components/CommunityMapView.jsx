@@ -271,9 +271,10 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
 
     const openLocated = (detail) => {
       if (!detail || compact) return
-      const lat = Number(detail.lat)
-      const lon = Number(detail.lon)
+      const lat = detail.lat == null || detail.lat === '' ? null : Number(detail.lat)
+      const lon = detail.lon == null || detail.lon === '' ? null : Number(detail.lon)
       const hasPoint = Number.isFinite(lat) && Number.isFinite(lon)
+      const locating = Boolean(detail.locating)
       setDestination(detail.destination === 'mine' ? 'mine' : 'community')
       setLabel(detail.label || detail.title || '')
       setDraft({
@@ -284,10 +285,15 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
         sidc: detail.sidc || '',
         place: detail.place || '',
         reasoning: detail.reasoning || '',
+        locating,
       })
-      awaitingRef.current = !hasPoint
-      map.getCanvas().style.cursor = hasPoint ? '' : 'crosshair'
-      if (hasPoint) map.flyTo({ center: [lon, lat], zoom: 12 })
+      awaitingRef.current = !hasPoint && !locating
+      map.getCanvas().style.cursor = awaitingRef.current ? 'crosshair' : ''
+      if (hasPoint) {
+        const go = () => map.flyTo({ center: [lon, lat], zoom: 12 })
+        if (map.isStyleLoaded()) go()
+        else map.once('load', go)
+      }
     }
     const onLocated = (event) => {
       sessionStorage.removeItem('supermap.draft-community-pin')
@@ -634,6 +640,7 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
             category: draft.category,
             sidc: draft.sidc,
             image: draft.media?.image || draft.image || '',
+            locating: draft.locating,
           }}
           saving={saving}
           showDestination={!draft.id}

@@ -2538,17 +2538,24 @@ export default function MapView({
 
     const openLocatedDraft = (detail) => {
       if (!detail) return
-      const lat = Number(detail.lat)
-      const lon = Number(detail.lon)
+      const lat = detail.lat == null || detail.lat === '' ? null : Number(detail.lat)
+      const lon = detail.lon == null || detail.lon === '' ? null : Number(detail.lon)
+      const hasPoint = Number.isFinite(lat) && Number.isFinite(lon)
+      const locating = Boolean(detail.locating)
       openDraftRef.current({
         ...detail,
-        lat: Number.isFinite(lat) ? lat : null,
-        lon: Number.isFinite(lon) ? lon : null,
+        lat: hasPoint ? lat : null,
+        lon: hasPoint ? lon : null,
         category: detail.category || (detail.kind === 'x' || detail.mediaKind === 'x' ? 'x' : 'news'),
-        awaiting: !Number.isFinite(lat) || !Number.isFinite(lon),
+        awaiting: !hasPoint && !locating,
+        locating,
       })
-      map.getCanvas().style.cursor = Number.isFinite(lat) && Number.isFinite(lon) ? '' : 'crosshair'
-      if (Number.isFinite(lat) && Number.isFinite(lon)) map.flyTo({ center: [lon, lat], zoom: 12 })
+      map.getCanvas().style.cursor = !hasPoint && !locating ? 'crosshair' : ''
+      if (hasPoint) {
+        const go = () => map.flyTo({ center: [lon, lat], zoom: 12 })
+        if (map.isStyleLoaded()) go()
+        else map.once('load', go)
+      }
     }
     const onLocatedDraft = (event) => {
       sessionStorage.removeItem('supermap.draft-map-pin')

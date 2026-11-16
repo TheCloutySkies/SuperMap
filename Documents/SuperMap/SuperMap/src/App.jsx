@@ -240,28 +240,33 @@ function App() {
       }, 350)
     }
     const onBeginCommunity = () => navigate(pathFromView('community-map'))
+    const coord = (value) => {
+      if (value == null || value === '') return null
+      const n = Number(value)
+      return Number.isFinite(n) ? n : null
+    }
     const onDraftMap = (event) => {
       navigate(pathFromView('osint-map'))
-      const lat = Number(event.detail?.lat)
-      const lon = Number(event.detail?.lon)
-      if (Number.isFinite(lat) && Number.isFinite(lon)) {
+      const lat = coord(event.detail?.lat)
+      const lon = coord(event.detail?.lon)
+      if (lat != null && lon != null) {
         setFlyToTarget({ lng: lon, lat, zoom: 12 })
       }
     }
     const onDraftCommunity = (event) => {
       navigate(pathFromView('community-map'))
-      const lat = Number(event.detail?.lat)
-      const lon = Number(event.detail?.lon)
-      if (Number.isFinite(lat) && Number.isFinite(lon)) {
+      const lat = coord(event.detail?.lat)
+      const lon = coord(event.detail?.lon)
+      if (lat != null && lon != null) {
         setFlyToTarget({ lng: lon, lat, zoom: 12 })
       }
     }
     const onShowPlace = (event) => {
       const detail = event.detail || {}
-      const lat = Number(detail.lat)
-      const lon = Number(detail.lon)
+      const lat = coord(detail.lat)
+      const lon = coord(detail.lon)
       navigate(pathFromView('osint-map'))
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return
+      if (lat == null || lon == null) return
       setFlyToTarget({ lng: lon, lat, zoom: detail.zoom || 12, properties: { title: detail.title || '' } })
       if (detail.drop) {
         window.setTimeout(() => {

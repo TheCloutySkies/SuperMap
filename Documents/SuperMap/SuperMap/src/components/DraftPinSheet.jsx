@@ -24,7 +24,7 @@ export default function DraftPinSheet({
     <form className="draft-pin" onSubmit={(event) => { event.preventDefault(); onSave?.() }}>
       <div className="draft-pin-head">
         <strong>Draft pin</strong>
-        <span>Drag the symbol to the right place.</span>
+        <span>{draft.locating ? 'Reading the headline for a place…' : 'Drag the symbol to the right place.'}</span>
       </div>
       {draft.image ? <img className="draft-pin-photo" src={draft.image} alt="" referrerPolicy="no-referrer" /> : null}
       {draft.place ? <p className="draft-pin-place">{draft.place}</p> : null}
@@ -69,7 +69,7 @@ export default function DraftPinSheet({
       ) : null}
       <div className="draft-pin-actions">
         <button type="button" onClick={onRemove}>Remove pin</button>
-        <button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save pin'}</button>
+        <button type="submit" disabled={saving || draft.locating}>{draft.locating ? 'Reading…' : (saving ? 'Saving…' : 'Save pin')}</button>
       </div>
     </form>
   )

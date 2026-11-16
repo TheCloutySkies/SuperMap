@@ -21,6 +21,7 @@ export default function PinEditorDialog({
   const [customLists, setCustomLists] = useState([])
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [shareCommunity, setShareCommunity] = useState(false)
 
   const pinTitle = pin?.title ?? pin?.properties?.title ?? ''
   const pinIcon = pin?.icon ?? pin?.properties?.icon ?? '📍'
@@ -33,6 +34,7 @@ export default function PinEditorDialog({
     setIcon(pinIcon || '📍')
     setListName(pinList || 'General')
     setNotes(pinNotes || '')
+    setShareCommunity(false)
   }, [open, pinTitle, pinIcon, pinList, pinNotes])
 
   const handleSave = async () => {
@@ -44,6 +46,7 @@ export default function PinEditorDialog({
         icon: icon || '📍',
         listName: listName.trim() || 'General',
         notes: notes.trim(),
+        shareCommunity,
       })
       if (result?.ok === false) return
       onClose?.()
@@ -143,6 +146,13 @@ export default function PinEditorDialog({
               Create list
             </button>
           </div>
+
+          <label className="pin-editor-label">
+            <span>
+              <input type="checkbox" checked={shareCommunity} onChange={(event) => setShareCommunity(event.target.checked)} />
+              {' '}Also share on the community map
+            </span>
+          </label>
 
           <label className="pin-editor-label">
             Notes (optional)

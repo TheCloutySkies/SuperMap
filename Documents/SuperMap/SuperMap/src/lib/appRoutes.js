@@ -14,8 +14,10 @@ export const APP_MODES = {
   SETTINGS: 'SETTINGS',
 }
 
-/** Map tool URL segment → activeView id. `/maps` alone → osint-map. */
+/** Map tool URL segment → activeView id. `/maps` alone → community-map. */
 const MAP_TOOL_TO_VIEW = Object.freeze({
+  community: 'community-map',
+  'community-map': 'community-map',
   osint: 'osint-map',
   'osint-map': 'osint-map',
   conflict: 'conflict-map',
@@ -33,7 +35,8 @@ const MAP_TOOL_TO_VIEW = Object.freeze({
 })
 
 const VIEW_TO_MAP_TOOL = Object.freeze({
-  'osint-map': null,
+  'community-map': null,
+  'osint-map': 'osint',
   'conflict-map': 'conflict',
   'explore-map': 'explore',
   'geolocate-map': 'geolocate',
@@ -44,7 +47,8 @@ const VIEW_TO_MAP_TOOL = Object.freeze({
 
 const VIEW_TO_PATH = Object.freeze({
   home: '/',
-  'osint-map': '/maps',
+  'community-map': '/maps',
+  'osint-map': '/maps/osint',
   'conflict-map': '/maps/conflict',
   'explore-map': '/maps/explore',
   'geolocate-map': '/maps/geolocate',
@@ -63,6 +67,7 @@ const VIEW_TO_PATH = Object.freeze({
   tools: '/tools',
   resources: '/resources',
   'report-maker': '/reports',
+  forensics: '/forensics',
   bulletin: '/bulletin',
   settings: '/settings',
   'search-results': '/search',
@@ -70,7 +75,7 @@ const VIEW_TO_PATH = Object.freeze({
 
 const PATH_TO_VIEW = Object.freeze({
   '/': 'home',
-  '/maps': 'osint-map',
+  '/maps': 'community-map',
   '/crime': CRIME_VIEW_ID,
   '/weather': WEATHER_VIEW_ID,
   '/news': 'news-feeds',
@@ -81,6 +86,7 @@ const PATH_TO_VIEW = Object.freeze({
   '/tools': 'tools',
   '/resources': 'resources',
   '/reports': 'report-maker',
+  '/forensics': 'forensics',
   '/bulletin': 'bulletin',
   '/settings': 'settings',
   '/search': 'search-results',
@@ -189,6 +195,7 @@ export function modeFromView(viewId) {
   if (MAP_VIEW_IDS.has(resolved)) return APP_MODES.MAPS
   if (FEED_VIEW_IDS.has(resolved) || resolved === 'search-results') return APP_MODES.FEEDS
   if (resolved === 'home') return APP_MODES.HOME
+  if (resolved === 'forensics') return APP_MODES.TOOLS
   if (resolved === 'tools') return APP_MODES.TOOLS
   if (resolved === 'resources') return APP_MODES.RESOURCES
   if (resolved === 'report-maker') return APP_MODES.REPORTS

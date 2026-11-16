@@ -3,6 +3,7 @@ import axios from 'axios'
 import RadialMenu from './RadialMenu'
 import { LatestBulletin } from '../features/bulletin/BulletinBoardView'
 import ItemMenu from '../features/accounts/ItemMenu'
+import CommunityMapView from './CommunityMapView'
 import { CRIME_VIEW_ID, WEATHER_VIEW_ID, BRAND_LOGO_SRC, BRAND_LOGO_ALT } from '../constants'
 import './HomeScreen.css'
 import './widgets/widgets.css'
@@ -26,7 +27,8 @@ const DOOMSDAY_CLOCK_SECONDS = 85
 const DOOMSDAY_CLOCK_URL = 'https://thebulletin.org/doomsday-clock/#nav_menu'
 
 const QUICK_LINKS = [
-  { id: 'osint-map', label: 'OSINT Map', desc: 'View news, intel, and events on the map', icon: '🗺️', path: 'osint-map' },
+  { id: 'community-map', label: 'Community map', desc: 'Pins, shapes, and the Ukraine frontline', icon: '🗺️', path: 'community-map' },
+  { id: 'osint-map', label: 'OSINT Map', desc: 'View news, intel, and events on the map', icon: '🧭', path: 'osint-map' },
   { id: 'print-map', label: 'Print Map', desc: 'US Letter land-nav / orienteering pages at true scale', icon: '🖨', path: 'print-map' },
   { id: 'conflict-map', label: 'Conflict Map', desc: 'Tactical and conflict layers', icon: '⚔️', path: 'conflict-map' },
   { id: CRIME_VIEW_ID, label: 'Crime Intelligence', desc: 'National snapshot, state & city detail, ask ThielBot', icon: '📉', path: CRIME_VIEW_ID },
@@ -512,6 +514,12 @@ export default function HomeScreen({
                   </div>
                 </div>
               )}
+            </section>
+            <section className="home-screen-section">
+              <h2 className="home-screen-section-title">Community map</h2>
+              <div className="home-community-map">
+                <CommunityMapView variant="home" />
+              </div>
             </section>
             <section className="home-screen-section">
               <h2 className="home-screen-section-title">Quick access</h2>

@@ -1,0 +1,72 @@
+.forensics-page {
+  height: 100%;
+  overflow: auto;
+  padding: 24px;
+  color: #e6edf3;
+}
+
+.forensics-page h1 {
+  margin: 0 0 8px;
+  font-size: 28px;
+}
+
+.forensics-page header p,
+.forensics-status,
+.forensics-file {
+  color: #8b949e;
+}
+
+.forensics-load,
+.forensics-tools,
+.forensics-stage {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 16px 0;
+}
+
+.forensics-load form {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+}
+
+.forensics-load input[name="url"] {
+  flex: 1;
+  min-width: 180px;
+  border: 1px solid #30363d;
+  background: #010409;
+  color: #e6edf3;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.forensics-tools button,
+.forensics-load button {
+  border: 1px solid #30363d;
+  background: #161b22;
+  color: #e6edf3;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.forensics-tools button.is-on {
+  border-color: #58a6ff;
+  color: #58a6ff;
+}
+
+.forensics-stage img,
+.forensics-canvas,
+.forensics-stage canvas {
+  width: min(100%, 720px);
+  background: #010409;
+  border: 1px solid #30363d;
+  border-radius: 12px;
+}
+
+.forensics-panel p {
+  margin: 4px 0;
+  word-break: break-word;
+}

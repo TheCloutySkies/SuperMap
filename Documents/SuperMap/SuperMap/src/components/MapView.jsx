@@ -33,6 +33,18 @@ import {
 } from '../services/layerServices'
 import { buildTerminatorGeoJSON } from '../services/solarTerminator'
 import { fetchMilitaryAircraft, fetchUkraineFrontline, fetchInternetOutages, frontlinePopupHtml } from '../services/newLayerFetchers'
+import {
+  aircraftIconLayout,
+  aircraftPopupHtml,
+  ensureMovementIcons,
+  fetchShipDetail,
+  fetchShipTrack,
+  refreshVectorTiles,
+  SHIP_TILES,
+  shipDetailRows,
+  shipIconLayout,
+  shipPopupHtml,
+} from '../lib/movementIcons'
 import { buildCrimeStateChoropleth, CRIME_RATE_COLOR_EXPRESSION } from '../services/crimeLayers'
 import MapControls from './MapControls'
 import MapToolsRadial from './MapToolsRadial'
@@ -195,6 +207,8 @@ const CLICKABLE_POINT_LAYERS = [
   'intel-flock-cameras-icon',
   'intel-live-webcams-layer',
   'intel-mil-aircraft-layer',
+  'intel-mil-aircraft-labels',
+  'intel-mil-ships-layer',
   'intel-ioda-layer',
   'mapped-news-layer',
   'mapped-osint-layer',
@@ -1097,13 +1111,18 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
   const addMilAircraft = (geoJson) => {
     try {
       if (!map || typeof map.getSource !== 'function') return
-      ensureEmojiIcons(map)
+      ensureMovementIcons(map)
       if (map.getSource('intel-mil-aircraft')) {
         map.getSource('intel-mil-aircraft').setData(geoJson)
         return
       }
       map.addSource('intel-mil-aircraft', { type: 'geojson', data: geoJson })
-      map.addLayer(emojiIconLayer('intel-mil-aircraft-layer', 'intel-mil-aircraft', EMOJI_ICON_IDS.milAircraft, { size: 0.9 }))
+      map.addLayer({
+        id: 'intel-mil-aircraft-layer',
+        type: 'symbol',
+        source: 'intel-mil-aircraft',
+        layout: aircraftIconLayout(),
+      })
       map.addLayer({
         id: 'intel-mil-aircraft-labels',
         type: 'symbol',
@@ -1119,6 +1138,43 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     } catch (_) {
       // Map may have been destroyed (e.g. tab switched) before async fetch completed
     }
+  }
+
+  const addMilShips = () => {
+    try {
+      if (!map || typeof map.getSource !== 'function') return
+      ensureMovementIcons(map)
+      if (!map.getSource('intel-ship-track')) {
+        map.addSource('intel-ship-track', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+        map.addLayer({
+          id: 'intel-ship-track-line',
+          type: 'line',
+          source: 'intel-ship-track',
+          paint: { 'line-color': '#7dd3fc', 'line-width': 2 },
+        })
+      }
+      if (map.getSource('intel-mil-ships')) return
+      map.addSource('intel-mil-ships', {
+        type: 'vector',
+        url: SHIP_TILES,
+        attribution: 'Open Waters AIS',
+      })
+      map.addLayer({
+        id: 'intel-mil-ships-layer',
+        type: 'symbol',
+        source: 'intel-mil-ships',
+        'source-layer': 'vessels',
+        layout: shipIconLayout(),
+      })
+    } catch { /* map gone */ }
+  }
+
+  const removeMilShips = () => {
+    if (!map || typeof map.getSource !== 'function') return
+    if (map.getLayer('intel-mil-ships-layer')) map.removeLayer('intel-mil-ships-layer')
+    if (map.getSource('intel-mil-ships')) map.removeSource('intel-mil-ships')
+    if (map.getLayer('intel-ship-track-line')) map.removeLayer('intel-ship-track-line')
+    if (map.getSource('intel-ship-track')) map.removeSource('intel-ship-track')
   }
 
   const removeMilAircraft = () => {
@@ -1288,6 +1344,8 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     removeTerminator,
     addMilAircraft,
     removeMilAircraft,
+    addMilShips,
+    removeMilShips,
     addFrontline,
     removeFrontline,
     addIodaOutages,
@@ -1395,6 +1453,7 @@ export default function MapView({
 }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
+  const shipPopupToken = useRef(0)
   const drawRef = useRef(null)
   const drawHandlerRef = useRef(null)
   const exploreDrawRef = useRef(null)
@@ -1970,6 +2029,9 @@ export default function MapView({
           .finally(() => onLoading?.(false))
       } else helpers.removeMilAircraft()
 
+      if (toggles.milShips) helpers.addMilShips()
+      else helpers.removeMilShips()
+
       if (toggles.ukraineFrontline) {
         onLoading?.(true)
         fetchUkraineFrontline()
@@ -2370,6 +2432,31 @@ export default function MapView({
         return
       }
       const props = feat.properties || {}
+      if (feat.layer.id === 'intel-mil-aircraft-layer' || feat.layer.id === 'intel-mil-aircraft-labels') {
+        popup.setLngLat(coords).setHTML(aircraftPopupHtml(props)).addTo(map)
+        return
+      }
+      if (feat.layer.id === 'intel-mil-ships-layer') {
+        popup.setLngLat(coords).setHTML(shipPopupHtml(props)).addTo(map)
+        const mmsi = props.mmsi
+        const token = shipPopupToken.current + 1
+        shipPopupToken.current = token
+        fetchShipDetail(mmsi).then((detail) => {
+          if (token !== shipPopupToken.current || !detail || !popup.isOpen()) return
+          popup.setHTML(shipPopupHtml(props, shipDetailRows(detail)))
+        }).catch(() => {})
+        fetchShipTrack(mmsi).then((track) => {
+          if (token !== shipPopupToken.current || !track || !popup.isOpen()) return
+          const source = map.getSource('intel-ship-track')
+          if (source?.setData) source.setData({ type: 'FeatureCollection', features: [track] })
+        }).catch(() => {})
+        popup.once('close', () => {
+          if (token !== shipPopupToken.current) return
+          const source = map.getSource('intel-ship-track')
+          if (source?.setData) source.setData({ type: 'FeatureCollection', features: [] })
+        })
+        return
+      }
       let html
       if (feat.layer.id === 'search-results-layer' || feat.layer.id === 'mapped-news-layer' || feat.layer.id === 'mapped-osint-layer' || feat.layer.id === 'mapped-conflict-events-layer') {
         const title = props.title || 'Untitled'
@@ -3250,6 +3337,23 @@ export default function MapView({
       }
     })
   }, [mapInstance, layerFilterKeyword, layerToggles, activeView, eventCountry, eventFilterByView, mapBoundsKey])
+
+  useEffect(() => {
+    if (!mapInstance) return undefined
+    if (!layerToggles?.milAircraft && !layerToggles?.milShips) return undefined
+    const timer = setInterval(() => {
+      const map = mapRef.current
+      if (!map) return
+      if (layerTogglesRef.current?.milAircraft) {
+        fetchMilitaryAircraft().then((geo) => {
+          const source = map.getSource?.('intel-mil-aircraft')
+          if (source?.setData) source.setData(geo)
+        }).catch(() => {})
+      }
+      if (layerTogglesRef.current?.milShips) refreshVectorTiles(map, 'intel-mil-ships')
+    }, layerToggles?.milShips ? 15000 : 45000)
+    return () => clearInterval(timer)
+  }, [mapInstance, layerToggles?.milAircraft, layerToggles?.milShips])
 
   useEffect(() => {
     if (!mapRef.current || !mapReadyRef.current) return

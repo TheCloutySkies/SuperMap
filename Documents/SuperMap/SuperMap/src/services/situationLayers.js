@@ -1,0 +1,173 @@
+import { fetchGdacsEvents, fetchUsgsVolcanoes } from './layerServices'
+import { ensurePinEmoji } from '../lib/mapEmoji'
+
+const API_BASE = typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL
+  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
+  : ''
+
+export const EMPTY_COLLECTION = { type: 'FeatureCollection', features: [] }
+
+function apiUrl(path) {
+  return `${API_BASE}${path}`
+}
+
+async function fetchJson(url) {
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  return response.json()
+}
+
+export async function fetchAcledEvents() {
+  const data = await fetchJson(apiUrl('/api/conflicts/acled'))
+  return data?.type === 'FeatureCollection' ? data : EMPTY_COLLECTION
+}
+
+export async function fetchGdeltReports() {
+  const data = await fetchJson(apiUrl('/api/conflicts/gdelt'))
+  return data?.type === 'FeatureCollection' ? data : EMPTY_COLLECTION
+}
+
+function gdacsLevel(properties = {}) {
+  return String(properties.alertlevel || properties.episodealertlevel || properties.alertLevel || '').toLowerCase()
+}
+
+function quakeFeatures(collection) {
+  return (collection?.features || []).map((feature) => {
+    const props = feature.properties || {}
+    const coords = feature.geometry?.coordinates
+    if (!coords || coords.length < 2) return null
+    const when = props.time ? new Date(props.time).toISOString().slice(0, 16).replace('T', ' ') : ''
+    return {
+      type: 'Feature',
+      properties: {
+        kind: 'quake',
+        source: 'USGS',
+        title: props.title || props.place || 'Earthquake',
+        type: props.mag != null ? `M${props.mag}` : 'Earthquake',
+        place: props.place || '',
+        date: when,
+        link: props.url || 'https://earthquake.usgs.gov/',
+        icon: '💥',
+      },
+      geometry: { type: 'Point', coordinates: [Number(coords[0]), Number(coords[1])] },
+    }
+  }).filter(Boolean)
+}
+
+function disasterFeatures(collection) {
+  return (collection?.features || []).map((feature) => {
+    const props = feature.properties || {}
+    const level = gdacsLevel(props)
+    if (level !== 'orange' && level !== 'red') return null
+    const coords = feature.geometry?.coordinates
+    if (!coords || coords.length < 2) return null
+    return {
+      type: 'Feature',
+      properties: {
+        kind: 'disaster',
+        source: 'GDACS',
+        title: props.eventname || props.name || 'Disaster',
+        type: props.eventtype || 'Disaster',
+        place: props.country || '',
+        date: props.fromdate || props.todate || '',
+        alert: level,
+        link: props.url || props.link || 'https://www.gdacs.org/',
+        icon: level === 'red' ? 'hazard-red' : 'hazard-orange',
+      },
+      geometry: { type: 'Point', coordinates: [Number(coords[0]), Number(coords[1])] },
+    }
+  }).filter(Boolean)
+}
+
+function volcanoFeatures(collection) {
+  return (collection?.features || []).map((feature) => {
+    const props = feature.properties || {}
+    const coords = feature.geometry?.coordinates
+    if (!coords || coords.length < 2) return null
+    return {
+      type: 'Feature',
+      properties: {
+        kind: 'volcano',
+        source: 'USGS',
+        title: props.title || props.name || 'Volcano',
+        type: 'Volcano',
+        place: props.name || '',
+        date: '',
+        notes: props.synopsis || '',
+        link: props.link || 'https://volcanoes.usgs.gov/',
+        icon: '🌋',
+      },
+      geometry: feature.geometry,
+    }
+  }).filter(Boolean)
+}
+
+export async function fetchMajorHazards() {
+  const [quakes, disasters, volcanoes] = await Promise.all([
+    fetchJson('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.geojson').catch(() => EMPTY_COLLECTION),
+    fetchGdacsEvents(null).catch(() => EMPTY_COLLECTION),
+    fetchUsgsVolcanoes(null).catch(() => EMPTY_COLLECTION),
+  ])
+  return {
+    type: 'FeatureCollection',
+    features: [
+      ...quakeFeatures(quakes),
+      ...disasterFeatures(disasters),
+      ...volcanoFeatures(volcanoes),
+    ],
+  }
+}
+
+function paintDisc(map, id, color) {
+  if (!map || map.hasImage?.(id)) return
+  const canvas = document.createElement('canvas')
+  canvas.width = 64
+  canvas.height = 64
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  ctx.clearRect(0, 0, 64, 64)
+  ctx.beginPath()
+  ctx.arc(32, 32, 18, 0, Math.PI * 2)
+  ctx.fillStyle = color
+  ctx.fill()
+  ctx.lineWidth = 6
+  ctx.strokeStyle = '#0b1220'
+  ctx.stroke()
+  try { map.addImage(id, ctx.getImageData(0, 0, 64, 64), { pixelRatio: 2 }) } catch { /* already added */ }
+}
+
+export function stampHazardIcons(map, collection) {
+  paintDisc(map, 'hazard-orange', '#f97316')
+  paintDisc(map, 'hazard-red', '#ef4444')
+  const features = (collection?.features || []).map((feature) => {
+    const icon = feature.properties?.icon || '💥'
+    const iconImage = icon.startsWith('hazard-') ? icon : ensurePinEmoji(map, icon)
+    return { ...feature, properties: { ...(feature.properties || {}), iconImage } }
+  })
+  return { type: 'FeatureCollection', features }
+}
+
+export function kmBetween(lon1, lat1, lon2, lat2) {
+  const toRad = (deg) => (deg * Math.PI) / 180
+  const dLat = toRad(lat2 - lat1)
+  const dLon = toRad(lon2 - lon1)
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2
+  return 6371 * 2 * Math.asin(Math.min(1, Math.sqrt(a)))
+}
+
+export function nearestCorroboration(lon, lat, conflicts, reports) {
+  let best = null
+  const consider = (features, line) => {
+    ;(features || []).forEach((feature) => {
+      const coords = feature?.geometry?.coordinates
+      if (!coords || coords.length < 2) return
+      const km = kmBetween(lon, lat, Number(coords[0]), Number(coords[1]))
+      if (!Number.isFinite(km) || km > 25) return
+      if (!best || km < best.km) best = { km, line, title: feature.properties?.title || '' }
+    })
+  }
+  consider(conflicts, 'Corroborated by ACLED')
+  consider(reports, 'Corroborated by a news report')
+  return best
+}

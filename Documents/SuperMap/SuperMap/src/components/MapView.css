@@ -455,6 +455,19 @@
   color: var(--y2k-text);
 }
 
+.movement-popup {
+  max-height: 320px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+
+.movement-popup a {
+  color: #58a6ff;
+}
+
 .map-popup-content {
   font-size: 0.85rem;
   color: var(--y2k-text);

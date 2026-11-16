@@ -21,6 +21,7 @@ const OSINT_LAYER_SECTIONS = [
     title: 'Transportation (Tactical)',
     layers: [
       { key: 'milAircraft', label: 'Military Aircraft (adsb.lol)' },
+      { key: 'milShips', label: 'Military Ships (Open Waters)' },
     ],
   },
   {

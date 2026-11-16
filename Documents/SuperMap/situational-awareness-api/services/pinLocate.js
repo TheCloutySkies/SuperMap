@@ -4,8 +4,9 @@
  * case where no model key is configured.
  */
 
-const { locatePin, hasGenkit } = require('./thielGenkit')
-const { extractPlaces, geocodePlace } = require('./geotagger')
+const { locatePin, readImagePlace, hasGenkit } = require('./thielGenkit')
+const { extractPlaces } = require('./geotagger')
+const { searchPlaces } = require('./placeSearch')
 
 const CATEGORIES = ['x', 'news', 'conflict', 'attack', 'planes', 'cars', 'drones', 'ships', 'explosion', 'outage']
 const CATEGORY_SET = new Set(CATEGORIES)
@@ -87,40 +88,76 @@ function heuristic(text, kind) {
   }
 }
 
-async function geocodeReading(reading, text) {
+async function geocodeFirst(names) {
   const tried = new Set()
-  const place = tidyPlace(reading.place)
-  const query = tidyPlace(reading.query)
-  const shortQuery = query && query.split(' ').length <= 6
-  const candidates = [...(shortQuery ? [query, place] : [place, query]), ...writtenPlaces(text).reverse()].map(tidyPlace)
-  for (const name of candidates) {
-    const query = String(name || '').trim()
-    if (!query || tried.has(query.toLowerCase())) continue
+  let guess = ''
+  for (const name of names) {
+    const query = tidyPlace(name)
+    if (!query || blankPlace(query) || tried.has(query.toLowerCase())) continue
     tried.add(query.toLowerCase())
-    const hit = await geocodePlace(query)
-    if (hit?.coords) return { hit, query }
+    if (!guess) guess = query
+    const rows = await searchPlaces(query, 1)
+    const hit = rows[0]
+    if (hit && Number.isFinite(hit.lat) && Number.isFinite(hit.lon)) {
+      return { lat: hit.lat, lon: hit.lon, query, label: hit.display_name || hit.name || query }
+    }
   }
-  return { hit: null, query: String(reading.query || reading.place || '').trim() }
+  return { lat: null, lon: null, query: guess, label: guess }
 }
 
-async function locateHeadline({ title, summary, url, kind } = {}) {
+function usefulReading(reading) {
+  if (!reading) return null
+  const next = { ...reading }
+  if (blankPlace(next.place)) next.place = ''
+  if (blankPlace(next.query)) next.query = ''
+  if (!next.place && !next.query) return null
+  if (/\b(cannot|can't|unable|no location|not enough)\b/i.test(next.reasoning || '')) {
+    next.reasoning = `The headline names ${next.place || next.query}.`
+  }
+  return next
+}
+
+async function locateHeadline({ title, summary, url, kind, image } = {}) {
   const headline = String(title || '').trim()
   const body = String(summary || '').trim()
   const text = [headline, body].filter(Boolean).join('\n')
   const sourceKind = String(kind || '').toLowerCase()
-  let reading = null
+  const named = writtenPlaces(text)
+  const modelPromise = hasGenkit()
+    ? locatePin({ title: headline, summary: body, url, kind: sourceKind }).catch(() => null)
+    : Promise.resolve(null)
+  const [model, placed] = await Promise.all([
+    Promise.race([
+      modelPromise,
+      new Promise((resolve) => setTimeout(() => resolve(null), 6000)),
+    ]),
+    geocodeFirst(named),
+  ])
+  let reading = usefulReading(model)
+  let located = placed
   let engine = 'places'
-  if (hasGenkit()) {
-    reading = await locatePin({ title: headline, summary: body, url, kind: sourceKind })
-    if (reading) {
-      if (blankPlace(reading.place)) reading.place = ''
-      if (blankPlace(reading.query)) reading.query = ''
-      if (/\b(cannot|can't|unable|no location|not enough)\b/i.test(reading.reasoning || '') && (reading.place || reading.query)) {
-        reading.reasoning = `The headline names ${reading.place || reading.query}.`
+  if (!Number.isFinite(located.lat) && reading) {
+    const modelHit = await geocodeFirst([reading.query, reading.place])
+    if (Number.isFinite(modelHit.lat)) {
+      located = modelHit
+      engine = 'genkit'
+    }
+  } else if (reading && Number.isFinite(located.lat)) {
+    engine = 'genkit'
+  }
+  if (!Number.isFinite(located.lat) && !named.length && image) {
+    const seen = usefulReading(await readImagePlace(image).catch(() => null))
+    if (seen) {
+      const photoHit = await geocodeFirst([seen.query, seen.place])
+      if (Number.isFinite(photoHit.lat)) {
+        located = photoHit
+        engine = 'image'
+        reading = reading || { ...seen, category: '', sidc: '', reasoning: `The photo names ${photoHit.query}.` }
+      } else if (!reading) {
+        reading = { ...seen, category: '', sidc: '', reasoning: '' }
+        located = { ...located, query: photoHit.query || located.query }
       }
     }
-    if (reading && (reading.place || reading.query)) engine = 'genkit'
-    else reading = null
   }
   if (!reading) reading = heuristic(text, sourceKind)
   const category = categoryFrom(sourceKind, text, reading.category)
@@ -128,15 +165,15 @@ async function locateHeadline({ title, summary, url, kind } = {}) {
   const sidc = modelCategory && modelCategory !== category
     ? DEFAULT_SIDC[category]
     : (cleanSidc(reading.sidc) || DEFAULT_SIDC[category])
-  const { hit, query } = await geocodeReading(reading, text)
+  const place = located.label || reading.place || located.query || ''
   return {
-    place: reading.place || query || '',
-    query,
+    place,
+    query: located.query || reading.query || reading.place || '',
     category,
     sidc,
-    reasoning: reading.reasoning || '',
-    lat: hit ? hit.coords[1] : null,
-    lon: hit ? hit.coords[0] : null,
+    reasoning: reading.reasoning || (place ? `The headline names ${place}.` : ''),
+    lat: Number.isFinite(located.lat) ? located.lat : null,
+    lon: Number.isFinite(located.lon) ? located.lon : null,
     engine,
     genkit: hasGenkit(),
   }

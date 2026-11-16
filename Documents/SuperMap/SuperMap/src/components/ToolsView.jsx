@@ -1,9 +1,18 @@
 import './ToolsView.css'
 import { TOOLS_LIST } from './toolsList'
+import ForensicsView from './ForensicsView'
 
 export default function ToolsView({ activeToolId, onToolChange }) {
-  const activeTool = activeToolId || TOOLS_LIST[0]?.id || null
-  const tool = TOOLS_LIST.find((t) => t.id === activeTool)
+  const activeTool = activeToolId || 'adsb'
+  const tool = TOOLS_LIST.find((t) => t.id === activeTool) || TOOLS_LIST.find((t) => t.id === 'adsb')
+
+  if (tool?.native === 'forensics') {
+    return (
+      <div className="tools-view tools-view--native">
+        <ForensicsView />
+      </div>
+    )
+  }
 
   return (
     <div className="tools-view">

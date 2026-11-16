@@ -7,6 +7,7 @@
 const { locatePin, readImagePlace, hasGenkit } = require('./thielGenkit')
 const { extractPlaces } = require('./geotagger')
 const { searchPlaces } = require('./placeSearch')
+const { pickHeadlinePlace, distanceKm } = require('./headlinePlaces')
 
 const CATEGORIES = ['x', 'news', 'conflict', 'attack', 'planes', 'cars', 'drones', 'ships', 'explosion', 'outage']
 const CATEGORY_SET = new Set(CATEGORIES)
@@ -31,7 +32,7 @@ const RULES = [
   ['cars', /\b(car|vehicle|truck|convoy|automobile)\b/i],
   ['explosion', /\b(explos|blast|bomb|ied|detonat)\w*/i],
   ['outage', /\b(outage|blackout|power cut|electricity)\b/i],
-  ['attack', /\b(attack|strike|shelling|missile|airstrike|shot)\b/i],
+  ['attack', /\b(attacks?|strikes?|struck|striking|shelling|missiles?|airstrikes?|shots?)\b/i],
   ['conflict', /\b(war|front|troops|battle|clash|offensive|advance|retreat)\b/i],
 ]
 
@@ -66,11 +67,15 @@ function blankPlace(value) {
     || /\b(cannot|can't|unable|no location|not enough)\b/.test(text)
 }
 
+const NOT_A_PLACE = /^(zelenskyy?|putin|biden|trump|netanyahu|khamenei|starshield|starlink|nato)$/i
+
 function writtenPlaces(text) {
   const found = []
   const pattern = /\b(?:in|at|near|outside|around|over|across|hits|hit|from|on|to)\s+([A-Z][\p{L}'’.-]+(?:\s+[A-Z][\p{L}'’.-]+){0,2})/gu
   for (const match of String(text || '').matchAll(pattern)) found.push(match[1])
-  return [...extractPlaces(text), ...found].map(tidyPlace).filter((name) => name.length > 2 && !blankPlace(name))
+  return [...extractPlaces(text), ...found]
+    .map(tidyPlace)
+    .filter((name) => name.length > 2 && !blankPlace(name) && !NOT_A_PLACE.test(name))
 }
 
 function heuristic(text, kind) {
@@ -88,21 +93,45 @@ function heuristic(text, kind) {
   }
 }
 
-async function geocodeFirst(names) {
+function sameCountry(hit, country) {
+  if (!country) return true
+  const blob = `${hit?.display_name || ''} ${hit?.name || ''}`.toLowerCase()
+  return blob.includes(String(country).toLowerCase())
+}
+
+async function geocodeFirst(names, country) {
   const tried = new Set()
   let guess = ''
+  const wanted = String(country || '').trim()
   for (const name of names) {
-    const query = tidyPlace(name)
-    if (!query || blankPlace(query) || tried.has(query.toLowerCase())) continue
-    tried.add(query.toLowerCase())
-    if (!guess) guess = query
-    const rows = await searchPlaces(query, 1)
-    const hit = rows[0]
-    if (hit && Number.isFinite(hit.lat) && Number.isFinite(hit.lon)) {
-      return { lat: hit.lat, lon: hit.lon, query, label: hit.display_name || hit.name || query }
+    const base = tidyPlace(name)
+    if (!base || blankPlace(base) || NOT_A_PLACE.test(base)) continue
+    const queries = [base]
+    if (wanted && !base.toLowerCase().includes(wanted.toLowerCase())) queries.push(`${base}, ${wanted}`)
+    for (const query of queries) {
+      if (tried.has(query.toLowerCase())) continue
+      tried.add(query.toLowerCase())
+      if (!guess) guess = query
+      const rows = await searchPlaces(query, 5)
+      const hit = rows.find((row) => sameCountry(row, wanted))
+      if (hit && Number.isFinite(hit.lat) && Number.isFinite(hit.lon)) {
+        return { lat: hit.lat, lon: hit.lon, query, label: hit.display_name || hit.name || query }
+      }
     }
   }
   return { lat: null, lon: null, query: guess, label: guess }
+}
+
+function pointFrom(picked, hit) {
+  const near = hit && Number.isFinite(hit.lat) && Number.isFinite(hit.lon)
+    && (!Number.isFinite(picked.lat) || distanceKm(picked, hit) <= 80)
+  if (near) {
+    return { lat: hit.lat, lon: hit.lon, query: picked.query || hit.query, label: picked.label || hit.label, zoom: picked.zoom || 11 }
+  }
+  if (Number.isFinite(picked?.lat) && Number.isFinite(picked?.lon)) {
+    return { lat: picked.lat, lon: picked.lon, query: picked.query, label: picked.label, zoom: picked.zoom }
+  }
+  return null
 }
 
 function usefulReading(reading) {
@@ -123,34 +152,47 @@ async function locateHeadline({ title, summary, url, kind, image } = {}) {
   const text = [headline, body].filter(Boolean).join('\n')
   const sourceKind = String(kind || '').toLowerCase()
   const named = writtenPlaces(text)
-  const modelPromise = hasGenkit()
-    ? locatePin({ title: headline, summary: body, url, kind: sourceKind }).catch(() => null)
-    : Promise.resolve(null)
-  const [model, placed] = await Promise.all([
-    Promise.race([
-      modelPromise,
-      new Promise((resolve) => setTimeout(() => resolve(null), 6000)),
-    ]),
-    geocodeFirst(named),
-  ])
-  let reading = usefulReading(model)
-  let located = placed
+  const picked = pickHeadlinePlace(text)
+  let located = { lat: null, lon: null, query: '', label: '', zoom: null }
   let engine = 'places'
-  if (!Number.isFinite(located.lat) && reading) {
-    const modelHit = await geocodeFirst([reading.query, reading.place])
-    if (Number.isFinite(modelHit.lat)) {
-      located = modelHit
-      engine = 'genkit'
-    }
-  } else if (reading && Number.isFinite(located.lat)) {
-    engine = 'genkit'
+  let reading = null
+
+  if (picked && Number.isFinite(picked.lat) && !picked.facility) {
+    located = { lat: picked.lat, lon: picked.lon, query: picked.query, label: picked.label, zoom: picked.zoom }
+  } else if (picked) {
+    const hit = await geocodeFirst([picked.query, picked.label], picked.country)
+    const point = pointFrom(picked, hit)
+    if (point) located = point
   }
-  if (!Number.isFinite(located.lat) && !named.length && image) {
+
+  if (!Number.isFinite(located.lat)) {
+    const country = picked?.country || ''
+    const placed = await geocodeFirst(named, country)
+    if (Number.isFinite(placed.lat)) {
+      located = { ...placed, zoom: 10 }
+    } else {
+      const model = await Promise.race([
+        hasGenkit()
+          ? locatePin({ title: headline, summary: body, url, kind: sourceKind }).catch(() => null)
+          : Promise.resolve(null),
+        new Promise((resolve) => setTimeout(() => resolve(null), 6000)),
+      ])
+      reading = usefulReading(model)
+      if (reading && !NOT_A_PLACE.test(reading.place || '') && !NOT_A_PLACE.test(reading.query || '')) {
+        const modelHit = await geocodeFirst([reading.query, reading.place], country)
+        if (Number.isFinite(modelHit.lat)) {
+          located = { ...modelHit, zoom: 10 }
+          engine = 'genkit'
+        }
+      }
+    }
+  }
+  if (!Number.isFinite(located.lat) && !named.length && !picked && image) {
     const seen = usefulReading(await readImagePlace(image).catch(() => null))
     if (seen) {
       const photoHit = await geocodeFirst([seen.query, seen.place])
       if (Number.isFinite(photoHit.lat)) {
-        located = photoHit
+        located = { ...photoHit, zoom: 10 }
         engine = 'image'
         reading = reading || { ...seen, category: '', sidc: '', reasoning: `The photo names ${photoHit.query}.` }
       } else if (!reading) {
@@ -159,21 +201,30 @@ async function locateHeadline({ title, summary, url, kind, image } = {}) {
       }
     }
   }
-  if (!reading) reading = heuristic(text, sourceKind)
+  if (!reading) {
+    reading = picked
+      ? { place: picked.label, query: picked.query, category: '', sidc: '', reasoning: picked.reasoning }
+      : heuristic(text, sourceKind)
+  }
   const category = categoryFrom(sourceKind, text, reading.category)
   const modelCategory = CATEGORY_SET.has(reading.category) ? reading.category : ''
   const sidc = modelCategory && modelCategory !== category
     ? DEFAULT_SIDC[category]
     : (cleanSidc(reading.sidc) || DEFAULT_SIDC[category])
-  const place = located.label || reading.place || located.query || ''
+  const place = picked?.label || located.label || reading.place || located.query || ''
+  let reasoning = reading.reasoning || (place ? `The headline names ${place}.` : '')
+  if (Number.isFinite(located.lat) && /no place (name )?stood out/i.test(reasoning)) {
+    reasoning = `The headline names ${place}.`
+  }
   return {
     place,
     query: located.query || reading.query || reading.place || '',
     category,
     sidc,
-    reasoning: reading.reasoning || (place ? `The headline names ${place}.` : ''),
+    reasoning,
     lat: Number.isFinite(located.lat) ? located.lat : null,
     lon: Number.isFinite(located.lon) ? located.lon : null,
+    zoom: Number.isFinite(located.lat) ? (located.zoom || 10) : null,
     engine,
     genkit: hasGenkit(),
   }

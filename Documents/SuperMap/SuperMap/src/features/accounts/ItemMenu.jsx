@@ -216,6 +216,7 @@ export default function ItemMenu({ item, inline = false, profilePost = false }) 
       sidc: located.sidc || '',
       reasoning: located.reasoning || '',
       label: media.title || '',
+      zoom: located.zoom,
       destination,
       locating: false,
     })
@@ -226,10 +227,16 @@ export default function ItemMenu({ item, inline = false, profilePost = false }) 
       window.dispatchEvent(new CustomEvent('supermap:place-search', { detail }))
     }
     setBusy(false)
+    const placeName = located.place || located.query || ''
     if (lat == null || lon == null) {
       showToast({ tone: 'info', message: 'No place stood out. Click the map to drop the pin.' })
     } else {
-      showToast({ tone: 'success', message: 'Draft pin is on the map. Drag it if the spot is off.' })
+      showToast({
+        tone: 'success',
+        message: placeName
+          ? `Draft pin is on ${placeName}. Drag it if the spot is off.`
+          : 'Draft pin is on the map. Drag it if the spot is off.',
+      })
     }
   }
 

@@ -1,3 +1,5 @@
+import { aircraftProperties } from '../lib/movementIcons'
+
 const API_BASE = typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
   : ''
@@ -31,8 +33,14 @@ export async function fetchMilitaryAircraft() {
     return milAircraftCache.fc
   }
   try {
-    const url = API_BASE ? `${API_BASE}/api/adsb/mil` : 'https://api.adsb.lol/v2/mil'
-    const data = await fetchJsonWithTimeout(url, 15000)
+    const proxied = `${API_BASE}/api/adsb/mil`
+    let data
+    try {
+      data = await fetchJsonWithTimeout(proxied, 15000)
+    } catch (error) {
+      if (API_BASE) throw error
+      data = await fetchJsonWithTimeout('https://api.adsb.lol/v2/mil', 15000)
+    }
     const aircraft = normalizeMilAircraftList(data)
     const fc = {
       type: 'FeatureCollection',
@@ -40,14 +48,7 @@ export async function fetchMilitaryAircraft() {
         .filter((a) => a && (a.lat != null && a.lon != null))
         .map((a) => ({
           type: 'Feature',
-          properties: {
-            title: (a.flight || a.r || 'MIL')?.trim?.() || 'MIL',
-            hex: a.hex || '',
-            type: a.t || '',
-            alt: a.alt_baro ?? a.alt_geom ?? 0,
-            speed: a.gs ?? 0,
-            source: 'adsb.lol/mil',
-          },
+          properties: aircraftProperties(a),
           geometry: { type: 'Point', coordinates: [Number(a.lon), Number(a.lat)] },
         })),
     }

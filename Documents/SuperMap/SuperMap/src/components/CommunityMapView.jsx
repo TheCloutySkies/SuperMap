@@ -4,7 +4,10 @@ import maplibregl from 'maplibre-gl'
 import MapboxDraw from '@mapbox/mapbox-gl-draw'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css'
-import { fetchUkraineFrontline, frontlinePopupHtml } from '../services/newLayerFetchers'
+import { fetchMilitaryAircraft, fetchUkraineFrontline, frontlinePopupHtml } from '../services/newLayerFetchers'
+import { fetchAcledEvents, fetchGdeltReports, fetchMajorHazards, nearestCorroboration, stampHazardIcons } from '../services/situationLayers'
+import { installCommunitySituation, setGeoSource, situationPopupHtml, CLUSTER_LAYERS, SITUATION_POINT_LAYERS } from './communitySituation'
+import { aircraftPopupHtml, fetchShipDetail, fetchShipTrack, refreshVectorTiles, shipDetailRows, shipPopupHtml } from '../lib/movementIcons'
 import { stampPinIcons } from '../lib/mapEmoji'
 import { categorySidc } from '../lib/milSymbols'
 import { clearDraftMarker, syncDraftMarker } from '../lib/draftMarker'
@@ -120,7 +123,20 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
   const popupRef = useRef(null)
   const drawRef = useRef(null)
   const pinsRef = useRef([])
-  const filtersRef = useRef({ x: true, news: true, images: true, shapes: true, frontline: true })
+  const filtersRef = useRef({
+    x: true,
+    news: true,
+    images: true,
+    shapes: true,
+    frontline: true,
+    conflicts: true,
+    reports: true,
+    hazards: true,
+    aircraft: true,
+    ships: true,
+  })
+  const situationRef = useRef({ conflicts: [], reports: [] })
+  const shipPopupToken = useRef(0)
   const toolRef = useRef(null)
   const pendingRef = useRef(null)
   const [ready, setReady] = useState(false)
@@ -217,6 +233,7 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
         },
         paint: { 'text-color': '#e6edf3', 'text-halo-color': '#0d1117', 'text-halo-width': 1.4 },
       })
+      installCommunitySituation(map)
       map.addSource('community-frontline', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
       map.addLayer({
         id: 'community-frontline-fill',
@@ -314,12 +331,22 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
       const edit = canEdit ? `<button type="button" class="community-popup-edit" data-id="${esc(pin.id)}">Edit pin</button>` : ''
       const remove = canDelete ? `<button type="button" class="community-popup-delete" data-id="${esc(pin.id)}">Remove pin</button>` : ''
       const category = pin.category ? `<em>${esc(pin.category)}</em>` : ''
+      const located = pin.geometry?.type === 'Point'
+        ? { lon: Number(pin.geometry.coordinates?.[0]), lat: Number(pin.geometry.coordinates?.[1]) }
+        : centroidOf(pin.geometry)
+      const near = located && Number.isFinite(located.lon) && Number.isFinite(located.lat)
+        ? nearestCorroboration(located.lon, located.lat, situationRef.current.conflicts, situationRef.current.reports)
+        : null
+      const corroboration = near
+        ? `<div class="community-popup-corroboration">${esc(near.line)}${near.title ? `: ${esc(near.title)}` : ''}</div>`
+        : ''
       popup.setLngLat(lngLat).setHTML(`
         <div class="community-popup">
           ${image}
           <strong>${esc(pin.title || pin.label || 'Community pin')}</strong>
           ${category}
           ${summary}
+          ${corroboration}
           <div class="community-popup-links">${original}${verify}</div>
           ${edit}
           ${remove}
@@ -370,6 +397,46 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
           ...current,
           geometry: { type: 'Point', coordinates: [event.lngLat.lng, event.lngLat.lat] },
         } : current)
+        return
+      }
+      const live = (ids) => ids.filter((id) => map.getLayer(id))
+      const clusterHit = map.queryRenderedFeatures(event.point, { layers: live(CLUSTER_LAYERS) })[0]
+      if (clusterHit) {
+        const clusterId = clusterHit.properties?.cluster_id
+        const expansion = map.getSource(clusterHit.source)?.getClusterExpansionZoom?.(clusterId)
+        Promise.resolve(expansion).then((zoom) => {
+          if (Number.isFinite(zoom)) map.easeTo({ center: clusterHit.geometry.coordinates, zoom })
+        }).catch(() => {})
+        return
+      }
+      const situationHit = map.queryRenderedFeatures(event.point, { layers: live(SITUATION_POINT_LAYERS) })[0]
+      if (situationHit) {
+        const layerId = situationHit.layer?.id || ''
+        const props = situationHit.properties || {}
+        if (layerId === 'community-aircraft-icon') {
+          popup.setLngLat(event.lngLat).setHTML(aircraftPopupHtml(props)).addTo(map)
+          return
+        }
+        if (layerId === 'community-ships-icon') {
+          popup.setLngLat(event.lngLat).setHTML(shipPopupHtml(props)).addTo(map)
+          const mmsi = props.mmsi
+          const token = shipPopupToken.current + 1
+          shipPopupToken.current = token
+          fetchShipDetail(mmsi).then((detail) => {
+            if (token !== shipPopupToken.current || !detail || !popup.isOpen()) return
+            popup.setHTML(shipPopupHtml(props, shipDetailRows(detail)))
+          }).catch(() => {})
+          fetchShipTrack(mmsi).then((track) => {
+            if (token !== shipPopupToken.current || !track || !popup.isOpen()) return
+            setGeoSource(map, 'community-ship-track', { type: 'FeatureCollection', features: [track] })
+          }).catch(() => {})
+          popup.once('close', () => {
+            if (token !== shipPopupToken.current) return
+            setGeoSource(map, 'community-ship-track', { type: 'FeatureCollection', features: [] })
+          })
+          return
+        }
+        popup.setLngLat(event.lngLat).setHTML(situationPopupHtml(props)).addTo(map)
         return
       }
       const hits = map.queryRenderedFeatures(event.point, { layers: ['community-pins-icon', 'community-pins-label', 'community-pins-fill', 'community-pins-line'] })
@@ -445,6 +512,87 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
     })
     return () => { cancelled = true }
   }, [filters.frontline, ready])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!ready || !map?.getSource?.('community-conflicts')) return undefined
+    let cancelled = false
+    if (!filters.conflicts) {
+      situationRef.current.conflicts = []
+      setGeoSource(map, 'community-conflicts', { type: 'FeatureCollection', features: [] })
+      return undefined
+    }
+    fetchAcledEvents().then((geo) => {
+      if (cancelled) return
+      situationRef.current.conflicts = geo.features || []
+      setGeoSource(map, 'community-conflicts', geo)
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [filters.conflicts, ready])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!ready || !map?.getSource?.('community-reports')) return undefined
+    let cancelled = false
+    if (!filters.reports) {
+      situationRef.current.reports = []
+      setGeoSource(map, 'community-reports', { type: 'FeatureCollection', features: [] })
+      return undefined
+    }
+    fetchGdeltReports().then((geo) => {
+      if (cancelled) return
+      situationRef.current.reports = geo.features || []
+      setGeoSource(map, 'community-reports', geo)
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [filters.reports, ready])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!ready || !map?.getSource?.('community-hazards')) return undefined
+    let cancelled = false
+    if (!filters.hazards) {
+      setGeoSource(map, 'community-hazards', { type: 'FeatureCollection', features: [] })
+      return undefined
+    }
+    fetchMajorHazards().then((geo) => {
+      if (!cancelled) setGeoSource(map, 'community-hazards', stampHazardIcons(map, geo))
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [filters.hazards, ready])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!ready || !map?.getSource?.('community-aircraft')) return undefined
+    let cancelled = false
+    if (!filters.aircraft) {
+      setGeoSource(map, 'community-aircraft', { type: 'FeatureCollection', features: [] })
+      return undefined
+    }
+    const pull = () => {
+      fetchMilitaryAircraft().then((geo) => {
+        if (!cancelled) setGeoSource(map, 'community-aircraft', geo)
+      }).catch(() => {})
+    }
+    pull()
+    const timer = setInterval(pull, 45000)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [filters.aircraft, ready])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!ready || !map?.getLayer?.('community-ships-icon')) return undefined
+    map.setLayoutProperty('community-ships-icon', 'visibility', filters.ships ? 'visible' : 'none')
+    if (!filters.ships) {
+      setGeoSource(map, 'community-ship-track', { type: 'FeatureCollection', features: [] })
+      return undefined
+    }
+    const timer = setInterval(() => refreshVectorTiles(map, 'community-ships'), 15000)
+    return () => clearInterval(timer)
+  }, [filters.ships, ready])
 
   useEffect(() => {
     const map = mapRef.current
@@ -611,6 +759,11 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
               ['images', 'Images'],
               ['shapes', 'Shapes'],
               ['frontline', 'Ukraine frontline'],
+              ['conflicts', 'Major conflicts'],
+              ['reports', 'Major reports'],
+              ['hazards', 'Hazards'],
+              ['aircraft', 'Military aircraft'],
+              ['ships', 'Military ships'],
             ].map(([key, name]) => (
               <label key={key}>
                 <input type="checkbox" checked={!!filters[key]} onChange={() => toggleFilter(key)} />

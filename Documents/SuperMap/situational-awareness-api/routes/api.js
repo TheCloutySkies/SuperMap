@@ -28,6 +28,7 @@ const weatherRouter = require('./weather')
 const forensicsRouter = require('./forensics')
 const pinsRouter = require('./pins')
 const { searchPlaces } = require('../services/placeSearch')
+const { acledGeoJson, gdeltGeoJson } = require('../services/conflictData')
 const windyWebcamsCache = new NodeCache({ stdTTL: 90, checkperiod: 60 })
 
 const searchCache = new NodeCache({ stdTTL: 15 })
@@ -1525,6 +1526,26 @@ router.get('/adsb/mil', async (_req, res) => {
   } catch (err) {
     console.warn('[API /adsb/mil]', err.message)
     res.status(502).json({ error: 'Failed to fetch mil aircraft feed' })
+  }
+})
+
+/** Major ACLED events, last 14 days, 5 or more fatalities. */
+router.get('/conflicts/acled', async (_req, res) => {
+  try {
+    res.json(await acledGeoJson())
+  } catch (err) {
+    console.warn('[API /conflicts/acled]', err.message)
+    res.json({ type: 'FeatureCollection', features: [] })
+  }
+})
+
+/** Hourly GDELT articles on major conflict and disaster terms, geocoded. */
+router.get('/conflicts/gdelt', async (_req, res) => {
+  try {
+    res.json(await gdeltGeoJson())
+  } catch (err) {
+    console.warn('[API /conflicts/gdelt]', err.message)
+    res.json({ type: 'FeatureCollection', features: [] })
   }
 })
 

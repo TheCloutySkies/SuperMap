@@ -67,6 +67,7 @@ export const DEFAULT_LAYER_TOGGLES = {
   usgsVolcanoes: false,
   nhcTropical: false,
   milAircraft: false,
+  milShips: false,
   noaaRadar: false,
   aoiDraw: false,
   sentinel2BurnScars: false,

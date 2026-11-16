@@ -532,9 +532,12 @@ export default function OsintXView({ keywordFilter = '', onClearFilter }) {
                     </time>
                     <ItemMenu inline item={{
                       type: 'article',
-                      title: post.title || displayName,
+                      kind: 'x',
+                      title: post.title || post.content || displayName,
                       summary: post.content || '',
                       url: post.url || '',
+                      image: (Array.isArray(post.images) && post.images[0]) || post.image || post.thumbnail || '',
+                      images: post.images,
                       lat: post.lat ?? post.latitude,
                       lon: post.lon ?? post.lng,
                     }} />

@@ -6,6 +6,10 @@ import { createProfilePost, deleteProfilePost, fileReport, queueReportClip, sear
 import { firebaseReady } from './firebaseClient'
 import './ItemMenu.css'
 
+const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
+  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
+  : 'http://localhost:3001'
+
 function num(value) {
   const n = Number(value)
   return Number.isFinite(n) ? n : null
@@ -141,11 +145,13 @@ export default function ItemMenu({ item, inline = false, profilePost = false }) 
 
   function pinMedia() {
     const url = item.url || item.link || ''
-    const image = item.image || item.imageUrl || item.thumbnail || ''
-    const summary = item.summary || item.description || ''
+    const listed = Array.isArray(item.images) ? item.images.find((src) => typeof src === 'string' && src) : ''
+    const image = item.image || item.imageUrl || item.thumbnail || item.src || listed || ''
+    const summary = item.summary || item.description || item.contentSnippet || item.content || ''
     const mediaKind = ['x', 'news', 'image'].includes(item.kind)
       ? item.kind
       : (/x\.com|twitter\.com/i.test(url) ? 'x' : (image && !url ? 'image' : 'news'))
+    const coords = Array.isArray(item.coordinates) ? item.coordinates : null
     return {
       title: item.title || 'Pinned item',
       url,
@@ -153,8 +159,8 @@ export default function ItemMenu({ item, inline = false, profilePost = false }) 
       summary,
       mediaKind,
       kind: mediaKind,
-      lat: num(item.lat ?? item.latitude),
-      lon: num(item.lon ?? item.lng ?? item.longitude),
+      lat: num(item.lat ?? item.latitude) ?? num(coords?.[1]),
+      lon: num(item.lon ?? item.lng ?? item.longitude) ?? num(coords?.[0]),
     }
   }
 
@@ -165,7 +171,7 @@ export default function ItemMenu({ item, inline = false, profilePost = false }) 
     showToast({ tone: 'info', message: 'Reading the headline for a place…' })
     let located = {}
     try {
-      const response = await fetch('/api/pins/locate', {
+      const response = await fetch(`${API_BASE}/api/pins/locate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: AbortSignal.timeout(20000),
@@ -173,10 +179,12 @@ export default function ItemMenu({ item, inline = false, profilePost = false }) 
           title: media.title,
           summary: media.summary,
           url: media.url,
+          image: media.image,
           kind: media.kind,
         }),
       })
-      located = await response.json()
+      const payload = await response.json()
+      located = payload && typeof payload === 'object' ? payload : {}
     } catch {
       located = {}
     }

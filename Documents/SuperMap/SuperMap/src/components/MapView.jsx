@@ -2299,7 +2299,7 @@ export default function MapView({
         const f = (fc.features || []).find((featItem) => featItem.id === pid) || feat
         const props = f.properties || {}
         const escPin = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-        const image = props.image ? `<img src="${escPin(props.image)}" alt="" style="width:100%;max-height:150px;object-fit:cover;border-radius:8px" />` : ''
+        const image = props.image ? `<img src="${escPin(props.image)}" alt="" referrerpolicy="no-referrer" style="width:100%;max-height:150px;object-fit:cover;border-radius:8px" />` : ''
         const summary = props.summary || props.notes || ''
         const original = props.url ? `<a href="${escPin(props.url)}" target="_blank" rel="noopener noreferrer" class="map-popup-read-more">Open original</a>` : ''
         const verify = props.image ? `<a href="/forensics?url=${encodeURIComponent(props.image)}" class="map-popup-read-more">Verify media</a>` : ''

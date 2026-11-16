@@ -58,8 +58,22 @@ function categoryFrom(kind, text, suggested) {
   return 'news'
 }
 
+function blankPlace(value) {
+  const text = tidyPlace(value).toLowerCase()
+  if (!text || text.length < 2) return true
+  return /^(unknown|n\/a|none|unspecified|not sure)$/.test(text)
+    || /\b(cannot|can't|unable|no location|not enough)\b/.test(text)
+}
+
+function writtenPlaces(text) {
+  const found = []
+  const pattern = /\b(?:in|at|near|outside|around|over|across|hits|hit|from|on|to)\s+([A-Z][\p{L}'’.-]+(?:\s+[A-Z][\p{L}'’.-]+){0,2})/gu
+  for (const match of String(text || '').matchAll(pattern)) found.push(match[1])
+  return [...extractPlaces(text), ...found].map(tidyPlace).filter((name) => name.length > 2 && !blankPlace(name))
+}
+
 function heuristic(text, kind) {
-  const places = extractPlaces(text).map(tidyPlace).filter((name) => name.length > 2)
+  const places = writtenPlaces(text)
   const category = categoryFrom(kind, text, '')
   const place = places[places.length - 1] || ''
   return {
@@ -78,7 +92,7 @@ async function geocodeReading(reading, text) {
   const place = tidyPlace(reading.place)
   const query = tidyPlace(reading.query)
   const shortQuery = query && query.split(' ').length <= 6
-  const candidates = [...(shortQuery ? [query, place] : [place, query]), ...extractPlaces(text).reverse()].map(tidyPlace)
+  const candidates = [...(shortQuery ? [query, place] : [place, query]), ...writtenPlaces(text).reverse()].map(tidyPlace)
   for (const name of candidates) {
     const query = String(name || '').trim()
     if (!query || tried.has(query.toLowerCase())) continue
@@ -98,6 +112,13 @@ async function locateHeadline({ title, summary, url, kind } = {}) {
   let engine = 'places'
   if (hasGenkit()) {
     reading = await locatePin({ title: headline, summary: body, url, kind: sourceKind })
+    if (reading) {
+      if (blankPlace(reading.place)) reading.place = ''
+      if (blankPlace(reading.query)) reading.query = ''
+      if (/\b(cannot|can't|unable|no location|not enough)\b/i.test(reading.reasoning || '') && (reading.place || reading.query)) {
+        reading.reasoning = `The headline names ${reading.place || reading.query}.`
+      }
+    }
     if (reading && (reading.place || reading.query)) engine = 'genkit'
     else reading = null
   }

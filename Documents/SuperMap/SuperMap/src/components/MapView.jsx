@@ -32,7 +32,7 @@ import {
   fetchWindyWebcams,
 } from '../services/layerServices'
 import { buildTerminatorGeoJSON } from '../services/solarTerminator'
-import { fetchMilitaryAircraft, fetchUkraineFrontline, fetchInternetOutages } from '../services/newLayerFetchers'
+import { fetchMilitaryAircraft, fetchUkraineFrontline, fetchInternetOutages, frontlinePopupHtml } from '../services/newLayerFetchers'
 import { buildCrimeStateChoropleth, CRIME_RATE_COLOR_EXPRESSION } from '../services/crimeLayers'
 import MapControls from './MapControls'
 import MapToolsRadial from './MapToolsRadial'
@@ -1139,13 +1139,19 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
       type: 'fill',
       source: 'intel-frontline',
       filter: ['==', ['geometry-type'], 'Polygon'],
-      paint: { 'fill-color': '#ef4444', 'fill-opacity': 0.18 },
+      paint: {
+        'fill-color': ['coalesce', ['get', 'fill'], '#ef4444'],
+        'fill-opacity': 0.35,
+      },
     })
     map.addLayer({
       id: 'intel-frontline-line',
       type: 'line',
       source: 'intel-frontline',
-      paint: { 'line-color': '#ef4444', 'line-width': 2.5 },
+      paint: {
+        'line-color': ['coalesce', ['get', 'stroke'], '#ef4444'],
+        'line-width': 2.5,
+      },
     })
   }
 
@@ -1542,11 +1548,21 @@ export default function MapView({
     const map = mapRef.current
     if (!map || !mapReadyRef.current) return
     const stamped = stampPinIcons(map, fc)
+    const withIds = {
+      type: 'FeatureCollection',
+      features: (stamped.features || []).map((feature) => ({
+        ...feature,
+        properties: {
+          ...(feature.properties || {}),
+          pinId: feature.id ?? feature.properties?.pinId ?? '',
+        },
+      })),
+    }
     if (map.getLayer('intel-saved-points-base')) map.removeLayer('intel-saved-points-base')
     if (!map.getSource('intel-saved-points')) {
-      map.addSource('intel-saved-points', { type: 'geojson', data: stamped })
+      map.addSource('intel-saved-points', { type: 'geojson', data: withIds })
     } else {
-      map.getSource('intel-saved-points').setData(stamped)
+      map.getSource('intel-saved-points').setData(withIds)
     }
     if (!map.getLayer('intel-saved-points-halo')) {
       map.addLayer({
@@ -2145,6 +2161,12 @@ export default function MapView({
       closeOnClick: false,
       className: 'maplibre-popup-dark',
     })
+    const frontlineTip = new maplibregl.Popup({
+      closeButton: false,
+      closeOnClick: false,
+      className: 'maplibre-popup-dark',
+      offset: 12,
+    })
 
     const existingClickableLayers = () => {
       const layers = CLICKABLE_POINT_LAYERS.filter((id) => !!map.getLayer(id))
@@ -2202,7 +2224,12 @@ export default function MapView({
       const layers = existingClickableLayers()
       const features = layers.length ? map.queryRenderedFeatures(e.point, { layers }) : []
       const feat = features[0]
-      if (!feat) return
+      if (!feat) {
+        const frontLayers = ['intel-frontline-fill', 'intel-frontline-line'].filter((id) => map.getLayer(id))
+        const region = frontLayers.length ? map.queryRenderedFeatures(e.point, { layers: frontLayers })[0] : null
+        if (region) popup.setLngLat(e.lngLat).setHTML(frontlinePopupHtml(region.properties)).addTo(map)
+        return
+      }
       if (feat.layer?.id === 'intel-crime-states-fill') {
         const props = feat.properties || {}
         const lngLat = e.lngLat
@@ -2293,10 +2320,10 @@ export default function MapView({
       }
       const coords = feat.geometry?.type === 'Point' ? feat.geometry.coordinates.slice() : null
       if (!coords) return
-      if (feat.layer.id === 'intel-saved-points-layer' || feat.layer.id === 'intel-saved-points-halo') {
-        const pid = feat.id
+      if (feat.layer.id === 'intel-saved-points-layer' || feat.layer.id === 'intel-saved-points-halo' || feat.layer.id === 'intel-saved-points-label') {
+        const pid = feat.properties?.pinId || feat.id
         const fc = getSavedPoints()
-        const f = (fc.features || []).find((featItem) => featItem.id === pid) || feat
+        const f = (fc.features || []).find((featItem) => String(featItem.id) === String(pid)) || feat
         const props = f.properties || {}
         const escPin = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
         const image = props.image ? `<img src="${escPin(props.image)}" alt="" referrerpolicy="no-referrer" style="width:100%;max-height:150px;object-fit:cover;border-radius:8px" />` : ''
@@ -2321,16 +2348,24 @@ export default function MapView({
         })
         popup.getElement()?.querySelector('.saved-pin-edit')?.addEventListener('click', () => {
           const [lon, lat] = f.geometry?.coordinates || coords
-          setPinEditorPin({
+          openDraftRef.current({
             id: f.id,
-            title: props.title,
-            icon: props.icon,
-            list_name: props.source,
+            title: props.title || '',
+            label: props.label || props.title || '',
+            summary: props.summary || props.notes || '',
+            url: props.url || '',
+            image: props.image || '',
+            mediaKind: props.mediaKind || '',
+            category: props.category || 'news',
+            sidc: props.sidc || '',
+            icon: props.icon || '📍',
+            listName: props.source || 'General',
             lat,
             lon,
+            awaiting: false,
           })
-          setPinEditorIsNew(false)
-          setPinEditorOpen(true)
+          popup.remove()
+          map.flyTo({ center: [lon, lat], zoom: Math.max(map.getZoom(), 12) })
         })
         return
       }
@@ -2356,7 +2391,13 @@ export default function MapView({
       lastMoveQuery = now
       const layers = existingClickableLayers()
       const features = layers.length ? map.queryRenderedFeatures(e.point, { layers }) : []
-      map.getCanvas().style.cursor = features.length ? 'pointer' : ''
+      const frontLayers = ['intel-frontline-fill', 'intel-frontline-line'].filter((id) => map.getLayer(id))
+      const region = !features.length && frontLayers.length
+        ? map.queryRenderedFeatures(e.point, { layers: frontLayers })[0]
+        : null
+      map.getCanvas().style.cursor = features.length || region ? 'pointer' : (awaitingDraftRef.current ? 'crosshair' : '')
+      if (region) frontlineTip.setLngLat(e.lngLat).setHTML(frontlinePopupHtml(region.properties)).addTo(map)
+      else frontlineTip.remove()
     }
 
     map.on('load', () => {
@@ -2538,6 +2579,7 @@ export default function MapView({
       map.off('click', handleMapClick)
       map.off('mousemove', handleMapMousemove)
       popup.remove()
+      frontlineTip.remove()
       if (exploreAdditionalToolsRef.current) {
         try { map.removeControl(exploreAdditionalToolsRef.current) } catch (_) {}
         exploreAdditionalToolsRef.current = null
@@ -2971,16 +3013,18 @@ export default function MapView({
     const point = draftMarkerRef.current?.getLngLat()
     const lat = point?.lat ?? Number(draftPin.lat)
     const lon = point?.lng ?? Number(draftPin.lon)
-    const id = `pt-${Date.now()}`
+    const id = draftPin.id || `pt-${Date.now()}`
     const title = draftPin.label || draftPin.title || 'Pinned place'
     const sidc = draftPin.sidc || categorySidc(draftPin.category)
+    const icon = draftPin.icon || '📍'
+    const listName = draftPin.listName || 'General'
     const feature = {
       type: 'Feature',
       id,
       properties: {
         title,
-        icon: '📍',
-        source: 'General',
+        icon,
+        source: listName,
         notes: draftPin.summary || '',
         summary: draftPin.summary || '',
         url: draftPin.url || '',
@@ -2995,8 +3039,8 @@ export default function MapView({
     const result = await saveMapPin({
       id,
       title,
-      icon: '📍',
-      listName: 'General',
+      icon,
+      listName,
       notes: draftPin.summary || '',
       summary: draftPin.summary || '',
       url: draftPin.url || '',

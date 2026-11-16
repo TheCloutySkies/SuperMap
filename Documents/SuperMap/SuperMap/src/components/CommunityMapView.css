@@ -150,11 +150,13 @@
 }
 
 .community-popup a,
-.community-popup-delete {
+.community-popup-delete,
+.community-popup-edit {
   color: #58a6ff;
 }
 
-.community-popup-delete {
+.community-popup-delete,
+.community-popup-edit {
   align-self: flex-start;
   background: none;
   border: 0;

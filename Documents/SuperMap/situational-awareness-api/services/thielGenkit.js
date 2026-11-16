@@ -25,7 +25,9 @@ function getFlow() {
     async (input) => {
       const response = await ai.generate({
         model: googleAI.model(input.model || MODEL),
-        prompt: input.prompt,
+        prompt: input.mediaUrl
+          ? [{ text: input.prompt }, { media: { url: input.mediaUrl, contentType: input.mediaType || 'image/jpeg' } }]
+          : input.prompt,
         config: {
           temperature: 0.2,
           maxOutputTokens: input.maxTokens || 800,
@@ -56,9 +58,26 @@ function withTimeout(promise, ms) {
   })
 }
 
-async function generateText(prompt, { maxTokens = 800, model, timeoutMs = 12000 } = {}) {
+async function inlineImage(url) {
+  const response = await fetch(url, {
+    redirect: 'follow',
+    headers: { 'user-agent': 'SuperMap/1.0 (place reader)' },
+  })
+  if (!response.ok) return null
+  const contentType = String(response.headers.get('content-type') || 'image/jpeg').split(';')[0]
+  if (!contentType.startsWith('image/')) return null
+  const bytes = Buffer.from(await response.arrayBuffer())
+  if (bytes.length < 32 || bytes.length > 2_000_000) return null
+  return { url: `data:${contentType};base64,${bytes.toString('base64')}`, contentType }
+}
+
+async function generateText(prompt, { maxTokens = 800, model, timeoutMs = 12000, mediaUrl, mediaType } = {}) {
   const run = getFlow()
   if (!run || !prompt) return null
+  let media = mediaUrl ? { url: mediaUrl, contentType: mediaType || 'image/jpeg' } : null
+  if (media && /^https?:\/\//i.test(media.url)) {
+    media = await inlineImage(media.url).catch(() => null) || media
+  }
   const models = [...new Set([model || MODEL, ...MODEL_FALLBACKS])]
   for (const name of models) {
     try {
@@ -66,6 +85,8 @@ async function generateText(prompt, { maxTokens = 800, model, timeoutMs = 12000 
         prompt: String(prompt),
         maxTokens,
         model: name,
+        mediaUrl: media?.url || '',
+        mediaType: media?.contentType || '',
       }), timeoutMs)
       if (text) return text
     } catch (error) {
@@ -119,8 +140,30 @@ async function locatePin({ title, summary, url, kind } = {}) {
   }
 }
 
+/**
+ * Read a place name out of a photo when the caption has none.
+ * Returns null when the picture does not show a place.
+ */
+async function readImagePlace(imageUrl) {
+  const url = String(imageUrl || '').trim()
+  if (!/^https?:\/\//i.test(url)) return null
+  const prompt = [
+    'Read this photo for a real place name written in the picture.',
+    'Return only JSON: {"place":"","query":""}',
+    'query is a short geocoder string such as "Aden, Yemen".',
+    'If no place is visible, leave both strings empty.',
+  ].join('\n')
+  const text = await generateText(prompt, { maxTokens: 160, timeoutMs: 8000, mediaUrl: url })
+  const parsed = parseJson(text)
+  if (!parsed || typeof parsed !== 'object') return null
+  return {
+    place: String(parsed.place || '').slice(0, 180),
+    query: String(parsed.query || parsed.place || '').slice(0, 180),
+  }
+}
+
 function hasGenkit() {
   return Boolean(apiKey())
 }
 
-module.exports = { generateText, locatePin, hasGenkit }
+module.exports = { generateText, locatePin, readImagePlace, hasGenkit }

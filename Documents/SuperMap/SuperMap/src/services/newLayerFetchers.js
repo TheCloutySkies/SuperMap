@@ -60,15 +60,57 @@ export async function fetchMilitaryAircraft() {
   }
 }
 
+function englishSegment(raw) {
+  const parts = String(raw || '')
+    .split(/\s*\/\/\/\s*/)
+    .map((part) => part.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+  return parts.find((part) => !part.startsWith('geoJSON') && /[A-Za-z]/.test(part) && !/^[\u0400-\u04FF]/.test(part))
+    || parts.find((part) => !part.startsWith('geoJSON'))
+    || ''
+}
+
+function describeFrontline(data) {
+  const fc = data?.map || data?.geojson || data
+  const features = Array.isArray(fc?.features) ? fc.features : (Array.isArray(data?.features) ? data.features : [])
+  const updated = String(data?.datetime || '').replace(/\s+/g, ' ').trim()
+  return {
+    type: 'FeatureCollection',
+    features: features.map((feature) => {
+      const props = feature?.properties || {}
+      const status = englishSegment(props.name) || 'Front line'
+      const detail = englishSegment(String(props.description || '').replace(/<[^>]+>/g, ' '))
+      return {
+        ...feature,
+        properties: {
+          ...props,
+          status,
+          detail,
+          updated,
+          fill: props.fill || '#ef4444',
+          stroke: props.stroke || props.fill || '#ef4444',
+        },
+      }
+    }),
+  }
+}
+
+export function frontlinePopupHtml(properties = {}) {
+  const esc = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+  const status = esc(properties.status || 'Front line')
+  const detail = properties.detail ? `<p>${esc(properties.detail)}</p>` : ''
+  const updated = properties.updated ? `<div>DeepState ${esc(properties.updated)}</div>` : ''
+  return `<div class="map-popup-content"><strong>${status}</strong>${detail}${updated}</div>`
+}
+
 export async function fetchUkraineFrontline() {
   try {
     const data = await fetchJsonWithTimeout('https://deepstatemap.live/api/history/last', 15000)
-    // DeepState returns { id, map: FeatureCollection, datetime }
-    const fc = data?.map || data?.geojson || data
-    if (fc?.type === 'FeatureCollection') return fc
-    if (Array.isArray(fc?.features)) return { type: 'FeatureCollection', features: fc.features }
-    if (Array.isArray(data?.features)) return { type: 'FeatureCollection', features: data.features }
-    return { type: 'FeatureCollection', features: [] }
+    return describeFrontline(data)
   } catch (err) {
     console.warn('[SuperMap Ukraine Frontline]', err?.message || err)
     return { type: 'FeatureCollection', features: [] }

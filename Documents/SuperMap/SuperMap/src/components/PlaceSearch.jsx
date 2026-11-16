@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { geocodePlaceQuery } from '../lib/placeGeocoding'
 import './PlaceSearch.css'
 
@@ -38,6 +38,29 @@ export default function PlaceSearch({ onFlyTo }) {
       .catch(() => setStatus('Lookup failed. Try a broader place name.'))
       .finally(() => setLoading(false))
   }
+
+  useEffect(() => {
+    const apply = (detail) => {
+      const next = String(detail?.query || '').trim()
+      if (!next) return
+      sessionStorage.removeItem('supermap.place-search')
+      setQuery(next)
+      setOpen(false)
+      setStatus('')
+      const lat = Number(detail?.lat)
+      const lon = Number(detail?.lon)
+      if (detail?.lat != null && detail?.lon != null && Number.isFinite(lat) && Number.isFinite(lon)) {
+        onFlyTo?.({ lat, lng: lon, zoom: 12, properties: { display_name: next } })
+      }
+    }
+    try {
+      const stored = sessionStorage.getItem('supermap.place-search')
+      if (stored) apply(JSON.parse(stored))
+    } catch { /* ignore a bad search handoff */ }
+    const onLocated = (event) => apply(event.detail)
+    window.addEventListener('supermap:place-search', onLocated)
+    return () => window.removeEventListener('supermap:place-search', onLocated)
+  }, [onFlyTo])
 
   const selectPlace = (place) => {
     if (flyToIfValid(place)) {

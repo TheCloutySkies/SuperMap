@@ -11,6 +11,7 @@ router.post('/locate', async (req, res) => {
       title,
       summary: req.body?.summary || req.body?.description || '',
       url: req.body?.url || '',
+      image: req.body?.image || '',
       kind: req.body?.kind || req.body?.mediaKind || '',
     })
     return res.json(located)

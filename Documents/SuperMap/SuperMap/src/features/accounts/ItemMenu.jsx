@@ -205,6 +205,12 @@ export default function ItemMenu({ item, inline = false, profilePost = false }) 
     const eventName = destination === 'community' ? 'supermap:draft-community-pin' : 'supermap:draft-map-pin'
     sessionStorage.setItem(key, JSON.stringify(draft))
     window.dispatchEvent(new CustomEvent(eventName, { detail: draft }))
+    const searchText = located.query || located.place || ''
+    if (searchText) {
+      const detail = { query: searchText, lat, lon }
+      sessionStorage.setItem('supermap.place-search', JSON.stringify(detail))
+      window.dispatchEvent(new CustomEvent('supermap:place-search', { detail }))
+    }
     setBusy(false)
     setOpen(false)
     if (lat == null || lon == null) {

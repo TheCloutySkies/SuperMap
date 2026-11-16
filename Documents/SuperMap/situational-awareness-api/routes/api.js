@@ -27,6 +27,7 @@ const crimeRouter = require('./crime')
 const weatherRouter = require('./weather')
 const forensicsRouter = require('./forensics')
 const pinsRouter = require('./pins')
+const { searchPlaces } = require('../services/placeSearch')
 const windyWebcamsCache = new NodeCache({ stdTTL: 90, checkperiod: 60 })
 
 const searchCache = new NodeCache({ stdTTL: 15 })
@@ -35,7 +36,6 @@ router.use('/crime', crimeRouter)
 router.use('/weather', weatherRouter)
 router.use('/forensics', forensicsRouter)
 router.use('/pins', pinsRouter)
-const geocodeCache = new NodeCache({ stdTTL: 24 * 60 * 60, checkperiod: 120 })
 const weatherNearbyCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 })
 const weatherHourlyCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 })
 const threatSummaryCache = new NodeCache({ stdTTL: 60 * 60, checkperiod: 300 })
@@ -44,8 +44,6 @@ const netblocksCache = new NodeCache({ stdTTL: 15 * 60, checkperiod: 120 })
 const earthquakesWidgetCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 60 })
 const conflictMetricsCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 })
 const homeBootstrapCache = new NodeCache({ stdTTL: 60, checkperiod: 30 })
-const MAPBOX_TOKEN = process.env.MAPBOX_TOKEN || ''
-const GEOAPIFY_KEY = process.env.GEOAPIFY_KEY || ''
 const {
   HOME_CACHE_CONTROL,
   HOME_LIVE_DEADLINE_MS,
@@ -163,38 +161,6 @@ function setHomeCacheHeaders(res) {
 
 
 
-
-function normalizeOpenMeteoGeocode(r) {
-  const lat = Number(r?.latitude)
-  const lon = Number(r?.longitude)
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
-  return {
-    id: r.id || `om-${lat}-${lon}`,
-    place_id: r.id || `om-${lat}-${lon}`,
-    name: r.name || 'Place',
-    display_name: [r.name, r.admin1, r.country].filter(Boolean).join(', ') || r.name || `${lat}, ${lon}`,
-    type: r.feature_code || 'place',
-    lat,
-    lon,
-    source: 'open-meteo',
-  }
-}
-
-function normalizeLatLonPlace(raw, fallbackType = 'place') {
-  const lat = Number(raw?.lat ?? raw?.latitude)
-  const lon = Number(raw?.lon ?? raw?.longitude)
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
-  return {
-    id: raw.id || raw.place_id || `${lat},${lon}`,
-    place_id: raw.place_id || raw.id || `${lat},${lon}`,
-    name: raw.name || raw.text || 'Place',
-    display_name: raw.display_name || raw.place_name || raw.formatted || raw.name || `${lat}, ${lon}`,
-    type: raw.type || raw.class || fallbackType,
-    lat,
-    lon,
-    source: raw.source || 'geocoder',
-  }
-}
 
 function searchResultsToGeoJSON(hits) {
   const features = hits
@@ -1562,96 +1528,13 @@ router.get('/adsb/mil', async (_req, res) => {
   }
 })
 
-/** Geocode place search (Nominatim) so map place search works without CORS. */
+/** Geocode place search so map place search works without CORS. */
 router.get('/geocode', async (req, res) => {
   const q = (req.query.q || '').trim()
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 8, 1), 10)
   if (!q) return res.status(400).json({ error: 'q required' })
-  const cacheKey = `${q.toLowerCase()}::${limit}`
-  const cached = geocodeCache.get(cacheKey)
-  if (cached) return res.json(cached)
-
-  // Provider 0: Mapbox
-  if (MAPBOX_TOKEN) {
-    try {
-      const { data } = await axios.get(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json`, {
-        params: { access_token: MAPBOX_TOKEN, limit },
-        timeout: 7000,
-      })
-      const rows = (Array.isArray(data?.features) ? data.features : [])
-        .map((f) => normalizeLatLonPlace({
-          id: f.id,
-          place_id: f.id,
-          name: f.text,
-          display_name: f.place_name,
-          type: Array.isArray(f.place_type) ? f.place_type[0] : 'place',
-          lat: Array.isArray(f.center) ? f.center[1] : null,
-          lon: Array.isArray(f.center) ? f.center[0] : null,
-          source: 'mapbox',
-        }))
-        .filter(Boolean)
-      if (rows.length) {
-        geocodeCache.set(cacheKey, rows)
-        return res.json(rows)
-      }
-    } catch (err) {
-      console.warn('[API /geocode] mapbox:', err.message)
-    }
-  }
-
-  // Provider 1: Geoapify
-  if (GEOAPIFY_KEY) {
-    try {
-      const { data } = await axios.get('https://api.geoapify.com/v1/geocode/search', {
-        params: { text: q, apiKey: GEOAPIFY_KEY, limit },
-        timeout: 7000,
-      })
-      const rows = (Array.isArray(data?.features) ? data.features : [])
-        .map((f) => normalizeLatLonPlace({
-          id: f.properties?.place_id || f.properties?.result_type || f.properties?.name,
-          place_id: f.properties?.place_id || f.properties?.name,
-          name: f.properties?.name || f.properties?.city || 'Place',
-          display_name: f.properties?.formatted || f.properties?.name,
-          type: f.properties?.result_type || 'place',
-          lat: Array.isArray(f.geometry?.coordinates) ? f.geometry.coordinates[1] : null,
-          lon: Array.isArray(f.geometry?.coordinates) ? f.geometry.coordinates[0] : null,
-          source: 'geoapify',
-        }))
-        .filter(Boolean)
-      if (rows.length) {
-        geocodeCache.set(cacheKey, rows)
-        return res.json(rows)
-      }
-    } catch (err) {
-      console.warn('[API /geocode] geoapify:', err.message)
-    }
-  }
-
-  // Provider 1: Open-Meteo geocoding (usually fast and stable).
   try {
-    const { data } = await axios.get('https://geocoding-api.open-meteo.com/v1/search', {
-      params: { name: q, count: limit },
-      timeout: 7000,
-    })
-    const rows = (data?.results || []).map(normalizeOpenMeteoGeocode).filter(Boolean)
-    if (rows.length) {
-      geocodeCache.set(cacheKey, rows)
-      return res.json(rows)
-    }
-  } catch (err) {
-    console.warn('[API /geocode] open-meteo:', err.message)
-  }
-
-  // Provider 2: Nominatim fallback.
-  try {
-    const { data } = await axios.get('https://nominatim.openstreetmap.org/search', {
-      params: { q, format: 'json', limit },
-      headers: { 'User-Agent': 'SuperMap/1.0 (https://github.com/supermap)' },
-      timeout: 8000,
-    })
-    const rows = Array.isArray(data) ? data : []
-    geocodeCache.set(cacheKey, rows)
-    res.json(rows)
+    res.json(await searchPlaces(q, limit))
   } catch (err) {
     console.warn('[API /geocode]', err.message)
     res.json([])

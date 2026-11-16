@@ -4,12 +4,12 @@ import maplibregl from 'maplibre-gl'
 import MapboxDraw from '@mapbox/mapbox-gl-draw'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css'
-import { fetchUkraineFrontline } from '../services/newLayerFetchers'
+import { fetchUkraineFrontline, frontlinePopupHtml } from '../services/newLayerFetchers'
 import { stampPinIcons } from '../lib/mapEmoji'
 import { categorySidc } from '../lib/milSymbols'
 import { clearDraftMarker, syncDraftMarker } from '../lib/draftMarker'
 import { useSuperMapAccount } from '../features/accounts/SuperMapAccounts'
-import { createCommunityPin, deleteCommunityPin, isSiteAdmin, subscribeCommunityPins } from '../features/accounts/communityPins'
+import { createCommunityPin, deleteCommunityPin, isSiteAdmin, subscribeCommunityPins, updateCommunityPin } from '../features/accounts/communityPins'
 import DraftPinSheet from './DraftPinSheet'
 import './CommunityMapView.css'
 import './DraftPinSheet.css'
@@ -223,13 +223,19 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
         type: 'fill',
         source: 'community-frontline',
         filter: ['==', ['geometry-type'], 'Polygon'],
-        paint: { 'fill-color': '#ef4444', 'fill-opacity': 0.18 },
+        paint: {
+          'fill-color': ['coalesce', ['get', 'fill'], '#ef4444'],
+          'fill-opacity': 0.35,
+        },
       })
       map.addLayer({
         id: 'community-frontline-line',
         type: 'line',
         source: 'community-frontline',
-        paint: { 'line-color': '#ef4444', 'line-width': 2.4 },
+        paint: {
+          'line-color': ['coalesce', ['get', 'stroke'], '#ef4444'],
+          'line-width': 2.4,
+        },
       })
       if (!compact) {
         const draw = new MapboxDraw({ displayControlsDefault: false })
@@ -298,6 +304,8 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
       const verify = pin.image ? `<a href="/forensics?url=${encodeURIComponent(pin.image)}">Verify media</a>` : ''
       const viewer = userRef.current
       const canDelete = viewer && (isSiteAdmin(viewer) || pin.ownerUid === viewer.uid)
+      const canEdit = viewer && pin.ownerUid === viewer.uid
+      const edit = canEdit ? `<button type="button" class="community-popup-edit" data-id="${esc(pin.id)}">Edit pin</button>` : ''
       const remove = canDelete ? `<button type="button" class="community-popup-delete" data-id="${esc(pin.id)}">Remove pin</button>` : ''
       const category = pin.category ? `<em>${esc(pin.category)}</em>` : ''
       popup.setLngLat(lngLat).setHTML(`
@@ -307,9 +315,28 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
           ${category}
           ${summary}
           <div class="community-popup-links">${original}${verify}</div>
+          ${edit}
           ${remove}
         </div>
       `).addTo(map)
+      popup.getElement()?.querySelector('.community-popup-edit')?.addEventListener('click', () => {
+        const point = pin.geometry?.type === 'Point' ? pin.geometry.coordinates : null
+        if (!point) return
+        setDestination('community')
+        setLabel(pin.label || pin.title || '')
+        setDraft({
+          id: pin.id,
+          geometry: { type: 'Point', coordinates: point },
+          kind: pin.kind || 'pin',
+          media: pin,
+          category: pin.category || 'news',
+          sidc: pin.sidc || '',
+          place: '',
+          reasoning: '',
+        })
+        popup.remove()
+        map.flyTo({ center: point, zoom: Math.max(map.getZoom(), 12) })
+      })
       popup.getElement()?.querySelector('.community-popup-delete')?.addEventListener('click', async () => {
         const result = await deleteCommunityPin(pin.id)
         if (result?.ok === false) toastRef.current?.({ tone: 'danger', message: result.error || 'Could not delete that pin.' })
@@ -340,7 +367,30 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
         return
       }
       const hits = map.queryRenderedFeatures(event.point, { layers: ['community-pins-icon', 'community-pins-label', 'community-pins-fill', 'community-pins-line'] })
-      if (hits[0]) openPopup(hits[0], event.lngLat)
+      if (hits[0]) {
+        openPopup(hits[0], event.lngLat)
+        return
+      }
+      const frontLayers = ['community-frontline-fill', 'community-frontline-line'].filter((id) => map.getLayer(id))
+      const region = frontLayers.length ? map.queryRenderedFeatures(event.point, { layers: frontLayers })[0] : null
+      if (region) popup.setLngLat(event.lngLat).setHTML(frontlinePopupHtml(region.properties)).addTo(map)
+    })
+
+    const frontlineTip = new maplibregl.Popup({ closeButton: false, closeOnClick: false, className: 'maplibre-popup-dark', offset: 12 })
+    map.on('mousemove', (event) => {
+      if (toolRef.current || awaitingRef.current) {
+        frontlineTip.remove()
+        return
+      }
+      const frontLayers = ['community-frontline-fill', 'community-frontline-line'].filter((id) => map.getLayer(id))
+      const region = frontLayers.length ? map.queryRenderedFeatures(event.point, { layers: frontLayers })[0] : null
+      if (!region) {
+        frontlineTip.remove()
+        if (!toolRef.current) map.getCanvas().style.cursor = ''
+        return
+      }
+      map.getCanvas().style.cursor = 'pointer'
+      frontlineTip.setLngLat(event.lngLat).setHTML(frontlinePopupHtml(region.properties)).addTo(map)
     })
 
     const onFocus = (event) => {
@@ -359,6 +409,7 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
       clearDraftMarker(markerRef)
       resize.disconnect()
       popup.remove()
+      frontlineTip.remove()
       map.remove()
       mapRef.current = null
       drawRef.current = null
@@ -464,7 +515,7 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
       if (destination === 'mine') {
         const placed = markerRef.current?.getLngLat()
         const result = await saveMapPin({
-          id: `pt-${Date.now()}`,
+          id: destination === 'mine' && draft.id ? draft.id : `pt-${Date.now()}`,
           title: name,
           icon: '📍',
           listName: 'General',
@@ -482,7 +533,7 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
         })
         if (result?.ok === false) return
       } else {
-        const result = await createCommunityPin({
+        const payload = {
           ownerUid: user.uid,
           ownerName: user.displayName || 'Anonymous',
           ownerEmoji: user.emoji || '📍',
@@ -499,12 +550,15 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
             type: 'Point',
             coordinates: [markerRef.current.getLngLat().lng, markerRef.current.getLngLat().lat],
           } : draft.geometry,
-        })
+        }
+        const result = draft.id
+          ? await updateCommunityPin(draft.id, payload)
+          : await createCommunityPin(payload)
         if (result?.ok === false) {
           showToast?.({ tone: 'danger', message: result.error || 'Could not share that pin.' })
           return
         }
-        showToast?.({ tone: 'success', message: 'Shared on the community map.' })
+        showToast?.({ tone: 'success', message: draft.id ? 'Pin updated.' : 'Shared on the community map.' })
       }
       clearDraftMarker(markerRef)
       setDraft(null)
@@ -582,7 +636,7 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
             image: draft.media?.image || draft.image || '',
           }}
           saving={saving}
-          showDestination
+          showDestination={!draft.id}
           destination={destination}
           onDestination={setDestination}
           onChange={(patch) => {

@@ -119,6 +119,32 @@ function withGeometry(pin) {
   }
 }
 
+export async function updateCommunityPin(pinId, input = {}) {
+  if (!pinId) return { ok: false, error: 'That pin is missing.' }
+  const geometry = input.geometry
+  if (!geometry || !geometry.type) return { ok: false, error: 'That pin needs a place on the map.' }
+  const patch = {
+    title: String(input.title || input.label || 'Community pin').trim().slice(0, 180) || 'Community pin',
+    summary: String(input.summary || '').slice(0, 500),
+    category: String(input.category || '').slice(0, 24),
+    sidc: String(input.sidc || '').slice(0, 20),
+    url: String(input.url || '').slice(0, 2000),
+    image: String(input.image || '').slice(0, 2000),
+    label: String(input.label || '').slice(0, 80),
+    updatedAtMs: Date.now(),
+  }
+  const firestore = db()
+  if (!firestore) {
+    writeLocal(readLocal().map((row) => (row.id === pinId ? { ...row, ...patch, geometry } : row)))
+    return { ok: true, id: pinId }
+  }
+  await setDoc(doc(firestore, 'community_pins', pinId), {
+    ...patch,
+    geometryJson: JSON.stringify(geometry).slice(0, 20000),
+  }, { merge: true })
+  return { ok: true, id: pinId }
+}
+
 export async function deleteCommunityPin(pinId) {
   if (!pinId) return { ok: false }
   const firestore = db()

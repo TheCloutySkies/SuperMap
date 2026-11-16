@@ -6,8 +6,25 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css'
 import { fetchMilitaryAircraft, fetchUkraineFrontline, frontlinePopupHtml } from '../services/newLayerFetchers'
 import { fetchAcledEvents, fetchGdeltReports, fetchMajorHazards, nearestCorroboration, stampHazardIcons } from '../services/situationLayers'
+import { ensurePinEmoji, pinIconImageId } from '../lib/mapEmoji'
 import { installCommunitySituation, setGeoSource, situationPopupHtml, CLUSTER_LAYERS, SITUATION_POINT_LAYERS } from './communitySituation'
-import { aircraftPopupHtml, fetchShipDetail, fetchShipTrack, refreshVectorTiles, shipDetailRows, shipPopupHtml } from '../lib/movementIcons'
+import {
+  aircraftPopupHtml,
+  detailIconSize,
+  fetchAircraftPhoto,
+  fetchAircraftRoute,
+  fetchAircraftTrace,
+  fetchShipDetail,
+  fetchShipPhoto,
+  fetchShipRoute,
+  fetchShipTrack,
+  mountMovementPhoto,
+  refreshVectorTiles,
+  setRouteData,
+  shipDetailRows,
+  shipPopupHtml,
+  shipTrackFeature,
+} from '../lib/movementIcons'
 import { stampPinIcons } from '../lib/mapEmoji'
 import { categorySidc } from '../lib/milSymbols'
 import { clearDraftMarker, syncDraftMarker } from '../lib/draftMarker'
@@ -18,6 +35,52 @@ import './CommunityMapView.css'
 import './DraftPinSheet.css'
 
 const MAP_GLYPHS = 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf'
+
+const HAZARD_MENU = [
+  ['earthquake', 'Earthquakes'],
+  ['wildfire', 'Wildfires'],
+  ['cyclone', 'Tropical cyclones'],
+  ['flood', 'Floods'],
+  ['volcano', 'Volcanoes'],
+  ['drought', 'Droughts'],
+  ['tsunami', 'Tsunamis'],
+  ['other', 'Other hazards'],
+]
+
+const LAYER_ROWS = [
+  ['x', 'X posts'],
+  ['news', 'News'],
+  ['images', 'Images'],
+  ['shapes', 'Shapes'],
+  ['frontline', 'Ukraine frontline'],
+  ['conflicts', 'Major conflicts'],
+  ['reports', 'Major reports'],
+  ['hazards', 'Hazards'],
+  ['aircraft', 'Military aircraft'],
+  ['ships', 'Military ships'],
+]
+
+function hazardCatalog(collection) {
+  const grouped = {}
+  ;(collection?.features || []).forEach((feature) => {
+    const props = feature.properties || {}
+    const group = props.hazardGroup || 'other'
+    if (!grouped[group]) grouped[group] = []
+    const title = props.title || 'Hazard'
+    const place = props.place && !title.includes(props.place) ? props.place : ''
+    const extra = place || props.date || ''
+    grouped[group].push({ id: props.hazardId, title: extra ? `${title} · ${extra}` : title })
+  })
+  Object.values(grouped).forEach((rows) => rows.sort((a, b) => a.title.localeCompare(b.title)))
+  return grouped
+}
+
+function visibleHazards(collection, hidden) {
+  return {
+    type: 'FeatureCollection',
+    features: (collection?.features || []).filter((feature) => !hidden[feature.properties?.hazardId]),
+  }
+}
 
 const DARK_STYLE = {
   version: 8,
@@ -148,6 +211,13 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
   const [destination, setDestination] = useState('community')
   const [saving, setSaving] = useState(false)
   const [basemap, setBasemap] = useState('dark')
+  const [hazardMenuOpen, setHazardMenuOpen] = useState(false)
+  const [openHazardGroups, setOpenHazardGroups] = useState({})
+  const [hiddenHazards, setHiddenHazards] = useState({})
+  const [hazardGroups, setHazardGroups] = useState({})
+  const hazardDataRef = useRef(null)
+  const hiddenHazardRef = useRef({})
+  hiddenHazardRef.current = hiddenHazards
   const markerRef = useRef(null)
   const awaitingRef = useRef(false)
 
@@ -184,12 +254,26 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
       scrollZoom: !compact,
     })
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
-    const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true, className: 'maplibre-popup-dark', maxWidth: '280px' })
+    const popup = new maplibregl.Popup({
+      closeButton: true,
+      closeOnClick: true,
+      focusAfterOpen: false,
+      className: 'maplibre-popup-dark community-map-popup',
+      maxWidth: '260px',
+      offset: 22,
+      padding: { top: 72, bottom: 24, left: 12, right: 56 },
+    })
     popupRef.current = popup
     mapRef.current = map
 
     map.on('load', () => {
-      map.addSource('community-pins', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+      map.addSource('community-pins', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+        cluster: true,
+        clusterRadius: 50,
+        clusterMaxZoom: 6,
+      })
       map.addLayer({
         id: 'community-pins-fill',
         type: 'fill',
@@ -208,19 +292,39 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
         id: 'community-pins-icon',
         type: 'symbol',
         source: 'community-pins',
-        filter: ['==', ['geometry-type'], 'Point'],
+        filter: ['all', ['!', ['has', 'point_count']], ['==', ['geometry-type'], 'Point']],
         layout: {
           'icon-image': ['get', 'iconImage'],
-          'icon-size': 0.72,
+          'icon-size': detailIconSize(),
           'icon-allow-overlap': true,
           'icon-ignore-placement': true,
         },
+      })
+      ensurePinEmoji(map, '📍')
+      map.addLayer({
+        id: 'community-pins-clusters',
+        type: 'symbol',
+        source: 'community-pins',
+        filter: ['has', 'point_count'],
+        layout: {
+          'icon-image': pinIconImageId('📍'),
+          'icon-size': 1.15,
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true,
+          'text-field': ['get', 'point_count_abbreviated'],
+          'text-font': ['Open Sans Regular'],
+          'text-size': 13,
+          'text-offset': [0, 1.35],
+          'text-anchor': 'top',
+          'text-allow-overlap': true,
+        },
+        paint: { 'text-color': '#f8fafc', 'text-halo-color': '#0d1117', 'text-halo-width': 1.4 },
       })
       map.addLayer({
         id: 'community-pins-label',
         type: 'symbol',
         source: 'community-pins',
-        filter: ['!=', ['coalesce', ['get', 'label'], ''], ''],
+        filter: ['all', ['!', ['has', 'point_count']], ['!=', ['coalesce', ['get', 'label'], ''], '']],
         minzoom: 12,
         layout: {
           'text-field': ['coalesce', ['get', 'title'], ['get', 'label'], ''],
@@ -415,24 +519,61 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
         const props = situationHit.properties || {}
         if (layerId === 'community-aircraft-icon') {
           popup.setLngLat(event.lngLat).setHTML(aircraftPopupHtml(props)).addTo(map)
+          const [lng, lat] = situationHit.geometry?.coordinates || [event.lngLat.lng, event.lngLat.lat]
+          const token = shipPopupToken.current + 1
+          shipPopupToken.current = token
+          const photoPromise = fetchAircraftPhoto(props.hex)
+          const showPhoto = () => {
+            photoPromise.then((photo) => {
+              if (token !== shipPopupToken.current || !popup.isOpen() || !photo) return
+              mountMovementPhoto(popup, { ...photo, alt: props.title || props.flight || 'Aircraft' })
+            }).catch(() => {})
+          }
+          showPhoto()
+          setRouteData(map, 'community-movement-route', [])
+          Promise.all([
+            fetchAircraftTrace(props.hex),
+            fetchAircraftRoute(props.flight || props.r, lng, lat),
+          ]).then(([traveled, current]) => {
+            if (token !== shipPopupToken.current || !popup.isOpen()) return
+            setRouteData(map, 'community-movement-route', [traveled, current])
+          }).catch(() => {})
+          popup.once('close', () => {
+            if (token !== shipPopupToken.current) return
+            setRouteData(map, 'community-movement-route', [])
+          })
           return
         }
         if (layerId === 'community-ships-icon') {
           popup.setLngLat(event.lngLat).setHTML(shipPopupHtml(props)).addTo(map)
           const mmsi = props.mmsi
+          const [lng, lat] = situationHit.geometry?.coordinates || [event.lngLat.lng, event.lngLat.lat]
           const token = shipPopupToken.current + 1
           shipPopupToken.current = token
-          fetchShipDetail(mmsi).then((detail) => {
+          setRouteData(map, 'community-movement-route', [])
+          const detailPromise = fetchShipDetail(mmsi)
+          const photoPromise = fetchShipPhoto(props.name)
+          const showPhoto = () => {
+            photoPromise.then((photo) => {
+              if (token !== shipPopupToken.current || !popup.isOpen() || !photo) return
+              mountMovementPhoto(popup, { ...photo, alt: props.name || 'Ship' })
+            }).catch(() => {})
+          }
+          detailPromise.then((detail) => {
             if (token !== shipPopupToken.current || !detail || !popup.isOpen()) return
             popup.setHTML(shipPopupHtml(props, shipDetailRows(detail)))
+            showPhoto()
           }).catch(() => {})
-          fetchShipTrack(mmsi).then((track) => {
-            if (token !== shipPopupToken.current || !track || !popup.isOpen()) return
-            setGeoSource(map, 'community-ship-track', { type: 'FeatureCollection', features: [track] })
+          showPhoto()
+          Promise.all([fetchShipTrack(mmsi), detailPromise.catch(() => null)]).then(async ([track, detail]) => {
+            if (token !== shipPopupToken.current || !popup.isOpen()) return
+            const current = await fetchShipRoute(detail, lng, lat)
+            if (token !== shipPopupToken.current || !popup.isOpen()) return
+            setRouteData(map, 'community-movement-route', [shipTrackFeature(track), current])
           }).catch(() => {})
           popup.once('close', () => {
             if (token !== shipPopupToken.current) return
-            setGeoSource(map, 'community-ship-track', { type: 'FeatureCollection', features: [] })
+            setRouteData(map, 'community-movement-route', [])
           })
           return
         }
@@ -450,20 +591,35 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
     })
 
     const frontlineTip = new maplibregl.Popup({ closeButton: false, closeOnClick: false, className: 'maplibre-popup-dark', offset: 12 })
+    let lastHover = 0
+    const hoverLayers = [
+      ...CLUSTER_LAYERS,
+      ...SITUATION_POINT_LAYERS,
+      'community-pins-icon',
+      'community-pins-label',
+      'community-pins-fill',
+      'community-pins-line',
+      'community-frontline-fill',
+      'community-frontline-line',
+    ]
     map.on('mousemove', (event) => {
       if (toolRef.current || awaitingRef.current) {
         frontlineTip.remove()
+        map.getCanvas().style.cursor = 'crosshair'
         return
       }
-      const frontLayers = ['community-frontline-fill', 'community-frontline-line'].filter((id) => map.getLayer(id))
-      const region = frontLayers.length ? map.queryRenderedFeatures(event.point, { layers: frontLayers })[0] : null
-      if (!region) {
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
+      if (now - lastHover < 40) return
+      lastHover = now
+      const layers = hoverLayers.filter((id) => map.getLayer(id))
+      const hit = layers.length ? map.queryRenderedFeatures(event.point, { layers })[0] : null
+      map.getCanvas().style.cursor = hit ? 'pointer' : ''
+      const front = hit && String(hit.layer?.id || '').startsWith('community-frontline')
+      if (!front) {
         frontlineTip.remove()
-        if (!toolRef.current) map.getCanvas().style.cursor = ''
         return
       }
-      map.getCanvas().style.cursor = 'pointer'
-      frontlineTip.setLngLat(event.lngLat).setHTML(frontlinePopupHtml(region.properties)).addTo(map)
+      frontlineTip.setLngLat(event.lngLat).setHTML(frontlinePopupHtml(hit.properties)).addTo(map)
     })
 
     const onFocus = (event) => {
@@ -551,15 +707,29 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
     const map = mapRef.current
     if (!ready || !map?.getSource?.('community-hazards')) return undefined
     let cancelled = false
+    const paint = (collection) => {
+      if (cancelled || !map.getSource('community-hazards')) return
+      setGeoSource(map, 'community-hazards', stampHazardIcons(map, collection))
+    }
     if (!filters.hazards) {
-      setGeoSource(map, 'community-hazards', { type: 'FeatureCollection', features: [] })
+      paint({ type: 'FeatureCollection', features: [] })
       return undefined
     }
     fetchMajorHazards().then((geo) => {
-      if (!cancelled) setGeoSource(map, 'community-hazards', stampHazardIcons(map, geo))
+      if (cancelled) return
+      hazardDataRef.current = geo
+      setHazardGroups(hazardCatalog(geo))
+      paint(visibleHazards(geo, hiddenHazardRef.current))
     }).catch(() => {})
     return () => { cancelled = true }
   }, [filters.hazards, ready])
+
+  useEffect(() => {
+    const map = mapRef.current
+    const loaded = hazardDataRef.current
+    if (!ready || !filters.hazards || !loaded || !map?.getSource?.('community-hazards')) return
+    setGeoSource(map, 'community-hazards', stampHazardIcons(map, visibleHazards(loaded, hiddenHazards)))
+  }, [hiddenHazards, filters.hazards, ready])
 
   useEffect(() => {
     const map = mapRef.current
@@ -587,7 +757,7 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
     if (!ready || !map?.getLayer?.('community-ships-icon')) return undefined
     map.setLayoutProperty('community-ships-icon', 'visibility', filters.ships ? 'visible' : 'none')
     if (!filters.ships) {
-      setGeoSource(map, 'community-ship-track', { type: 'FeatureCollection', features: [] })
+      setRouteData(map, 'community-movement-route', [])
       return undefined
     }
     const timer = setInterval(() => refreshVectorTiles(map, 'community-ships'), 15000)
@@ -753,22 +923,87 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
                 {name}
               </label>
             ))}
-            {[
-              ['x', 'X posts'],
-              ['news', 'News'],
-              ['images', 'Images'],
-              ['shapes', 'Shapes'],
-              ['frontline', 'Ukraine frontline'],
-              ['conflicts', 'Major conflicts'],
-              ['reports', 'Major reports'],
-              ['hazards', 'Hazards'],
-              ['aircraft', 'Military aircraft'],
-              ['ships', 'Military ships'],
-            ].map(([key, name]) => (
-              <label key={key}>
-                <input type="checkbox" checked={!!filters[key]} onChange={() => toggleFilter(key)} />
-                {name}
-              </label>
+            {LAYER_ROWS.map(([key, name]) => (
+              key === 'hazards' ? (
+                <div key={key} className="community-map-hazard-block">
+                  <div className="community-map-layer-row">
+                    <label>
+                      <input type="checkbox" checked={!!filters.hazards} onChange={() => toggleFilter('hazards')} />
+                      Hazards
+                    </label>
+                    <button
+                      type="button"
+                      className="community-map-layer-disclosure"
+                      aria-expanded={hazardMenuOpen}
+                      aria-label="Hazard types"
+                      onClick={() => setHazardMenuOpen((open) => !open)}
+                    >
+                      {hazardMenuOpen ? '▾' : '▸'}
+                    </button>
+                  </div>
+                  {hazardMenuOpen ? (
+                    <div className="community-map-hazard-list">
+                      {HAZARD_MENU.filter(([group]) => hazardGroups[group]?.length).map(([group, label]) => {
+                        const rows = hazardGroups[group]
+                        const hiddenCount = rows.filter((row) => hiddenHazards[row.id]).length
+                        const groupOn = hiddenCount === 0
+                        return (
+                          <div key={group}>
+                            <div className="community-map-layer-row">
+                              <label>
+                                <input
+                                  type="checkbox"
+                                  checked={groupOn}
+                                  onChange={() => setHiddenHazards((current) => {
+                                    const next = { ...current }
+                                    if (groupOn) rows.forEach((row) => { next[row.id] = true })
+                                    else rows.forEach((row) => { delete next[row.id] })
+                                    return next
+                                  })}
+                                />
+                                {label}
+                              </label>
+                              <button
+                                type="button"
+                                className="community-map-layer-disclosure"
+                                aria-expanded={!!openHazardGroups[group]}
+                                aria-label={`${label} events`}
+                                onClick={() => setOpenHazardGroups((current) => ({ ...current, [group]: !current[group] }))}
+                              >
+                                {openHazardGroups[group] ? '▾' : '▸'}
+                              </button>
+                            </div>
+                            {openHazardGroups[group] ? (
+                              <div className="community-map-hazard-items">
+                                {rows.map((row) => (
+                                  <label key={row.id} title={row.title}>
+                                    <input
+                                      type="checkbox"
+                                      checked={!hiddenHazards[row.id]}
+                                      onChange={() => setHiddenHazards((current) => {
+                                        const next = { ...current }
+                                        if (next[row.id]) delete next[row.id]
+                                        else next[row.id] = true
+                                        return next
+                                      })}
+                                    />
+                                    <span>{row.title}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <label key={key}>
+                  <input type="checkbox" checked={!!filters[key]} onChange={() => toggleFilter(key)} />
+                  {name}
+                </label>
+              )
             ))}
           </div>
         ) : null}
@@ -801,7 +1036,14 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
           onDestination={setDestination}
           onChange={(patch) => {
             if (patch.label != null) setLabel(patch.label)
-            setDraft((current) => (current ? { ...current, ...patch, label: undefined } : current))
+            setDraft((current) => {
+              if (!current) return current
+              const next = { ...current, ...patch, label: undefined }
+              if (Object.prototype.hasOwnProperty.call(patch, 'image') && current.media) {
+                next.media = { ...current.media, image: patch.image }
+              }
+              return next
+            })
           }}
           onSave={saveDraft}
           onRemove={() => {

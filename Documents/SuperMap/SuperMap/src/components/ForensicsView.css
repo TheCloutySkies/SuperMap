@@ -356,6 +356,21 @@
   min-height: 100%;
 }
 
+.app--device-mobile .bench-bar,
+.app--device-mobile .bench-work {
+  grid-template-columns: 1fr;
+}
+
+.app--device-mobile .bench-rail,
+.app--device-mobile .bench-ledger {
+  border: 0;
+  border-top: 1px solid var(--bench-line);
+}
+
+.app--device-mobile .bench-plates {
+  grid-template-columns: 1fr;
+}
+
 @media (max-width: 980px) {
   .bench-bar,
   .bench-work {

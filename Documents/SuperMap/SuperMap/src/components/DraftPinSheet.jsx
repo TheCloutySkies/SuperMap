@@ -26,7 +26,20 @@ export default function DraftPinSheet({
         <strong>Draft pin</strong>
         <span>{draft.locating ? 'Reading the headline for a place…' : 'Drag the symbol to the right place.'}</span>
       </div>
-      {draft.image ? <img className="draft-pin-photo" src={draft.image} alt="" referrerPolicy="no-referrer" /> : null}
+      {draft.image ? (
+        <div className="draft-pin-photo-wrap">
+          <img className="draft-pin-photo" src={draft.image} alt="" referrerPolicy="no-referrer" />
+          <button
+            type="button"
+            className="draft-pin-photo-remove"
+            aria-label="Remove image"
+            title="Remove image"
+            onClick={() => onChange?.({ image: '' })}
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
       {draft.place ? <p className="draft-pin-place">{draft.place}</p> : null}
       {draft.reasoning ? <p className="draft-pin-reason">{draft.reasoning}</p> : null}
       <label>
@@ -45,9 +58,11 @@ export default function DraftPinSheet({
             type="button"
             className={symbol.sidc === sidc ? 'is-on' : ''}
             title={`${symbol.group}: ${symbol.label}`}
+            aria-label={symbol.label}
             onClick={() => onChange?.({ sidc: symbol.sidc })}
           >
-            {symbol.src ? <img src={symbol.src} alt="" /> : symbol.label}
+            {symbol.src ? <img src={symbol.src} alt="" /> : null}
+            <span>{symbol.label}</span>
           </button>
         ))}
       </div>

@@ -397,7 +397,7 @@ export function aircraftPopupHtml(props = {}) {
     ? `<a href="https://adsb.lol/?icao=${esc(hex)}" target="_blank" rel="noopener noreferrer">Open on adsb.lol</a>`
     : ''
   const title = String(props.flight || props.r || props.hex || 'Military aircraft').trim() || 'Military aircraft'
-  return `<div class="movement-popup"><strong>${esc(title)}</strong>${lines.join('')}${link}<div class="map-popup-source">adsb.lol</div></div>`
+  return `<div class="movement-popup"><strong>${esc(title)}</strong>${lines.join('')}${link}<div class="map-popup-source">Blue is the recent track. Gold dashes run to the destination when one is known.</div><div class="map-popup-source">adsb.lol</div></div>`
 }
 
 export function aircraftProperties(record) {
@@ -499,7 +499,7 @@ export function shipPopupHtml(tileProps = {}, extraRows = []) {
     lines.push(row(label, value))
   })
   const title = tileProps.name || (tileProps.mmsi ? `MMSI ${tileProps.mmsi}` : 'Military ship')
-  return `<div class="movement-popup"><strong>${esc(title)}</strong>${lines.join('')}<div class="map-popup-source">Open Waters AIS</div></div>`
+  return `<div class="movement-popup"><strong>${esc(title)}</strong>${lines.join('')}<div class="map-popup-source">Blue is the recent track. Gold dashes run to the destination when one is known.</div><div class="map-popup-source">Open Waters AIS</div></div>`
 }
 
 export async function fetchShipDetail(mmsi) {
@@ -522,6 +522,220 @@ export async function fetchShipTrack(mmsi) {
   return null
 }
 
+function lineFeature(coordinates, kind) {
+  const coords = []
+  ;(coordinates || []).forEach((pair) => {
+    const lon = Number(pair?.[0])
+    const lat = Number(pair?.[1])
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) return
+    const prev = coords[coords.length - 1]
+    if (prev && Math.abs(prev[0] - lon) < 1e-5 && Math.abs(prev[1] - lat) < 1e-5) return
+    coords.push([lon, lat])
+  })
+  if (coords.length < 2) return null
+  return {
+    type: 'Feature',
+    properties: { kind },
+    geometry: { type: 'LineString', coordinates: coords },
+  }
+}
+
+function trackFeature(track) {
+  const geometry = track?.geometry
+  if (geometry?.type === 'LineString') return lineFeature(geometry.coordinates, 'traveled')
+  if (geometry?.type === 'MultiLineString') {
+    return lineFeature(geometry.coordinates.flat(), 'traveled')
+  }
+  return null
+}
+
+function apiPath(path) {
+  const base = typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL
+    ? String(import.meta.env.VITE_API_URL).replace(/\/$/, '')
+    : ''
+  return `${base}${path}`
+}
+
+const movementPhotoCache = new Map()
+
+async function fetchMovementPhoto(cacheKey, path) {
+  if (movementPhotoCache.has(cacheKey)) return movementPhotoCache.get(cacheKey)
+  try {
+    const response = await fetch(apiPath(path))
+    if (response.status === 404) {
+      movementPhotoCache.set(cacheKey, null)
+      return null
+    }
+    if (!response.ok) return null
+    const photo = await response.json()
+    const value = photo?.src ? photo : null
+    movementPhotoCache.set(cacheKey, value)
+    return value
+  } catch {
+    return null
+  }
+}
+
+export function fetchAircraftPhoto(hex) {
+  const id = String(hex || '').trim().toLowerCase()
+  if (!/^[0-9a-f]{6}$/.test(id)) return Promise.resolve(null)
+  return fetchMovementPhoto(`hex:${id}`, `/api/adsb/photo/${id}`)
+}
+
+export function fetchShipPhoto(name) {
+  const text = String(name || '').trim()
+  if (text.length < 4) return Promise.resolve(null)
+  return fetchMovementPhoto(`ship:${text.toUpperCase()}`, `/api/vessels/photo?name=${encodeURIComponent(text)}`)
+}
+
+export function mountMovementPhoto(popup, photo) {
+  const root = popup?.getElement?.()?.querySelector('.movement-popup')
+  if (!root || !photo?.src || root.querySelector('.movement-photo')) return
+  const image = document.createElement('img')
+  image.className = 'movement-photo'
+  image.alt = photo.alt || 'Photograph'
+  image.referrerPolicy = 'no-referrer'
+  image.src = photo.src
+  const credit = document.createElement('a')
+  credit.className = 'movement-photo-credit'
+  credit.href = photo.link || photo.src
+  credit.target = '_blank'
+  credit.rel = 'noopener noreferrer'
+  credit.textContent = photo.credit ? `Photo: ${photo.credit}` : 'Photograph'
+  image.addEventListener('error', () => {
+    image.remove()
+    credit.remove()
+  })
+  root.prepend(credit)
+  root.prepend(image)
+}
+
+function currentLeg(coordinates) {
+  const legs = [[]]
+  coordinates.forEach((pair) => {
+    const leg = legs[legs.length - 1]
+    const prev = leg[leg.length - 1]
+    const jumped = prev && (Math.abs(prev[0] - pair[0]) > 2 || Math.abs(prev[1] - pair[1]) > 2)
+    if (jumped) legs.push([pair])
+    else leg.push(pair)
+  })
+  return legs[legs.length - 1]
+}
+
+export async function fetchAircraftTrace(hex) {
+  const id = String(hex || '').trim().toLowerCase()
+  if (!/^[0-9a-f]{6}$/.test(id)) return null
+  try {
+    const response = await fetch(apiPath(`/api/adsb/trace/${id}`))
+    if (!response.ok) return null
+    const data = await response.json()
+    const coordinates = (data?.trace || []).map((point) => [Number(point?.[2]), Number(point?.[1])])
+    return lineFeature(currentLeg(coordinates), 'traveled')
+  } catch {
+    return null
+  }
+}
+
+export async function fetchAircraftRoute(callsign, lng, lat) {
+  const id = String(callsign || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+  if (id.length < 3 || !Number.isFinite(Number(lng)) || !Number.isFinite(Number(lat))) return null
+  try {
+    const response = await fetch(apiPath(`/api/adsb/route/${encodeURIComponent(id)}`))
+    if (!response.ok) return null
+    const data = await response.json()
+    const airports = Array.isArray(data?._airports) ? data._airports : []
+    const dest = airports[airports.length - 1]
+    const destLon = Number(dest?.lon)
+    const destLat = Number(dest?.lat)
+    if (!Number.isFinite(destLon) || !Number.isFinite(destLat)) return null
+    return lineFeature([[Number(lng), Number(lat)], [destLon, destLat]], 'current')
+  } catch {
+    return null
+  }
+}
+
+const placeCache = new Map()
+
+function placeMatches(query, name) {
+  const norm = (value) => String(value || '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
+  const wanted = norm(query)
+  const found = norm(name)
+  if (wanted.length < 4 || found.length < 4) return false
+  if (wanted === found || wanted.includes(found) || found.includes(wanted)) {
+    return Math.min(wanted.length, found.length) >= 6 || wanted === found
+  }
+  return false
+}
+
+async function geocodePlace(query) {
+  const text = String(query || '').trim()
+  const key = text.toUpperCase()
+  if (key.length < 4 || !/[A-Z]/.test(key)) return null
+  if (placeCache.has(key)) return placeCache.get(key)
+  try {
+    const response = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(text)}&limit=1`)
+    if (!response.ok) return null
+    const data = await response.json()
+    const hit = data?.features?.[0]
+    const name = hit?.properties?.name || hit?.properties?.city || ''
+    const coords = hit?.geometry?.coordinates
+    const point = placeMatches(text, name) && Number.isFinite(Number(coords?.[0])) && Number.isFinite(Number(coords?.[1]))
+      ? [Number(coords[0]), Number(coords[1])]
+      : null
+    placeCache.set(key, point)
+    return point
+  } catch {
+    return null
+  }
+}
+
+export async function fetchShipRoute(detail, lng, lat) {
+  const destination = detail?.properties?.destination || detail?.destination
+  const text = String(destination || '').trim()
+  if (!text || text === '0' || text === '>') return null
+  const place = await geocodePlace(text)
+  if (!place) return null
+  return lineFeature([[Number(lng), Number(lat)], place], 'current')
+}
+
+export function installRouteLayers(map, sourceId) {
+  if (!map || map.getSource?.(sourceId)) return
+  map.addSource(sourceId, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+  const traveled = `${sourceId}-traveled`
+  const current = `${sourceId}-current`
+  if (!map.getLayer(traveled)) {
+    map.addLayer({
+      id: traveled,
+      type: 'line',
+      source: sourceId,
+      filter: ['==', ['get', 'kind'], 'traveled'],
+      paint: { 'line-color': '#38bdf8', 'line-width': 3, 'line-opacity': 0.95 },
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+    })
+  }
+  if (!map.getLayer(current)) {
+    map.addLayer({
+      id: current,
+      type: 'line',
+      source: sourceId,
+      filter: ['==', ['get', 'kind'], 'current'],
+      paint: { 'line-color': '#fbbf24', 'line-width': 2.5, 'line-dasharray': [2, 1.4] },
+      layout: { 'line-cap': 'butt', 'line-join': 'round' },
+    })
+  }
+}
+
+export function setRouteData(map, sourceId, features) {
+  const source = map?.getSource?.(sourceId)
+  if (source?.setData) {
+    source.setData({ type: 'FeatureCollection', features: (features || []).filter(Boolean) })
+  }
+}
+
+export function shipTrackFeature(track) {
+  return trackFeature(track)
+}
+
 export function refreshVectorTiles(map, sourceId) {
   if (!map) return
   try {
@@ -540,18 +754,71 @@ export function refreshVectorTiles(map, sourceId) {
 
 export const SHIP_TILES = 'https://ais.openwaters.io/v1/vessels/tiles.json?kind=vessel&type=35,55'
 
+const AIR_FAMILIES = ['heli', 'tilt', 'fighter', 'transport', 'bizjet', 'prop', 'jet']
+
+/** Screen size grows as you zoom in. Pitch stays on the viewport so the icon does not shrink. */
+export function detailIconSize(factor = null) {
+  const stops = [[4, 1.05], [8, 1.5], [12, 1.95], [16, 2.25]]
+  const expression = ['interpolate', ['linear'], ['zoom']]
+  stops.forEach(([zoom, size]) => {
+    expression.push(zoom, factor ? ['*', size, factor] : size)
+  })
+  return expression
+}
+
+export function clusterIconSize() {
+  return 1.15
+}
+
+export function aircraftClusterProperties() {
+  return Object.fromEntries(AIR_FAMILIES.map((family) => [
+    `n_${family}`,
+    ['+', ['case', ['==', ['get', 'icon'], `ac-${family}`], 1, 0]],
+  ]))
+}
+
+function argmaxIcon(pairs, fallback) {
+  let expr = fallback
+  for (let index = pairs.length - 1; index >= 0; index -= 1) {
+    const [prop, image] = pairs[index]
+    const checks = pairs
+      .filter(([other]) => other !== prop)
+      .map(([other]) => ['>=', ['to-number', ['get', prop]], ['to-number', ['get', other]]])
+    expr = ['case', checks.length ? ['all', ...checks] : ['literal', true], image, expr]
+  }
+  return expr
+}
+
+export function aircraftClusterIcon() {
+  return argmaxIcon(
+    AIR_FAMILIES.map((family) => [`n_${family}`, `ac-${family}`]),
+    'ac-jet',
+  )
+}
+
+export function clusterCountLayout(iconImage) {
+  return {
+    'icon-image': iconImage,
+    'icon-size': clusterIconSize(),
+    'icon-allow-overlap': true,
+    'icon-ignore-placement': true,
+    'text-field': ['get', 'point_count_abbreviated'],
+    'text-font': ['Open Sans Regular'],
+    'text-size': 13,
+    'text-offset': [0, 1.35],
+    'text-anchor': 'top',
+    'text-allow-overlap': true,
+  }
+}
+
 export function shipIconLayout() {
+  const lengthFactor = ['step', ['coalesce', ['to-number', ['get', 'length']], 40], 0.82, 40, 0.95, 90, 1.05, 220, 1.18]
   return {
     'icon-image': ['case', ['==', ['to-number', ['get', 'type']], 55], 'ship-patrol', 'ship-war'],
-    'icon-size': [
-      'interpolate', ['linear'], ['coalesce', ['to-number', ['get', 'length']], 40],
-      15, 0.55,
-      80, 0.8,
-      250, 1.15,
-    ],
-    'icon-rotate': ['coalesce', ['get', 'hdg'], 0],
+    'icon-size': detailIconSize(lengthFactor),
+    'icon-rotate': ['coalesce', ['to-number', ['get', 'hdg']], 0],
     'icon-rotation-alignment': 'map',
-    'icon-pitch-alignment': 'map',
+    'icon-pitch-alignment': 'viewport',
     'icon-allow-overlap': true,
     'icon-ignore-placement': true,
   }
@@ -560,10 +827,10 @@ export function shipIconLayout() {
 export function aircraftIconLayout() {
   return {
     'icon-image': ['concat', ['get', 'icon'], ['case', ['==', ['get', 'alertMark'], 1], '-alert', '']],
-    'icon-size': 0.85,
-    'icon-rotate': ['coalesce', ['get', 'heading'], 0],
+    'icon-size': detailIconSize(),
+    'icon-rotate': ['coalesce', ['to-number', ['get', 'heading']], 0],
     'icon-rotation-alignment': 'map',
-    'icon-pitch-alignment': 'map',
+    'icon-pitch-alignment': 'viewport',
     'icon-allow-overlap': true,
     'icon-ignore-placement': true,
   }

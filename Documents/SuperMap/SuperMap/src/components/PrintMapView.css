@@ -318,6 +318,18 @@
   pointer-events: none;
 }
 
+.app--device-mobile .print-map-view {
+  flex-direction: column;
+}
+.app--device-mobile .print-panel {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  max-height: 42%;
+  border-right: 0;
+  border-bottom: 1px solid var(--y2k-border, #1c2a22);
+}
+
 @media (max-width: 900px) {
   .print-map-view {
     flex-direction: column;

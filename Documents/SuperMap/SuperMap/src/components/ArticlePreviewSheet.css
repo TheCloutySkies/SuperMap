@@ -40,6 +40,16 @@
   to { transform: translateY(0); opacity: 1; }
 }
 
+.app--device-mobile .article-preview-backdrop {
+  align-items: flex-end;
+  padding: 0;
+}
+.app--device-mobile .article-preview-sheet {
+  width: 100%;
+  border-radius: 16px 16px 0 0;
+  max-height: min(62vh, 520px);
+}
+
 @media (min-width: 720px) {
   .article-preview-backdrop {
     align-items: center;

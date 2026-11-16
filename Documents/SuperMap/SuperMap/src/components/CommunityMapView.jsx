@@ -6,10 +6,22 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css'
 import { fetchMilitaryAircraft, fetchUkraineFrontline, frontlinePopupHtml } from '../services/newLayerFetchers'
 import { fetchAcledEvents, fetchGdeltReports, fetchMajorHazards, nearestCorroboration, stampHazardIcons } from '../services/situationLayers'
-import { detailIconSize } from '../lib/movementIcons'
 import { ensurePinEmoji, pinIconImageId } from '../lib/mapEmoji'
 import { installCommunitySituation, setGeoSource, situationPopupHtml, CLUSTER_LAYERS, SITUATION_POINT_LAYERS } from './communitySituation'
-import { aircraftPopupHtml, fetchShipDetail, fetchShipTrack, refreshVectorTiles, shipDetailRows, shipPopupHtml } from '../lib/movementIcons'
+import {
+  aircraftPopupHtml,
+  detailIconSize,
+  fetchAircraftRoute,
+  fetchAircraftTrace,
+  fetchShipDetail,
+  fetchShipRoute,
+  fetchShipTrack,
+  refreshVectorTiles,
+  setRouteData,
+  shipDetailRows,
+  shipPopupHtml,
+  shipTrackFeature,
+} from '../lib/movementIcons'
 import { stampPinIcons } from '../lib/mapEmoji'
 import { categorySidc } from '../lib/milSymbols'
 import { clearDraftMarker, syncDraftMarker } from '../lib/draftMarker'
@@ -451,24 +463,44 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
         const props = situationHit.properties || {}
         if (layerId === 'community-aircraft-icon') {
           popup.setLngLat(event.lngLat).setHTML(aircraftPopupHtml(props)).addTo(map)
+          const [lng, lat] = situationHit.geometry?.coordinates || [event.lngLat.lng, event.lngLat.lat]
+          const token = shipPopupToken.current + 1
+          shipPopupToken.current = token
+          setRouteData(map, 'community-movement-route', [])
+          Promise.all([
+            fetchAircraftTrace(props.hex),
+            fetchAircraftRoute(props.flight || props.r, lng, lat),
+          ]).then(([traveled, current]) => {
+            if (token !== shipPopupToken.current || !popup.isOpen()) return
+            setRouteData(map, 'community-movement-route', [traveled, current])
+          }).catch(() => {})
+          popup.once('close', () => {
+            if (token !== shipPopupToken.current) return
+            setRouteData(map, 'community-movement-route', [])
+          })
           return
         }
         if (layerId === 'community-ships-icon') {
           popup.setLngLat(event.lngLat).setHTML(shipPopupHtml(props)).addTo(map)
           const mmsi = props.mmsi
+          const [lng, lat] = situationHit.geometry?.coordinates || [event.lngLat.lng, event.lngLat.lat]
           const token = shipPopupToken.current + 1
           shipPopupToken.current = token
-          fetchShipDetail(mmsi).then((detail) => {
+          setRouteData(map, 'community-movement-route', [])
+          const detailPromise = fetchShipDetail(mmsi)
+          detailPromise.then((detail) => {
             if (token !== shipPopupToken.current || !detail || !popup.isOpen()) return
             popup.setHTML(shipPopupHtml(props, shipDetailRows(detail)))
           }).catch(() => {})
-          fetchShipTrack(mmsi).then((track) => {
-            if (token !== shipPopupToken.current || !track || !popup.isOpen()) return
-            setGeoSource(map, 'community-ship-track', { type: 'FeatureCollection', features: [track] })
+          Promise.all([fetchShipTrack(mmsi), detailPromise.catch(() => null)]).then(async ([track, detail]) => {
+            if (token !== shipPopupToken.current || !popup.isOpen()) return
+            const current = await fetchShipRoute(detail, lng, lat)
+            if (token !== shipPopupToken.current || !popup.isOpen()) return
+            setRouteData(map, 'community-movement-route', [shipTrackFeature(track), current])
           }).catch(() => {})
           popup.once('close', () => {
             if (token !== shipPopupToken.current) return
-            setGeoSource(map, 'community-ship-track', { type: 'FeatureCollection', features: [] })
+            setRouteData(map, 'community-movement-route', [])
           })
           return
         }
@@ -486,20 +518,35 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
     })
 
     const frontlineTip = new maplibregl.Popup({ closeButton: false, closeOnClick: false, className: 'maplibre-popup-dark', offset: 12 })
+    let lastHover = 0
+    const hoverLayers = [
+      ...CLUSTER_LAYERS,
+      ...SITUATION_POINT_LAYERS,
+      'community-pins-icon',
+      'community-pins-label',
+      'community-pins-fill',
+      'community-pins-line',
+      'community-frontline-fill',
+      'community-frontline-line',
+    ]
     map.on('mousemove', (event) => {
       if (toolRef.current || awaitingRef.current) {
         frontlineTip.remove()
+        map.getCanvas().style.cursor = 'crosshair'
         return
       }
-      const frontLayers = ['community-frontline-fill', 'community-frontline-line'].filter((id) => map.getLayer(id))
-      const region = frontLayers.length ? map.queryRenderedFeatures(event.point, { layers: frontLayers })[0] : null
-      if (!region) {
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
+      if (now - lastHover < 40) return
+      lastHover = now
+      const layers = hoverLayers.filter((id) => map.getLayer(id))
+      const hit = layers.length ? map.queryRenderedFeatures(event.point, { layers })[0] : null
+      map.getCanvas().style.cursor = hit ? 'pointer' : ''
+      const front = hit && String(hit.layer?.id || '').startsWith('community-frontline')
+      if (!front) {
         frontlineTip.remove()
-        if (!toolRef.current) map.getCanvas().style.cursor = ''
         return
       }
-      map.getCanvas().style.cursor = 'pointer'
-      frontlineTip.setLngLat(event.lngLat).setHTML(frontlinePopupHtml(region.properties)).addTo(map)
+      frontlineTip.setLngLat(event.lngLat).setHTML(frontlinePopupHtml(hit.properties)).addTo(map)
     })
 
     const onFocus = (event) => {
@@ -623,7 +670,7 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
     if (!ready || !map?.getLayer?.('community-ships-icon')) return undefined
     map.setLayoutProperty('community-ships-icon', 'visibility', filters.ships ? 'visible' : 'none')
     if (!filters.ships) {
-      setGeoSource(map, 'community-ship-track', { type: 'FeatureCollection', features: [] })
+      setRouteData(map, 'community-movement-route', [])
       return undefined
     }
     const timer = setInterval(() => refreshVectorTiles(map, 'community-ships'), 15000)

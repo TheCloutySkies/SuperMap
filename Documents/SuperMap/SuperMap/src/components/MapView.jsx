@@ -37,13 +37,19 @@ import {
   aircraftIconLayout,
   aircraftPopupHtml,
   ensureMovementIcons,
+  fetchAircraftRoute,
+  fetchAircraftTrace,
   fetchShipDetail,
+  fetchShipRoute,
   fetchShipTrack,
+  installRouteLayers,
   refreshVectorTiles,
+  setRouteData,
   SHIP_TILES,
   shipDetailRows,
   shipIconLayout,
   shipPopupHtml,
+  shipTrackFeature,
 } from '../lib/movementIcons'
 import { buildCrimeStateChoropleth, CRIME_RATE_COLOR_EXPRESSION } from '../services/crimeLayers'
 import MapControls from './MapControls'
@@ -1144,15 +1150,7 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     try {
       if (!map || typeof map.getSource !== 'function') return
       ensureMovementIcons(map)
-      if (!map.getSource('intel-ship-track')) {
-        map.addSource('intel-ship-track', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
-        map.addLayer({
-          id: 'intel-ship-track-line',
-          type: 'line',
-          source: 'intel-ship-track',
-          paint: { 'line-color': '#7dd3fc', 'line-width': 2 },
-        })
-      }
+      installRouteLayers(map, 'intel-movement-route')
       if (map.getSource('intel-mil-ships')) return
       map.addSource('intel-mil-ships', {
         type: 'vector',
@@ -1173,8 +1171,7 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     if (!map || typeof map.getSource !== 'function') return
     if (map.getLayer('intel-mil-ships-layer')) map.removeLayer('intel-mil-ships-layer')
     if (map.getSource('intel-mil-ships')) map.removeSource('intel-mil-ships')
-    if (map.getLayer('intel-ship-track-line')) map.removeLayer('intel-ship-track-line')
-    if (map.getSource('intel-ship-track')) map.removeSource('intel-ship-track')
+    setRouteData(map, 'intel-movement-route', [])
   }
 
   const removeMilAircraft = () => {
@@ -2437,6 +2434,21 @@ export default function MapView({
       const props = feat.properties || {}
       if (feat.layer.id === 'intel-mil-aircraft-layer' || feat.layer.id === 'intel-mil-aircraft-labels') {
         popup.setLngLat(coords).setHTML(aircraftPopupHtml(props)).addTo(map)
+        const token = shipPopupToken.current + 1
+        shipPopupToken.current = token
+        installRouteLayers(map, 'intel-movement-route')
+        setRouteData(map, 'intel-movement-route', [])
+        Promise.all([
+          fetchAircraftTrace(props.hex),
+          fetchAircraftRoute(props.flight || props.r, coords[0], coords[1]),
+        ]).then(([traveled, current]) => {
+          if (token !== shipPopupToken.current || !popup.isOpen()) return
+          setRouteData(map, 'intel-movement-route', [traveled, current])
+        }).catch(() => {})
+        popup.once('close', () => {
+          if (token !== shipPopupToken.current) return
+          setRouteData(map, 'intel-movement-route', [])
+        })
         return
       }
       if (feat.layer.id === 'intel-mil-ships-layer') {
@@ -2444,19 +2456,22 @@ export default function MapView({
         const mmsi = props.mmsi
         const token = shipPopupToken.current + 1
         shipPopupToken.current = token
-        fetchShipDetail(mmsi).then((detail) => {
+        installRouteLayers(map, 'intel-movement-route')
+        setRouteData(map, 'intel-movement-route', [])
+        const detailPromise = fetchShipDetail(mmsi)
+        detailPromise.then((detail) => {
           if (token !== shipPopupToken.current || !detail || !popup.isOpen()) return
           popup.setHTML(shipPopupHtml(props, shipDetailRows(detail)))
         }).catch(() => {})
-        fetchShipTrack(mmsi).then((track) => {
-          if (token !== shipPopupToken.current || !track || !popup.isOpen()) return
-          const source = map.getSource('intel-ship-track')
-          if (source?.setData) source.setData({ type: 'FeatureCollection', features: [track] })
+        Promise.all([fetchShipTrack(mmsi), detailPromise.catch(() => null)]).then(async ([track, detail]) => {
+          if (token !== shipPopupToken.current || !popup.isOpen()) return
+          const current = await fetchShipRoute(detail, coords[0], coords[1])
+          if (token !== shipPopupToken.current || !popup.isOpen()) return
+          setRouteData(map, 'intel-movement-route', [shipTrackFeature(track), current])
         }).catch(() => {})
         popup.once('close', () => {
           if (token !== shipPopupToken.current) return
-          const source = map.getSource('intel-ship-track')
-          if (source?.setData) source.setData({ type: 'FeatureCollection', features: [] })
+          setRouteData(map, 'intel-movement-route', [])
         })
         return
       }

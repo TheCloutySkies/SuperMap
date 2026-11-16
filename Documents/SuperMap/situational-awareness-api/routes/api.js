@@ -1511,6 +1511,41 @@ router.get('/adsb-lol/airport/:icao', async (req, res) => {
   }
 })
 
+/** Recent adsb.lol track for one aircraft (avoids browser CORS). GET /api/adsb/trace/:hex */
+router.get('/adsb/trace/:hex', async (req, res) => {
+  const hex = String(req.params.hex || '').trim().toLowerCase()
+  if (!/^[0-9a-f]{6}$/.test(hex)) return res.status(400).json({ error: 'ICAO hex required' })
+  try {
+    const { data, status } = await axios.get(`https://api.adsb.lol/1/trace/recent/${hex}`, {
+      timeout: 12000,
+      validateStatus: () => true,
+      responseType: 'json',
+    })
+    if (status !== 200 || !data) return res.status(status >= 400 ? status : 502).json({ error: 'No aircraft trace' })
+    res.json(data)
+  } catch (err) {
+    console.warn('[API /adsb/trace]', err.message)
+    res.status(502).json({ error: 'Failed to fetch aircraft trace' })
+  }
+})
+
+/** Filed route from current position's callsign (avoids browser CORS). GET /api/adsb/route/:callsign */
+router.get('/adsb/route/:callsign', async (req, res) => {
+  const id = String(req.params.callsign || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+  if (id.length < 3 || id.length > 8) return res.status(400).json({ error: 'Callsign required' })
+  try {
+    const { data, status } = await axios.get(
+      `https://vrs-standing-data.adsb.lol/routes/${id.slice(0, 2)}/${encodeURIComponent(id)}.json`,
+      { timeout: 10000, validateStatus: () => true, responseType: 'json' },
+    )
+    if (status !== 200 || !data) return res.status(status >= 400 ? status : 502).json({ error: 'No filed route' })
+    res.json(data)
+  } catch (err) {
+    console.warn('[API /adsb/route]', err.message)
+    res.status(502).json({ error: 'Failed to fetch aircraft route' })
+  }
+})
+
 /** adsb.lol mil feed proxy (avoids browser CORS). GET /api/adsb/mil */
 router.get('/adsb/mil', async (_req, res) => {
   try {

@@ -7,6 +7,7 @@ import {
   clusterCountLayout,
   detailIconSize,
   ensureMovementIcons,
+  installRouteLayers,
   SHIP_TILES,
   shipIconLayout,
 } from '../lib/movementIcons'
@@ -142,6 +143,7 @@ export function installCommunitySituation(map) {
       paint: { 'text-color': '#f8fafc', 'text-halo-color': '#0d1117', 'text-halo-width': 1.4 },
     })
   }
+  installRouteLayers(map, 'community-movement-route')
   if (!map.getSource('community-aircraft')) {
     map.addSource('community-aircraft', {
       type: 'geojson',
@@ -173,15 +175,6 @@ export function installCommunitySituation(map) {
       filter: ['has', 'point_count'],
       layout: clusterCountLayout(aircraftClusterIcon()),
       paint: { 'text-color': '#f8fafc', 'text-halo-color': '#0d1117', 'text-halo-width': 1.4 },
-    })
-  }
-  if (!map.getSource('community-ship-track')) {
-    map.addSource('community-ship-track', { type: 'geojson', data: EMPTY })
-    map.addLayer({
-      id: 'community-ship-track-line',
-      type: 'line',
-      source: 'community-ship-track',
-      paint: { 'line-color': '#7dd3fc', 'line-width': 2 },
     })
   }
   if (!map.getSource('community-ships')) {

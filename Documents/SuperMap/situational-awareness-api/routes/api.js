@@ -1529,6 +1529,123 @@ router.get('/adsb/trace/:hex', async (req, res) => {
   }
 })
 
+const movementPhotoCache = new Map()
+const MOVEMENT_PHOTO_TTL_MS = 6 * 60 * 60 * 1000
+const MOVEMENT_PHOTO_UA = 'GoodPalantir/1.0 (+https://goodpalantir.cloutyskies.org)'
+
+function readMovementPhoto(key) {
+  const hit = movementPhotoCache.get(key)
+  if (!hit) return undefined
+  if (Date.now() - hit.at > MOVEMENT_PHOTO_TTL_MS) {
+    movementPhotoCache.delete(key)
+    return undefined
+  }
+  return hit.value
+}
+
+function storeMovementPhoto(key, value) {
+  movementPhotoCache.set(key, { at: Date.now(), value })
+  return value
+}
+
+function vesselPhoto(name, pages) {
+  const norm = (value) => String(value || '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
+  const tokens = (value) => norm(value).split(' ').filter((word) => word.length >= 4 && !['SHIP', 'BOAT', 'CLASS', 'NAVAL', 'VESSEL'].includes(word))
+  const wanted = norm(name)
+  const wantedTokens = new Set(tokens(name))
+  const vessel = /\b(ship|ships|vessel|vessels|warship|frigate|destroyer|carrier|submarine|cutter|corvette|cruiser|naval|navy|boat|ferry|tanker|cargo|patrol|icebreaker|minesweeper|amphibious|auxiliary|battleship|hovercraft|trawler|yacht)\b/i
+  const prefix = /\b(HMS|USS|USNS|USAV|USCGC|CGC|HMAS|HMCS|HMNZS|HNLMS|INS|ROKS|TCG|FGS|ITS|RFS|KRI|BRP)\b/i
+  const reject = /\b(disambiguation|album|song|single|film|movie|television|footballer|politician|actor|actress|surname|suv|automobile|car model)\b/i
+  const ranked = (pages || []).map((page) => {
+    const title = norm(page.title)
+    const about = `${page.description || ''} ${page.title || ''}`
+    const shared = tokens(page.title).filter((word) => wantedTokens.has(word)).length
+    const named = title.includes(wanted) || (wanted.includes(title) && title.length >= 8)
+    const looksLikeVessel = vessel.test(about) || prefix.test(page.title || '')
+    const ok = Boolean(page.thumbnail && (named || shared >= 2) && looksLikeVessel && !reject.test(about))
+    return { page, shared, named, ok }
+  }).filter((item) => item.ok)
+  ranked.sort((a, b) => Number(b.named) - Number(a.named) || b.shared - a.shared)
+  const best = ranked[0]?.page
+  if (!best?.thumbnail) return null
+  return {
+    src: best.thumbnail,
+    link: best.url,
+    credit: best.title,
+    alt: best.title,
+  }
+}
+
+/** Photograph of one aircraft from planespotters.net. GET /api/adsb/photo/:hex */
+router.get('/adsb/photo/:hex', async (req, res) => {
+  const hex = String(req.params.hex || '').trim().toLowerCase()
+  if (!/^[0-9a-f]{6}$/.test(hex)) return res.status(400).json({ error: 'ICAO hex required' })
+  const cached = readMovementPhoto(`hex:${hex}`)
+  if (cached !== undefined) return cached ? res.json(cached) : res.status(404).json({ error: 'No aircraft photo' })
+  try {
+    const { data, status } = await axios.get(`https://api.planespotters.net/pub/photos/hex/${hex}`, {
+      timeout: 10000,
+      validateStatus: () => true,
+      responseType: 'json',
+      headers: { 'User-Agent': MOVEMENT_PHOTO_UA, Accept: 'application/json' },
+    })
+    const shot = status === 200 ? data?.photos?.[0] : null
+    const src = shot?.thumbnail_large?.src || shot?.thumbnail?.src
+    if (!src) {
+      storeMovementPhoto(`hex:${hex}`, null)
+      return res.status(404).json({ error: 'No aircraft photo' })
+    }
+    res.json(storeMovementPhoto(`hex:${hex}`, { src, link: shot.link, credit: shot.photographer || 'planespotters.net' }))
+  } catch (err) {
+    console.warn('[API /adsb/photo]', err.message)
+    res.status(502).json({ error: 'Failed to fetch aircraft photo' })
+  }
+})
+
+/** Photograph of a named vessel from Wikipedia, only when the page is clearly that ship. GET /api/vessels/photo?name= */
+router.get('/vessels/photo', async (req, res) => {
+  const name = String(req.query.name || '').trim()
+  if (name.length < 4 || name.length > 80) return res.status(400).json({ error: 'Vessel name required' })
+  const key = `ship:${name.toUpperCase()}`
+  const cached = readMovementPhoto(key)
+  if (cached !== undefined) return cached ? res.json(cached) : res.status(404).json({ error: 'No vessel photo' })
+  try {
+    const { data, status } = await axios.get('https://en.wikipedia.org/w/api.php', {
+      timeout: 10000,
+      validateStatus: () => true,
+      responseType: 'json',
+      headers: { 'User-Agent': MOVEMENT_PHOTO_UA },
+      params: {
+        action: 'query',
+        format: 'json',
+        generator: 'search',
+        gsrsearch: `${name} ship`,
+        gsrlimit: 5,
+        gsrnamespace: 0,
+        prop: 'pageimages|pageterms|info',
+        inprop: 'url',
+        piprop: 'thumbnail',
+        pithumbsize: 480,
+      },
+    })
+    const pages = status === 200 ? Object.values(data?.query?.pages || {}) : []
+    const photo = vesselPhoto(name, pages.map((page) => ({
+      title: page.title,
+      description: page.terms?.description?.[0] || '',
+      thumbnail: page.thumbnail?.source || '',
+      url: page.fullurl || '',
+    })))
+    if (!photo) {
+      storeMovementPhoto(key, null)
+      return res.status(404).json({ error: 'No vessel photo' })
+    }
+    res.json(storeMovementPhoto(key, photo))
+  } catch (err) {
+    console.warn('[API /vessels/photo]', err.message)
+    res.status(502).json({ error: 'Failed to fetch vessel photo' })
+  }
+})
+
 /** Filed route from current position's callsign (avoids browser CORS). GET /api/adsb/route/:callsign */
 router.get('/adsb/route/:callsign', async (req, res) => {
   const id = String(req.params.callsign || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')

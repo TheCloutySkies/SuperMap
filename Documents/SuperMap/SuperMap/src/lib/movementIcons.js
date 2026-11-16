@@ -556,6 +556,60 @@ function apiPath(path) {
   return `${base}${path}`
 }
 
+const movementPhotoCache = new Map()
+
+async function fetchMovementPhoto(cacheKey, path) {
+  if (movementPhotoCache.has(cacheKey)) return movementPhotoCache.get(cacheKey)
+  try {
+    const response = await fetch(apiPath(path))
+    if (response.status === 404) {
+      movementPhotoCache.set(cacheKey, null)
+      return null
+    }
+    if (!response.ok) return null
+    const photo = await response.json()
+    const value = photo?.src ? photo : null
+    movementPhotoCache.set(cacheKey, value)
+    return value
+  } catch {
+    return null
+  }
+}
+
+export function fetchAircraftPhoto(hex) {
+  const id = String(hex || '').trim().toLowerCase()
+  if (!/^[0-9a-f]{6}$/.test(id)) return Promise.resolve(null)
+  return fetchMovementPhoto(`hex:${id}`, `/api/adsb/photo/${id}`)
+}
+
+export function fetchShipPhoto(name) {
+  const text = String(name || '').trim()
+  if (text.length < 4) return Promise.resolve(null)
+  return fetchMovementPhoto(`ship:${text.toUpperCase()}`, `/api/vessels/photo?name=${encodeURIComponent(text)}`)
+}
+
+export function mountMovementPhoto(popup, photo) {
+  const root = popup?.getElement?.()?.querySelector('.movement-popup')
+  if (!root || !photo?.src || root.querySelector('.movement-photo')) return
+  const image = document.createElement('img')
+  image.className = 'movement-photo'
+  image.alt = photo.alt || 'Photograph'
+  image.referrerPolicy = 'no-referrer'
+  image.src = photo.src
+  const credit = document.createElement('a')
+  credit.className = 'movement-photo-credit'
+  credit.href = photo.link || photo.src
+  credit.target = '_blank'
+  credit.rel = 'noopener noreferrer'
+  credit.textContent = photo.credit ? `Photo: ${photo.credit}` : 'Photograph'
+  image.addEventListener('error', () => {
+    image.remove()
+    credit.remove()
+  })
+  root.prepend(credit)
+  root.prepend(image)
+}
+
 function currentLeg(coordinates) {
   const legs = [[]]
   coordinates.forEach((pair) => {

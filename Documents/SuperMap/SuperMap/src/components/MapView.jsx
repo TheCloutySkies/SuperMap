@@ -37,11 +37,14 @@ import {
   aircraftIconLayout,
   aircraftPopupHtml,
   ensureMovementIcons,
+  fetchAircraftPhoto,
   fetchAircraftRoute,
   fetchAircraftTrace,
   fetchShipDetail,
+  fetchShipPhoto,
   fetchShipRoute,
   fetchShipTrack,
+  mountMovementPhoto,
   installRouteLayers,
   refreshVectorTiles,
   setRouteData,
@@ -2436,6 +2439,10 @@ export default function MapView({
         popup.setLngLat(coords).setHTML(aircraftPopupHtml(props)).addTo(map)
         const token = shipPopupToken.current + 1
         shipPopupToken.current = token
+        fetchAircraftPhoto(props.hex).then((photo) => {
+          if (token !== shipPopupToken.current || !popup.isOpen() || !photo) return
+          mountMovementPhoto(popup, { ...photo, alt: props.title || props.flight || 'Aircraft' })
+        }).catch(() => {})
         installRouteLayers(map, 'intel-movement-route')
         setRouteData(map, 'intel-movement-route', [])
         Promise.all([
@@ -2459,10 +2466,19 @@ export default function MapView({
         installRouteLayers(map, 'intel-movement-route')
         setRouteData(map, 'intel-movement-route', [])
         const detailPromise = fetchShipDetail(mmsi)
+        const photoPromise = fetchShipPhoto(props.name)
+        const showPhoto = () => {
+          photoPromise.then((photo) => {
+            if (token !== shipPopupToken.current || !popup.isOpen() || !photo) return
+            mountMovementPhoto(popup, { ...photo, alt: props.name || 'Ship' })
+          }).catch(() => {})
+        }
         detailPromise.then((detail) => {
           if (token !== shipPopupToken.current || !detail || !popup.isOpen()) return
           popup.setHTML(shipPopupHtml(props, shipDetailRows(detail)))
+          showPhoto()
         }).catch(() => {})
+        showPhoto()
         Promise.all([fetchShipTrack(mmsi), detailPromise.catch(() => null)]).then(async ([track, detail]) => {
           if (token !== shipPopupToken.current || !popup.isOpen()) return
           const current = await fetchShipRoute(detail, coords[0], coords[1])

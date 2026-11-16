@@ -11,11 +11,14 @@ import { installCommunitySituation, setGeoSource, situationPopupHtml, CLUSTER_LA
 import {
   aircraftPopupHtml,
   detailIconSize,
+  fetchAircraftPhoto,
   fetchAircraftRoute,
   fetchAircraftTrace,
   fetchShipDetail,
+  fetchShipPhoto,
   fetchShipRoute,
   fetchShipTrack,
+  mountMovementPhoto,
   refreshVectorTiles,
   setRouteData,
   shipDetailRows,
@@ -466,6 +469,14 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
           const [lng, lat] = situationHit.geometry?.coordinates || [event.lngLat.lng, event.lngLat.lat]
           const token = shipPopupToken.current + 1
           shipPopupToken.current = token
+          const photoPromise = fetchAircraftPhoto(props.hex)
+          const showPhoto = () => {
+            photoPromise.then((photo) => {
+              if (token !== shipPopupToken.current || !popup.isOpen() || !photo) return
+              mountMovementPhoto(popup, { ...photo, alt: props.title || props.flight || 'Aircraft' })
+            }).catch(() => {})
+          }
+          showPhoto()
           setRouteData(map, 'community-movement-route', [])
           Promise.all([
             fetchAircraftTrace(props.hex),
@@ -488,10 +499,19 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
           shipPopupToken.current = token
           setRouteData(map, 'community-movement-route', [])
           const detailPromise = fetchShipDetail(mmsi)
+          const photoPromise = fetchShipPhoto(props.name)
+          const showPhoto = () => {
+            photoPromise.then((photo) => {
+              if (token !== shipPopupToken.current || !popup.isOpen() || !photo) return
+              mountMovementPhoto(popup, { ...photo, alt: props.name || 'Ship' })
+            }).catch(() => {})
+          }
           detailPromise.then((detail) => {
             if (token !== shipPopupToken.current || !detail || !popup.isOpen()) return
             popup.setHTML(shipPopupHtml(props, shipDetailRows(detail)))
+            showPhoto()
           }).catch(() => {})
+          showPhoto()
           Promise.all([fetchShipTrack(mmsi), detailPromise.catch(() => null)]).then(async ([track, detail]) => {
             if (token !== shipPopupToken.current || !popup.isOpen()) return
             const current = await fetchShipRoute(detail, lng, lat)

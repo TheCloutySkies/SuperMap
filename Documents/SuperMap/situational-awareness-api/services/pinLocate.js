@@ -45,14 +45,15 @@ function tidyPlace(name) {
 
 function cleanSidc(value) {
   const sidc = String(value || '').toUpperCase().replace(/[^A-Z0-9-]/g, '')
+  if (!/^[SEGIOW]/.test(sidc)) return ''
   return sidc.length >= 10 && sidc.length <= 20 ? sidc : ''
 }
 
 function categoryFrom(kind, text, suggested) {
-  if (CATEGORY_SET.has(suggested)) return suggested
   for (const [category, pattern] of RULES) {
     if (pattern.test(text)) return category
   }
+  if (CATEGORY_SET.has(suggested)) return suggested
   if (kind === 'x') return 'x'
   return 'news'
 }
@@ -74,7 +75,10 @@ function heuristic(text, kind) {
 
 async function geocodeReading(reading, text) {
   const tried = new Set()
-  const candidates = [reading.query, reading.place, ...extractPlaces(text).reverse()].map(tidyPlace)
+  const place = tidyPlace(reading.place)
+  const query = tidyPlace(reading.query)
+  const shortQuery = query && query.split(' ').length <= 6
+  const candidates = [...(shortQuery ? [query, place] : [place, query]), ...extractPlaces(text).reverse()].map(tidyPlace)
   for (const name of candidates) {
     const query = String(name || '').trim()
     if (!query || tried.has(query.toLowerCase())) continue
@@ -99,7 +103,10 @@ async function locateHeadline({ title, summary, url, kind } = {}) {
   }
   if (!reading) reading = heuristic(text, sourceKind)
   const category = categoryFrom(sourceKind, text, reading.category)
-  const sidc = cleanSidc(reading.sidc) || DEFAULT_SIDC[category]
+  const modelCategory = CATEGORY_SET.has(reading.category) ? reading.category : ''
+  const sidc = modelCategory && modelCategory !== category
+    ? DEFAULT_SIDC[category]
+    : (cleanSidc(reading.sidc) || DEFAULT_SIDC[category])
   const { hit, query } = await geocodeReading(reading, text)
   return {
     place: reading.place || query || '',

@@ -8,7 +8,7 @@ import { getAoiFeatures, setAoiFeatures, getSavedPoints, setSavedPoints } from '
 import { MAPLIBRE_DRAW_STYLES } from '../lib/mapboxDrawStyles'
 import { capMapPixelRatio } from '../lib/mapPerf'
 import { emojiToImageData, stampPinIcons } from '../lib/mapEmoji'
-import { categorySidc } from '../lib/milSymbols'
+import { categorySidc, EARTHQUAKE_SIDC, ensureSidcIcon, sidcIconId } from '../lib/milSymbols'
 import { clearDraftMarker, syncDraftMarker } from '../lib/draftMarker'
 import DraftPinSheet from './DraftPinSheet'
 import './DraftPinSheet.css'
@@ -83,12 +83,11 @@ const WEBCAM_FETCH_DEBOUNCE_MS = 450
 const FLOCK_MARKER_URL = '/assets/flock-camera-marker.png'
 const FLOCK_ICON_ID = 'flock-camera-marker'
 
-/** Layer emoji markers (documented in PR): hurricane 🌀, volcano 🌋, news 📰, quake 💥, mil ✈, FCC 📡 */
+/** Layer emoji markers (documented in PR): hurricane 🌀, volcano 🌋, news 📰, mil ✈, FCC 📡 */
 const LAYER_EMOJI = {
   hurricane: '🌀',
   volcano: '🌋',
   news: '📰',
-  earthquake: '💥',
   milAircraft: '✈',
   fccTower: '📡',
   osint: '🔎',
@@ -98,7 +97,7 @@ const EMOJI_ICON_IDS = {
   hurricane: 'emoji-hurricane',
   volcano: 'emoji-volcano',
   news: 'emoji-news',
-  earthquake: 'emoji-earthquake',
+  earthquake: sidcIconId(EARTHQUAKE_SIDC),
   milAircraft: 'emoji-mil-aircraft',
   fccTower: 'emoji-fcc-tower',
   osint: 'emoji-osint',
@@ -106,9 +105,11 @@ const EMOJI_ICON_IDS = {
 
 function ensureEmojiIcons(map) {
   if (!map || typeof map.addImage !== 'function') return
+  ensureSidcIcon(map, EARTHQUAKE_SIDC)
   Object.entries(EMOJI_ICON_IDS).forEach(([key, id]) => {
     if (map.hasImage(id)) return
     const emoji = LAYER_EMOJI[key]
+    if (!emoji) return
     const data = emojiToImageData(emoji, 64)
     if (!data) return
     try {

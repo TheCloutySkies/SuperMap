@@ -1,5 +1,5 @@
 import { ensurePinEmoji, pinIconImageId } from '../lib/mapEmoji'
-import { ensureSidcIcon, sidcIconId, WILDFIRE_SIDC } from '../lib/milSymbols'
+import { EARTHQUAKE_SIDC, ensureSidcIcon, sidcIconId, WILDFIRE_SIDC } from '../lib/milSymbols'
 import {
   aircraftClusterIcon,
   aircraftClusterProperties,
@@ -12,7 +12,7 @@ import {
   shipIconLayout,
 } from '../lib/movementIcons'
 
-const QUAKE_ICON = pinIconImageId('💥')
+const QUAKE_ICON = sidcIconId(EARTHQUAKE_SIDC)
 const VOLCANO_ICON = pinIconImageId('🌋')
 
 const EMPTY = { type: 'FeatureCollection', features: [] }
@@ -82,7 +82,7 @@ export function installCommunitySituation(map) {
   paintMark(map, 'mark-report', '#f59e0b')
   paintMark(map, 'hazard-orange', '#f97316')
   paintMark(map, 'hazard-red', '#ef4444')
-  ensurePinEmoji(map, '💥')
+  ensureSidcIcon(map, EARTHQUAKE_SIDC)
   ensurePinEmoji(map, '🌋')
   ensurePinEmoji(map, '📍')
   ensureSidcIcon(map, WILDFIRE_SIDC)

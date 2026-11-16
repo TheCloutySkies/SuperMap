@@ -1,6 +1,6 @@
 import { fetchGdacsEvents, fetchUsgsVolcanoes } from './layerServices'
 import { ensurePinEmoji } from '../lib/mapEmoji'
-import { ensureSidcIcon, WILDFIRE_SIDC } from '../lib/milSymbols'
+import { ensureSidcIcon, EARTHQUAKE_SIDC, WILDFIRE_SIDC } from '../lib/milSymbols'
 
 const API_BASE = typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
@@ -48,7 +48,8 @@ function quakeFeatures(collection) {
         place: props.place || '',
         date: when,
         link: props.url || 'https://earthquake.usgs.gov/',
-        icon: '💥',
+        sidc: EARTHQUAKE_SIDC,
+        icon: EARTHQUAKE_SIDC,
       },
       geometry: { type: 'Point', coordinates: [Number(coords[0]), Number(coords[1])] },
     }
@@ -150,7 +151,7 @@ export function stampHazardIcons(map, collection) {
   paintDisc(map, 'hazard-orange', '#f97316')
   paintDisc(map, 'hazard-red', '#ef4444')
   const features = (collection?.features || []).map((feature) => {
-    const icon = feature.properties?.icon || '💥'
+    const icon = feature.properties?.icon || 'hazard-orange'
     const sidc = feature.properties?.sidc
     const iconImage = sidc
       ? ensureSidcIcon(map, sidc)

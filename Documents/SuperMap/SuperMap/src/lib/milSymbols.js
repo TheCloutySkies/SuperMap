@@ -57,12 +57,16 @@ export const MIL_SYMBOLS = [
   { group: 'Incident', label: 'Shooting', sidc: 'EHIPBF----' },
   { group: 'Incident', label: 'Fire', sidc: 'EHIPC-----' },
   { group: 'Incident', label: 'Wildfire', sidc: 'EHIPCH----' },
+  { group: 'Incident', label: 'Earthquake', sidc: 'EHNPAC----' },
   { group: 'Incident', label: 'Electric power', sidc: 'SFGPIUE----' },
   { group: 'Incident', label: 'Nuclear power', sidc: 'SFGPIUEN--' },
 ]
 
 /** MIL-STD-2525C emergency incident: wild fire (E-I-CH). */
 export const WILDFIRE_SIDC = 'EHIPCH----'
+
+/** MIL-STD-2525C natural event: earthquake epicenter (E-N-AC). */
+export const EARTHQUAKE_SIDC = 'EHNPAC----'
 
 const thumbs = new Map()
 

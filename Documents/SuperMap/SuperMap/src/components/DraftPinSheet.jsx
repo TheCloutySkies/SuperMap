@@ -58,9 +58,11 @@ export default function DraftPinSheet({
             type="button"
             className={symbol.sidc === sidc ? 'is-on' : ''}
             title={`${symbol.group}: ${symbol.label}`}
+            aria-label={symbol.label}
             onClick={() => onChange?.({ sidc: symbol.sidc })}
           >
-            {symbol.src ? <img src={symbol.src} alt="" /> : symbol.label}
+            {symbol.src ? <img src={symbol.src} alt="" /> : null}
+            <span>{symbol.label}</span>
           </button>
         ))}
       </div>

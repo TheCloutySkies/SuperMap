@@ -244,7 +244,8 @@
 }
 
 .app--device-mobile .draft-pin-symbols {
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(3, 1fr);
+  max-height: 200px;
 }
 
 .movement-popup a,

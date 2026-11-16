@@ -88,13 +88,13 @@
 
 .draft-pin-symbols {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 4px;
-  max-height: 148px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  max-height: 280px;
   overflow: auto;
+  padding: 2px;
 }
 
-.draft-pin-symbols button,
 .draft-pin-actions button,
 .draft-pin-destination button {
   border: 1px solid #30363d;
@@ -102,6 +102,21 @@
   color: #e6edf3;
   border-radius: 8px;
   padding: 4px;
+  cursor: pointer;
+}
+
+.draft-pin-symbols button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  min-height: 62px;
+  border: 1px solid #30363d;
+  background: #010409;
+  color: #c9d1d9;
+  border-radius: 8px;
+  padding: 6px 4px 5px;
   cursor: pointer;
 }
 
@@ -114,7 +129,15 @@
   display: block;
   width: 28px;
   height: 28px;
-  margin: 0 auto;
+  margin: 2px auto 0;
+}
+
+.draft-pin-symbols span {
+  display: block;
+  width: 100%;
+  font-size: 9px;
+  line-height: 1.15;
+  text-align: center;
 }
 
 .draft-pin-destination,

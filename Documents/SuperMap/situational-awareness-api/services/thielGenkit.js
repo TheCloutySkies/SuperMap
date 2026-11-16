@@ -47,8 +47,51 @@ async function generateText(prompt, { maxTokens = 800 } = {}) {
   }
 }
 
+function parseJson(text) {
+  if (!text) return null
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
+  if (start < 0 || end <= start) return null
+  try {
+    return JSON.parse(text.slice(start, end + 1))
+  } catch (_) {
+    return null
+  }
+}
+
+/**
+ * Ask Gemini, through the same Genkit flow, where a headline happened.
+ * Returns null when no key is configured or the model does not answer.
+ */
+async function locatePin({ title, summary, url, kind } = {}) {
+  const headline = String(title || '').trim()
+  if (!headline) return null
+  const prompt = [
+    'You place one news post, X post, or photo on a map.',
+    'Read the headline and text. Name the most specific real place the event happened: a town, airfield, port, neighborhood, or street. Prefer that over a country, and ignore datelines that are only where the story was written.',
+    'category must be one of: x, news, conflict, attack, planes, cars, drones, ships, explosion, outage.',
+    'sidc must be a MIL-STD-2525C symbol code when one fits, otherwise an empty string. Examples: SFAPMF----- fixed wing, SFAPMFQ---- drone, SFAPMH----- helicopter, SFSPCL----- ship, SFGPUCI---- infantry, SHGPUCI---- hostile infantry, SFGPUCA---- armor, SFGPEVCA--- car, SFGPIUE---- electric power, EHIPBA---- bomb.',
+    'Return only JSON: {"place":"","query":"","category":"news","sidc":"","reasoning":""}',
+    'query is the geocoder string. reasoning is one sentence naming why that place is the event, not a verdict about the story.',
+    `kind: ${String(kind || 'news')}`,
+    url ? `url: ${String(url).slice(0, 300)}` : '',
+    `headline: ${headline.slice(0, 400)}`,
+    summary ? `text: ${String(summary).slice(0, 1200)}` : '',
+  ].filter(Boolean).join('\n')
+  const text = await generateText(prompt, { maxTokens: 480 })
+  const parsed = parseJson(text)
+  if (!parsed || typeof parsed !== 'object') return null
+  return {
+    place: String(parsed.place || '').slice(0, 180),
+    query: String(parsed.query || parsed.place || '').slice(0, 180),
+    category: String(parsed.category || '').toLowerCase(),
+    sidc: String(parsed.sidc || '').toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 20),
+    reasoning: String(parsed.reasoning || '').slice(0, 400),
+  }
+}
+
 function hasGenkit() {
   return Boolean(apiKey())
 }
 
-module.exports = { generateText, hasGenkit }
+module.exports = { generateText, locatePin, hasGenkit }

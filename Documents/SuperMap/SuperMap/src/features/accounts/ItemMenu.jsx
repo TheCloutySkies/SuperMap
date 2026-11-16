@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom'
 import { useSuperMapAccount } from './SuperMapAccounts'
 import { personHandle, personTitle } from './accountIdentity'
 import { createProfilePost, deleteProfilePost, fileReport, queueReportClip, searchDiscoverableUsers, sendDirectMessage } from './socialData'
-import { createCommunityPin } from './communityPins'
 import { firebaseReady } from './firebaseClient'
 import './ItemMenu.css'
 
@@ -159,58 +158,51 @@ export default function ItemMenu({ item, inline = false, profilePost = false }) 
     }
   }
 
-  function pinToMap() {
+  async function locatePin(destination) {
+    if (destination === 'community' && !requireUser()) return
     const media = pinMedia()
-    sessionStorage.setItem('supermap.pending-pin', JSON.stringify(media))
-    if (media.lat != null && media.lon != null) {
-      window.dispatchEvent(new CustomEvent('supermap:show-place', {
-        detail: { ...media, zoom: 12, drop: true },
-      }))
-      showToast({ tone: 'success', message: 'Pinned on your map' })
-    } else {
-      sessionStorage.setItem('supermap.pending-pin-title', media.title)
-      sessionStorage.setItem('supermap.one-shot-pin', '1')
-      window.dispatchEvent(new CustomEvent('supermap:begin-pin'))
-      showToast({ tone: 'info', message: 'Click the map to place this pin' })
-    }
-    setOpen(false)
-  }
-
-  async function pinToCommunity() {
-    if (!requireUser()) return
-    const media = pinMedia()
-    if (media.lat != null && media.lon != null) {
-      let result
-      try {
-        result = await createCommunityPin({
-        ownerUid: user.uid,
-        ownerName: user.displayName || 'Anonymous',
-        ownerEmoji: user.emoji || '📍',
-        title: media.title,
-        summary: media.summary,
-        kind: media.kind,
-        icon: '📍',
-        url: media.url,
-        image: media.image,
-        geometry: { type: 'Point', coordinates: [media.lon, media.lat] },
+    setBusy(true)
+    showToast({ tone: 'info', message: 'Reading the headline for a place…' })
+    let located = {}
+    try {
+      const response = await fetch('/api/pins/locate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: media.title,
+          summary: media.summary,
+          url: media.url,
+          kind: media.kind,
+        }),
       })
-      } catch (error) {
-        showToast({ tone: 'danger', message: error.message || 'Could not share that pin.' })
-        return
-      }
-      if (result?.ok === false) {
-        showToast({ tone: 'danger', message: result.error || 'Could not share that pin.' })
-        return
-      }
-      sessionStorage.setItem('supermap.community-focus', JSON.stringify({ lng: media.lon, lat: media.lat, zoom: 8 }))
-      window.dispatchEvent(new CustomEvent('supermap:begin-community-pin'))
-      showToast({ tone: 'success', message: 'Pinned on the community map' })
-    } else {
-      sessionStorage.setItem('supermap.pending-community-pin', JSON.stringify(media))
-      window.dispatchEvent(new CustomEvent('supermap:begin-community-pin'))
-      showToast({ tone: 'info', message: 'Click the community map to place this pin' })
+      located = await response.json()
+    } catch {
+      located = {}
     }
+    const lat = num(located.lat) ?? media.lat
+    const lon = num(located.lon) ?? media.lon
+    const draft = {
+      ...media,
+      lat,
+      lon,
+      place: located.place || '',
+      category: located.category || (media.kind === 'x' ? 'x' : 'news'),
+      sidc: located.sidc || '',
+      reasoning: located.reasoning || '',
+      label: media.title || '',
+      destination,
+    }
+    const key = destination === 'community' ? 'supermap.draft-community-pin' : 'supermap.draft-map-pin'
+    const eventName = destination === 'community' ? 'supermap:draft-community-pin' : 'supermap:draft-map-pin'
+    sessionStorage.setItem(key, JSON.stringify(draft))
+    window.dispatchEvent(new CustomEvent(eventName, { detail: draft }))
+    setBusy(false)
     setOpen(false)
+    if (lat == null || lon == null) {
+      showToast({ tone: 'info', message: 'No place stood out. Click the map to drop the pin.' })
+    } else {
+      showToast({ tone: 'success', message: 'Draft pin is on the map. Drag it if the spot is off.' })
+    }
   }
 
   function addToReport() {
@@ -296,8 +288,8 @@ export default function ItemMenu({ item, inline = false, profilePost = false }) 
               <button type="button" onClick={() => { setStep('send'); loadPeople('') }}>Send to User</button>
               <button type="button" onClick={addToVault}>Add to vault</button>
               <button type="button" onClick={addToReport}>Add to report</button>
-              <button type="button" onClick={pinToMap}>Pin to my maps</button>
-              <button type="button" onClick={pinToCommunity}>Pin to community</button>
+              <button type="button" onClick={() => locatePin('mine')} disabled={busy}>Pin to my maps</button>
+              <button type="button" onClick={() => locatePin('community')} disabled={busy}>Pin to community</button>
               <button type="button" onClick={() => setStep('report')}>Report</button>
             </>
           ) : null}

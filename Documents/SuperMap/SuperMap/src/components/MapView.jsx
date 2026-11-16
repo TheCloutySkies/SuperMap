@@ -8,6 +8,10 @@ import { getAoiFeatures, setAoiFeatures, getSavedPoints, setSavedPoints } from '
 import { MAPLIBRE_DRAW_STYLES } from '../lib/mapboxDrawStyles'
 import { capMapPixelRatio } from '../lib/mapPerf'
 import { emojiToImageData, stampPinIcons } from '../lib/mapEmoji'
+import { categorySidc } from '../lib/milSymbols'
+import { clearDraftMarker, syncDraftMarker } from '../lib/draftMarker'
+import DraftPinSheet from './DraftPinSheet'
+import './DraftPinSheet.css'
 import { createCommunityPin } from '../features/accounts/communityPins'
 import {
   fetchOverpassPower,
@@ -198,10 +202,14 @@ const CLICKABLE_POINT_LAYERS = [
   'search-results-layer',
   'intel-saved-points-layer',
   'intel-saved-points-halo',
+  'intel-saved-points-label',
 ]
+
+const MAP_GLYPHS = 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf'
 
 const OSM_STYLE = {
   version: 8,
+  glyphs: MAP_GLYPHS,
   sources: {
     osm: {
       type: 'raster',
@@ -225,7 +233,7 @@ function buildRasterStyle(basemap) {
       attribution: basemap.attribution,
     },
   }
-  return { version: 8, sources, layers }
+  return { version: 8, glyphs: MAP_GLYPHS, sources, layers }
 }
 
 function buildHybridStyle(basemap) {
@@ -246,7 +254,7 @@ function buildHybridStyle(basemap) {
     { id: 'imagery', type: 'raster', source: 'imagery', minzoom: 0, maxzoom: 22 },
     { id: 'labels', type: 'raster', source: 'labels', minzoom: 0, maxzoom: 22 },
   ]
-  return { version: 8, sources, layers }
+  return { version: 8, glyphs: MAP_GLYPHS, sources, layers }
 }
 
 const RAILWAY_TILES = [
@@ -1335,6 +1343,8 @@ function accountPlaceFeature(item) {
       url: item.payload?.url || '',
       image: item.payload?.image || '',
       mediaKind: item.payload?.mediaKind || '',
+      category: item.payload?.category || '',
+      sidc: item.payload?.sidc || '',
       label: item.payload?.label || '',
       accountPin: true,
     },
@@ -1483,6 +1493,8 @@ export default function MapView({
   }, [webcamLightbox])
 
   const [mapInstance, setMapInstance] = useState(null)
+  const [draftPin, setDraftPin] = useState(null)
+  const draftMarkerRef = useRef(null)
   const [pinEditorOpen, setPinEditorOpen] = useState(false)
   const [pinEditorPin, setPinEditorPin] = useState(null)
   const [pinEditorIsNew, setPinEditorIsNew] = useState(false)
@@ -1549,12 +1561,36 @@ export default function MapView({
         },
       })
     }
+    const ensurePinLabel = () => {
+      if (map.getLayer('intel-saved-points-label') || !map.getSource('intel-saved-points')) return
+      map.addLayer({
+        id: 'intel-saved-points-label',
+        type: 'symbol',
+        source: 'intel-saved-points',
+        minzoom: 12,
+        filter: ['==', ['geometry-type'], 'Point'],
+        layout: {
+          'text-field': ['coalesce', ['get', 'title'], ''],
+          'text-font': ['Open Sans Regular'],
+          'text-size': 12,
+          'text-max-width': 12,
+          'text-offset': [0, 1.6],
+          'text-anchor': 'top',
+        },
+        paint: {
+          'text-color': '#e6edf3',
+          'text-halo-color': '#0d1117',
+          'text-halo-width': 1.4,
+        },
+      })
+    }
     if (map.getLayer('intel-saved-points-layer')) {
       try {
         map.setLayoutProperty('intel-saved-points-layer', 'icon-image', ['get', 'iconImage'])
         map.setLayoutProperty('intel-saved-points-layer', 'icon-size', 0.72)
         map.setLayoutProperty('intel-saved-points-layer', 'text-field', '')
       } catch (_) { /* older text layers still receive the icon image */ }
+      ensurePinLabel()
       return
     }
     map.addLayer({
@@ -1569,6 +1605,7 @@ export default function MapView({
         'icon-ignore-placement': true,
       },
     })
+    ensurePinLabel()
     map.addLayer({
       id: 'intel-saved-points-line',
       type: 'line',
@@ -1653,6 +1690,8 @@ export default function MapView({
           icon: updates.icon ?? f.properties?.icon,
           source: updates.listName ?? f.properties?.source,
           notes: updates.notes !== undefined ? updates.notes : f.properties?.notes,
+          category: updates.category ?? f.properties?.category,
+          sidc: updates.sidc ?? f.properties?.sidc,
         },
       }
     })
@@ -1672,6 +1711,8 @@ export default function MapView({
       url: savedProps.url || '',
       image: savedProps.image || '',
       mediaKind: savedProps.mediaKind || '',
+      category: updates.category ?? savedProps.category ?? '',
+      sidc: updates.sidc ?? savedProps.sidc ?? '',
       lat,
       lon,
     })
@@ -1684,6 +1725,8 @@ export default function MapView({
         summary: updates.notes || savedProps.summary || '',
         kind: savedProps.mediaKind || 'pin',
         icon: updates.icon || savedProps.icon || '📍',
+        category: updates.category ?? savedProps.category ?? '',
+        sidc: updates.sidc ?? savedProps.sidc ?? '',
         url: savedProps.url || '',
         image: savedProps.image || '',
         geometry: { type: 'Point', coordinates: [lon, lat] },
@@ -1704,6 +1747,13 @@ export default function MapView({
     upsertSavedPointsLayer(next)
     return { ok: true }
   }, [upsertSavedPointsLayer, deleteSavedItem])
+
+  const deletePinRef = useRef(handlePinEditorDelete)
+  deletePinRef.current = handlePinEditorDelete
+  const openDraftRef = useRef(setDraftPin)
+  openDraftRef.current = setDraftPin
+  const awaitingDraftRef = useRef(false)
+  awaitingDraftRef.current = Boolean(draftPin?.awaiting)
 
   const doFetch = useCallback(
     (map, togglesIn, onLoading) => {
@@ -2103,6 +2153,15 @@ export default function MapView({
     }
 
     const handleMapClick = (e) => {
+      if (awaitingDraftRef.current) {
+        const lng = Number(e?.lngLat?.lng)
+        const lat = Number(e?.lngLat?.lat)
+        if (Number.isFinite(lng) && Number.isFinite(lat)) {
+          openDraftRef.current((current) => current ? { ...current, lat, lon: lng, awaiting: false } : current)
+          map.getCanvas().style.cursor = ''
+        }
+        return
+      }
       if (tapPinModeRef.current) {
         const lng = Number(e?.lngLat?.lng)
         const lat = Number(e?.lngLat?.lat)
@@ -2243,15 +2302,23 @@ export default function MapView({
         const image = props.image ? `<img src="${escPin(props.image)}" alt="" style="width:100%;max-height:150px;object-fit:cover;border-radius:8px" />` : ''
         const summary = props.summary || props.notes || ''
         const original = props.url ? `<a href="${escPin(props.url)}" target="_blank" rel="noopener noreferrer" class="map-popup-read-more">Open original</a>` : ''
+        const verify = props.image ? `<a href="/forensics?url=${encodeURIComponent(props.image)}" class="map-popup-read-more">Verify media</a>` : ''
         popup.setLngLat(coords).setHTML(`
           <div class="map-popup-content">
             ${image}
             <div class="map-popup-title">${escPin(props.title || 'Pinned place')}</div>
+            ${props.category ? `<div>${escPin(props.category)}</div>` : ''}
             ${summary ? `<div>${escPin(summary)}</div>` : ''}
             ${original}
+            ${verify}
             <button type="button" class="saved-pin-edit">Edit pin</button>
+            <button type="button" class="saved-pin-remove">Remove pin</button>
           </div>
         `).addTo(map)
+        popup.getElement()?.querySelector('.saved-pin-remove')?.addEventListener('click', async () => {
+          const result = await deletePinRef.current?.(f.id || pid)
+          if (result?.ok !== false) popup.remove()
+        })
         popup.getElement()?.querySelector('.saved-pin-edit')?.addEventListener('click', () => {
           const [lon, lat] = f.geometry?.coordinates || coords
           setPinEditorPin({
@@ -2428,6 +2495,33 @@ export default function MapView({
     }
     window.addEventListener('supermap-drop-pin', onDropPin)
 
+    const openLocatedDraft = (detail) => {
+      if (!detail) return
+      const lat = Number(detail.lat)
+      const lon = Number(detail.lon)
+      openDraftRef.current({
+        ...detail,
+        lat: Number.isFinite(lat) ? lat : null,
+        lon: Number.isFinite(lon) ? lon : null,
+        category: detail.category || (detail.kind === 'x' || detail.mediaKind === 'x' ? 'x' : 'news'),
+        awaiting: !Number.isFinite(lat) || !Number.isFinite(lon),
+      })
+      map.getCanvas().style.cursor = Number.isFinite(lat) && Number.isFinite(lon) ? '' : 'crosshair'
+      if (Number.isFinite(lat) && Number.isFinite(lon)) map.flyTo({ center: [lon, lat], zoom: 12 })
+    }
+    const onLocatedDraft = (event) => {
+      sessionStorage.removeItem('supermap.draft-map-pin')
+      openLocatedDraft(event.detail)
+    }
+    window.addEventListener('supermap:draft-map-pin', onLocatedDraft)
+    try {
+      const stored = sessionStorage.getItem('supermap.draft-map-pin')
+      if (stored) {
+        sessionStorage.removeItem('supermap.draft-map-pin')
+        openLocatedDraft(JSON.parse(stored))
+      }
+    } catch { /* ignore a bad draft */ }
+
     const containerEl = containerRef.current
     const resizeObserver =
       containerEl && typeof ResizeObserver !== 'undefined'
@@ -2466,6 +2560,8 @@ export default function MapView({
         map.removeControl(drawRef.current)
         drawRef.current = null
       }
+      clearDraftMarker(draftMarkerRef)
+      if (map.getLayer('intel-saved-points-label')) map.removeLayer('intel-saved-points-label')
       if (map.getLayer('intel-saved-points-layer')) map.removeLayer('intel-saved-points-layer')
       if (map.getLayer('intel-saved-points-line')) map.removeLayer('intel-saved-points-line')
       if (map.getLayer('intel-saved-points-fill')) map.removeLayer('intel-saved-points-fill')
@@ -2474,6 +2570,7 @@ export default function MapView({
       map.off('moveend', onMoveend)
       window.removeEventListener('supermap-toggle-tap-pin', onTapPinToggle)
       window.removeEventListener('supermap-drop-pin', onDropPin)
+      window.removeEventListener('supermap:draft-map-pin', onLocatedDraft)
       map.remove()
       mapRef.current = null
       mapReadyRef.current = false
@@ -2854,6 +2951,73 @@ export default function MapView({
   }, [searchResultsGeoJson])
 
   useEffect(() => {
+    const map = mapInstance
+    if (!map) return undefined
+    if (!draftPin || draftPin.awaiting || !Number.isFinite(Number(draftPin.lat)) || !Number.isFinite(Number(draftPin.lon))) {
+      clearDraftMarker(draftMarkerRef)
+      return undefined
+    }
+    syncDraftMarker(map, draftMarkerRef, {
+      lng: draftPin.lon,
+      lat: draftPin.lat,
+      sidc: draftPin.sidc || categorySidc(draftPin.category),
+      onDrag: (lng, lat) => setDraftPin((current) => (current ? { ...current, lon: lng, lat, awaiting: false } : current)),
+    })
+    return undefined
+  }, [draftPin, mapInstance])
+
+  const saveDraftPin = useCallback(async () => {
+    if (!draftPin || !Number.isFinite(Number(draftPin.lat)) || !Number.isFinite(Number(draftPin.lon))) return
+    const point = draftMarkerRef.current?.getLngLat()
+    const lat = point?.lat ?? Number(draftPin.lat)
+    const lon = point?.lng ?? Number(draftPin.lon)
+    const id = `pt-${Date.now()}`
+    const title = draftPin.label || draftPin.title || 'Pinned place'
+    const sidc = draftPin.sidc || categorySidc(draftPin.category)
+    const feature = {
+      type: 'Feature',
+      id,
+      properties: {
+        title,
+        icon: '📍',
+        source: 'General',
+        notes: draftPin.summary || '',
+        summary: draftPin.summary || '',
+        url: draftPin.url || '',
+        image: draftPin.image || '',
+        mediaKind: draftPin.mediaKind || draftPin.kind || '',
+        category: draftPin.category || '',
+        sidc,
+        label: draftPin.label || '',
+      },
+      geometry: { type: 'Point', coordinates: [lon, lat] },
+    }
+    const result = await saveMapPin({
+      id,
+      title,
+      icon: '📍',
+      listName: 'General',
+      notes: draftPin.summary || '',
+      summary: draftPin.summary || '',
+      url: draftPin.url || '',
+      image: draftPin.image || '',
+      mediaKind: draftPin.mediaKind || draftPin.kind || '',
+      category: draftPin.category || '',
+      sidc,
+      lat,
+      lon,
+      label: draftPin.label || '',
+    })
+    if (result?.ok === false) return
+    const current = getSavedPoints()
+    const next = { type: 'FeatureCollection', features: [...(current.features || []).filter((row) => row.id !== id), feature] }
+    setSavedPoints(next)
+    upsertSavedPointsLayer(next)
+    clearDraftMarker(draftMarkerRef)
+    setDraftPin(null)
+  }, [draftPin, saveMapPin, upsertSavedPointsLayer])
+
+  useEffect(() => {
     const map = mapRef.current
     if (!map || !mapReadyRef.current || !flyToTarget) return
     const { lng, lat, zoom = 12, properties } = flyToTarget
@@ -3075,6 +3239,18 @@ export default function MapView({
       />
       <div className="map-crosshair" aria-hidden="true" />
       <MapControls map={mapInstance} activeView={activeView} chromePrefs={chromePrefs} />
+      {draftPin ? (
+        <DraftPinSheet
+          draft={draftPin}
+          destination="mine"
+          onChange={(patch) => setDraftPin((current) => (current ? { ...current, ...patch } : current))}
+          onSave={saveDraftPin}
+          onRemove={() => {
+            clearDraftMarker(draftMarkerRef)
+            setDraftPin(null)
+          }}
+        />
+      ) : null}
       <MapToolsRadial
         map={mapInstance}
         activeView={activeView}

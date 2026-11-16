@@ -225,6 +225,27 @@ export const BASEMAPS = [
     tileSize: 256,
   },
   {
+    id: 'osm-standard',
+    label: 'OpenStreetMap',
+    type: 'raster',
+    attribution: '© OpenStreetMap',
+    tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+    tileSize: 256,
+  },
+  {
+    id: 'hybrid',
+    label: 'Hybrid',
+    type: 'hybrid',
+    attribution: 'Esri, Maxar, Earthstar Geographics',
+    imagery: [
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    ],
+    labels: [
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+    ],
+    tileSize: 256,
+  },
+  {
     id: 'high-res-satellite',
     label: 'High-Res Satellite',
     type: 'raster',
@@ -255,27 +276,6 @@ export const BASEMAPS = [
     type: 'raster',
     attribution: '© OpenTopoMap',
     tiles: ['https://a.tile.opentopomap.org/{z}/{x}/{y}.png'],
-    tileSize: 256,
-  },
-  {
-    id: 'hybrid',
-    label: 'Hybrid',
-    type: 'hybrid',
-    attribution: 'Esri, Maxar, Earthstar Geographics',
-    imagery: [
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    ],
-    labels: [
-      'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-    ],
-    tileSize: 256,
-  },
-  {
-    id: 'osm-standard',
-    label: 'OpenStreetMap',
-    type: 'raster',
-    attribution: '© OpenStreetMap',
-    tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
     tileSize: 256,
   },
   {

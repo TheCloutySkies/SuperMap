@@ -411,7 +411,8 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
       awaitingRef.current = !hasPoint && !locating
       map.getCanvas().style.cursor = awaitingRef.current ? 'crosshair' : ''
       if (hasPoint) {
-        const go = () => map.flyTo({ center: [lon, lat], zoom: 12 })
+        const zoom = Number(detail.zoom)
+        const go = () => map.flyTo({ center: [lon, lat], zoom: Number.isFinite(zoom) ? zoom : 12 })
         if (map.isStyleLoaded()) go()
         else map.once('load', go)
       }

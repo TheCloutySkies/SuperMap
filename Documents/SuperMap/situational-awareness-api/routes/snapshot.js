@@ -77,6 +77,70 @@ router.get('/utility-outages', served('utility-outages', (cond) => snapshotSourc
 /** One hazard collection for the community map. */
 router.get('/hazards/major', served('major-hazards', (cond) => snapshotSources.getMajorHazards(cond)))
 
+/**
+ * Serve an X/Twitter image from our own origin.
+ *
+ * Strict browsers (LibreWolf with uBlock Origin, EasyPrivacy) block requests to
+ * pbs.twimg.com outright, so the gallery is blank there. The browser loads the
+ * CDN URL first and only falls back here when that image fails, so normal
+ * visitors never spend API traffic on images. Cached in memory for a day.
+ */
+const IMAGE_HOSTS = new Set(['pbs.twimg.com'])
+const IMAGE_MAX_BYTES = 8 * 1024 * 1024
+const imageCache = new Map()
+const IMAGE_CACHE_LIMIT = 240
+
+router.get('/media/x', async (req, res) => {
+  const raw = String(req.query.u || '')
+  let target
+  try {
+    target = new URL(raw)
+  } catch {
+    return res.status(400).json({ error: 'u must be an absolute URL' })
+  }
+  if (target.protocol !== 'https:' || !IMAGE_HOSTS.has(target.hostname)) {
+    return res.status(400).json({ error: 'only https://pbs.twimg.com is proxied' })
+  }
+  const key = target.toString()
+  const hit = imageCache.get(key)
+  if (hit) {
+    res.set('Content-Type', hit.type)
+    res.set('Cache-Control', 'public, max-age=86400, immutable')
+    res.set('X-Media-Source', 'memory')
+    return res.end(hit.body)
+  }
+  try {
+    const upstream = await fetch(key, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36',
+        Referer: 'https://x.com/',
+        Accept: 'image/avif,image/webp,image/png,image/jpeg,*/*;q=0.8',
+      },
+      signal: AbortSignal.timeout(12000),
+    })
+    if (!upstream.ok) {
+      console.warn('[API /media/x]', upstream.status, key)
+      return res.status(502).json({ error: `upstream HTTP ${upstream.status}` })
+    }
+    const type = upstream.headers.get('content-type') || 'image/jpeg'
+    if (!/^image\//i.test(type)) return res.status(502).json({ error: 'upstream did not return an image' })
+    const body = Buffer.from(await upstream.arrayBuffer())
+    if (body.length > IMAGE_MAX_BYTES) return res.status(502).json({ error: 'image too large' })
+    if (imageCache.size >= IMAGE_CACHE_LIMIT) {
+      const oldest = imageCache.keys().next().value
+      imageCache.delete(oldest)
+    }
+    imageCache.set(key, { type, body })
+    res.set('Content-Type', type)
+    res.set('Cache-Control', 'public, max-age=86400, immutable')
+    res.set('X-Media-Source', 'upstream')
+    return res.end(body)
+  } catch (err) {
+    console.warn('[API /media/x]', err.message)
+    return res.status(502).json({ error: err.message })
+  }
+})
+
 /** What this instance was seeded with, and how old it is (for diagnosis). */
 router.get('/snapshot/status', (_req, res) => {
   res.set('Cache-Control', 'no-store')

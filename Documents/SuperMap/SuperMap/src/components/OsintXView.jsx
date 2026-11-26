@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import axios from 'axios'
 import { getApiBase, readHomeSnapshot, writeHomeSnapshot } from '../lib/homeBootstrap'
-import { loadSnapshot } from '../lib/snapshotClient'
+import { loadSnapshot, xImageProps } from '../lib/snapshotClient'
 import ItemMenu from '../features/accounts/ItemMenu'
 import ThreatScoreButton from './ThreatScoreButton'
 import './OsintXView.css'
@@ -381,7 +381,7 @@ export default function OsintXView({ keywordFilter = '', onClearFilter }) {
                 onClick={() => openImageDialog(post, src)}
                 title="Expand image"
               >
-                <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" />
+                <img {...xImageProps(src)} alt="" loading="lazy" />
               </button>
             ))}
           </div>
@@ -611,7 +611,7 @@ export default function OsintXView({ keywordFilter = '', onClearFilter }) {
         <div className="osint-x-video-dialog-backdrop" role="dialog" aria-modal="true" onClick={() => setImageDialog(null)}>
           <div className="osint-x-video-dialog osint-x-image-dialog" onClick={(e) => e.stopPropagation()}>
             <h3>Image</h3>
-            <img src={imageDialog.src} alt="" className="osint-x-image-dialog-img" />
+            <img {...xImageProps(imageDialog.src)} alt="" className="osint-x-image-dialog-img" />
             {imageDialog.caption && <p className="osint-x-image-dialog-caption">{imageDialog.caption}</p>}
             <div className="osint-x-video-dialog-actions">
               <button type="button" className="x-post-action-btn" onClick={handleDownloadImage} disabled={imageDownloading}>

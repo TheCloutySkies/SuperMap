@@ -5,7 +5,7 @@
  * ~5 min TTL), never their own upstream call. One request per file per version
  * per tab: the manifest poll is tiny and every payload is immutable per version.
  */
-import { isLoopbackHost } from './homeBootstrap'
+import { getApiBase, isLoopbackHost } from './homeBootstrap'
 
 /** Direct CDN base. Never routed through /api rewrites: those are pass-through. */
 const DEFAULT_BASE = 'https://raw.githubusercontent.com/TheCloutySkies/SuperMap/data'
@@ -165,6 +165,40 @@ export function stopSnapshotPolling() {
   if (pollTimer) clearInterval(pollTimer)
   pollTimer = null
   started = false
+}
+
+/** True for the X image host a strict browser blocks. */
+export function isXMediaUrl(src) {
+  return typeof src === 'string' && /^https:\/\/pbs\.twimg\.com\//i.test(src)
+}
+
+/** Our own origin serving that image, for a browser that blocks twimg. */
+export function xMediaProxyUrl(src) {
+  const api = apiBase()
+  return `${api}/api/media/x?u=${encodeURIComponent(src)}`
+}
+
+function apiBase() {
+  return getApiBase()
+}
+
+/**
+ * Props for an X image: load the CDN URL first (fast, cached) and retry through
+ * our proxy once if the browser blocked it.
+ */
+export function xImageProps(src, { retryAttr = 'data-x-proxied' } = {}) {
+  if (!isXMediaUrl(src)) return { src }
+  return {
+    src,
+    referrerPolicy: 'no-referrer',
+    [retryAttr]: '0',
+    onError: (event) => {
+      const el = event?.currentTarget
+      if (!el || el.getAttribute(retryAttr) === '1') return
+      el.setAttribute(retryAttr, '1')
+      el.src = xMediaProxyUrl(src)
+    },
+  }
 }
 
 /** Keep a FeatureCollection inside a bbox, so one world snapshot serves every view. */

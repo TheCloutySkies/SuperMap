@@ -5,6 +5,7 @@ import { LatestBulletin } from '../features/bulletin/BulletinBoardView'
 import ItemMenu from '../features/accounts/ItemMenu'
 import CommunityMapView from './CommunityMapView'
 import DataFreshness from './DataFreshness'
+import { xImageProps } from '../lib/snapshotClient'
 import { CRIME_VIEW_ID, WEATHER_VIEW_ID, BRAND_LOGO_SRC, BRAND_LOGO_ALT } from '../constants'
 import './HomeScreen.css'
 import './widgets/widgets.css'
@@ -782,7 +783,7 @@ export default function HomeScreen({
                         onClick={() => setOsintPhotoModal(item)}
                         title="Expand"
                       >
-                        <img src={item.src} alt="" loading="lazy" referrerPolicy="no-referrer" />
+                        <img {...xImageProps(item.src)} alt="" loading="lazy" />
                         <span className="home-screen-photos-main-overlay">Expand</span>
                       </button>
                       <ItemMenu item={{ type: 'article', kind: 'image', title: item.caption || 'Photo', summary: item.caption || '', url: item.postUrl || '', image: item.src || '' }} />
@@ -809,7 +810,7 @@ export default function HomeScreen({
             {osintPhotoModal && (
               <div className="home-screen-photo-dialog-backdrop" role="dialog" aria-modal="true" aria-label="OSINT photo" onClick={() => setOsintPhotoModal(null)}>
                 <div className="home-screen-photo-dialog" onClick={(e) => e.stopPropagation()}>
-                  <img src={osintPhotoModal.src} alt="" className="home-screen-photo-dialog-img" />
+                  <img {...xImageProps(osintPhotoModal.src)} alt="" className="home-screen-photo-dialog-img" />
                   {osintPhotoModal.caption && <p className="home-screen-photo-dialog-caption">{osintPhotoModal.caption}</p>}
                   <div className="home-screen-photo-dialog-actions">
                     <a href={osintPhotoModal.postUrl} target="_blank" rel="noopener noreferrer" className="btn-y2k home-screen-photo-dialog-link">Open original post</a>

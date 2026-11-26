@@ -38,6 +38,9 @@ function runIdFor(date = new Date()) {
 const RUN_ID = runIdFor()
 
 /** Gate = skip the source when its last success is younger than this. */
+/** A single source larger than this does not belong in a boot tarball. */
+const MAX_SOURCE_BYTES = 8 * 1024 * 1024
+
 const GATE_HOURS = {
   news: 6,
   osint: 4,
@@ -60,7 +63,6 @@ const GATE_HOURS = {
   frontline: 4,
   liveuamap: 4,
   datacenters: 168,
-  surveillance: 168,
   firms: 4,
   'utility-outages': 4,
   'fcc-towers': 168,
@@ -88,13 +90,13 @@ const REGISTRY = [
   { name: 'hazards-nws', path: '/api/hazards/nws', timeoutMs: 60000 },
   { name: 'hazards-emsc', path: '/api/hazards/emsc', timeoutMs: 60000 },
   { name: 'volcanoes', path: '/api/hazards/volcanoes', timeoutMs: 60000 },
-  { name: 'nhc', path: '/api/hazards/nhc', timeoutMs: 60000 },
+  // A season with no active storm is a valid, publishable empty.
+  { name: 'nhc', path: '/api/hazards/nhc', timeoutMs: 60000, allowEmpty: true },
   { name: 'space-weather', path: '/api/space-weather', timeoutMs: 45000 },
   { name: 'outages-internet', path: '/api/outages/internet', timeoutMs: 60000 },
   { name: 'frontline', path: '/api/frontline', timeoutMs: 60000 },
   { name: 'liveuamap', path: '/api/liveuamap', timeoutMs: 60000 },
   { name: 'datacenters', path: '/api/map/datacenters', timeoutMs: 90000 },
-  { name: 'surveillance', path: '/api/map/surveillance', timeoutMs: 90000 },
   { name: 'firms', path: '/api/map/fires', timeoutMs: 90000 },
   { name: 'utility-outages', path: '/api/utility-outages', timeoutMs: 60000 },
   { name: 'fcc-towers', path: '/api/fcc/towers', timeoutMs: 90000 },
@@ -335,10 +337,15 @@ async function main() {
       }
       if (res.status >= 400) throw new Error(`HTTP ${res.status} ${res.data?.error || ''}`.trim())
       const data = res.data
-      if (!hasContent(entry.name, data)) throw new Error('empty payload kept out of the snapshot')
+      if (!hasContent(entry.name, data) && !entry.allowEmpty) {
+        throw new Error('empty payload kept out of the snapshot')
+      }
 
       const file = fileFor(entry.name, RUN_ID)
       const text = scrub(JSON.stringify(data))
+      if (text.length > MAX_SOURCE_BYTES) {
+        throw new Error(`payload too large (${(text.length / 1048576).toFixed(1)} MB) for the boot tarball`)
+      }
       fs.writeFileSync(path.join(OUT_DIR, file), `${text}\n`, 'utf8')
       okCount += 1
       state.sources[entry.name] = {

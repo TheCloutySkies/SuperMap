@@ -27,6 +27,8 @@ const WorldClock = lazy(() => import('./widgets/WorldClock'))
 const SpaceWidget = lazy(() => import('./widgets/SpaceWidget'))
 const HeadlinesWidget = lazy(() => import('./widgets/HeadlinesWidget'))
 const EarthquakesWidget = lazy(() => import('./widgets/EarthquakesWidget'))
+const StrategicOverviewWidget = lazy(() => import('./widgets/StrategicOverviewWidget'))
+const NextLaunchWidget = lazy(() => import('./widgets/NextLaunchWidget'))
 
 const API_BASE = getApiBase()
 
@@ -806,6 +808,8 @@ export default function HomeScreen({
               <div id="earthquakes"><EarthquakesWidget onShowOnMap={onShowLocationOnMap} initialData={quakesPiece} bootstrapState={bootstrapState} /></div>
               <div id="world-clock"><WorldClock /></div>
               <div id="space"><SpaceWidget initialData={spacePiece} bootstrapState={bootstrapState} /></div>
+              <div id="strategic-overview" className="home-widget-wide"><StrategicOverviewWidget bootstrapState={bootstrapState} /></div>
+              <div id="next-launch" className="home-widget-wide"><NextLaunchWidget bootstrapState={bootstrapState} /></div>
             </Suspense>
             {osintPhotoModal && (
               <div className="home-screen-photo-dialog-backdrop" role="dialog" aria-modal="true" aria-label="OSINT photo" onClick={() => setOsintPhotoModal(null)}>

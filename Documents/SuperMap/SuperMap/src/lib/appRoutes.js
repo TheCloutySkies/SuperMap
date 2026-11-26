@@ -1,4 +1,4 @@
-import { CRIME_VIEW_ID, WEATHER_VIEW_ID, resolveCrimeViewId, CRIME_VIEW_ALIASES } from '../constants'
+import { CRIME_VIEW_ID, WEATHER_VIEW_ID, STRATEGIC_VIEW_ID, resolveCrimeViewId, CRIME_VIEW_ALIASES } from '../constants'
 
 /** Mode ids used by ModeRail / MobileShell / App. */
 export const APP_MODES = {
@@ -6,6 +6,7 @@ export const APP_MODES = {
   MAPS: 'MAPS',
   CRIME: 'CRIME',
   WEATHER: 'WEATHER',
+  STRATEGIC: 'STRATEGIC',
   FEEDS: 'FEEDS',
   BULLETIN: 'BULLETIN',
   TOOLS: 'TOOLS',
@@ -59,6 +60,7 @@ const VIEW_TO_PATH = Object.freeze({
   'crime-intel': '/crime',
   'crime-map': '/crime',
   [WEATHER_VIEW_ID]: '/weather',
+  [STRATEGIC_VIEW_ID]: '/strategic',
   'news-feeds': '/news',
   'osint-feeds': '/news/osint',
   'recent-videos': '/news/videos',
@@ -78,6 +80,7 @@ const PATH_TO_VIEW = Object.freeze({
   '/maps': 'community-map',
   '/crime': CRIME_VIEW_ID,
   '/weather': WEATHER_VIEW_ID,
+  '/strategic': STRATEGIC_VIEW_ID,
   '/news': 'news-feeds',
   '/news/osint': 'osint-feeds',
   '/news/videos': 'recent-videos',
@@ -166,6 +169,8 @@ export function pathFromMode(mode) {
       return '/crime'
     case APP_MODES.WEATHER:
       return '/weather'
+    case APP_MODES.STRATEGIC:
+      return '/strategic'
     case APP_MODES.FEEDS:
       return '/news'
     case APP_MODES.BULLETIN:
@@ -192,6 +197,7 @@ export function modeFromView(viewId) {
   const resolved = resolveCrimeViewId(viewId)
   if (resolved === CRIME_VIEW_ID) return APP_MODES.CRIME
   if (resolved === WEATHER_VIEW_ID) return APP_MODES.WEATHER
+  if (resolved === STRATEGIC_VIEW_ID) return APP_MODES.STRATEGIC
   if (MAP_VIEW_IDS.has(resolved)) return APP_MODES.MAPS
   if (FEED_VIEW_IDS.has(resolved) || resolved === 'search-results') return APP_MODES.FEEDS
   if (resolved === 'home') return APP_MODES.HOME

@@ -10,6 +10,7 @@ import {
   CRIME_VIEW_ID,
   isCrimeIntelligenceView,
   isWeatherView,
+  isStrategicView,
   BRAND_LOGO_SRC,
   BRAND_LOGO_ALT,
 } from './constants'
@@ -24,6 +25,7 @@ import { loadChromePrefs, saveChromePrefs } from './lib/mapToolsPrefs'
 import HomeScreen from './components/HomeScreen'
 import CrimeIntelligenceView from './components/CrimeIntelligenceView'
 import WeatherView from './components/WeatherView'
+import StrategicView from './components/StrategicView'
 import MapView from './components/MapView'
 import CommunityMapView from './components/CommunityMapView'
 import ForensicsView from './components/ForensicsView'
@@ -345,6 +347,7 @@ function App() {
   const isLiveMapView = isMapView && !isPrintView && !isCommunityMap
   const isCrimeView = isCrimeIntelligenceView(activeView)
   const isWeatherPage = isWeatherView(activeView)
+  const isStrategicPage = isStrategicView(activeView)
   const isFeedView = ['osint-feeds', 'news-feeds', 'recent-videos', 'osint-x', 'advanced-search', 'broadcasts'].includes(activeView)
   const isSettingsView = activeView === 'settings'
   const tabVisibility = getTabVisibility()
@@ -612,6 +615,11 @@ function App() {
               initialLon={weatherCoords.lon ?? userCoords.lon}
               onLocationChange={(lat, lon) => setWeatherCoords({ lat, lon })}
             />
+          </div>
+        )}
+        {isStrategicPage && (
+          <div className="main-content-scroll main-content-scroll--strategic">
+            <StrategicView />
           </div>
         )}
         {activeView === 'osint-feeds' && (

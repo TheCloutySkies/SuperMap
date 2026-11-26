@@ -15,6 +15,8 @@ export const CRIME_VIEW_ALIASES = Object.freeze(['crime-map', 'crime-intel'])
 
 /** Canonical Weather desk view id (ModeRail WEATHER, Radial, Omnibar). */
 export const WEATHER_VIEW_ID = 'weather'
+/** Strategic desk: conflict, orbital, cyber and infrastructure. */
+export const STRATEGIC_VIEW_ID = 'strategic'
 
 export function resolveCrimeViewId(viewId) {
   if (viewId === CRIME_VIEW_ID || CRIME_VIEW_ALIASES.includes(viewId)) return CRIME_VIEW_ID
@@ -27,6 +29,11 @@ export function isCrimeIntelligenceView(viewId) {
 }
 
 /** True when the dedicated WeatherView should render. */
+/** Strategic desk routes on STRATEGIC_VIEW_ID. */
+export function isStrategicView(viewId) {
+  return viewId === STRATEGIC_VIEW_ID
+}
+
 export function isWeatherView(viewId) {
   return viewId === WEATHER_VIEW_ID
 }
@@ -84,6 +91,12 @@ export const DEFAULT_LAYER_TOGGLES = {
   flockCameras: false,
   crimeStateRates: false,
   crimeCityHighlight: false,
+  /** Strategic layers: snapshot-backed, so a toggle costs no upstream call. */
+  warspottingLosses: false,
+  satelliteTracks: false,
+  radiationSafecast: false,
+  weatherBalloons: false,
+  ucdpEvents: false,
 }
 
 export function getAoiFeatures() {

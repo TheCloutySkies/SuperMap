@@ -4,6 +4,18 @@
  */
 export const WIDGET_SEARCH_INDEX = [
   {
+    id: 'strategic-overview',
+    title: 'Strategic overview',
+    description: 'Conflict events, equipment losses, exploited CVEs and radiosondes.',
+    keywords: ['strategic', 'conflict', 'ucdp', 'deaths', 'losses', 'warspotting', 'kev', 'cve', 'balloons'],
+  },
+  {
+    id: 'next-launch',
+    title: 'Next launches',
+    description: 'Upcoming orbital launches from Launch Library 2.',
+    keywords: ['launch', 'launches', 'rocket', 'spacex', 'orbital', 'liftoff', 'spacedevs'],
+  },
+  {
     id: 'gas-prices',
     title: 'Gas Prices (US)',
     description: 'National and state-level gasoline prices. Look up by state.',

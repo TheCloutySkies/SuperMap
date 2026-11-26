@@ -16,10 +16,11 @@ async function fetchCisaKev({ etag = null, lastModified = null } = {}) {
 
   const rows = Array.isArray(res.data?.vulnerabilities) ? res.data.vulnerabilities : []
   const byYear = new Map()
+  let ransomwareLinked = 0
   for (const row of rows) {
     const year = String(row.dateAdded || '').slice(0, 4)
-    if (!year) continue
-    byYear.set(year, (byYear.get(year) || 0) + 1)
+    if (year) byYear.set(year, (byYear.get(year) || 0) + 1)
+    if (String(row.knownRansomwareCampaignUse || '').toLowerCase() === 'known') ransomwareLinked += 1
   }
   const recent = rows
     .slice()
@@ -40,7 +41,7 @@ async function fetchCisaKev({ etag = null, lastModified = null } = {}) {
       catalogVersion: res.data?.catalogVersion || null,
       dateReleased: res.data?.dateReleased || null,
       count: rows.length,
-      ransomwareLinked: recent.filter((row) => row.ransomware).length,
+      ransomwareLinked,
       byYear: [...byYear.entries()].sort((a, b) => b[0].localeCompare(a[0])).slice(0, 8)
         .map(([year, count]) => ({ year, count })),
       recent,

@@ -42,12 +42,12 @@ async function fetchSondehub({ etag = null, lastModified = null } = {}) {
   const features = []
   const byType = new Map()
   for (const [serial, value] of Object.entries(payload)) {
+    if (features.length >= 500) break
     const feature = entryOf(serial, value)
     if (!feature) continue
     features.push(feature)
     const kind = String(feature.properties.type || 'unknown').toLowerCase()
     byType.set(kind, (byType.get(kind) || 0) + 1)
-    if (features.length >= 500) break
   }
 
   return {

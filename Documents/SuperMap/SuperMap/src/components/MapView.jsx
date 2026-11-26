@@ -67,6 +67,13 @@ import 'mapboxgl-legend/dist/style.css'
 import GlobeMinimap from 'mapbox-gl-globe-minimap'
 import './MapView.css'
 import { getApiBase } from '../lib/homeBootstrap'
+import {
+  fetchStrategicWarspotting,
+  fetchStrategicSatellites,
+  fetchStrategicRadiation,
+  fetchStrategicBalloons,
+  fetchStrategicUcdp,
+} from '../services/strategicLayers'
 
 // Improve @mapbox/mapbox-gl-draw compatibility on MapLibre.
 MapboxDraw.constants.classes.CANVAS = 'maplibregl-canvas'
@@ -383,6 +390,7 @@ function addOrUpdateLayer(map, layerToggles, onLoading, getRadarWanted) {
     if (map.getLayer('intel-usgs-layer')) map.removeLayer('intel-usgs-layer')
     if (map.getSource('intel-usgs')) map.removeSource('intel-usgs')
   }
+
 
   const addEmsc = (geoJson) => {
     ensureEmojiIcons(map)
@@ -1500,6 +1508,160 @@ export default function MapView({
     }
     setWebcamStageFullscreen(false)
   }, [])
+
+  // Strategic layers: one snapshot-backed source each, five toggles.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return undefined
+    const toggles = layerToggles || {}
+    let cancelled = false
+
+    const add = (id, collection, specs) => {
+      try {
+        const sourceId = `intel-${id}`
+        if (map.getSource(sourceId)) {
+          map.getSource(sourceId).setData(collection)
+          return
+        }
+        map.addSource(sourceId, { type: 'geojson', data: collection })
+        for (const spec of specs) map.addLayer({ ...spec, source: sourceId })
+      } catch (err) {
+        console.warn('[MapView] strategic layer:', id, err.message)
+      }
+    }
+
+    const remove = (id) => {
+      try {
+        for (const layer of map.getStyle()?.layers || []) {
+          if (layer.id.startsWith(`intel-${id}-`)) map.removeLayer(layer.id)
+        }
+        if (map.getSource(`intel-${id}`)) map.removeSource(`intel-${id}`)
+      } catch (err) {
+        void err
+      }
+    }
+
+    const layers = [
+      {
+        toggle: 'warspottingLosses',
+        id: 'warspotting',
+        load: fetchStrategicWarspotting,
+        specs: [{
+          id: 'intel-warspotting-layer',
+          type: 'circle',
+          filter: ['==', ['geometry-type'], 'Point'],
+          paint: {
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 3, 2.5, 8, 5],
+            'circle-color': [
+              'match', ['get', 'status'],
+              'destroyed', '#ef4444',
+              'damaged', '#f97316',
+              'abandoned', '#9ca3af',
+              'captured', '#3dd68c',
+              '#ef4444',
+            ],
+            'circle-stroke-color': '#0b1220',
+            'circle-stroke-width': 1,
+            'circle-opacity': 0.85,
+          },
+        }],
+      },
+      {
+        toggle: 'ucdpEvents',
+        id: 'ucdp',
+        load: fetchStrategicUcdp,
+        specs: [{
+          id: 'intel-ucdp-layer',
+          type: 'circle',
+          filter: ['==', ['geometry-type'], 'Point'],
+          paint: {
+            'circle-radius': ['interpolate', ['linear'], ['get', 'deaths'], 0, 3, 10, 4, 50, 7, 200, 12],
+            'circle-color': [
+              'interpolate', ['linear'], ['get', 'deaths'],
+              0, '#fbbf24', 10, '#f97316', 50, '#ef4444', 200, '#b91c1c',
+            ],
+            'circle-opacity': 0.7,
+            'circle-stroke-color': '#0b1220',
+            'circle-stroke-width': 0.8,
+          },
+        }],
+      },
+      {
+        toggle: 'satelliteTracks',
+        id: 'satellites',
+        load: fetchStrategicSatellites,
+        specs: [
+          {
+            id: 'intel-satellites-track',
+            type: 'line',
+            filter: ['!=', ['get', 'track'], null],
+            paint: { 'line-color': '#58a6ff', 'line-width': 1.1, 'line-opacity': 0.55, 'line-dasharray': [2, 2] },
+          },
+          {
+            id: 'intel-satellites-layer',
+            type: 'circle',
+            filter: ['==', ['geometry-type'], 'Point'],
+            paint: {
+              'circle-radius': 3,
+              'circle-color': ['match', ['get', 'group'], 'military', '#f97316', 'stations', '#3dd68c', '#58a6ff'],
+              'circle-stroke-color': '#0b1220',
+              'circle-stroke-width': 1,
+            },
+          },
+        ],
+      },
+      {
+        toggle: 'radiationSafecast',
+        id: 'radiation',
+        load: fetchStrategicRadiation,
+        specs: [{
+          id: 'intel-radiation-layer',
+          type: 'circle',
+          filter: ['==', ['geometry-type'], 'Point'],
+          paint: {
+            'circle-radius': 2.6,
+            'circle-color': [
+              'interpolate', ['linear'], ['get', 'value'],
+              0, '#3dd68c', 100, '#fbbf24', 500, '#f97316', 2000, '#ef4444',
+            ],
+            'circle-opacity': 0.75,
+          },
+        }],
+      },
+      {
+        toggle: 'weatherBalloons',
+        id: 'balloons',
+        load: fetchStrategicBalloons,
+        specs: [{
+          id: 'intel-balloons-layer',
+          type: 'circle',
+          filter: ['==', ['geometry-type'], 'Point'],
+          paint: {
+            'circle-radius': 3,
+            'circle-color': '#c084fc',
+            'circle-stroke-color': '#0b1220',
+            'circle-stroke-width': 1,
+          },
+        }],
+      },
+    ]
+
+    for (const layer of layers) {
+      if (!toggles[layer.toggle]) {
+        remove(layer.id)
+        continue
+      }
+      layer.load()
+        .then((collection) => {
+          if (cancelled || !collection) return
+          add(layer.id, collection, layer.specs)
+        })
+        .catch(() => undefined)
+    }
+
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- layers follow their toggles only
+  }, [layerToggles])
 
   const closeWebcamLightbox = useCallback(() => {
     exitWebcamStageFullscreen()

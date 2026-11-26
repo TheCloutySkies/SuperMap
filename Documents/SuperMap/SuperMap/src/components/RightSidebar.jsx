@@ -10,6 +10,11 @@ const OSINT_LAYER_SECTIONS = [
     layers: [
       { key: 'liveWildfires', label: 'Live Wildfires' },
       { key: 'usgsEarthquakes', label: 'USGS Earthquakes' },
+      { key: 'ucdpEvents', label: 'UCDP conflict events', hint: 'Georeferenced events · snapshot' },
+      { key: 'warspottingLosses', label: 'Equipment losses', hint: 'WarSpotting · snapshot' },
+      { key: 'satelliteTracks', label: 'Satellite tracks', hint: 'CelesTrak ground tracks · snapshot' },
+      { key: 'radiationSafecast', label: 'Radiation (Safecast)', hint: 'Citizen sensors · snapshot' },
+      { key: 'weatherBalloons', label: 'Weather balloons', hint: 'SondeHub · snapshot' },
       { key: 'emscEarthquakes', label: 'EMSC Earthquakes (global)' },
       { key: 'usgsVolcanoes', label: 'USGS Elevated Volcanoes', hint: 'Active alert notices · free' },
       { key: 'nwsAlerts', label: 'NWS Weather Alerts (US)', hint: 'Watches / warnings · free' },

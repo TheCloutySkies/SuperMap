@@ -86,6 +86,16 @@ export const OMNIBAR_CORE_ENTRIES = Object.freeze([
     weight: 10,
   },
   {
+    id: 'mode-strategic',
+    label: 'Strategic',
+    category: 'Mode',
+    keywords: ['strategic', 'conflict', 'ucdp', 'warspotting', 'satellites', 'orbital', 'launch', 'kev', 'ransomware', 'ooni', 'censorship', 'radiation', 'balloons'],
+    synonyms: ['military', 'defence', 'defense', 'space', 'cyber'],
+    action: 'navigate',
+    viewId: 'strategic',
+    weight: 10,
+  },
+  {
     id: 'mode-tools',
     label: 'Tools',
     category: 'Mode',

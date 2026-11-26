@@ -42,13 +42,13 @@ const RUN_ID = runIdFor()
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024
 
 const GATE_HOURS = {
-  news: 6,
+  news: 2,
   osint: 4,
-  'osint-x': 4,
-  videos: 4,
+  'osint-x': 2,
+  videos: 2,
   'threat-summary': 4,
   'keyword-tags': 6,
-  stocks: 4,
+  stocks: 2,
   'gas-prices': 24,
   space: 4,
   defcon: 4,

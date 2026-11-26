@@ -48,7 +48,7 @@ export default function DataFreshness({ className = '' }) {
     staleCount ? `${staleCount} stale` : 'all fresh',
   ].join(' · ')
 
-  const state = snapshot.state === SNAPSHOT_STATE.DEGRADED ? 'refresh failing' : 'every 4 hours'
+  const state = snapshot.state === SNAPSHOT_STATE.DEGRADED ? 'refresh failing' : 'every 2 hours'
 
   return (
     <p className={`data-freshness ${old || staleCount || snapshot.state === SNAPSHOT_STATE.DEGRADED ? 'data-freshness--stale' : ''} ${className}`.trim()} title={detail}>

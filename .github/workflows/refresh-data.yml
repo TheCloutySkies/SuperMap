@@ -11,8 +11,9 @@ name: Refresh data snapshots
 
 on:
   schedule:
-    # Every 4 hours, off the hour to miss the top-of-hour rush
-    - cron: '23 */4 * * *'
+    # Every 2 hours, at :23 UTC. Most sources are gated to 4h/24h/7d, so an
+    # extra run costs almost nothing while X, headlines and stocks stay fresh.
+    - cron: '23 */2 * * *'
   workflow_dispatch:
     inputs:
       only:

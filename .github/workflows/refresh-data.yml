@@ -31,9 +31,6 @@ jobs:
   collect:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: Documents/SuperMap/situational-awareness-api
     steps:
       - uses: actions/checkout@v4
 
@@ -42,9 +39,11 @@ jobs:
           node-version: '20'
 
       - name: Install API dependencies
+        working-directory: Documents/SuperMap/situational-awareness-api
         run: npm ci --no-audit --no-fund
 
       - name: Collect snapshots
+        working-directory: Documents/SuperMap/situational-awareness-api
         env:
           MEDIASTACK_API_KEY: ${{ secrets.MEDIASTACK_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
@@ -64,17 +63,19 @@ jobs:
           fi
 
       - name: Publish to the data branch
+        working-directory: ${{ github.workspace }}
         run: |
           set -e
-          if [ ! -f snapshot-out/staging/manifest.json ]; then
+          OUT="Documents/SuperMap/situational-awareness-api/snapshot-out/staging"
+          if [ ! -f "$OUT/manifest.json" ]; then
             echo "::error::collector produced no manifest"
             exit 1
           fi
-          VERSION=$(node -p "require('./snapshot-out/staging/manifest.json').version")
+          VERSION=$(node -p "require('./$OUT/manifest.json').version")
           # Stage the published tree outside the checkout before clearing it.
           rm -rf "$RUNNER_TEMP/publish"
           mkdir -p "$RUNNER_TEMP/publish"
-          cp -a snapshot-out/staging/. "$RUNNER_TEMP/publish/"
+          cp -a "$OUT/." "$RUNNER_TEMP/publish/"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # Orphan single commit: the branch is a snapshot, not a history.

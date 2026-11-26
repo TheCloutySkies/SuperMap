@@ -5,7 +5,7 @@
  * ~5 min TTL), never their own upstream call. One request per file per version
  * per tab: the manifest poll is tiny and every payload is immutable per version.
  */
-import { getApiBase, isLoopbackHost } from './homeBootstrap'
+import { isLoopbackHost } from './homeBootstrap'
 
 /** Direct CDN base. Never routed through /api rewrites: those are pass-through. */
 const DEFAULT_BASE = 'https://raw.githubusercontent.com/TheCloutySkies/SuperMap/data'

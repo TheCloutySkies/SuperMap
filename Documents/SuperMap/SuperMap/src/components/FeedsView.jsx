@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import axios from 'axios'
 import ArticlePreviewSheet from './ArticlePreviewSheet'
+import DataFreshness from './DataFreshness'
 import ThreatScoreButton from './ThreatScoreButton'
 import ItemMenu from '../features/accounts/ItemMenu'
 import { readHomeSnapshot, writeHomeSnapshot } from '../lib/homeBootstrap'
@@ -888,6 +889,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
                 <span className="news-desk-title-rest">Report</span>
               </h1>
               <p className="news-desk-tagline">War, weather, politics, technology, and markets.</p>
+              <DataFreshness />
             </div>
             <button
               type="button"

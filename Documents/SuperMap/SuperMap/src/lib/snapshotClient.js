@@ -28,6 +28,13 @@ export const SNAPSHOT_STATE = Object.freeze({
 let manifest = null
 let state = SNAPSHOT_STATE.UNKNOWN
 let lastError = null
+/** Age of the published run when the manifest was read (ms), measured off render. */
+let manifestAgeMs = null
+
+function ageOf(next) {
+  const at = next?.generatedAt ? Date.parse(next.generatedAt) : NaN
+  return Number.isFinite(at) ? Math.max(0, Date.now() - at) : null
+}
 const listeners = new Set()
 let pollTimer = null
 let started = false
@@ -38,9 +45,13 @@ export function snapshotBase() {
   return DEFAULT_BASE
 }
 
-/** Local dev talks to the API, so there is nothing to read from the CDN there. */
+/**
+ * Local dev talks to the API, so there is nothing to read from the CDN there —
+ * unless VITE_SNAPSHOT_BASE is set, which is how the snapshot path is tested.
+ */
 export function snapshotEnabled() {
   if (typeof window === 'undefined') return false
+  if (import.meta.env?.VITE_SNAPSHOT_BASE) return true
   return !isLoopbackHost(window.location.hostname)
 }
 
@@ -49,13 +60,13 @@ export function getManifest() {
 }
 
 export function getSnapshotState() {
-  return { state, manifest, error: lastError }
+  return { state, manifest, error: lastError, ageMs: manifestAgeMs }
 }
 
 function emit() {
   for (const fn of listeners) {
     try {
-      fn({ state, manifest, error: lastError })
+      fn({ state, manifest, error: lastError, ageMs: manifestAgeMs })
     } catch { /* listener only */ }
   }
 }
@@ -80,6 +91,7 @@ export async function loadManifest({ force = false } = {}) {
     const next = await getJson(`${snapshotBase()}/manifest.json`, MANIFEST_TIMEOUT_MS)
     const changed = !manifest || manifest.version !== next?.version
     manifest = next
+    manifestAgeMs = ageOf(next)
     state = SNAPSHOT_STATE.READY
     lastError = null
     if (changed) emit()
@@ -123,7 +135,7 @@ export async function loadSnapshot(name, { force = false } = {}) {
 export function subscribeSnapshot(fn) {
   listeners.add(fn)
   try {
-    fn({ state, manifest, error: lastError })
+    fn({ state, manifest, error: lastError, ageMs: manifestAgeMs })
   } catch { /* first paint */ }
   return () => listeners.delete(fn)
 }

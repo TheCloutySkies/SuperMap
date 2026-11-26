@@ -1,0 +1,22 @@
+.data-freshness {
+  margin: 0;
+  color: #6f7d92;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+}
+
+.data-freshness--stale {
+  color: #e0a34a;
+}
+
+.data-freshness--stale::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: #e0a34a;
+  vertical-align: middle;
+}

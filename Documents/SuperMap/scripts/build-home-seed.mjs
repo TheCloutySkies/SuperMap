@@ -116,8 +116,12 @@ async function fromSnapshot() {
 }
 
 async function main() {
+  if (String(process.env.SKIP_HOME_SEED || '') === '1') {
+    console.log('[home-seed] skipped (SKIP_HOME_SEED=1)')
+    return
+  }
   // Build-time floor: the published snapshot first, then a live API, then the
-  // seed already in the tree. Both write to ./snapshot-out/ dry runs are fine here.
+  // seed already in the tree.
   let payload = null
   const sources = [
     ['snapshot', fromSnapshot],
@@ -133,15 +137,16 @@ async function main() {
     }
   }
   if (!payload) {
+    // A build must not fail on a network hiccup: keep the committed floor.
     console.error('[home-seed] no source produced a payload; keeping the existing seed')
-    process.exitCode = 1
+    process.exitCode = fs.existsSync(outFile) ? 0 : 1
     return
   }
 
   const trimmed = trimPayload(payload || {})
   if (!hasContent(trimmed)) {
     console.error('[home-seed] payload had no usable content; keeping the existing seed')
-    process.exitCode = 1
+    process.exitCode = fs.existsSync(outFile) ? 0 : 1
     return
   }
 

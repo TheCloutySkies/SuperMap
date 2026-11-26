@@ -244,6 +244,22 @@ async function main() {
   await restorePrevious()
 
   const api = await bootApi()
+
+  // Publisher feeds only build through a background service, so a fresh runner
+  // has nothing for /api/osint until they are fetched here at least once.
+  if (!ONLY || ONLY.includes('osint')) {
+    try {
+      const osint = require('../services/osint')
+      if (typeof osint.fetchAllOsint === 'function') {
+        const counts = await osint.fetchAllOsint()
+        const total = Object.values(counts || {}).reduce((sum, n) => sum + (Number(n) || 0), 0)
+        console.log('[collector] publisher fan-out events=', total)
+      }
+    } catch (err) {
+      console.warn('[collector] publisher fan-out:', err.message)
+    }
+  }
+
   const base = `http://127.0.0.1:${api.port}`
   const state = readJson(STATE_PATH, { sources: {} }) || { sources: {} }
   state.sources = state.sources || {}

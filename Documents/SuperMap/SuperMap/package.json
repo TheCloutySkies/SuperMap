@@ -9,7 +9,8 @@
     "dev:all": "concurrently -n app,api -c blue,green \"vite\" \"cd ../situational-awareness-api && node server.js\"",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "prebuild": "node ../scripts/build-home-seed.mjs"
   },
   "dependencies": {
     "@mapbox/mapbox-gl-draw": "^1.5.1",

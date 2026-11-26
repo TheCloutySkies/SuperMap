@@ -4,6 +4,7 @@ import RadialMenu from './RadialMenu'
 import { LatestBulletin } from '../features/bulletin/BulletinBoardView'
 import ItemMenu from '../features/accounts/ItemMenu'
 import CommunityMapView from './CommunityMapView'
+import DataFreshness from './DataFreshness'
 import { CRIME_VIEW_ID, WEATHER_VIEW_ID, BRAND_LOGO_SRC, BRAND_LOGO_ALT } from '../constants'
 import './HomeScreen.css'
 import './widgets/widgets.css'
@@ -425,6 +426,8 @@ export default function HomeScreen({
             <span className="home-screen-date">{formatDate()}</span>
           </div>
         </header>
+
+        <DataFreshness className="home-screen-freshness" />
 
         {/* Desktop: ModeRail is the sole primary mode switcher. Radial is mobile-only. */}
         {isMobileLayout && (

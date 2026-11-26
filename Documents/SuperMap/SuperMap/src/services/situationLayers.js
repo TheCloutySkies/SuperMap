@@ -1,6 +1,7 @@
 import { fetchGdacsEvents, fetchUsgsVolcanoes } from './layerServices'
 import { ensurePinEmoji } from '../lib/mapEmoji'
 import { ensureSidcIcon, EARTHQUAKE_SIDC, WILDFIRE_SIDC } from '../lib/milSymbols'
+import { loadSnapshot } from '../lib/snapshotClient'
 
 const API_BASE = typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
@@ -221,6 +222,8 @@ function volcanoFeatures(collection) {
 }
 
 export async function fetchMajorHazards() {
+  const snap = await loadSnapshot('major-hazards')
+  if (snap?.type === 'FeatureCollection') return snap
   const [quakes, disasters, volcanoes] = await Promise.all([
     fetchJson('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.geojson').catch(() => EMPTY_COLLECTION),
     fetchGdacsEvents(null).catch(() => EMPTY_COLLECTION),

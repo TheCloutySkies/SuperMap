@@ -9,3 +9,6 @@ data/*
 !data/crime/**
 !data/sex-offenders/
 !data/sex-offenders/**
+
+# Collector output (published to the orphan data branch by CI, never committed here)
+snapshot-out/

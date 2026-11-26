@@ -297,12 +297,33 @@ function runBootCatchUp() {
   }
 }
 
-app.listen(PORT, () => {
-  console.log(`Situational Awareness API running on http://localhost:${PORT}`)
+/** The collector boots this app on an ephemeral port to call its own routes. */
+const COLLECTOR_MODE = String(process.env.SNAPSHOT_COLLECTOR || '') === '1'
+/** GitHub Actions owns freshness; Render only serves from the seeded snapshot. */
+const SCHEDULERS_DISABLED = COLLECTOR_MODE
+  || String(process.env.DISABLE_SCHEDULERS || '') === '1'
+
+const server = app.listen(COLLECTOR_MODE ? 0 : PORT, () => {
+  const actualPort = server.address()?.port
+  console.log(`Situational Awareness API running on http://localhost:${actualPort}`)
   try {
     dataPaths.logOnce()
   } catch (_) { /* optional */ }
   // Prefer keepalive hitting /api/home (not only /health) so in-memory last-good stays warm.
+
+  if (COLLECTOR_MODE) {
+    console.log('[boot] collector mode: schedulers skipped, routes only')
+    return
+  }
+
+  if (SCHEDULERS_DISABLED) {
+    // Seed from the published snapshot, then serve. No upstream jobs run here.
+    const snapshotSeed = require('./services/snapshotSeed')
+    seedFromSnapshot(snapshotSeed).finally(() => {
+      console.log('[boot] DISABLE_SCHEDULERS=1: scheduled jobs skipped')
+    })
+    return
+  }
 
   // Load disk/memory last-good immediately so first requests are not blank
   let hadLastGood = false
@@ -401,3 +422,28 @@ app.listen(PORT, () => {
     refreshHomeImagesBackground().catch((e) => console.warn('[home] images tick:', e.message))
   }, HOME_IMAGES_REFRESH_MS)
 })
+
+module.exports = { app, server, COLLECTOR_MODE, SCHEDULERS_DISABLED }
+
+/**
+ * Restore the collector's published snapshot before serving.
+ * Runs before seedHomeCachesOnBoot so the memory caches are filled from it.
+ */
+async function seedFromSnapshot(snapshotSeed) {
+  try {
+    const status = await snapshotSeed.seedOnBoot()
+    if (status.seeded) {
+      console.log('[boot] served from snapshot', status.version || '(no version)', status.counts)
+    }
+  } catch (err) {
+    console.warn('[boot] snapshot seed:', err.message)
+  }
+  try {
+    newsService.getNewsCached()
+  } catch (_) { /* optional */ }
+  try {
+    if (typeof apiRouter.seedHomeCachesOnBoot === 'function') apiRouter.seedHomeCachesOnBoot()
+  } catch (err) {
+    console.warn('[boot] seed:', err.message)
+  }
+}

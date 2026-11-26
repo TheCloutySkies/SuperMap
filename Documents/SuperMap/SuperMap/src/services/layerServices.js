@@ -4,13 +4,11 @@
  * When VITE_API_URL is set, earthquakes (and optionally towers) use the backend API.
  */
 
-const API_BASE = typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL
-  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
-  : ''
+import { getApiBase } from '../lib/homeBootstrap'
+import { collectionSnapshot, loadSnapshot, clipCollection } from '../lib/snapshotClient'
 
-const FIRMS_MAP_KEY = '09415b5df0304c3802335984b511c111'
-const FIRMS_WORLD_TTL_MS = 5 * 60 * 1000
-let firmsWorldCache = { at: 0, headers: null, lines: null }
+const API_BASE = getApiBase()
+
 const OVERPASS_ENDPOINT = 'https://overpass-api.de/api/interpreter'
 const OVERPASS_HEADERS = {
   'Content-Type': 'application/x-www-form-urlencoded',
@@ -161,36 +159,17 @@ export async function fetchOverpassCellTowers(bbox) {
 }
 
 export async function fetchNasaFirmsArea(bbox) {
-  // Free FIRMS map keys often only allow the `world` area slug (custom bboxes return header-only).
-  // Fetch world NRT then filter to the visible bbox client-side. Cache the CSV for a few minutes.
-  const now = Date.now()
-  if (!firmsWorldCache.lines || now - firmsWorldCache.at > FIRMS_WORLD_TTL_MS) {
-    const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${FIRMS_MAP_KEY}/VIIRS_NOAA20_NRT/world/1`
-    const res = await fetch(url)
-    if (!res.ok) return { type: 'FeatureCollection', features: [] }
-    const text = await res.text()
-    const lines = text.trim().split('\n')
-    if (lines.length < 2) return { type: 'FeatureCollection', features: [] }
-    firmsWorldCache = { at: now, headers: lines[0].split(','), lines: lines.slice(1) }
-  }
-  const headers = firmsWorldCache.headers || []
-  const latIdx = headers.indexOf('latitude')
-  const lonIdx = headers.indexOf('longitude')
-  if (latIdx === -1 || lonIdx === -1) return { type: 'FeatureCollection', features: [] }
-  const [w, s, e, n] = bbox || [-180, -90, 180, 90]
-  const features = firmsWorldCache.lines.map((line) => {
-    const vals = line.split(',')
-    const lat = parseFloat(vals[latIdx])
-    const lon = parseFloat(vals[lonIdx])
-    if (Number.isNaN(lat) || Number.isNaN(lon)) return null
-    if (lon < w || lon > e || lat < s || lat > n) return null
-    return {
-      type: 'Feature',
-      properties: {},
-      geometry: { type: 'Point', coordinates: [lon, lat] },
+  // Served from the collector's snapshot; the FIRMS map key stays on the server.
+  const snap = await collectionSnapshot('firms', bbox)
+  if (snap) return snap
+  try {
+    const res = await fetch(`${API_BASE}/api/map/fires`)
+    if (res.ok) {
+      const data = await res.json()
+      if (data?.type === 'FeatureCollection') return clipCollection(data, bbox)
     }
-  }).filter(Boolean)
-  return { type: 'FeatureCollection', features }
+  } catch { /* the layer stays empty while both are unreachable */ }
+  return { type: 'FeatureCollection', features: [] }
 }
 
 export async function fetchGdacsEvents(bbox) {
@@ -229,6 +208,8 @@ export async function fetchGdacsEvents(bbox) {
 }
 
 export async function fetchUsgsEarthquakes(bbox) {
+  const snap = await collectionSnapshot('earthquakes-feed', bbox)
+  if (snap) return snap
   if (API_BASE) {
     try {
       const bboxStr = bbox ? bbox.join(',') : ''
@@ -353,6 +334,8 @@ export async function fetchDatacenters(bbox) {
 }
 
 export async function fetchUtilityOutages() {
+  const snap = await collectionSnapshot('utility-outages')
+  if (snap) return snap
   const url =
     'https://services.arcgis.com/BLN4oKB0N1YSgvY8/arcgis/rest/services/Power_Outages_(View)/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=geojson'
   try {
@@ -367,6 +350,8 @@ export async function fetchUtilityOutages() {
 }
 
 export async function fetchLiveuamapRss() {
+  const snap = await loadSnapshot('liveuamap')
+  if (snap?.items?.length) return snap.items
   try {
     const res = await fetch('https://liveuamap.com/rss', { mode: 'cors' })
     if (!res.ok) return []
@@ -574,6 +559,8 @@ function filterFcByBbox(fc, bbox) {
 
 /** EMSC / Seismic Portal global quakes (free, CORS-enabled). Falls back via API proxy. */
 export async function fetchEmscEarthquakes(bbox) {
+  const snap = await collectionSnapshot('hazards-emsc', bbox)
+  if (snap) return snap
   const q = bboxQuery(bbox)
   if (API_BASE) {
     try {
@@ -621,6 +608,8 @@ export async function fetchEmscEarthquakes(bbox) {
 
 /** NWS active alerts / WWA polygons (free, no key). Prefer API proxy when available. */
 export async function fetchNwsAlerts(bbox) {
+  const snap = await collectionSnapshot('hazards-nws', bbox)
+  if (snap) return snap
   const q = bboxQuery(bbox)
   if (API_BASE) {
     try {
@@ -665,6 +654,8 @@ export async function fetchNwsAlerts(bbox) {
 
 /** USGS elevated volcano notices (free JSON). */
 export async function fetchUsgsVolcanoes(bbox) {
+  const snap = await collectionSnapshot('volcanoes', bbox)
+  if (snap) return snap
   const q = bboxQuery(bbox)
   if (API_BASE) {
     try {
@@ -715,6 +706,8 @@ export async function fetchUsgsVolcanoes(bbox) {
 
 /** NHC tropical cyclone centers — CORS blocked client-side; requires API proxy. */
 export async function fetchNhcTropical(bbox) {
+  const snap = await collectionSnapshot('nhc', bbox)
+  if (snap) return snap
   const q = bboxQuery(bbox)
   if (!API_BASE) return { type: 'FeatureCollection', features: [] }
   try {

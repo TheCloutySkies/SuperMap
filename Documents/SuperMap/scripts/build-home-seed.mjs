@@ -23,6 +23,9 @@ const outFile = path.join(repoRoot, 'SuperMap', 'public', 'home-seed.json')
 
 const HOME_URL = process.env.API_HOME_URL || 'https://supermap-api.onrender.com/api/home'
 const TIMEOUT_MS = Number(process.env.SEED_TIMEOUT_MS || 60000)
+/** The collector's published snapshot: the seed's primary source at build time. */
+const SNAPSHOT_BASE = (process.env.VITE_SNAPSHOT_BASE
+  || 'https://raw.githubusercontent.com/TheCloutySkies/SuperMap/data').replace(/\/$/, '')
 
 function trimPayload(payload) {
   const news = payload.news && Array.isArray(payload.news.features)
@@ -85,20 +88,54 @@ function mergeWithExisting(next, existing) {
   return out
 }
 
-async function main() {
+function withTimeout(ms) {
   const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS)
-  let payload
+  const timer = setTimeout(() => ctrl.abort(), ms)
+  return { ctrl, done: () => clearTimeout(timer) }
+}
+
+async function getJson(url, timeoutMs = TIMEOUT_MS) {
+  const { ctrl, done } = withTimeout(timeoutMs)
   try {
-    const res = await fetch(HOME_URL, { signal: ctrl.signal, headers: { Accept: 'application/json' } })
+    const res = await fetch(url, { signal: ctrl.signal, headers: { Accept: 'application/json' } })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    payload = await res.json()
-  } catch (err) {
-    console.error(`[home-seed] ${HOME_URL} failed: ${err.message}`)
+    return await res.json()
+  } finally {
+    done()
+  }
+}
+
+/** The collector's latest home snapshot, named by its manifest. */
+async function fromSnapshot() {
+  const manifest = await getJson(`${SNAPSHOT_BASE}/manifest.json`, 15000)
+  const file = manifest?.sources?.home?.file
+  if (!file) throw new Error('manifest names no home file')
+  const home = await getJson(`${SNAPSHOT_BASE}/${file}`, 30000)
+  console.log(`[home-seed] from snapshot ${manifest.version} (${file})`)
+  return home
+}
+
+async function main() {
+  // Build-time floor: the published snapshot first, then a live API, then the
+  // seed already in the tree. Both write to ./snapshot-out/ dry runs are fine here.
+  let payload = null
+  const sources = [
+    ['snapshot', fromSnapshot],
+    ['api', () => getJson(HOME_URL)],
+  ]
+  for (const [name, load] of sources) {
+    try {
+      payload = await load()
+      console.log(`[home-seed] loaded from ${name}`)
+      break
+    } catch (err) {
+      console.warn(`[home-seed] ${name} unavailable: ${err.message}`)
+    }
+  }
+  if (!payload) {
+    console.error('[home-seed] no source produced a payload; keeping the existing seed')
     process.exitCode = 1
     return
-  } finally {
-    clearTimeout(timer)
   }
 
   const trimmed = trimPayload(payload || {})

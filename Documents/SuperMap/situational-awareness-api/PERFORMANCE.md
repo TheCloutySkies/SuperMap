@@ -89,3 +89,20 @@ The old client gave up after 12s and never retried, so the desks stayed blank.
 
 10. **Optional features**  
    Consider loading camera-discovery, finance, or stream-proxy only when their env vars are set, to avoid pulling in large deps for every deployment.
+
+## Shared snapshots (one collector, one data branch)
+
+GitHub Actions now owns freshness; Render serves it. One 4-hourly run
+(`scripts/refresh-snapshots.js`) restores the previous snapshot, refreshes every
+display source through the local API, and publishes versioned files plus a
+manifest to the orphan `data` branch. `refresh-data.yml` is the only scheduler;
+`api-keepalive.yml` is untouched.
+
+- `singleFlight` + `snapshotHttp` concurrency (4 global / 1 per host, 30s timeout,
+  2 retries with full jitter, `Retry-After`) keep the per-day budget fixed.
+- Gates skip a source whose last success is younger than its window, and a failed
+  source keeps last-good (`status.json` records it); three failures park it a day.
+- `services/snapshotSeed.js` restores the published tarball on boot;
+  `DISABLE_SCHEDULERS=1` stops Render's own jobs.
+- Display routes serve the seeded state: `?refresh=1` / `?wait=1` only count with
+  the config write token, and `Cache-Control` is 300s + 3600s SWR.

@@ -13,7 +13,8 @@ const newsService = require('./news')
 const apiResultCache = require('./apiResultCache')
 const dataPaths = require('./dataPaths')
 
-const HOME_CACHE_CONTROL = 'public, max-age=60, stale-while-revalidate=600'
+/** Display routes: shared caches may hold a run's payload for a few minutes. */
+const HOME_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=3600'
 /** Hard ceiling for cold /api/home when no last-good exists (ms). */
 const HOME_LIVE_DEADLINE_MS = 8000
 

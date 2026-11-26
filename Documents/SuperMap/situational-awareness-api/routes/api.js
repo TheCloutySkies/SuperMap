@@ -37,6 +37,43 @@ router.use('/crime', crimeRouter)
 router.use('/weather', weatherRouter)
 router.use('/forensics', forensicsRouter)
 router.use('/pins', pinsRouter)
+// Sources that used to be fetched straight from the browser (snapshot collector + fallback)
+router.use(require('./snapshot'))
+
+/**
+ * Display routes serve the seeded snapshot. A visitor may not trigger an upstream
+ * pull: `?refresh=1` / `?wait=1` only count with the config write token, so the
+ * collector's fixed per-day budget stays the only thing that talks upstream.
+ */
+const DISPLAY_PATHS = new Set([
+  '/home',
+  '/news',
+  '/osint-x',
+  '/threat-summary',
+  '/stocks',
+  '/gas-prices',
+  '/home-images',
+  '/space',
+  '/defcon',
+  '/earthquakes/widget',
+])
+
+function allowInteractiveRefresh(req) {
+  const expected = String(process.env.CONFIG_WRITE_TOKEN || '').trim()
+  if (!expected) return true // no token configured (local / dev): unchanged behaviour
+  const given = String(req.headers['x-config-token'] || req.query?.token || '').trim()
+  return given.length > 0 && given === expected
+}
+
+router.use((req, _res, next) => {
+  if (DISPLAY_PATHS.has(req.path) && !allowInteractiveRefresh(req) && req.query
+    && (req.query.refresh != null || req.query.wait != null)) {
+    req.query = { ...req.query }
+    delete req.query.refresh
+    delete req.query.wait
+  }
+  next()
+})
 const weatherNearbyCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 })
 const weatherHourlyCache = new NodeCache({ stdTTL: 10 * 60, checkperiod: 120 })
 const threatSummaryCache = new NodeCache({ stdTTL: 60 * 60, checkperiod: 300 })

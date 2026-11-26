@@ -1,0 +1,91 @@
+# One data scheduler: collect every display source, publish a versioned snapshot.
+#
+# Data updates must never need an app deploy, and the upstream request volume must
+# be a fixed per-day budget, not a function of how many people are looking. This
+# run is the only thing that talks to the sources; it restores the previous
+# snapshot first (so gates and last-good are real), then force-pushes the result to
+# the orphan `data` branch as one commit. Vercel ignores that branch (Ignored Build
+# Step), so a publish costs no deploy, and raw.githubusercontent serves it to every
+# visitor from the CDN.
+name: Refresh data snapshots
+
+on:
+  schedule:
+    # Every 4 hours, off the hour to miss the top-of-hour rush
+    - cron: '23 */4 * * *'
+  workflow_dispatch:
+    inputs:
+      only:
+        description: Comma-separated sources (blank = everything)
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-data
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: Documents/SuperMap/situational-awareness-api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install API dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Collect snapshots
+        env:
+          MEDIASTACK_API_KEY: ${{ secrets.MEDIASTACK_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          NASA_API_KEY: ${{ secrets.NASA_API_KEY }}
+          FIRMS_MAP_KEY: ${{ secrets.FIRMS_MAP_KEY }}
+          EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
+          ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
+          # Writes through the collector are the one place a refresh is expected.
+          CONFIG_WRITE_TOKEN: ${{ secrets.CONFIG_WRITE_TOKEN }}
+          SNAPSHOT_OUT_DIR: snapshot-out
+        run: |
+          set -o pipefail
+          if [ -n "${{ inputs.only }}" ]; then
+            node scripts/refresh-snapshots.js --only="${{ inputs.only }}"
+          else
+            node scripts/refresh-snapshots.js
+          fi
+
+      - name: Publish to the data branch
+        run: |
+          set -e
+          if [ ! -f snapshot-out/staging/manifest.json ]; then
+            echo "::error::collector produced no manifest"
+            exit 1
+          fi
+          VERSION=$(node -p "require('./snapshot-out/staging/manifest.json').version")
+          # Stage the published tree outside the checkout before clearing it.
+          rm -rf "$RUNNER_TEMP/publish"
+          mkdir -p "$RUNNER_TEMP/publish"
+          cp -a snapshot-out/staging/. "$RUNNER_TEMP/publish/"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Orphan single commit: the branch is a snapshot, not a history.
+          git checkout --orphan data-publish
+          git rm -rq --cached . || true
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -a "$RUNNER_TEMP/publish/." .
+          git add -A
+          if git diff --cached --quiet; then
+            echo "nothing to publish"
+            exit 0
+          fi
+          git commit -q -m "Publish data snapshot $VERSION"
+          git push --force origin HEAD:refs/heads/data

@@ -6,6 +6,7 @@
  * single fetch fills the site and a finished server-side ingest reaches open tabs
  * without anyone reloading.
  */
+import { loadSnapshot, startSnapshotPolling, subscribeSnapshot, getSnapshotState, SNAPSHOT_STATE } from './snapshotClient'
 import {
   HOME_STATE,
   loadHomeSeed,
@@ -141,18 +142,48 @@ async function pollOnce() {
   }
 }
 
+let lastSnapshotVersion = null
+
+/** A new published version reaches every open tab without a reload. */
+function watchPublishedVersion() {
+  subscribeSnapshot(({ manifest: next, state: snapState }) => {
+    if (snapState !== SNAPSHOT_STATE.READY || !next?.version) return
+    if (!lastSnapshotVersion) {
+      lastSnapshotVersion = next.version
+      return
+    }
+    if (next.version === lastSnapshotVersion) return
+    lastSnapshotVersion = next.version
+    loadSnapshot('home', { force: true }).then((payload) => {
+      if (payload) applyPayload(payload, { status: HOME_STATE.SEED, source: 'cdn' })
+    }).catch(() => {})
+  })
+}
+
 async function boot() {
   // 1) Local last-good paints immediately.
   const snapshot = readHomeSnapshot()
   if (snapshot) {
     setState({ payload: snapshot, status: HOME_STATE.SEED, source: 'snapshot' })
   }
-  // 2) Static seed covers a wiped browser / brand-new visitor.
+
+  // 2) The shared snapshot: every visitor reads the same CDN file, so no one
+  //    waits on Render and the payload does not depend on who is looking.
+  startSnapshotPolling()
+  watchPublishedVersion()
+  const cdn = await loadSnapshot('home')
+  if (cdn) {
+    const next = getSnapshotState().manifest
+    lastSnapshotVersion = next?.version || null
+    applyPayload(cdn, { status: HOME_STATE.SEED, source: 'cdn' })
+    return
+  }
+
+  // 3) Degraded: the bundled seed, then the API with backoff and its ETag poll.
   if (!snapshot || !snapshot.news?.features?.length) {
     const seed = await loadHomeSeed({ signal: abortBoot?.signal })
     if (seed) applyPayload(seed, { status: HOME_STATE.SEED, source: 'seed' })
   }
-  // 3) Live, with backoff.
   await loadLive({ etag: null })
   startPolling()
 }

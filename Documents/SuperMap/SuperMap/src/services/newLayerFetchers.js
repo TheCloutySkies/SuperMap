@@ -1,4 +1,5 @@
 import { aircraftProperties } from '../lib/movementIcons'
+import { loadSnapshot } from '../lib/snapshotClient'
 
 const API_BASE = typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
@@ -109,6 +110,8 @@ export function frontlinePopupHtml(properties = {}) {
 }
 
 export async function fetchUkraineFrontline() {
+  const snap = await loadSnapshot('frontline')
+  if (snap) return describeFrontline(snap)
   try {
     const data = await fetchJsonWithTimeout('https://deepstatemap.live/api/history/last', 15000)
     return describeFrontline(data)
@@ -119,6 +122,8 @@ export async function fetchUkraineFrontline() {
 }
 
 export async function fetchSpaceWeather() {
+  const snap = await loadSnapshot('space-weather')
+  if (snap && typeof snap.kp === 'number') return snap
   const rows = await fetchJsonWithTimeout('https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json', 10000)
   if (!Array.isArray(rows) || rows.length < 2) return { kp: 0, label: 'Quiet' }
   const latest = rows[rows.length - 1]

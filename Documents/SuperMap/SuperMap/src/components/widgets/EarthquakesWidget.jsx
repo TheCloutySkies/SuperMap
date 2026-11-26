@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import WidgetCard from './WidgetCard'
-import { getApiBase } from '../../lib/homeBootstrap'
+import { getApiBase, HOME_STATE } from '../../lib/homeBootstrap'
 
 const API_BASE = getApiBase()
 
@@ -10,7 +10,8 @@ function formatQuakeTime(time) {
   return new Date(time).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-export default function EarthquakesWidget({ onShowOnMap, initialData }) {
+export default function EarthquakesWidget({ onShowOnMap, initialData, bootstrapState }) {
+  const waking = bootstrapState === HOME_STATE.WAKING
   const [events, setEvents] = useState(() =>
     Array.isArray(initialData?.events) ? initialData.events.slice(0, 4) : []
   )
@@ -77,7 +78,7 @@ export default function EarthquakesWidget({ onShowOnMap, initialData }) {
   }, [initialData])
 
   return (
-    <WidgetCard title="Recent earthquakes" loading={loading} error={error} updatedAt={updatedAt}>
+    <WidgetCard title="Recent earthquakes" loading={loading} error={error || (waking && !events.length ? 'Waking the API — retrying…' : null)} updatedAt={updatedAt}>
       {events.length > 0 ? (
         <ul className="widget-earthquakes-list">
           {events.map((ev, i) => (

@@ -1,5 +1,38 @@
 # Situational Awareness API — Performance & Startup
 
+## Measured on the live deployment (Render Free + Vercel)
+
+| Call | Cold | Warm |
+| --- | --- | --- |
+| `GET /health` (instance asleep) | **22.0s** to first byte | 0.001s |
+| `GET /api/gas-prices` | **37.5s** | 0.3s |
+| `GET /api/stocks` | **37.4s** | 0.3s |
+| `GET /api/earthquakes/widget` | **41.9s** | 0.8s |
+| `GET /api/osint-x?limit=80` | **24.5s** | 0.6s |
+| `GET /api/news`, `/api/threat-summary`, `/api/home-images` | 1–1.5s | 0.3–1.2s |
+
+Cold-cache handlers, not the network, were the cost: `/api/stocks` awaited five
+symbols in a loop (10s timeout each), gas scraped EIA twice with 20s timeouts,
+and the slow ones collided with the boot catch-up storm on a 0.1-CPU instance.
+The old client gave up after 12s and never retried, so the desks stayed blank.
+
+## What changed
+
+- **`services/singleFlight.js`** — one upstream fetch per key, shared by every
+  caller (`/api/gas-prices`, `/api/stocks`, `/api/earthquakes/widget`,
+  `/api/defcon`, `/api/home-images`).
+- **`/api/stocks`** — symbols are fetched with `Promise.allSettled`, 8s timeouts.
+- **`/api/gas-prices`** — EIA API branch only when `EIA_API_KEY` is set, 8s
+  timeouts, and a failed scrape is kept out of the request path for 60s.
+- **`/api/earthquakes/widget`** — disk last-good first, then one shared USGS pull.
+- **`/api/home`** — weak `ETag` over the pieces (`updatedAt`, counts, threat
+  timestamp, gas as-of): a 60s poll costs a `304` (measured 1.9ms), and any
+  finished ingest changes it. `Server-Timing: home;dur=…` is set for diagnosis.
+- **Piece caches** — `assembleHomeFromCaches()` now also carries `earthquakes`
+  and `defcon` from `apiResultCache`, so the first `/api/home` has every piece.
+- **Boot ordering** — on a cold instance a 10–12s quiet window runs before the
+  catch-up jobs, while `warmHomeCaches()` starts at 300ms instead of 2.5s.
+
 ## Implemented
 
 - **Threat summary**: `/api/threat-summary` lazy-loads the `threatSummary` service (and thus the database module) only on first request. No impact on startup.

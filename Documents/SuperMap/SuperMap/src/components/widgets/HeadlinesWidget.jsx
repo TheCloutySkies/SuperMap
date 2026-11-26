@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import WidgetCard from './WidgetCard'
-import { getApiBase } from '../../lib/homeBootstrap'
+import { getApiBase, HOME_STATE } from '../../lib/homeBootstrap'
 import { isGlowieRelevant } from '../../lib/glowieRelevance'
 
 const API_BASE = getApiBase()
@@ -20,7 +20,9 @@ function headlinesFromNews(news) {
     .slice(0, 6)
 }
 
-export default function HeadlinesWidget({ initialNews }) {
+export default function HeadlinesWidget({ initialNews, bootstrapState }) {
+  // While the API is waking, say so instead of implying there is no data.
+  const waking = bootstrapState === HOME_STATE.WAKING
   const [items, setItems] = useState(() => headlinesFromNews(initialNews))
   const [loading, setLoading] = useState(() => !headlinesFromNews(initialNews).length)
   const [error, setError] = useState(null)
@@ -50,7 +52,7 @@ export default function HeadlinesWidget({ initialNews }) {
     if (initialNews !== undefined || items.length) return
     let cancelled = false
     setLoading(true)
-    axios.get(`${API_BASE}/api/news`, { timeout: 28000 })
+    axios.get(`${API_BASE}/api/news`, { timeout: 14000 })
       .then((res) => {
         if (!cancelled && res.data?.features) {
           setItems(headlinesFromNews(res.data))
@@ -72,7 +74,7 @@ export default function HeadlinesWidget({ initialNews }) {
   }
 
   return (
-    <WidgetCard title="Headlines" loading={loading} error={error} updatedAt={updatedAt}>
+    <WidgetCard title="Headlines" loading={loading} error={error || (waking && !items.length ? 'Waking the API — retrying…' : null)} updatedAt={updatedAt}>
       {items.length > 0 ? (
         <ul className="widget-headlines-list">
           {items.map((item, i) => {
@@ -106,7 +108,7 @@ export default function HeadlinesWidget({ initialNews }) {
           })}
         </ul>
       ) : !loading && !error && (
-        <p className="widget-outage-empty">No headlines. Start the API to load news feeds.</p>
+        <p className="widget-outage-empty">No headlines yet — feeds are still warming up.</p>
       )}
     </WidgetCard>
   )

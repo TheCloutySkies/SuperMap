@@ -15,6 +15,16 @@ Render Free wipes the local filesystem on every **deploy / sleep wake / restart*
 
 Without workarounds, boot logged `hadLastGood= false` and users stared at empty desks while RSS + FxTwitter caught up.
 
+## What the browser does now (so a wipe is never a blank site)
+
+| Workaround | Effect |
+| --- | --- |
+| **Static seed** `SuperMap/public/home-seed.json` | Served by the CDN. A brand-new visitor paints threat, gas, headlines, tickers, quakes, EONET and X images in milliseconds while the API is still waking. Refreshed every 30 min by `.github/workflows/refresh-home-seed.yml`; a thin payload never overwrites a richer seed. |
+| **Same-origin `/api`** | `vercel.json` rewrites `/api/:path*` and `/health` to `supermap-api.onrender.com`, so a deployed page never calls `localhost`. `getApiBase()` falls back to the Render host if the rewrite fails. |
+| **Retries** | `/api/home` is attempted at 12s, 16s and 20s (a sleeping instance answers in ~22s), then a "waking" state with a Retry button instead of a permanent blank. |
+| **Shared store** | One `homeStore` pipeline (snapshot → seed → live) feeds home, the banner, X/OSINT and feeds; pieces merge field by field so a warming payload cannot blank a filled widget. |
+| **60s ETag poll** | Open tabs re-check `/api/home` with `If-None-Match`; a finished catch-up reaches everyone without a reload. |
+
 ## Free-tier path (first-class — do this)
 
 ### 1. Keepalive: hit `/api/home`, not only `/health`

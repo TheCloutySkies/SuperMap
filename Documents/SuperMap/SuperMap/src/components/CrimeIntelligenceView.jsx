@@ -4,10 +4,9 @@ import { CITY_COORDS, coordsForCity, stateAbbrFromName } from '../services/crime
 import { LEVEL_THRESHOLDS, levelFromRatio } from '../lib/crimeLevels'
 import SexOffendersMap from './SexOffendersMap'
 import './CrimeIntelligenceView.css'
+import { getApiBase } from '../lib/homeBootstrap'
 
-const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
-  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
-  : (import.meta.env.DEV ? '' : 'http://localhost:3001')
+const API_BASE = getApiBase()
 
 const SEGMENTS = [
   { id: 'national', label: 'National' },

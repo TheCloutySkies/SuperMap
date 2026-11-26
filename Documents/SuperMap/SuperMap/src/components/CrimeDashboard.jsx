@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import './CrimeDashboard.css'
+import { getApiBase } from '../lib/homeBootstrap'
 
-const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
-  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
-  : (import.meta.env.DEV ? '' : 'http://localhost:3001')
+const API_BASE = getApiBase()
 
 const SECTIONS = [
   { id: 'overview', label: 'Overview' },

@@ -1,9 +1,9 @@
 /**
  * Crime map layer helpers — US state choropleth joined to /api/crime/states
  */
-const API_BASE = (import.meta.env?.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
-  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
-  : (import.meta.env?.DEV ? '' : 'http://localhost:3001')
+import { getApiBase } from '../lib/homeBootstrap'
+
+const API_BASE = getApiBase()
 
 const US_STATES_GEOJSON_URL =
   'https://cdn.jsdelivr.net/gh/PublicaMundi/MappingAPI@master/data/geojson/us-states.json'

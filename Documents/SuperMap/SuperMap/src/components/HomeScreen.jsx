@@ -11,9 +11,14 @@ import {
   getApiBase,
   readHomeSnapshot,
   writeHomeSnapshot,
-  fetchHomeBootstrap,
   osintXToImages,
 } from '../lib/homeBootstrap'
+import {
+  HOME_STATE,
+  subscribeHome,
+  startHomePolling,
+  refreshHomeNow,
+} from '../lib/homeStore'
 
 const StockWidget = lazy(() => import('./widgets/StockWidget'))
 const WorldClock = lazy(() => import('./widgets/WorldClock'))
@@ -114,7 +119,7 @@ function applyHomePayload(data, setters) {
     setGasPricesLoading,
     setWidgetBootstrap,
   } = setters
-  if (data.threatSummary) {
+  if (data.threatSummary?.summary) {
     setThreatSummary(data.threatSummary)
     setThreatSummaryError(null)
     setThreatSummaryLoading(false)
@@ -124,21 +129,26 @@ function applyHomePayload(data, setters) {
   const fromHome = Array.isArray(data.homeImages) ? data.homeImages : []
   const fromOsint = osintXToImages(data.osintX)
   if (fromHome.length || fromOsint.length) {
-    setHomeXImages(fromHome.length ? fromHome : fromOsint)
+    setHomeXImages((prev) => (fromHome.length ? fromHome : (fromOsint.length ? fromOsint : prev)))
   }
-  if (Array.isArray(data.gasStates)) setGasPricesStates(data.gasStates)
-  if (data.gasPrices) {
+  if (Array.isArray(data.gasStates) && data.gasStates.length) setGasPricesStates(data.gasStates)
+  if (data.gasPrices && data.gasPrices.national != null) {
     const gas = normalizeGasPrices(data.gasPrices)
-    setGasPrices(gas)
-    setGasPricesError(gas?.gasUnavailable ? (gas.error || null) : null)
-    setGasPricesLoading(false)
+    if (gas && !gas.gasUnavailable) {
+      setGasPrices(gas)
+      setGasPricesError(null)
+      setGasPricesLoading(false)
+    }
   }
-  setWidgetBootstrap({
-    news: data.news || null,
-    stocks: data.stocks || null,
-    earthquakes: data.earthquakes || null,
-    space: data.space || null,
-  })
+  // Merge piece by piece: a warming payload must never blank a painted widget.
+  const newsFeatures = data.news?.features?.length || 0
+  const hasEvents = Array.isArray(data.earthquakes?.events) && data.earthquakes.events.length > 0
+  setWidgetBootstrap((prev) => ({
+    news: newsFeatures ? data.news : prev.news,
+    stocks: data.stocks?.current ? data.stocks : prev.stocks,
+    earthquakes: hasEvents ? data.earthquakes : prev.earthquakes,
+    space: (data.space?.eonet || data.space?.nasaNews || data.space?.apod) ? data.space : prev.space,
+  }))
 }
 
 export default function HomeScreen({
@@ -183,6 +193,8 @@ export default function HomeScreen({
   }))
   const skipInitialGasFetch = useRef(true) // national gas comes from /api/home; only refetch on state pick
   const notifiedBootstrap = useRef(false)
+  // Seed | waking | live | failed — drives honest copy instead of a permanent "Loading…"
+  const [bootstrapState, setBootstrapState] = useState(HOME_STATE.SEED)
 
   const payloadSetters = {
     setThreatSummary,
@@ -258,27 +270,39 @@ export default function HomeScreen({
       .finally(() => setHomeXImagesLoading(false))
   }
 
-  // Single /api/home bootstrap (hydrate from snapshot already done via useState init)
+  // Shared situational store: snapshot → seed file → /api/home with backoff → 60s ETag poll.
+  // One fetch fills home, threat summary, gas, X/OSINT and the widgets, for every visitor.
   useEffect(() => {
     if (!API_BASE) {
+      setBootstrapState(HOME_STATE.FAILED)
       setThreatSummaryLoading(false)
-      return
+      return undefined
     }
     if (snap && !notifiedBootstrap.current) {
       notifiedBootstrap.current = true
       onHomeBootstrap?.(snap)
     }
-    let cancelled = false
-    // Snapshot already painted; network revalidate with short budget (≤12s)
-    fetchHomeBootstrap({ timeoutMs: 12000 }).then(({ data }) => {
-      if (cancelled || !data) {
-        if (!cancelled && !snap?.threatSummary) setThreatSummaryLoading(false)
-        return
+    let lastPayload = null
+    const unsubscribe = subscribeHome((store) => {
+      setBootstrapState(store.status)
+      if (!store.payload) return
+      if (store.payload !== lastPayload) {
+        lastPayload = store.payload
+        applyHomePayload(store.payload, payloadSetters)
+        onHomeBootstrap?.(store.payload)
       }
-      applyHomePayload(data, payloadSetters)
-      onHomeBootstrap?.(data)
+      if (store.status === HOME_STATE.LIVE || store.status === HOME_STATE.SEED) {
+        if (!store.payload.threatSummary?.summary) {
+          // Nothing yet: keep the soft loading state, it fills in from the poll.
+          setThreatSummaryLoading(!store.payload.threatSummary?.summary && store.status === HOME_STATE.SEED)
+        }
+      }
+      if (store.status === HOME_STATE.FAILED && !store.payload?.threatSummary?.summary) {
+        setThreatSummaryLoading(false)
+      }
     })
-    return () => { cancelled = true }
+    startHomePolling()
+    return unsubscribe
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only bootstrap
   }, [])
 
@@ -294,7 +318,7 @@ export default function HomeScreen({
     }
     axios.get(`${API_BASE}/api/gas-prices`, {
       params,
-      timeout: 35000,
+      timeout: 20000,
       headers: force ? { 'Cache-Control': 'no-cache' } : undefined,
     })
       .then((res) => {
@@ -370,6 +394,24 @@ export default function HomeScreen({
     if (onNavigate && path) onNavigate(path)
   }
 
+  // Once the bootstrap settles without a piece, hand the widget `undefined` so it
+  // falls back to its own fetch instead of sitting on "Loading…" forever.
+  const bootstrapSettled = bootstrapState === HOME_STATE.LIVE || bootstrapState === HOME_STATE.FAILED
+  const piece = (value, present) => (bootstrapSettled && !present ? undefined : value)
+  const newsPiece = piece(
+    widgetBootstrap.news,
+    (widgetBootstrap.news?.features?.length || 0) > 0,
+  )
+  const stocksPiece = piece(widgetBootstrap.stocks, Boolean(widgetBootstrap.stocks?.current))
+  const quakesPiece = piece(
+    widgetBootstrap.earthquakes,
+    Array.isArray(widgetBootstrap.earthquakes?.events) && widgetBootstrap.earthquakes.events.length > 0,
+  )
+  const spacePiece = piece(
+    widgetBootstrap.space,
+    Boolean(widgetBootstrap.space?.eonet || widgetBootstrap.space?.nasaNews || widgetBootstrap.space?.apod),
+  )
+
   return (
     <div className={`home-screen ${isMobileLayout ? 'home-screen--mobile' : ''}`}>
       <div className="home-screen-map-bg" aria-hidden />
@@ -419,10 +461,21 @@ export default function HomeScreen({
                 <a href={DOOMSDAY_CLOCK_URL} target="_blank" rel="noopener noreferrer" className="home-screen-threat-info" title="About the Doomsday Clock (Bulletin of the Atomic Scientists)" aria-label="About the Doomsday Clock">ℹ️</a>
               </div>
               {threatSummaryLoading && (
-                <p className="home-screen-threat-loading">Loading threat summary…</p>
+                <p className="home-screen-threat-loading">
+                  {bootstrapState === HOME_STATE.WAKING ? 'Waking the API — retrying…' : 'Loading threat summary…'}
+                </p>
               )}
               {threatSummaryError && !threatSummary && (
-                <p className="home-screen-threat-error">Threat summary unavailable. Ensure the API is running and Groq/Ollama is configured.</p>
+                <p className="home-screen-threat-error">
+                  {threatSummaryError}{' '}
+                  <button
+                    type="button"
+                    className="btn-y2k"
+                    onClick={() => refreshHomeNow({ force: true })}
+                  >
+                    Retry
+                  </button>
+                </p>
               )}
               {!threatSummaryLoading && threatSummary && (
                 <div className="home-screen-threat-card card-y2k">
@@ -520,6 +573,7 @@ export default function HomeScreen({
               <div className="home-community-map">
                 <CommunityMapView variant="home" />
               </div>
+              <p className="home-community-caption">Drag to spin · community pins and live situation layers worldwide</p>
             </section>
             <section className="home-screen-section">
               <h2 className="home-screen-section-title">Quick access</h2>
@@ -743,11 +797,11 @@ export default function HomeScreen({
           </div>
           <aside className="home-screen-sidebar">
             <Suspense fallback={<div className="home-screen-sidebar-block card-y2k widget-card"><p className="widget-card-loading">Loading widgets…</p></div>}>
-              <div id="stocks"><StockWidget onOpenSettings={() => onNavigate?.('settings')} initialData={widgetBootstrap.stocks} /></div>
-              <div id="headlines"><HeadlinesWidget initialNews={widgetBootstrap.news} /></div>
-              <div id="earthquakes"><EarthquakesWidget onShowOnMap={onShowLocationOnMap} initialData={widgetBootstrap.earthquakes} /></div>
+              <div id="stocks"><StockWidget onOpenSettings={() => onNavigate?.('settings')} initialData={stocksPiece} bootstrapState={bootstrapState} /></div>
+              <div id="headlines"><HeadlinesWidget initialNews={newsPiece} bootstrapState={bootstrapState} /></div>
+              <div id="earthquakes"><EarthquakesWidget onShowOnMap={onShowLocationOnMap} initialData={quakesPiece} bootstrapState={bootstrapState} /></div>
               <div id="world-clock"><WorldClock /></div>
-              <div id="space"><SpaceWidget initialData={widgetBootstrap.space} /></div>
+              <div id="space"><SpaceWidget initialData={spacePiece} bootstrapState={bootstrapState} /></div>
             </Suspense>
             {osintPhotoModal && (
               <div className="home-screen-photo-dialog-backdrop" role="dialog" aria-modal="true" aria-label="OSINT photo" onClick={() => setOsintPhotoModal(null)}>

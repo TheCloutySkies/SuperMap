@@ -66,6 +66,7 @@ import LegendControl from 'mapboxgl-legend'
 import 'mapboxgl-legend/dist/style.css'
 import GlobeMinimap from 'mapbox-gl-globe-minimap'
 import './MapView.css'
+import { getApiBase } from '../lib/homeBootstrap'
 
 // Improve @mapbox/mapbox-gl-draw compatibility on MapLibre.
 MapboxDraw.constants.classes.CANVAS = 'maplibregl-canvas'
@@ -1364,9 +1365,7 @@ function sentinelTimeToIso(sentinelTime) {
   return d.toISOString().slice(0, 10)
 }
 
-const API_BASE = (import.meta.env?.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
-  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
-  : (import.meta.env?.DEV ? '' : 'http://localhost:3001')
+const API_BASE = getApiBase()
 
 function readPendingPinMedia(detail) {
   let pending = null

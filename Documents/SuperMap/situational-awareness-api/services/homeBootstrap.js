@@ -149,16 +149,20 @@ function assembleHomeFromCaches() {
     apiResultCache.getStale('gas-prices', 'gas-prices', apiResultCache.TTL.WEEKLY)
     || apiResultCache.getNewestStale('gas-prices', apiResultCache.TTL.WEEKLY)
   const spaceHit = apiResultCache.getStale('space', 'space', 2 * apiResultCache.TTL.DAILY)
+  // Earthquakes and DEFCON from the same disk cache the widgets use, so the first
+  // /api/home carries every piece instead of leaving two widgets to fetch alone.
+  const quakesHit = apiResultCache.getStale('earthquakes', 'earthquakes-widget', apiResultCache.TTL.DAILY)
+  const defconHit = apiResultCache.getStale('defcon', 'defcon', apiResultCache.TTL.DAILY)
 
   return {
     threatSummary,
-    defcon: null,
+    defcon: defconHit?.value || null,
     osintX,
     gasStates: Array.isArray(gasHit?.value?.states) ? gasHit.value.states : [],
     gasPrices: gasHit?.value || null,
     news,
     stocks: stocksHit?.value || null,
-    earthquakes: null,
+    earthquakes: quakesHit?.value || null,
     space: spaceHit?.value || null,
     homeImages,
     updatedAt: new Date().toISOString(),

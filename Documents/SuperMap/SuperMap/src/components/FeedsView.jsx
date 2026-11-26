@@ -6,10 +6,9 @@ import ItemMenu from '../features/accounts/ItemMenu'
 import { readHomeSnapshot, writeHomeSnapshot } from '../lib/homeBootstrap'
 import { isGlowieRelevant } from '../lib/glowieRelevance'
 import './FeedsView.css'
+import { getApiBase } from '../lib/homeBootstrap'
 
-const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
-  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
-  : 'http://localhost:3001'
+const API_BASE = getApiBase()
 
 const OSINT_FEED_SNAP_KEY = 'supermap_osint_feeds_snap'
 const VIDEOS_FEED_SNAP_KEY = 'supermap_videos_feeds_snap'

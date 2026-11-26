@@ -53,6 +53,7 @@ const {
   assembleHomeFromCaches,
 } = require('../services/homeBootstrap')
 const apiResultCache = require('../services/apiResultCache')
+const { singleFlight } = require('../services/singleFlight')
 
 const HOME_DISK_NS = 'home'
 const HOME_DISK_KEY = 'bootstrap'
@@ -119,6 +120,10 @@ const STOCKS_STALE_SEC = apiResultCache.TTL.DAILY
 /** Gas: EIA weekly retail — cache 6h fresh / 7d stale. */
 const GAS_TTL_SEC = apiResultCache.TTL.SIX_HOURS
 const GAS_STALE_SEC = apiResultCache.TTL.WEEKLY
+/** Keep a failed scrape out of the request path for a minute. */
+const GAS_FAILURE_BACKOFF_MS = 60 * 1000
+/** @type {Map<string, { payload: any, until: number }>} */
+const gasFailure = new Map()
 /** Space/APOD: 6h fresh / 48h stale. */
 const SPACE_TTL_SEC = apiResultCache.TTL.SIX_HOURS
 const SPACE_STALE_SEC = 2 * apiResultCache.TTL.DAILY
@@ -156,6 +161,38 @@ function warnSpaceOnce(key, message) {
 
 function setHomeCacheHeaders(res) {
   res.set('Cache-Control', HOME_CACHE_CONTROL)
+}
+
+/**
+ * Weak ETag over the pieces a client shows, so a 60s poll costs a 304 instead of
+ * 230 KB, and any finished ingest (news, X, threat, gas) changes it.
+ */
+function homeEtag(payload) {
+  const parts = [
+    payload?.updatedAt || '',
+    payload?.threatSummary?.timestamp || '',
+    payload?.news?.features?.length || 0,
+    payload?.news?.meta?.fetchedAt || '',
+    payload?.osintX?.length || 0,
+    payload?.homeImages?.length || 0,
+    payload?.stocks?.updatedAt || '',
+    payload?.gasPrices?.asOf || payload?.gasPrices?.weekEnding || payload?.gasPrices?.national || '',
+    payload?.earthquakes?.updatedAt || '',
+    payload?.space?.updatedAt || '',
+  ]
+  return `W/"${crypto.createHash('sha1').update(parts.join('|')).digest('hex').slice(0, 20)}"`
+}
+
+/** Send a home payload with ETag revalidation and timing for diagnosis. */
+function sendHomePayload(req, res, payload, startedAt = Date.now()) {
+  res.set('Cache-Control', HOME_CACHE_CONTROL)
+  res.set('ETag', homeEtag(payload))
+  res.set('Server-Timing', `home;dur=${Date.now() - startedAt}`)
+  if (req?.fresh) {
+    res.status(304).end()
+    return
+  }
+  res.json(payload)
 }
 
 
@@ -288,27 +325,27 @@ function withFreshThreat(payload) {
 }
 
 router.get('/home', async (req, res) => {
-  setHomeCacheHeaders(res)
+  const startedAt = Date.now()
   const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true'
   if (!forceRefresh) {
     const cached = homeBootstrapCache.get('home')
     if (cached && payloadHasContent(cached)) {
-      return res.json(withFreshThreat({ ...cached, _cached: true }))
+      return sendHomePayload(req, res, withFreshThreat({ ...cached, _cached: true }), startedAt)
     }
     const disk = loadHomeLastGood()
     if (disk) {
       homeBootstrapCache.set('home', disk)
       scheduleHomeBackgroundRefresh()
-      return res.json(withFreshThreat({ ...disk, _cached: true, _fromDisk: true }))
+      return sendHomePayload(req, res, withFreshThreat({ ...disk, _cached: true, _fromDisk: true }), startedAt)
     }
-    // Piece caches (news/threat/stocks/gas/osint-x) — sync, no live upstream waits
+    // Piece caches (news/threat/stocks/gas/osint-x/earthquakes) — sync, no live waits
     try {
       const pieces = assembleHomeFromCaches()
       if (payloadHasContent(pieces)) {
         homeBootstrapCache.set('home', pieces)
         persistHomeLastGood(pieces)
         scheduleHomeBackgroundRefresh()
-        return res.json({ ...pieces, _cached: true, _fromPieces: true })
+        return sendHomePayload(req, res, { ...pieces, _cached: true, _fromPieces: true }, startedAt)
       }
     } catch (e) {
       console.warn('[API /home] piece assemble:', e.message)
@@ -325,7 +362,7 @@ router.get('/home', async (req, res) => {
     }
     // Always kick a fuller background rebuild after a deadline-bounded response
     if (payload?._timedOut || forceRefresh) scheduleHomeBackgroundRefresh()
-    return res.json(payload || {
+    return sendHomePayload(req, res, payload || {
       threatSummary: null,
       defcon: null,
       osintX: [],
@@ -338,14 +375,14 @@ router.get('/home', async (req, res) => {
       homeImages: [],
       updatedAt: new Date().toISOString(),
       _warming: true,
-    })
+    }, startedAt)
   } catch (err) {
     console.error('[API /home]', err.message)
     const cached = homeBootstrapCache.get('home') || loadHomeLastGood()
-    if (cached) return res.json({ ...cached, _cached: true, _staleOnError: true })
+    if (cached) return sendHomePayload(req, res, { ...cached, _cached: true, _staleOnError: true }, startedAt)
     try {
       const pieces = assembleHomeFromCaches()
-      if (payloadHasContent(pieces)) return res.json({ ...pieces, _staleOnError: true })
+      if (payloadHasContent(pieces)) return sendHomePayload(req, res, { ...pieces, _staleOnError: true }, startedAt)
     } catch (_) { /* optional */ }
     res.status(500).json({ error: 'Failed to build home payload' })
   }
@@ -678,11 +715,11 @@ router.get('/defcon', async (_req, res) => {
   const cached = defconCache.get(cacheKey)
   if (cached) return res.json({ ...cached, _cached: true })
   try {
-    const { data } = await axios.get(DEFCONLEVEL_URL, {
+    const { data } = await singleFlight('defcon', () => axios.get(DEFCONLEVEL_URL, {
       timeout: 10000,
       headers: { 'User-Agent': 'SuperMap/1.0 (https://github.com/TheCloutySkies/SuperMap)' },
       validateStatus: () => true,
-    })
+    }))
     const html = typeof data === 'string' ? data : ''
     const currentMatch = html.match(/Current Level DEFCON\s*([1-5])/i) || html.match(/DEFCON\s*([1-5])/i)
     const level = currentMatch ? parseInt(currentMatch[1], 10) : null
@@ -693,6 +730,7 @@ router.get('/defcon', async (_req, res) => {
       updatedAt: new Date().toISOString(),
     }
     defconCache.set(cacheKey, payload)
+    apiResultCache.set('defcon', cacheKey, payload, apiResultCache.TTL.DAILY)
     return res.json(payload)
   } catch (err) {
     console.warn('[API /defcon]', err.message)
@@ -732,10 +770,10 @@ router.get('/home-images', async (req, res) => {
   }
   try {
     const { buildHomeImages } = require('../services/homeBootstrap')
-    const images = await buildHomeImages({
-      max: Math.min(parseInt(req.query.limit, 10) || 24, 48),
-      force,
-    })
+    const max = Math.min(parseInt(req.query.limit, 10) || 24, 48)
+    // One shared gallery build: FxTwitter fan-out is the slowest cold path here.
+    const images = await singleFlight(`home-images:${max}:${force ? 'force' : 'soft'}`, () =>
+      buildHomeImages({ max, force }))
     res.json({
       images,
       count: images.length,
@@ -1124,38 +1162,65 @@ router.get('/earthquakes', async (req, res) => {
   }
 })
 
-/** Widget: recent earthquakes (USGS 2.5+ week). Cache 5 min. */
+const EARTHQUAKES_WIDGET_NS = 'earthquakes'
+
+/**
+ * Fetch the USGS 2.5+ week feed once and remember it, so a cold boot can answer
+ * from disk instead of holding the request (measured 42s cold during catch-up).
+ */
+async function buildEarthquakesWidget() {
+  const resUsgs = await axios.get('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson', {
+    timeout: 8000,
+  })
+  const features = resUsgs.data?.features || []
+  const events = features.slice(0, 12).map((f) => {
+    const p = f.properties || {}
+    const id = f.id
+    return {
+      id,
+      mag: p.mag,
+      place: (p.place || '').replace(/^\d+\s+km\s+(?:[NESW]+\s+of\s+)?/i, '').trim().slice(0, 50) || '—',
+      time: p.time,
+      depth: f.geometry?.coordinates?.[2] ?? null,
+      url: id ? `https://earthquake.usgs.gov/earthquakes/eventpage/${id}` : null,
+    }
+  })
+  const payload = {
+    events,
+    updatedAt: new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }),
+    fetchedAt: new Date().toISOString(),
+  }
+  earthquakesWidgetCache.set('earthquakes-widget', payload)
+  apiResultCache.set(EARTHQUAKES_WIDGET_NS, 'earthquakes-widget', payload, apiResultCache.TTL.HOURLY)
+  return payload
+}
+
+/** Widget: recent earthquakes (USGS 2.5+ week). Disk last-good, then one shared fetch. */
 router.get('/earthquakes/widget', async (req, res) => {
   setHomeCacheHeaders(res)
   const cacheKey = 'earthquakes-widget'
   const cached = earthquakesWidgetCache.get(cacheKey)
   if (cached) return res.json({ ...cached, _cached: true })
-  try {
-    const resUsgs = await axios.get('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson', { timeout: 10000 })
-    const features = resUsgs.data?.features || []
-    const events = features.slice(0, 12).map((f) => {
-      const p = f.properties || {}
-      const id = f.id
-      return {
-        id,
-        mag: p.mag,
-        place: (p.place || '').replace(/^\d+\s+km\s+(?:[NESW]+\s+of\s+)?/i, '').trim().slice(0, 50) || '—',
-        time: p.time,
-        depth: f.geometry?.coordinates?.[2] ?? null,
-        url: id ? `https://earthquake.usgs.gov/earthquakes/eventpage/${id}` : null,
-      }
+
+  // Stale-while-revalidate: never block on USGS when a last-good exists.
+  const disk = apiResultCache.getStale(EARTHQUAKES_WIDGET_NS, cacheKey, apiResultCache.TTL.DAILY)
+  if (disk?.value?.events) {
+    earthquakesWidgetCache.set(cacheKey, disk.value)
+    setImmediate(() => {
+      singleFlight('earthquakes-widget', buildEarthquakesWidget).catch(() => {})
     })
-    const payload = {
-      events,
-      updatedAt: new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }),
-    }
-    earthquakesWidgetCache.set(cacheKey, payload)
-    res.json(payload)
+    return res.json({ ...disk.value, _cached: true, _stale: true, _cacheAgeMs: disk.ageMs })
+  }
+
+  try {
+    const payload = await singleFlight('earthquakes-widget', buildEarthquakesWidget)
+    return res.json(payload)
   } catch (err) {
     console.warn('[API /earthquakes/widget]', err.message)
-    res.json({
+    return res.json({
       events: [],
       updatedAt: new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }),
+      error: err.message,
     })
   }
 })
@@ -2017,89 +2082,111 @@ router.get('/stocks', async (req, res) => {
   }
 
   try {
-    const keylessSymbols = symbols.slice(0, 5).map(normalizeKeyless)
-    const current = []
-    const series = []
-    let chartTimestamps = null
-    for (const n of keylessSymbols) {
-      if (n.source === 'yahoo') {
-        const chartRes = await axios.get(
-          `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(n.symbol)}?interval=${interval}&range=${range}`,
-          { timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' } }
-        )
-        const result = chartRes.data?.chart?.result?.[0]
-        const meta = result?.meta
-        const quote = result?.indicators?.quote?.[0]
-        const price = meta?.regularMarketPrice ?? meta?.chartPreviousClose ?? (Array.isArray(quote?.close) ? quote.close.filter((v) => v != null).pop() : null)
-        const numPrice = price != null ? Number(price) : null
-        const prevClose = meta?.previousClose ?? meta?.chartPreviousClose ?? null
-        const numPrev = prevClose != null ? Number(prevClose) : null
-        const closes = Array.isArray(quote?.close) ? quote.close.filter((v) => v != null) : []
-        if (Array.isArray(result?.timestamp) && result.timestamp.length > 0 && !chartTimestamps) {
-          chartTimestamps = formatChartTimestamps(result.timestamp, range)
+    // Concurrent, not serial: the old await-in-a-loop held cold /api/stocks for ~37s,
+    // and every visitor repeated the same upstream work. One shared fetch now.
+    const keyless = await singleFlight(`stocks-keyless:${cacheKey}`, async () => {
+      const keylessSymbols = symbols.slice(0, 5).map(normalizeKeyless)
+      const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      const settled = await Promise.allSettled(keylessSymbols.map(async (n) => {
+        if (n.source === 'yahoo') {
+          const chartRes = await axios.get(
+            `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(n.symbol)}?interval=${interval}&range=${range}`,
+            { timeout: 8000, headers: { 'User-Agent': UA } }
+          )
+          const result = chartRes.data?.chart?.result?.[0]
+          if (!result) return null
+          const meta = result.meta
+          const quote = result.indicators?.quote?.[0]
+          const price = meta?.regularMarketPrice ?? meta?.chartPreviousClose ?? (Array.isArray(quote?.close) ? quote.close.filter((v) => v != null).pop() : null)
+          const numPrice = price != null ? Number(price) : null
+          const prevClose = meta?.previousClose ?? meta?.chartPreviousClose ?? null
+          const numPrev = prevClose != null ? Number(prevClose) : null
+          const closes = Array.isArray(quote?.close) ? quote.close.filter((v) => v != null) : []
+          const pct = (numPrice != null && numPrev != null && numPrev !== 0)
+            ? (((numPrice - numPrev) / numPrev) * 100).toFixed(2) + '%'
+            : (numPrice != null ? '0.00%' : '—')
+          return {
+            current: { symbol: n.name, value: numPrice != null ? Number(numPrice).toFixed(2) : '—', change: pct },
+            series: { name: n.name, values: closes.length ? closes : (numPrice != null ? [numPrice] : []) },
+            timestamps: Array.isArray(result.timestamp) && result.timestamp.length
+              ? formatChartTimestamps(result.timestamp, range)
+              : null,
+          }
         }
-        const pct = (numPrice != null && numPrev != null && numPrev !== 0)
-          ? (((numPrice - numPrev) / numPrev) * 100).toFixed(2) + '%'
-          : (numPrice != null ? '0.00%' : '—')
-        current.push({ symbol: n.name, value: numPrice != null ? Number(numPrice).toFixed(2) : '—', change: pct })
-        series.push({
-          name: n.name,
-          values: closes.length ? closes : (numPrice != null ? [numPrice] : []),
-        })
-      } else if (n.source === 'coingecko') {
+
         const cgDays = { '1d': 1, '5d': 7, '1mo': 30, '3mo': 90, '6mo': 180, '1y': 365, '2y': 365 }[range] || 7
-        const cgRes = await axios.get(
-          `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(n.id)}&vs_currencies=usd&include_24hr_change=true`,
-          { timeout: 8000 }
-        )
-        const data = cgRes.data?.[n.id]
-        const price = data?.usd != null ? Number(data.usd) : null
-        const change24 = data?.usd_24h_change != null ? Number(data.usd_24h_change) : null
-        const pct = change24 != null ? (change24 >= 0 ? '+' : '') + change24.toFixed(2) + '%' : (price != null ? '0.00%' : '—')
-        current.push({ symbol: n.name, value: price != null ? Number(price).toFixed(2) : '—', change: pct })
-        let sparkline = []
-        try {
-          const mcRes = await axios.get(
+        const [priceRes, chartResCg] = await Promise.allSettled([
+          axios.get(
+            `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(n.id)}&vs_currencies=usd&include_24hr_change=true`,
+            { timeout: 8000 }
+          ),
+          axios.get(
             `https://api.coingecko.com/api/v3/coins/${n.id}/market_chart?vs_currency=usd&days=${cgDays}`,
             { timeout: 6000 }
-          )
-          const prices = mcRes.data?.prices
-          if (Array.isArray(prices) && prices.length > 0) {
-            sparkline = prices.map((p) => p[1]).filter((v) => v != null)
-            if (!chartTimestamps && prices.length > 0) {
-              chartTimestamps = prices.map((p) => {
-                const d = new Date(p[0])
-                return range === '1d' ? d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-              })
-            }
-          }
-        } catch (_) { /* optional */ }
-        series.push({ name: n.name, values: sparkline.length ? sparkline : (price != null ? [price] : []) })
+          ),
+        ])
+        const data = priceRes.status === 'fulfilled' ? priceRes.value.data?.[n.id] : null
+        const price = data?.usd != null ? Number(data.usd) : null
+        const change24 = data?.usd_24h_change != null ? Number(data.usd_24h_change) : null
+        const pct = change24 != null
+          ? (change24 >= 0 ? '+' : '') + change24.toFixed(2) + '%'
+          : (price != null ? '0.00%' : '—')
+        let sparkline = []
+        let sparklineTimestamps = null
+        const prices = chartResCg.status === 'fulfilled' ? chartResCg.value.data?.prices : null
+        if (Array.isArray(prices) && prices.length > 0) {
+          sparkline = prices.map((p) => p[1]).filter((v) => v != null)
+          sparklineTimestamps = prices.map((p) => {
+            const d = new Date(p[0])
+            return range === '1d'
+              ? d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+              : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          })
+        }
+        return {
+          current: { symbol: n.name, value: price != null ? Number(price).toFixed(2) : '—', change: pct },
+          series: { name: n.name, values: sparkline.length ? sparkline : (price != null ? [price] : []) },
+          timestamps: sparklineTimestamps,
+        }
+      }))
+
+      const current = []
+      const series = []
+      let chartTimestamps = null
+      for (const item of settled) {
+        if (item.status !== 'fulfilled' || !item.value) continue
+        current.push(item.value.current)
+        series.push(item.value.series)
+        if (!chartTimestamps && item.value.timestamps) chartTimestamps = item.value.timestamps
       }
-    }
-    if (current.length > 0) {
+      if (current.length === 0) return null
+
       const want = chartTimestamps ? chartTimestamps.length : (range === '1d' ? 24 : 31)
-      const padSeries = series.map((s) => {
-        const vals = s.values
-        if (vals.length >= want) return { ...s, values: vals.slice(-want) }
-        return { ...s, values: [...Array(want - vals.length).fill(null), ...vals] }
+      const padSeries = series.map((entry) => {
+        const vals = entry.values
+        if (vals.length >= want) return { ...entry, values: vals.slice(-want) }
+        return { ...entry, values: [...Array(want - vals.length).fill(null), ...vals] }
       })
       const n = padSeries[0]?.values?.length || want
       const outTs = chartTimestamps && chartTimestamps.length >= n ? chartTimestamps.slice(-n) : (() => {
         const arr = []
         for (let i = 0; i < n; i++) {
           const d = new Date(now - (n - 1 - i) * (range === '1d' ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000))
-          arr.push(range === '1d' ? d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))
+          arr.push(range === '1d'
+            ? d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+            : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))
         }
         return arr
       })()
-      return pushPayload({
+      return {
         timestamps: outTs,
         series: padSeries,
         current,
         updatedAt: new Date().toLocaleTimeString(undefined, { timeStyle: 'short' }),
-      })
-    }
+      }
+    })
+
+    if (keyless) return pushPayload(keyless)
   } catch (err) {
     console.warn('[API /stocks] Keyless (Yahoo/CoinGecko) error:', err.message)
   }
@@ -2547,10 +2634,21 @@ router.get('/gas-prices', async (req, res) => {
     }
   }
 
+  // A failed EIA scrape must not be retried by every visitor: 60s of backoff.
+  const failure = gasFailure.get(cacheKey)
+  if (failure && failure.until > Date.now()) {
+    return res.json({ ...failure.payload, _cached: true, _backoff: true })
+  }
+
   try {
-    const payload = await gasPricesService.getGasPrices({ stateCode, zip })
+    // One shared upstream fetch: a cold cache plus N visitors used to mean N scrapes.
+    const payload = await singleFlight(`gas-prices:${cacheKey}`, () =>
+      gasPricesService.getGasPrices({ stateCode, zip }))
     if (isGoodGasPayload(payload)) {
+      gasFailure.delete(cacheKey)
       apiResultCache.set('gas-prices', cacheKey, payload, GAS_TTL_SEC)
+    } else {
+      gasFailure.set(cacheKey, { payload, until: Date.now() + GAS_FAILURE_BACKOFF_MS })
     }
     res.json(payload)
   } catch (err) {

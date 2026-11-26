@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import WidgetCard from './WidgetCard'
-import { getApiBase } from '../../lib/homeBootstrap'
+import { getApiBase, HOME_STATE } from '../../lib/homeBootstrap'
 
 const API_BASE = getApiBase()
 
-export default function StockWidget({ onOpenSettings, initialData }) {
+export default function StockWidget({ onOpenSettings, initialData, bootstrapState }) {
+  const waking = bootstrapState === HOME_STATE.WAKING
   const [data, setData] = useState(() => initialData || null)
   const [loading, setLoading] = useState(() => initialData === undefined ? true : !initialData?.current)
   const [error, setError] = useState(null)
@@ -17,7 +18,7 @@ export default function StockWidget({ onOpenSettings, initialData }) {
     setLoading(true)
     setError(null)
     const url = refresh ? `${API_BASE}/api/stocks?refresh=1` : `${API_BASE}/api/stocks`
-    axios.get(url, { timeout: 15000 })
+    axios.get(url, { timeout: 12000 })
       .then((res) => {
         if (res.data) {
           setData(res.data)
@@ -62,7 +63,7 @@ export default function StockWidget({ onOpenSettings, initialData }) {
     : []
 
   return (
-    <WidgetCard title="Stocks & markets" loading={loading} error={error} updatedAt={updatedAt}>
+    <WidgetCard title="Stocks & markets" loading={loading} error={error || (waking && !data?.current ? 'Waking the API — retrying…' : null)} updatedAt={updatedAt}>
       <p className="widget-stock-settings-hint">
         {onOpenSettings && (
           <button type="button" className="widget-stock-settings-btn" onClick={onOpenSettings}>

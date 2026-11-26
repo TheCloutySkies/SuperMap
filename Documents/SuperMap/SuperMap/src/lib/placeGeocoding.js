@@ -1,8 +1,7 @@
 import axios from 'axios'
+import { getApiBase } from './homeBootstrap'
 
-const DEFAULT_API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
-  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
-  : 'http://localhost:3001'
+const DEFAULT_API_BASE = getApiBase()
 
 function normalizeOpenMeteo(result) {
   const lat = Number(result?.latitude)

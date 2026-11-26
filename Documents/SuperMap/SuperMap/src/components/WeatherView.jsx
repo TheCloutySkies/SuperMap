@@ -8,10 +8,9 @@ import WmoIcon from './WmoIcon'
 import { compassFromDeg, wmoKind } from './weatherWmo'
 import ItemMenu from '../features/accounts/ItemMenu'
 import './WeatherView.css'
+import { getApiBase } from '../lib/homeBootstrap'
 
-const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
-  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
-  : (import.meta.env.DEV ? '' : 'http://localhost:3001')
+const API_BASE = getApiBase()
 
 const SPANS = [
   { id: 'now', label: 'Now', hours: 0 },

@@ -11,10 +11,9 @@ import {
 } from '../lib/omnibarIndex'
 import { AI_ASSISTANT_NAME } from '../constants'
 import './Omnibar.css'
+import { getApiBase } from '../lib/homeBootstrap'
 
-const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
-  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
-  : (import.meta.env?.DEV ? 'http://localhost:3001' : 'http://localhost:3001')
+const API_BASE = getApiBase()
 
 const MAX_JUMP = 8
 const MAX_MERGED = 14

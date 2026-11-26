@@ -331,7 +331,7 @@ async function fetchEiaGasdieselHtml({ force = false } = {}) {
   for (const url of EIA_GASDIESEL_URLS) {
     try {
       const res = await axios.get(url, {
-        timeout: 20000,
+        timeout: 8000,
         headers: {
           'User-Agent': BROWSER_UA,
           Accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
@@ -572,7 +572,7 @@ async function fetchEiaApi(stateCode) {
   const duoareaState = stateCode ? `S${stateCode}` : null
 
   const res = await axios.get(`${EIA_V2_BASE}?${eiaV2Query.toString()}`, {
-    timeout: 20000,
+    timeout: 8000,
     headers: {
       'X-Params': eiaV2XParams,
       Accept: 'application/json',
@@ -680,16 +680,19 @@ async function getGasPrices({ stateCode = '', zip: _zip = '' } = {}) {
   const code = String(stateCode || '').trim().toUpperCase().slice(0, 2)
   const errors = []
 
-  // 1) Official EIA API when key present
-  try {
-    const apiPayload = await fetchEiaApi(code)
-    if (apiPayload && (apiPayload.national != null || (apiPayload.states && apiPayload.states.length)
-      || apiPayload.diesel?.national != null || apiPayload.diesel?.states?.length)) {
-      return apiPayload
+  // 1) Official EIA API only when a key is configured
+  const eiaKeySet = Boolean((process.env.EIA_API_KEY || '').trim())
+  if (eiaKeySet) {
+    try {
+      const apiPayload = await fetchEiaApi(code)
+      if (apiPayload && (apiPayload.national != null || (apiPayload.states && apiPayload.states.length)
+        || apiPayload.diesel?.national != null || apiPayload.diesel?.states?.length)) {
+        return apiPayload
+      }
+    } catch (err) {
+      errors.push(`eia-api: ${err.message}`)
+      console.warn('[gasPrices] EIA API:', err.message)
     }
-  } catch (err) {
-    errors.push(`eia-api: ${err.message}`)
-    console.warn('[gasPrices] EIA API:', err.message)
   }
 
   // 2) Public weekly HTML (no key) — primary free path (gasoline + diesel)

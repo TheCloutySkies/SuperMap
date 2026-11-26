@@ -55,6 +55,7 @@ import MobileLayoutPrompt from './components/MobileLayoutPrompt'
 import { osintXToBannerItems, readHomeSnapshot } from './lib/homeBootstrap'
 import { metallicss } from 'metallicss'
 import './App.css'
+import { getApiBase } from './lib/homeBootstrap'
 
 function initMetallicss() {
   document.querySelectorAll('.metallicss').forEach((el) => {
@@ -303,9 +304,7 @@ function App() {
 
   const clearFlyToTarget = useCallback(() => setFlyToTarget(null), [])
 
-  const apiBase = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
-    ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
-    : 'http://localhost:3001'
+  const apiBase = getApiBase()
 
   const handleShowLocationOnMap = useCallback((place) => {
     const q = typeof place === 'string' ? place.trim() : ''

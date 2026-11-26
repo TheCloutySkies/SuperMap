@@ -5,10 +5,9 @@ import { personHandle, personTitle } from './accountIdentity'
 import { createProfilePost, deleteProfilePost, fileReport, queueReportClip, searchDiscoverableUsers, sendDirectMessage } from './socialData'
 import { firebaseReady } from './firebaseClient'
 import './ItemMenu.css'
+import { getApiBase } from '../../lib/homeBootstrap'
 
-const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
-  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
-  : 'http://localhost:3001'
+const API_BASE = getApiBase()
 
 function num(value) {
   const n = Number(value)

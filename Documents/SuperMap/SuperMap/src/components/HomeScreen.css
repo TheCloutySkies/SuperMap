@@ -1292,3 +1292,12 @@
   padding-bottom: 0.75rem;
   margin-bottom: 0.25rem;
 }
+
+
+/* Caption under the home community globe */
+.home-community-caption {
+  margin: 0.5rem 0 0;
+  color: var(--y2k-text-muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+}

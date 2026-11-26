@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import axios from 'axios'
 import WidgetCard from './WidgetCard'
-import { getApiBase } from '../../lib/homeBootstrap'
+import { getApiBase, HOME_STATE } from '../../lib/homeBootstrap'
 
 const API_BASE = getApiBase()
 const EONET_URL = 'https://eonet.gsfc.nasa.gov/api/v3/events?limit=20&status=open'
@@ -73,7 +73,8 @@ function parseEventDetail(ev) {
   }
 }
 
-export default function SpaceWidget({ initialData }) {
+export default function SpaceWidget({ initialData, bootstrapState }) {
+  const waking = bootstrapState === HOME_STATE.WAKING
   const [data, setData] = useState(() => initialData || null)
   const [eonet, setEonet] = useState(() => {
     const fromBackend = (initialData?.eonet || []).filter((e) => !PRESCRIBED_FIRE.test(e.title || ''))
@@ -180,7 +181,7 @@ export default function SpaceWidget({ initialData }) {
   if (!loading && !error && !hasUseful) return null
 
   return (
-    <WidgetCard title="NASA EONET" loading={loading} error={error} updatedAt={updatedAt}>
+    <WidgetCard title="NASA EONET" loading={loading} error={error || (waking && !eonet.length ? 'Waking the API — retrying…' : null)} updatedAt={updatedAt}>
       {eonet.length > 0 && (
         <div className="widget-space-eonet">
           <ul className="widget-space-eonet-list">

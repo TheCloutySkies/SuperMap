@@ -332,11 +332,15 @@ app.listen(PORT, () => {
   // Free tier (ephemeral): start OSINT X sooner (~10s) when DB empty; stagger
   // news/videos/publishers so catch-up does not death-spiral with X ingest.
   const xEmpty = osintXDbEmpty()
-  const catchUpDelayMs = hadLastGood ? 45000 : (ephemeral ? 4000 : 6000)
-  const osintXDelayMs = hadLastGood ? 50000 : (xEmpty ? 10000 : 32000)
-  const warmHomeDelayMs = hadLastGood ? 15000 : 2500
+  // Boot quiet window: on a cold instance the first visitor requests must not be
+  // starved by catch-up jobs (cold /earthquakes/widget measured 42s during that storm).
+  const quietMs = hadLastGood ? 0 : (ephemeral ? 12000 : 10000)
+  const catchUpDelayMs = hadLastGood ? 45000 : quietMs + 2000
+  const osintXDelayMs = hadLastGood ? 50000 : quietMs + (xEmpty ? 5000 : 25000)
+  // Warm the home pieces first: the first visitor should find caches already filling.
+  const warmHomeDelayMs = hadLastGood ? 15000 : 300
   // Videos after news catch-up starts — avoid Innertube + RSS stampede on free tier
-  const videosDelayMs = hadLastGood ? 20000 : (ephemeral ? 32000 : 22000)
+  const videosDelayMs = hadLastGood ? 20000 : quietMs + 25000
   setTimeout(runBootCatchUp, catchUpDelayMs)
   console.log(
     '[boot] catch-up delay ms=',
@@ -347,6 +351,8 @@ app.listen(PORT, () => {
     warmHomeDelayMs,
     'videos delay ms=',
     videosDelayMs,
+    'quiet ms=',
+    quietMs,
     'hadLastGood=',
     hadLastGood,
     'osintXEmpty=',

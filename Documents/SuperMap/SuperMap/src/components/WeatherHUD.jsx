@@ -2,10 +2,9 @@ import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { geocodePlaceQuery } from '../lib/placeGeocoding'
 import './WeatherHUD.css'
+import { getApiBase } from '../lib/homeBootstrap'
 
-const API_BASE = (import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== '')
-  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
-  : 'http://localhost:3001'
+const API_BASE = getApiBase()
 const DEFAULT_LAT = 20
 const DEFAULT_LON = 0
 const OPENMETEO_URL = 'https://api.open-meteo.com/v1/forecast'

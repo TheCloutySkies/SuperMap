@@ -104,6 +104,45 @@ const DARK_STYLE = {
   ],
 }
 
+/**
+ * Frame the whole planet in the card. Calibrated on MapLibre 5.19's globe: a 460px-tall card sits
+ * at zoom 1.4 with the disc filling ~76% of the height and space left around the atmosphere limb.
+ */
+function globeZoomFor(el) {
+  const height = el?.clientHeight || 460
+  const zoom = 1.4 - (460 - height) * (0.25 / 140)
+  return Math.min(1.6, Math.max(0.6, zoom))
+}
+
+// Atmosphere limb and space tint, borrowed from the watched.earth look. `atmosphere-blend`
+// is faded out with zoom so the halo hugs the horizon instead of greasing the map close in.
+const GLOBE_SKY = {
+  'sky-color': '#01040c',
+  'sky-horizon-blend': 0.15,
+  'horizon-color': '#0e3552',
+  'horizon-fog-blend': 0.35,
+  'fog-color': '#060b16',
+  'fog-ground-blend': 0,
+  'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 5, 1, 8, 0.15],
+}
+
+const GLOBE_SPACE_LAYER = {
+  id: 'community-space',
+  type: 'background',
+  paint: { 'background-color': '#01040c' },
+}
+
+/** The community style, dressed as a planet for the home card and left flat everywhere else. */
+function communityStyle(globe) {
+  if (!globe) return DARK_STYLE
+  return {
+    ...DARK_STYLE,
+    projection: { type: 'globe' },
+    sky: GLOBE_SKY,
+    layers: [GLOBE_SPACE_LAYER, ...DARK_STYLE.layers],
+  }
+}
+
 function esc(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -245,9 +284,9 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
     if (!el) return undefined
     const map = new maplibregl.Map({
       container: el,
-      style: DARK_STYLE,
-      center: [31.2, 48.5],
-      zoom: compact ? 4.2 : 4.6,
+      style: communityStyle(compact),
+      center: compact ? [20, 18] : [31.2, 48.5],
+      zoom: compact ? globeZoomFor(el) : 4.6,
       attributionControl: true,
       dragRotate: false,
       pitchWithRotate: false,
@@ -338,6 +377,10 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
         paint: { 'text-color': '#e6edf3', 'text-halo-color': '#0d1117', 'text-halo-width': 1.4 },
       })
       installCommunitySituation(map)
+      // Whole planet in view on the globe: world-wide AIS would smother it.
+      if (compact && map.getLayer('community-ships-icon')) {
+        map.setLayerZoomRange('community-ships-icon', 3, 22)
+      }
       map.addSource('community-frontline', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
       map.addLayer({
         id: 'community-frontline-fill',
@@ -902,6 +945,7 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
   return (
     <div className={`community-map ${compact ? 'community-map--home' : 'community-map--full'}`}>
       <div ref={containerRef} className="community-map-canvas" />
+      {compact ? <div className="community-map-stars" aria-hidden="true" /> : null}
       <div className="community-map-tools">
         <button
           type="button"
@@ -1009,7 +1053,10 @@ export default function CommunityMapView({ variant = 'full', flyToTarget = null,
           </div>
         ) : null}
         {compact ? (
-          <button type="button" className="community-map-open" onClick={() => navigate('/maps')}>Open map</button>
+          <>
+            <span className="community-map-hint">Drag to spin</span>
+            <button type="button" className="community-map-open" onClick={() => navigate('/maps')}>Open map</button>
+          </>
         ) : (
           <div className="community-map-draw" role="toolbar" aria-label="Draw">
             <button type="button" className={tool === 'pin' ? 'is-on' : ''} onClick={() => chooseTool('pin')}>Pin</button>

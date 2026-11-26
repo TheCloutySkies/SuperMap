@@ -39,6 +39,8 @@ router.use('/forensics', forensicsRouter)
 router.use('/pins', pinsRouter)
 // Sources that used to be fetched straight from the browser (snapshot collector + fallback)
 router.use(require('./snapshot'))
+// Strategic sources: cache-first, published by the collector like everything else
+router.use('/strategic', require('./strategic'))
 
 /**
  * Display routes serve the seeded snapshot. A visitor may not trigger an upstream

@@ -106,3 +106,24 @@ manifest to the orphan `data` branch. `refresh-data.yml` is the only scheduler;
   `DISABLE_SCHEDULERS=1` stops Render's own jobs.
 - Display routes serve the seeded state: `?refresh=1` / `?wait=1` only count with
   the config write token, and `Cache-Control` is 300s + 3600s SWR.
+
+## Strategic desk sources
+
+Ten sources ride the same 2-hourly collector run and publish to the `data` branch, so
+none of them is fetched per visitor:
+
+| Source | Gate | Key |
+| --- | --- | --- |
+| WarSpotting equipment losses | 4h | none |
+| CelesTrak orbit elements (ground tracks computed server-side) | 4h | none |
+| Launch Library 2 upcoming launches | 4h | none |
+| ISW / Critical Threats briefs (Google News RSS) | 4h | none |
+| OONI censorship measurements | 4h | none |
+| CISA KEV | 4h | none |
+| ransomware.live victims | 4h | none |
+| Safecast radiation | 4h | none |
+| SondeHub balloons | 2h | none |
+| UCDP GED conflict events | 4h | `UCDP_ACCESS_TOKEN` (free, by email) |
+
+`scripts/probe-strategic.mjs` re-checks every endpoint; NRC reactor status, the FAA TFR
+list and NGA MSI were dropped because they no longer answer (403, no public JSON, 503).

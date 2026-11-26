@@ -103,6 +103,17 @@ const REGISTRY = [
   { name: 'conflict-gdelt', path: '/api/conflicts/gdelt', timeoutMs: 90000 },
   { name: 'conflict-acled', path: '/api/conflicts/acled', timeoutMs: 90000 },
   { name: 'major-hazards', path: '/api/hazards/major', timeoutMs: 90000 },
+  // Strategic sources: the collector owns their freshness, same as everything else.
+  { name: 'strategic-warspotting', path: '/api/strategic/warspotting', timeoutMs: 60000, optional: true },
+  { name: 'strategic-satellites', path: '/api/strategic/satellites', timeoutMs: 90000, optional: true },
+  { name: 'strategic-launches', path: '/api/strategic/launches', timeoutMs: 60000, optional: true },
+  { name: 'strategic-briefs', path: '/api/strategic/briefs', timeoutMs: 60000, optional: true },
+  { name: 'strategic-ucdp', path: '/api/strategic/ucdp', timeoutMs: 90000, optional: true },
+  { name: 'strategic-censorship', path: '/api/strategic/censorship', timeoutMs: 60000, optional: true },
+  { name: 'strategic-kev', path: '/api/strategic/kev', timeoutMs: 60000, optional: true },
+  { name: 'strategic-ransomware', path: '/api/strategic/ransomware', timeoutMs: 60000, optional: true },
+  { name: 'strategic-radiation', path: '/api/strategic/radiation', timeoutMs: 90000, optional: true },
+  { name: 'strategic-balloons', path: '/api/strategic/balloons', timeoutMs: 60000, optional: true },
   { name: 'home', path: '/api/home?refresh=1', timeoutMs: 120000 },
 ]
 
@@ -403,7 +414,8 @@ async function main() {
         count: prior.lastCount || 0,
       }
       results.push({ name: entry.name, status: 'fail', ms, error: err.message })
-      const log = err?.response?.status === 503 || /not set|gated/i.test(err.message) ? console.log : console.warn
+      const quiet = entry.optional || err?.response?.status === 503 || /not set|gated/i.test(err.message)
+      const log = quiet ? console.log : console.warn
       log(`[collector] ${entry.name}: failed (${err.message}) — keeping last-good`)
     }
   }

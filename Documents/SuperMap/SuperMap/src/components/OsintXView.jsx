@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import axios from 'axios'
 import { getApiBase, readHomeSnapshot, writeHomeSnapshot } from '../lib/homeBootstrap'
+import { loadSnapshot } from '../lib/snapshotClient'
 import ItemMenu from '../features/accounts/ItemMenu'
 import ThreatScoreButton from './ThreatScoreButton'
 import './OsintXView.css'
@@ -282,8 +283,16 @@ export default function OsintXView({ keywordFilter = '', onClearFilter }) {
 
   useEffect(() => {
     if (snapshotPosts.current.length) setLoading(false)
-    // Seed from /api/home quickly if dedicated osint-x is slow (ingest starvation).
+    // The collector's snapshot is the newest set, shared by everyone: paint it
+    // first so a sleeping API can never leave this desk on "Timed Out".
     let cancelled = false
+    loadSnapshot('osint-x').then((seed) => {
+      if (cancelled || !Array.isArray(seed) || seed.length === 0) return
+      if (snapshotPosts.current.length >= seed.length) return
+      applyPosts(seed)
+      snapshotPosts.current = seed
+      setLoading(false)
+    }).catch(() => {})
     ;(async () => {
       if (snapshotPosts.current.length || posts.length) return
       if (!API_BASE) return

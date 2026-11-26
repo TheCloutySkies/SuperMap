@@ -33,7 +33,9 @@ export default function DataFreshness({ className = '' }) {
   const sources = manifest?.sources && typeof manifest.sources === 'object'
     ? Object.values(manifest.sources)
     : []
-  const staleCount = sources.filter((source) => source && (source.stale || source.ok === false)).length
+  // Optional feeds (IODA, Liveuamap, datacenters, FCC towers) fail upstream on
+  // their own and keep last-good, so they are not counted as site staleness.
+  const staleCount = sources.filter((source) => source && !source.optional && (source.stale || source.ok === false)).length
   // The client stamps the age when it reads the manifest, so this stays pure.
   const old = typeof snapshot.ageMs === 'number' && snapshot.ageMs > OLD_AFTER_MS
 

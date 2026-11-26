@@ -75,7 +75,12 @@ async function getLiveuamap({ etag = null, lastModified = null } = {}) {
     responseType: 'text',
     etag,
     lastModified,
-    headers: userAgentHeaders(),
+    headers: {
+      ...userAgentHeaders(),
+      // Their edge answers 403 to a bare server request.
+      Referer: 'https://liveuamap.com/',
+      Accept: 'application/rss+xml,application/xml;q=0.9,*/*;q=0.8',
+    },
   })
   if (res.notModified) return res
   const feed = await parser.parseString(String(res.data || ''))
@@ -134,7 +139,10 @@ async function getSurveillance({ etag = null, lastModified = null } = {}) {
 
 /** NASA FIRMS world VIIRS detections as points. The key never reaches the browser. */
 async function getFirms({ etag = null, lastModified = null } = {}) {
-  const key = String(process.env.FIRMS_MAP_KEY || '').trim()
+  // The public key this app already shipped in the browser, so the fires layer
+  // works before a FIRMS_MAP_KEY secret exists. Set your own to replace it.
+  const DEFAULT_FIRMS_KEY = '09415b5df0304c3802335984b511c111'
+  const key = String(process.env.FIRMS_MAP_KEY || DEFAULT_FIRMS_KEY).trim()
   if (!key) {
     const err = new Error('FIRMS_MAP_KEY is not set')
     err.gated = true

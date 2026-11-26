@@ -77,6 +77,9 @@ jobs:
           rm -rf "$RUNNER_TEMP/publish"
           mkdir -p "$RUNNER_TEMP/publish"
           cp -a "$OUT/." "$RUNNER_TEMP/publish/"
+          # The data branch holds snapshots, not the app: tell Vercel never to
+          # build it, so a push here can never fail on the app's Root Directory.
+          printf '{\n  "git": {\n    "deploymentEnabled": false\n  }\n}\n' > "$RUNNER_TEMP/publish/vercel.json"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # Orphan single commit: the branch is a snapshot, not a history.

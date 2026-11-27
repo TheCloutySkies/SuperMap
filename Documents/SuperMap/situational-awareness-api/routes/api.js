@@ -41,6 +41,9 @@ router.use('/pins', pinsRouter)
 router.use(require('./snapshot'))
 // Strategic sources: cache-first, published by the collector like everything else
 router.use('/strategic', require('./strategic'))
+// Ten keyless console feeds (malicious infrastructure, routing, displacement, wastewater, H5N1,
+// river gauges, MeteoAlarm, advisories, airspace, cyclones). Same cache-first contract.
+router.use('/console', require('./consoleSources'))
 
 /**
  * Display routes serve the seeded snapshot. A visitor may not trigger an upstream

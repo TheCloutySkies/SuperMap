@@ -123,6 +123,24 @@ const REGISTRY = [
   { name: 'home', path: '/api/home?refresh=1', timeoutMs: 120000 },
 ]
 
+/**
+ * The ten keyless console sources register themselves, so the collector and the
+ * /api/console route can never disagree about a name, a path or a gate.
+ */
+{
+  const { SOURCES } = require('../services/freeSources')
+  const homeIndex = REGISTRY.findIndex((entry) => entry.name === 'home')
+  const entries = SOURCES.map((source) => ({
+    name: source.name,
+    path: `/api/console/${source.key}`,
+    timeoutMs: source.timeoutMs || 120000,
+    ...(source.allowEmpty ? { allowEmpty: true } : {}),
+    ...(source.optional ? { optional: true } : {}),
+  }))
+  REGISTRY.splice(homeIndex < 0 ? REGISTRY.length : homeIndex, 0, ...entries)
+  for (const source of SOURCES) GATE_HOURS[source.name] = source.gateHours
+}
+
 const SECRET_ENV = [
   'MEDIASTACK_API_KEY',
   'GROQ_API_KEY',

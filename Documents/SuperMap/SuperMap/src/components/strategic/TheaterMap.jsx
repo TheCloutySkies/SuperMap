@@ -69,6 +69,7 @@ export default function TheaterMap({
   const mapRef = useRef(null)
   const boundLayers = useRef(new Set())
   const selectRef = useRef(onSelect)
+  const featureRef = useRef(null)
   const [ready, setReady] = useState(false)
 
   const plotted = useMemo(() => {
@@ -166,6 +167,7 @@ export default function TheaterMap({
     if (!map || !ready) return
     if (typeof map.isStyleLoaded === 'function' && !map.isStyleLoaded()) return
     const since = now - scrubHours * HOUR
+    let features = 0
 
     try {
       for (const domain of GEO_DOMAINS) {
@@ -184,6 +186,8 @@ export default function TheaterMap({
         boundLayers.current.delete(pointId)
         continue
       }
+
+      features += collection.features.length
 
       if (!map.getSource(sourceId)) {
         map.addSource(sourceId, {
@@ -237,6 +241,10 @@ export default function TheaterMap({
         map.on('mouseleave', layerId, () => { map.getCanvas().style.cursor = '' })
       }
       }
+      // Instrumentation for the paint check: the number of features handed to
+      // the map's sources, readable without a screenshot of a WebGL canvas.
+      if (containerRef.current) containerRef.current.dataset.features = String(features)
+      if (featureRef.current) featureRef.current.textContent = `${features.toLocaleString()} features`
     } catch (err) {
       console.warn('[strategic map] pins:', err.message)
     }
@@ -325,8 +333,8 @@ export default function TheaterMap({
         ))}
       </div>
 
-      <div className="console-map-stats">
-        {plotted.toLocaleString()} pins · {activeGeoDomains.length} layers
+      <div className="console-map-stats" data-plotted={plotted}>
+        {plotted.toLocaleString()} pins · <span ref={featureRef}>0 features</span> · {activeGeoDomains.length} layers
       </div>
 
       <label className="console-scrub">

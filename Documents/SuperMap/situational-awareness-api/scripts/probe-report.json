@@ -1,0 +1,388 @@
+[
+  {
+    "name": "gpsjam-index",
+    "source": "GPSJam",
+    "url": "https://gpsjam.org/",
+    "status": 200,
+    "contentType": "text/html",
+    "bytes": 4181,
+    "ms": 761,
+    "sampleKeys": "<!doctype html> <html lang=\"en\"> <head> <meta charset=\"utf-8\" /> <meta name=\"viewport\" con",
+    "ok": true
+  },
+  {
+    "name": "gpsjam-data",
+    "source": "GPSJam",
+    "url": "https://gpsjam.org/data/latest.json",
+    "status": 404,
+    "contentType": "application/json",
+    "bytes": 28,
+    "ms": 600,
+    "sampleKeys": [
+      "message"
+    ],
+    "ok": false
+  },
+  {
+    "name": "urlhaus-download",
+    "source": "abuse.ch",
+    "url": "https://urlhaus.abuse.ch/downloads/json_recent/",
+    "status": 410,
+    "contentType": "text/plain",
+    "bytes": 283,
+    "ms": 155,
+    "sampleKeys": "410 Gone: legacy URLhaus file exports are no longer available at this URL. Since 21 Octobe",
+    "ok": false
+  },
+  {
+    "name": "urlhaus-api",
+    "source": "abuse.ch",
+    "url": "https://urlhaus-api.abuse.ch/v1/urls/recent/",
+    "status": 401,
+    "contentType": "application/octet-stream",
+    "bytes": 25,
+    "ms": 706,
+    "sampleKeys": [
+      "error"
+    ],
+    "ok": false
+  },
+  {
+    "name": "feodo",
+    "source": "abuse.ch",
+    "url": "https://feodotracker.abuse.ch/downloads/ipblocklist.json",
+    "status": 200,
+    "contentType": "application/json",
+    "bytes": 1763,
+    "ms": 176,
+    "sampleKeys": "array[5]",
+    "ok": true
+  },
+  {
+    "name": "openphish",
+    "source": "abuse.ch",
+    "url": "https://openphish.com/feed.txt",
+    "status": 200,
+    "contentType": "text/plain; charset=utf-8",
+    "bytes": 15093,
+    "ms": 1000,
+    "sampleKeys": "https://sso-auth.com/E.twfJHicKjhI?/facebook_secure_account?id=759347502378427672987349826",
+    "ok": true
+  },
+  {
+    "name": "spamhaus-drop",
+    "source": "abuse.ch",
+    "url": "https://www.spamhaus.org/drop/drop.txt",
+    "status": 200,
+    "contentType": "text/plain; charset=UTF-8",
+    "bytes": 48279,
+    "ms": 255,
+    "sampleKeys": "; Spamhaus DROP List 2026/11/26 - (c) 2026 The Spamhaus Project SLU ; https://www.spamhaus",
+    "ok": true
+  },
+  {
+    "name": "ripestat-country",
+    "source": "RIPEstat",
+    "url": "https://stat.ripe.net/data/country-resource-stats/data.json?resource=RU",
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "bytes": 277472,
+    "ms": 9314,
+    "sampleKeys": [
+      "messages",
+      "see_also",
+      "version",
+      "data_call_name",
+      "data_call_status",
+      "cached",
+      "query_id",
+      "process_time",
+      "server_id",
+      "build_version"
+    ],
+    "ok": true
+  },
+  {
+    "name": "ripestat-asns",
+    "source": "RIPEstat",
+    "url": "https://stat.ripe.net/data/country-asns/data.json?resource=RU",
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "bytes": 650,
+    "ms": 2192,
+    "sampleKeys": [
+      "messages",
+      "see_also",
+      "version",
+      "data_call_name",
+      "data_call_status",
+      "cached",
+      "query_id",
+      "process_time",
+      "server_id",
+      "build_version"
+    ],
+    "ok": true
+  },
+  {
+    "name": "unhcr",
+    "source": "UNHCR",
+    "url": "https://api.unhcr.org/population/v1/population/?year=2024&coo_all=true&coa_all=true&limit=1000&page=1",
+    "status": 200,
+    "contentType": "application/json",
+    "bytes": 277815,
+    "ms": 2245,
+    "sampleKeys": [
+      "page",
+      "short-url",
+      "maxPages",
+      "total",
+      "items"
+    ],
+    "ok": true
+  },
+  {
+    "name": "hapi",
+    "source": "OCHA HAPI",
+    "url": "https://hapi.humdata.org/api/v1/",
+    "status": 403,
+    "contentType": "application/json",
+    "bytes": 35,
+    "ms": 496,
+    "sampleKeys": [
+      "error"
+    ],
+    "ok": false
+  },
+  {
+    "name": "nwss",
+    "source": "CDC NWSS",
+    "url": "https://data.cdc.gov/resource/2ew6-ywp6.json?$order=date_end%20DESC&$limit=2",
+    "status": 200,
+    "contentType": "application/json;charset=utf-8",
+    "bytes": 823,
+    "ms": 848,
+    "sampleKeys": "array[2]",
+    "ok": true
+  },
+  {
+    "name": "aphis-livestock",
+    "source": "APHIS",
+    "url": "https://services1.arcgis.com/jWQlP64OuwDh6GGX/arcgis/rest/services/hpai_commercial_backyard_usa/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=geojson&resultRecordCount=2",
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "bytes": 892,
+    "ms": 422,
+    "sampleKeys": [
+      "type",
+      "crs",
+      "properties",
+      "features"
+    ],
+    "ok": true
+  },
+  {
+    "name": "aphis-wildbirds",
+    "source": "APHIS",
+    "url": "https://services1.arcgis.com/jWQlP64OuwDh6GGX/arcgis/rest/services/hpai_wildbirds_usa/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=geojson&resultRecordCount=2",
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "bytes": 992,
+    "ms": 304,
+    "sampleKeys": [
+      "type",
+      "crs",
+      "properties",
+      "features"
+    ],
+    "ok": true
+  },
+  {
+    "name": "usgs-water-gage",
+    "source": "USGS Water",
+    "url": "https://api.waterdata.usgs.gov/ogcapi/v0/collections/latest-continuous/items?f=json&parameter_code=00065&limit=2",
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "bytes": 2325,
+    "ms": 330,
+    "sampleKeys": [
+      "type",
+      "features",
+      "numberReturned",
+      "links",
+      "timeStamp"
+    ],
+    "ok": true
+  },
+  {
+    "name": "usgs-water-flow",
+    "source": "USGS Water",
+    "url": "https://api.waterdata.usgs.gov/ogcapi/v0/collections/latest-continuous/items?f=json&parameter_code=00060&limit=2",
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "bytes": 2315,
+    "ms": 113,
+    "sampleKeys": [
+      "type",
+      "features",
+      "numberReturned",
+      "links",
+      "timeStamp"
+    ],
+    "ok": true
+  },
+  {
+    "name": "nwps-gauges",
+    "source": "NWPS (not used)",
+    "url": "https://api.water.noaa.gov/nwps/v1/gauges",
+    "status": 0,
+    "error": "The operation was aborted due to timeout",
+    "ms": 20004,
+    "ok": false
+  },
+  {
+    "name": "meteoalarm-europe",
+    "source": "MeteoAlarm",
+    "url": "https://feeds.meteoalarm.org/feeds/meteoalarm-legacy-atom-europe",
+    "status": 404,
+    "contentType": "text/html; charset=utf-8",
+    "bytes": 9,
+    "ms": 1507,
+    "sampleKeys": "Not Found",
+    "ok": false
+  },
+  {
+    "name": "meteoalarm-germany",
+    "source": "MeteoAlarm",
+    "url": "https://feeds.meteoalarm.org/feeds/meteoalarm-legacy-atom-germany",
+    "status": 200,
+    "contentType": "application/atom+xml; charset=utf-8",
+    "bytes": 2227923,
+    "ms": 8316,
+    "sampleKeys": "<?xml version=\"1.0\" encoding=\"UTF-8\"?> <feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:cap",
+    "ok": true
+  },
+  {
+    "name": "meteoalarm-france",
+    "source": "MeteoAlarm",
+    "url": "https://feeds.meteoalarm.org/feeds/meteoalarm-legacy-atom-france",
+    "status": 200,
+    "contentType": "application/atom+xml; charset=utf-8",
+    "bytes": 92191,
+    "ms": 1657,
+    "sampleKeys": "<?xml version=\"1.0\" encoding=\"UTF-8\"?> <feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:cap",
+    "ok": true
+  },
+  {
+    "name": "state-advisories",
+    "source": "State Dept",
+    "url": "https://travel.state.gov/_res/rss/TAsTWs.xml",
+    "status": 200,
+    "contentType": "text/xml",
+    "bytes": 551176,
+    "ms": 328,
+    "sampleKeys": "<?xml version=\"1.0\" encoding=\"UTF-8\"?> <rss xmlns:dc=\"http://purl.org/dc/elements/1.1/\" ve",
+    "ok": true
+  },
+  {
+    "name": "fcdo-index",
+    "source": "FCDO",
+    "url": "https://www.gov.uk/api/content/foreign-travel-advice",
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "bytes": 300976,
+    "ms": 912,
+    "sampleKeys": [
+      "analytics_identifier",
+      "base_path",
+      "content_id",
+      "description",
+      "details",
+      "document_type",
+      "first_published_at",
+      "links",
+      "locale",
+      "phase"
+    ],
+    "ok": true
+  },
+  {
+    "name": "fcdo-ukraine",
+    "source": "FCDO",
+    "url": "https://www.gov.uk/api/content/foreign-travel-advice/ukraine",
+    "status": 200,
+    "contentType": "application/json; charset=utf-8",
+    "bytes": 102178,
+    "ms": 207,
+    "sampleKeys": [
+      "analytics_identifier",
+      "base_path",
+      "content_id",
+      "description",
+      "details",
+      "document_type",
+      "first_published_at",
+      "links",
+      "locale",
+      "phase"
+    ],
+    "ok": true
+  },
+  {
+    "name": "faa-tfr-root",
+    "source": "FAA TFR",
+    "url": "https://tfr.faa.gov/",
+    "status": 200,
+    "contentType": "text/html",
+    "bytes": 8352,
+    "ms": 678,
+    "sampleKeys": "<!doctype html> <html lang=\"en\" data-n-head=\"%7B%22lang%22:%7B%221%22:%22en%22%7D%7D\"> <he",
+    "ok": true
+  },
+  {
+    "name": "faa-tfr-list",
+    "source": "FAA TFR",
+    "url": "https://tfr.faa.gov/tfr3/?page=list",
+    "status": 200,
+    "contentType": "text/html",
+    "bytes": 8352,
+    "ms": 357,
+    "sampleKeys": "<!doctype html> <html lang=\"en\" data-n-head=\"%7B%22lang%22:%7B%221%22:%22en%22%7D%7D\"> <he",
+    "ok": true
+  },
+  {
+    "name": "faa-nas-events",
+    "source": "FAA NAS",
+    "url": "https://nasstatus.faa.gov/api/airport-events",
+    "status": 200,
+    "contentType": "application/json",
+    "bytes": 3611,
+    "ms": 516,
+    "sampleKeys": "array[4]",
+    "ok": true
+  },
+  {
+    "name": "jtwc",
+    "source": "JTWC",
+    "url": "https://www.metoc.navy.mil/jtwc/rss/jtwc.rss",
+    "status": 200,
+    "contentType": "application/rss+xml",
+    "bytes": 2357,
+    "ms": 486,
+    "sampleKeys": "<?xml version=\"1.0\" encoding=\"UTF-8\"?> <rss version=\"2.0\"> <channel> <title>JTWC TROPICAL ",
+    "ok": true
+  },
+  {
+    "name": "nhc",
+    "source": "NHC",
+    "url": "https://www.nhc.noaa.gov/CurrentStorms.json",
+    "status": 200,
+    "contentType": "application/json",
+    "bytes": 24,
+    "ms": 162,
+    "sampleKeys": [
+      "activeStorms"
+    ],
+    "ok": true
+  }
+]

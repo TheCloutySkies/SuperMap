@@ -35,23 +35,32 @@ function text(value, max = 200) {
 export const DOMAINS = {
   conflict: { label: 'Conflict', short: 'Conflict', hex: '#ff3b5c', icon: '⚔', source: 'GDELT · ACLED · UCDP', weight: 1.4 },
   losses: { label: 'Equipment losses', short: 'Losses', hex: '#ffb020', icon: '🛡', source: 'WarSpotting', weight: 1.1 },
-  hazards: { label: 'Hazards', short: 'Hazards', hex: '#f97316', icon: '⚠', source: 'USGS · EMSC · NWS · volcanoes', weight: 1.15 },
+  hazards: { label: 'Hazards', short: 'Hazards', hex: '#f97316', icon: '⚠', source: 'USGS · EMSC · NWS · MeteoAlarm · JTWC', weight: 1.15 },
   infrastructure: { label: 'Infrastructure', short: 'Infra', hex: '#4f7cff', icon: '⌁', source: 'Utility outages', weight: 1 },
   cyber: { label: 'Cyber', short: 'Cyber', hex: '#ff4fd8', icon: '🖧', source: 'CISA KEV · ransomware.live', weight: 1.2 },
+  cyberinfra: { label: 'Malicious infra', short: 'Malware', hex: '#e879f9', icon: '🕸', source: 'Feodo · OpenPhish · Spamhaus', weight: 1.25 },
   censorship: { label: 'Censorship', short: 'Censor', hex: '#a78bfa', icon: '🚫', source: 'OONI', weight: 0.9 },
+  network: { label: 'Routing health', short: 'Routing', hex: '#93c5fd', icon: '🌐', source: 'RIPEstat', weight: 1.1 },
+  displacement: { label: 'Displacement', short: 'Displaced', hex: '#facc15', icon: '👥', source: 'UNHCR', weight: 0.35 },
   radiation: { label: 'Radiation', short: 'Radiation', hex: '#57e389', icon: '☢', source: 'Safecast', weight: 1.5 },
+  health: { label: 'Wastewater', short: 'Wastewater', hex: '#34d399', icon: '🧬', source: 'CDC NWSS', weight: 1.05 },
+  outbreak: { label: 'H5N1', short: 'H5N1', hex: '#a3e635', icon: '🦠', source: 'USDA APHIS', weight: 1.15 },
+  hydro: { label: 'River / flood', short: 'River', hex: '#38bdf8', icon: '🌊', source: 'USGS Water · NWS', weight: 1.1 },
+  advisory: { label: 'Travel risk', short: 'Advisory', hex: '#fb7185', icon: '⚠', source: 'State Dept · FCDO', weight: 1 },
+  airspace: { label: 'Airspace', short: 'Airspace', hex: '#c4b5fd', icon: '✈', source: 'FAA NAS', weight: 1 },
   orbital: { label: 'Orbital', short: 'Orbital', hex: '#22d3ee', icon: '🛰', source: 'CelesTrak · Launch Library', weight: 0.35 },
   balloons: { label: 'Radiosondes', short: 'Sondes', hex: '#2dd4bf', icon: '🎈', source: 'SondeHub', weight: 0.15 },
   assessments: { label: 'Assessments', short: 'Briefs', hex: '#8b9bb4', icon: '📋', source: 'ISW · Critical Threats', weight: 0.5 },
 }
 
 export const DOMAIN_ORDER = [
-  'conflict', 'losses', 'hazards', 'infrastructure', 'cyber',
-  'censorship', 'radiation', 'orbital', 'balloons', 'assessments',
+  'conflict', 'losses', 'hazards', 'infrastructure', 'cyber', 'cyberinfra',
+  'network', 'displacement', 'censorship', 'hydro', 'health', 'outbreak',
+  'advisory', 'airspace', 'radiation', 'orbital', 'balloons', 'assessments',
 ]
 
 /** Domains that can carry coordinates onto the map. */
-export const GEO_DOMAINS = ['conflict', 'losses', 'hazards', 'infrastructure', 'radiation', 'orbital', 'balloons']
+export const GEO_DOMAINS = ['conflict', 'losses', 'hazards', 'infrastructure', 'radiation', 'orbital', 'balloons', 'airspace']
 
 /* ------------------------------------------------------------------ regions */
 
@@ -901,6 +910,376 @@ function fromOsintX(payload, now) {
   return out
 }
 
+/* ------------------------------------------------- keyless console feeds */
+
+function fromAbuseCh(payload, now) {
+  const rows = Array.isArray(payload?.items) ? payload.items : []
+  const base = { 'Feodo Tracker': 0.75, OpenPhish: 0.55, 'Spamhaus DROP': 0.6 }
+  const out = []
+  for (const row of rows) {
+    const count = Number(row?.count) || 0
+    if (!count) continue
+    const feed = String(row.feed || 'abuse.ch')
+    const magnitude = clamp((base[feed] ?? 0.5) * (0.6 + Math.log10(1 + count) / 4), 0.25, 0.95)
+    out.push(mk({
+      id: `abuse:${feed}:${row.label}`,
+      domain: 'cyberinfra',
+      region: 'cyber',
+      at: now,
+      tier: 2,
+      magnitude,
+      title: `${feed}: ${row.label}`,
+      detail: `${count.toLocaleString()} ${feed === 'OpenPhish' ? 'phishing URLs on this host' : feed === 'Feodo Tracker' ? 'command-and-control endpoints' : 'DROP prefixes in this /8'} in the latest published list.`,
+      raw: `abuse.ch summary · ${feed} · ${row.label} · ${count}`,
+      source: feed,
+      link: feed === 'OpenPhish' ? 'https://openphish.com/' : feed === 'Feodo Tracker' ? 'https://feodotracker.abuse.ch/' : 'https://www.spamhaus.org/drop/',
+      meta: { feed, label: String(row.label), count: String(count), ...(row.online != null ? { online: String(row.online) } : {}) },
+    }))
+  }
+  return out
+}
+
+function fromRipestat(payload, now) {
+  const rows = Array.isArray(payload?.items) ? payload.items : []
+  const out = []
+  for (const row of rows) {
+    const registered = Number(row.registered)
+    const routed = Number(row.routed)
+    const ratio = Number.isFinite(registered) && Number.isFinite(routed) && registered > 0 ? routed / registered : null
+    const thin = ratio != null && ratio < 0.9
+    const moved = Number.isFinite(Number(row.deltaPct)) && Math.abs(Number(row.deltaPct)) >= 1
+    if (!thin && !moved) continue
+    const magnitude = thin
+      ? clamp((0.9 - ratio) * 1.6, 0.25, 0.85)
+      : clamp(Math.abs(Number(row.deltaPct)) / 10, 0.2, 0.6)
+    const missing = Number.isFinite(registered) && Number.isFinite(routed) ? registered - routed : null
+    out.push(mk({
+      id: `ripeat:${row.cc}:${thin ? 'unrouted' : 'delta'}`,
+      domain: 'network',
+      region: regionForCountry(row.cc),
+      // Routing health is a current state, not an event: observed now, dated in meta.
+      at: now,
+      tier: 1,
+      magnitude,
+      title: thin
+        ? `${row.cc}: ${missing.toLocaleString()} registered prefixes not routed`
+        : `${row.cc}: announced prefixes ${Number(row.deltaPct) > 0 ? 'up' : 'down'} ${Math.abs(Number(row.deltaPct))}% week over week`,
+      detail: thin
+        ? `${registered.toLocaleString()} prefixes registered for ${row.cc}, ${routed.toLocaleString()} seen routed by RIS. A widening gap usually means withdrawals or a routing policy change.`
+        : `${row.cc} announced ${row.v4?.toLocaleString() ?? '—'} IPv4 prefixes on ${row.observedAt || 'the latest RIS snapshot'}, ${Math.abs(Number(row.deltaPct))}% week over week.`,
+      raw: `RIPEstat · ${row.cc} · v4 ${row.v4 ?? '—'} · registered ${registered ?? '—'} · routed ${routed ?? '—'} · Δ ${row.deltaPct ?? '—'}% · ${row.observedAt || '—'}`,
+      source: 'RIPEstat',
+      link: `https://stat.ripe.net/${row.cc}`,
+      meta: {
+        country: String(row.cc),
+        v4: String(row.v4 ?? '—'),
+        v6: String(row.v6 ?? '—'),
+        asns: String(row.asns ?? '—'),
+        registered: String(registered ?? '—'),
+        routed: String(routed ?? '—'),
+        delta: `${row.deltaPct ?? '—'}%`,
+        observed: String(row.observedAt || '—'),
+      },
+    }))
+  }
+  return out
+}
+
+function fromUnhcr(payload, now) {
+  const rows = Array.isArray(payload?.items) ? payload.items : []
+  const out = []
+  for (const row of rows) {
+    const total = Number(row.total) || 0
+    if (total < 250000) continue
+    const change = Number(row.changePct)
+    out.push(mk({
+      id: `unhcr:${row.iso3 || row.name}`,
+      domain: 'displacement',
+      region: regionForCountry(row.iso2),
+      at: now,
+      tier: 1,
+      magnitude: clamp(Math.log10(total / 100000) / 2.4, 0.25, 0.7),
+      title: `${row.name}: ${total.toLocaleString()} displaced`,
+      detail: `UNHCR counts ${total.toLocaleString()} people displaced from ${row.name} in ${row.year}: ${Number(row.refugees || 0).toLocaleString()} refugees, ${Number(row.idps || 0).toLocaleString()} internally displaced${Number.isFinite(change) ? `, ${change > 0 ? 'up' : 'down'} ${Math.abs(change)}% year over year` : ''}. Displacement is a lagging indicator.`,
+      raw: `UNHCR · ${row.name} (${row.iso3}) · ${row.year} · total ${total} · refugees ${row.refugees ?? 0} · idps ${row.idps ?? 0} · change ${row.changePct ?? '—'}%`,
+      source: 'UNHCR',
+      link: 'https://www.unhcr.org/refugee-statistics/',
+      meta: {
+        country: String(row.name),
+        year: String(row.year ?? '—'),
+        total: String(total),
+        refugees: String(row.refugees ?? 0),
+        idps: String(row.idps ?? 0),
+        stateless: String(row.stateless ?? 0),
+        change: `${row.changePct ?? '—'}%`,
+      },
+    }))
+  }
+  return out
+}
+
+function fromNwss(payload, now) {
+  const rows = Array.isArray(payload?.items) ? payload.items : []
+  const out = []
+  for (const row of rows) {
+    const percentile = Number(row.percentile)
+    if (!Number.isFinite(percentile)) continue
+    out.push(mk({
+      id: `nwss:${row.state}`,
+      domain: 'health',
+      region: 'americas',
+      at: now,
+      tier: 1,
+      magnitude: clamp(percentile / 110, 0.3, 0.9),
+      title: `${row.state}: wastewater activity ${Math.round(percentile)}th percentile`,
+      detail: `${payload.pathogen || 'SARS-CoV-2'} wastewater viral activity in ${row.state} sits at the ${Math.round(percentile)}th percentile for the week ending ${row.dateEnd || '—'}.`,
+      raw: `CDC NWSS · ${row.state} · percentile ${percentile} · 15-day change ${row.ptc15d ?? '—'}% · detected ${row.detectProp ?? '—'}% · week ending ${row.dateEnd || '—'}`,
+      source: 'CDC NWSS',
+      link: 'https://www.cdc.gov/nwss/rv/COVID19-nationaltrend.html',
+      meta: {
+        jurisdiction: String(row.jurisdiction || row.state),
+        percentile: String(Math.round(percentile)),
+        change15d: `${row.ptc15d ?? '—'}%`,
+        detected: `${row.detectProp ?? '—'}%`,
+        weekEnding: String(row.dateEnd || '—'),
+        pathogen: String(payload.pathogen || 'SARS-CoV-2'),
+      },
+    }))
+  }
+  return out
+}
+
+function fromHpai(payload, now) {
+  const rows = Array.isArray(payload?.items) ? payload.items : []
+  const out = []
+  const withRecent = rows.filter((row) => Number(row.recent) > 0)
+  const list = withRecent.length ? withRecent : rows.slice(0, 8)
+  for (const row of list) {
+    const recent = Number(row.recent) || 0
+    out.push(mk({
+      id: `hpai:${row.state}`,
+      domain: 'outbreak',
+      region: 'americas',
+      at: now,
+      tier: 1,
+      magnitude: row.dairy ? 0.78 : recent > 0 ? clamp(0.45 + Math.log10(1 + recent) * 0.2, 0.45, 0.8) : 0.32,
+      title: recent > 0
+        ? `${row.state}: ${recent} new H5N1 detection${recent === 1 ? '' : 's'} in 30 days`
+        : `${row.state}: H5N1 detections on record (none in 30 days)`,
+      detail: [
+        `${Number(row.total || 0).toLocaleString()} detections on record (${Number(row.livestock || 0)} livestock, ${Number(row.wild || 0)} wild bird)`,
+        Number(row.birds) ? `${Number(row.birds).toLocaleString()} birds affected` : null,
+        row.dairy ? 'dairy cattle involved' : null,
+        recent > 0 ? `${recent} in the last 30 days` : 'no new detections in 30 days',
+      ].filter(Boolean).join(' · '),
+      raw: `USDA APHIS · ${row.state} · recent ${recent} · total ${row.total ?? 0} · birds ${row.birds ?? 0} · dairy ${row.dairy ? 'yes' : 'no'} · last ${row.lastConfirmed || '—'}`,
+      source: 'USDA APHIS',
+      link: 'https://www.aphis.usda.gov/livestock-poultry-disease/avian/avian-influenza/hpai-detections/hpai-confirmed-cases-livestock',
+      meta: {
+        state: String(row.state),
+        recent: String(recent),
+        total: String(row.total ?? 0),
+        livestock: String(row.livestock ?? 0),
+        wild: String(row.wild ?? 0),
+        birds: String(row.birds ?? 0),
+        dairy: row.dairy ? 'yes' : 'no',
+        lastConfirmed: String(row.lastConfirmed || '—'),
+      },
+    }))
+  }
+  return out
+}
+
+const RIVER_SEVERITY = { extreme: 1, severe: 0.85, moderate: 0.6, minor: 0.4, rise: 0.55, unknown: 0.35 }
+
+function fromUsgsWater(payload, now) {
+  const rows = Array.isArray(payload?.items) ? payload.items : []
+  const out = []
+  for (const row of rows) {
+    const lat = Number(row.lat)
+    const lon = Number(row.lon)
+    const at = toMs(row.onset) ?? now
+    out.push(mk({
+      id: `river:${row.site}`,
+      domain: 'hydro',
+      lat,
+      lon,
+      at,
+      tier: 1,
+      magnitude: RIVER_SEVERITY[String(row.severity || '').toLowerCase()] ?? 0.4,
+      title: row.alert
+        ? `${row.site}: ${row.gage} ${row.unit || ''} under ${row.alert}`
+        : `${row.site}: gauge doubled to ${row.gage} ${row.unit || ''}`,
+      detail: [
+        row.alert ? `${row.alert} covers this gauge` : 'Gauge rose at least 2× since the previous published run',
+        row.discharge != null ? `discharge ${Number(row.discharge).toLocaleString()} ${row.dischargeUnit || ''}` : null,
+        row.rise && row.priorGage != null ? `prior ${row.priorGage} ${row.unit || ''}` : null,
+      ].filter(Boolean).join(' · '),
+      raw: `USGS Water · site ${row.site} · gage ${row.gage} ${row.unit || ''} · ${row.at || '—'}${row.alert ? ` · ${row.alert} (${row.severity})` : ' · rise'}`,
+      source: 'USGS Water',
+      link: `https://waterdata.usgs.gov/monitoring-location/${row.site}/`,
+      meta: {
+        site: String(row.site),
+        gage: `${row.gage} ${row.unit || ''}`.trim(),
+        discharge: row.discharge != null ? `${Number(row.discharge).toLocaleString()} ${row.dischargeUnit || ''}`.trim() : '—',
+        alert: String(row.alert || '—'),
+        severity: String(row.severity || '—'),
+        expires: String(row.expires || '—'),
+      },
+    }))
+  }
+  return out
+}
+
+function fromMeteoalarm(payload, now) {
+  const rows = Array.isArray(payload?.items) ? payload.items : []
+  const out = []
+  for (const row of rows) {
+    const severity = String(row.severity || '').toLowerCase()
+    const lat = Number(row.lat)
+    const lon = Number(row.lon)
+    out.push(mk({
+      id: `meteo:${row.country}:${row.event}:${row.area || ''}:${row.onset || ''}`,
+      domain: 'hazards',
+      region: regionForCountry(row.country),
+      lat: Number.isFinite(lat) ? lat : null,
+      lon: Number.isFinite(lon) ? lon : null,
+      // A warning is state: it covers "now" while it is on the feed.
+      at: now,
+      tier: 1,
+      magnitude: severity === 'extreme' ? 0.95 : 0.8,
+      title: `${row.event}${row.area ? ` — ${row.area}` : ''}`,
+      detail: `MeteoAlarm ${severity} warning for ${row.area || row.country}, ${row.country}${row.certainty ? `, certainty ${row.certainty.toLowerCase()}` : ''}.`,
+      raw: `MeteoAlarm · ${row.country} · ${row.severity} · ${row.event} · ${row.onset || '—'} → ${row.expires || '—'}`,
+      source: 'MeteoAlarm',
+      link: row.link || 'https://meteoalarm.org/',
+      tags: ['meteoalarm'],
+      meta: {
+        kind: 'meteoalarm',
+        country: String(row.country),
+        severity: String(row.severity),
+        area: String(row.area || '—'),
+        onset: String(row.onset || '—'),
+        expires: String(row.expires || '—'),
+        certainty: String(row.certainty || '—'),
+      },
+    }))
+  }
+  return out
+}
+
+const ADVISORY_MAGNITUDE = { 4: 0.9, 3: 0.6 }
+
+function fromAdvisories(payload, now) {
+  const rows = Array.isArray(payload?.items) ? payload.items : []
+  const out = []
+  for (const row of rows) {
+    const level = Number(row.level) || 0
+    if (level < 3) continue
+    const agreement = Number(row.agreement) || 1
+    out.push(mk({
+      id: `advisory:${row.iso2 || row.country}`,
+      domain: 'advisory',
+      region: regionForCountry(row.iso2),
+      at: now,
+      tier: 1,
+      magnitude: clamp((ADVISORY_MAGNITUDE[level] ?? 0.5) + (agreement >= 2 ? 0.05 : 0), 0.4, 0.95),
+      title: `${row.country}: Level ${level} — ${row.label || 'travel advisory'}`,
+      detail: [
+        `US State Department: ${row.label || `level ${level}`}`,
+        row.fcdoFloor != null ? `FCDO advises against travel to parts (floor ${row.fcdoFloor})` : null,
+        agreement >= 2 ? 'both governments agree on serious risk' : 'single government source',
+      ].filter(Boolean).join('. '),
+      raw: `Advisories · ${row.country} (${row.iso2 || '—'}) · US level ${level} · FCDO floor ${row.fcdoFloor ?? '—'} · agreement ${agreement} · updated ${row.updated || '—'}`,
+      source: 'US State Dept',
+      link: row.url || row.fcdoUrl || null,
+      meta: {
+        level: String(level),
+        label: String(row.label || '—'),
+        fcdoFloor: String(row.fcdoFloor ?? '—'),
+        agreement: String(agreement),
+        updated: String(row.updated || '—'),
+      },
+    }))
+  }
+  return out
+}
+
+const AIRSPACE_SEVERITY = { closure: 1, 'ground stop': 0.9, 'ground delay': 0.6, 'arrival delay': 0.4, 'departure delay': 0.4, notice: 0.3 }
+
+function fromNasAirspace(payload, now) {
+  const rows = Array.isArray(payload?.items) ? payload.items : []
+  const out = []
+  for (const row of rows) {
+    out.push(mk({
+      id: `airspace:${row.airport}:${row.notam ?? row.start ?? ''}`,
+      domain: 'airspace',
+      lat: Number.isFinite(Number(row.lat)) ? Number(row.lat) : null,
+      lon: Number.isFinite(Number(row.lon)) ? Number(row.lon) : null,
+      // The NAS list is active restrictions: state as of this run.
+      at: now,
+      tier: 1,
+      magnitude: AIRSPACE_SEVERITY[row.type] ?? 0.35,
+      title: `${row.airport}: ${row.type}${row.airportName ? ` — ${row.airportName}` : ''}`,
+      detail: row.reason || 'FAA NAS airport event',
+      raw: `FAA NAS · ${row.airport} · ${row.type} · ${row.start || '—'} → ${row.end || '—'} · NOTAM ${row.notam ?? '—'}`,
+      source: 'FAA NAS',
+      link: 'https://nasstatus.faa.gov/',
+      meta: {
+        airport: String(row.airport),
+        type: String(row.type),
+        notam: String(row.notam ?? '—'),
+        start: String(row.start || '—'),
+        end: String(row.end || '—'),
+      },
+    }))
+  }
+  return out
+}
+
+const CYCLONE_MAGNITUDE = {
+  'SUPER TYPHOON': 0.95,
+  TYPHOON: 0.85,
+  HURRICANE: 0.85,
+  'TROPICAL STORM': 0.6,
+  'TROPICAL DEPRESSION': 0.4,
+  'TROPICAL CYCLONE': 0.6,
+}
+
+function fromCyclones(payload, now) {
+  const rows = Array.isArray(payload?.items) ? payload.items : []
+  const out = []
+  for (const row of rows) {
+    const category = String(row.category || '').toUpperCase()
+    const lat = Number(row.lat)
+    const lon = Number(row.lon)
+    out.push(mk({
+      id: row.id || `cyclone:${row.name}`,
+      domain: 'hazards',
+      region: Number.isFinite(lat) && Number.isFinite(lon) ? regionForPoint(lon, lat) : 'global',
+      lat: Number.isFinite(lat) ? lat : null,
+      lon: Number.isFinite(lon) ? lon : null,
+      at: now,
+      tier: 1,
+      magnitude: CYCLONE_MAGNITUDE[category] ?? 0.5,
+      title: `${row.name}${row.intensity ? ` · ${row.intensity} kt` : ''}`,
+      detail: [row.detail, row.basin].filter(Boolean).join(' · ') || 'Tropical cyclone warning',
+      raw: `${row.source || 'JTWC'} · ${row.name} · ${row.category || '—'} · ${row.basin || '—'}${row.pressure ? ` · ${row.pressure} hPa` : ''}`,
+      source: row.source || 'JTWC',
+      link: row.link || null,
+      tags: ['cyclone'],
+      meta: {
+        kind: String(row.source || 'JTWC').toLowerCase(),
+        basin: String(row.basin || '—'),
+        category: String(row.category || '—'),
+        intensity: row.intensity != null ? `${row.intensity} kt` : '—',
+        pressure: row.pressure != null ? `${row.pressure} hPa` : '—',
+      },
+    }))
+  }
+  return out
+}
+
 /* --------------------------------------------------------------- assembly */
 
 function dedupe(signals) {
@@ -956,6 +1335,16 @@ export function buildSignals(payloads = {}, now = Date.now()) {
     ...fromLaunches(payloads.launches),
     ...fromBriefs(payloads.briefs, now),
     ...fromSpaceWeather(payloads.spaceWeather, now),
+    ...fromAbuseCh(payloads.abuseCh, now),
+    ...fromRipestat(payloads.ripestat, now),
+    ...fromUnhcr(payloads.unhcr, now),
+    ...fromNwss(payloads.nwss, now),
+    ...fromHpai(payloads.hpai, now),
+    ...fromUsgsWater(payloads.usgsWater, now),
+    ...fromMeteoalarm(payloads.meteoalarm, now),
+    ...fromAdvisories(payloads.advisories, now),
+    ...fromNasAirspace(payloads.nasAirspace, now),
+    ...fromCyclones(payloads.cyclones, now),
     ...fromNews(payloads.news, now),
     ...fromOsintX(payloads.osintX, now),
   ]
@@ -974,6 +1363,20 @@ export function buildSignals(payloads = {}, now = Date.now()) {
 }
 
 /* ------------------------------------------------------------- derivations */
+
+/**
+ * Coincidences worth naming. A cluster still needs three domains and five
+ * signals; these pairs only decide how loud an already-real cluster is.
+ */
+const COINCIDENCES = [
+  { domains: ['network', 'infrastructure', 'censorship'], label: 'information control or infrastructure failure', bonus: 8 },
+  { domains: ['hydro', 'hazards', 'infrastructure'], label: 'cascading weather infrastructure event', bonus: 8 },
+  { domains: ['cyberinfra', 'cyber'], label: 'exploitation campaign in progress', bonus: 6 },
+  { domains: ['airspace', 'conflict'], label: 'airspace restriction with active conflict', bonus: 6 },
+  { domains: ['health', 'outbreak'], label: 'compounding public-health stress', bonus: 6 },
+  { domains: ['advisory', 'conflict'], label: 'official travel risk with active conflict', bonus: 5 },
+  { domains: ['displacement', 'conflict'], label: 'conflict-driven displacement', bonus: 4 },
+]
 
 export function computeConvergence(signals, { windowHours = 6, minDomains = 3, now = Date.now() } = {}) {
   const since = now - windowHours * HOUR
@@ -994,14 +1397,17 @@ export function computeConvergence(signals, { windowHours = 6, minDomains = 3, n
     if (domains.length < minDomains || list.length < 5) continue
     const meanMagnitude = list.reduce((sum, signal) => sum + signal.magnitude, 0) / list.length
     const volume = Math.min(1, Math.log1p(list.length) / Math.log(40))
-    const score = Math.round(100 * clamp01((domains.length / 6) * 0.45 + meanMagnitude * 0.3 + volume * 0.25))
+    const base = Math.round(100 * clamp01((domains.length / 6) * 0.45 + meanMagnitude * 0.3 + volume * 0.25))
+    const pairs = COINCIDENCES.filter((entry) => entry.domains.every((id) => domains.includes(id)))
+    const score = Math.min(99, base + pairs.reduce((sum, entry) => sum + entry.bonus, 0))
     clusters.push({
       region,
       score,
       domains,
       count: list.length,
       signals: list.slice().sort((a, b) => b.magnitude - a.magnitude).slice(0, 4),
-      why: `${domains.length} domains active in ${REGIONS[region]?.label || region} within ${windowHours} h (${list.length} signals).`,
+      pairs: pairs.map((entry) => entry.label),
+      why: `${domains.length} domains active in ${REGIONS[region]?.label || region} within ${windowHours} h (${list.length} signals)${pairs.length ? ` · ${pairs.map((entry) => entry.label).join('; ')}` : ''}.`,
     })
   }
   return clusters.sort((a, b) => b.score - a.score)
@@ -1017,11 +1423,21 @@ export function computePosture({ signals = [], convergence = [], threat = null, 
   const activity = severity * volume
 
   const threatValue = clamp01((numberOr(threat?.average_score) ?? numberOr(threat?.threat_score) ?? 0) / 5)
-  const level = numberOr(defcon?.level)
-  const tension = level != null && level >= 1 && level <= 5 ? (6 - level) / 5 : 0
+  const defconLevel = numberOr(defcon?.level)
+  const tension = defconLevel != null && defconLevel >= 1 && defconLevel <= 5 ? (6 - defconLevel) / 5 : 0
   const convNorm = convergence.length ? clamp01(convergence[0].score / 100) : 0
 
-  const score = Math.round(100 * clamp(activity * 0.42 + threatValue * 0.25 + tension * 0.15 + convNorm * 0.18, 0.02, 0.99))
+  // Official travel advice is a floor: a country at Do Not Travel must not read
+  // calm just because the desk has little else from there.
+  const advisory = recent.filter((signal) => signal.domain === 'advisory')
+  const advisoryLevel = advisory.reduce((max, signal) => Math.max(max, Number(signal.meta?.level) || 0), 0)
+  const advisoryAgreement = advisory.reduce((max, signal) => Math.max(max, Number(signal.meta?.agreement) || 1), 1)
+  const advisoryFloor = advisory.length && advisoryLevel >= 3
+    ? Math.min(99, (advisoryLevel >= 4 ? 55 : 44) + (advisoryAgreement >= 2 ? 5 : 0))
+    : 0
+
+  const blended = Math.round(100 * clamp(activity * 0.42 + threatValue * 0.25 + tension * 0.15 + convNorm * 0.18, 0.02, 0.99))
+  const score = Math.max(advisoryFloor, blended)
   const band = score >= 82 ? 'CRITICAL' : score >= 66 ? 'HIGH' : score >= 48 ? 'ELEVATED' : score >= 28 ? 'GUARDED' : 'CALM'
   const color = score >= 82 ? '#ff3b5c' : score >= 66 ? '#ff4fd8' : score >= 48 ? '#ffb020' : score >= 28 ? '#22d3ee' : '#57e389'
   return {
@@ -1036,8 +1452,11 @@ export function computePosture({ signals = [], convergence = [], threat = null, 
       threat: threatValue,
       threatLevel: threat?.threat_level || null,
       tension,
-      defcon: level,
+      defcon: defconLevel,
       convergence: convNorm,
+      advisoryFloor,
+      advisoryLevel,
+      advisoryAgreement,
     },
   }
 }
@@ -1077,6 +1496,8 @@ const HAZARD_FEEDS = {
   'nws-wwa': 'NWS',
   nhc: 'NHC',
   gdacs: 'GDACS',
+  meteoalarm: 'MeteoAlarm',
+  jtwc: 'JTWC',
 }
 
 /** One label per feed, so "emsc" and "EMSC" never split a bar in two. */
@@ -1138,15 +1559,34 @@ export function computeCharts(payloads = {}, signals = []) {
     hazardKinds.set(kind, (hazardKinds.get(kind) || 0) + 1)
   }
   if (hazardKinds.size) {
-    const chart = barChart('hazards', 'Hazards by feed', 'USGS · EMSC · NWS · volcanoes',
+    const chart = barChart('hazards', 'Hazards by feed', 'USGS · EMSC · NWS · MeteoAlarm · JTWC',
       [...hazardKinds.entries()].sort((a, b) => b[1] - a[1]), '#f97316')
     if (chart) charts.push(chart)
   }
 
-  const CHART_ORDER = ['hazards', 'losses', 'kev', 'ransomware', 'censorship']
+  const abuse = Array.isArray(payloads.abuseCh?.items) ? payloads.abuseCh.items : []
+  if (abuse.length) {
+    const byFeed = new Map()
+    for (const row of abuse) {
+      const feed = String(row.feed || 'abuse.ch')
+      byFeed.set(feed, (byFeed.get(feed) || 0) + (Number(row.count) || 0))
+    }
+    const chart = barChart('abuse-ch', 'Malicious infrastructure by feed', 'abuse.ch · published snapshot',
+      [...byFeed.entries()].sort((a, b) => b[1] - a[1]), '#e879f9')
+    if (chart) charts.push(chart)
+  }
+
+  const advisoryCounts = payloads.advisories?.counts
+  if (advisoryCounts && Object.keys(advisoryCounts).length) {
+    const chart = barChart('advisories', 'Travel advisory levels by country', 'US State Dept · published snapshot',
+      ['4', '3', '2', '1'].map((level) => [`Level ${level}`, advisoryCounts[level] || 0]), '#fb7185')
+    if (chart) charts.push(chart)
+  }
+
+  const CHART_ORDER = ['hazards', 'abuse-ch', 'advisories', 'losses', 'kev', 'ransomware', 'censorship']
   return charts
     .sort((a, b) => CHART_ORDER.indexOf(a.id) - CHART_ORDER.indexOf(b.id))
-    .slice(0, 5)
+    .slice(0, 7)
 }
 
 /* ------------------------------------------------------------------ display */

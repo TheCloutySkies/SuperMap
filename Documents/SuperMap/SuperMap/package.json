@@ -9,6 +9,7 @@
     "dev:all": "concurrently -n app,api -c blue,green \"vite\" \"cd ../situational-awareness-api && node server.js\"",
     "build": "vite build",
     "lint": "eslint .",
+    "test:console": "node scripts/test-console-signals.mjs",
     "preview": "vite preview",
     "prebuild": "node ../scripts/build-home-seed.mjs"
   },

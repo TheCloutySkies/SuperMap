@@ -53,13 +53,20 @@ function readJson(key, fallback) {
 export function loadConsolePrefs() {
   const stored = readJson(CONSOLE_PREFS_KEY, {})
   const merged = { ...DEFAULT_CONSOLE_PREFS, ...stored }
-  const domains = Array.isArray(merged.domains)
+  // New domains added after a user saved their filters must arrive switched on,
+  // without resurrecting domains they deliberately turned off.
+  const storedKeys = Array.isArray(merged.domainKeys) ? merged.domainKeys : []
+  const newKeys = DOMAIN_ORDER.filter((id) => !storedKeys.includes(id))
+  const chosen = Array.isArray(merged.domains)
     ? merged.domains.filter((id) => DOMAIN_ORDER.includes(id))
     : [...DOMAIN_ORDER]
+  const domains = DOMAIN_ORDER.filter((id) => chosen.includes(id) || newKeys.includes(id))
+  const watch = Array.isArray(merged.watch) ? merged.watch.filter((id) => typeof id === 'string') : []
   return {
     ...merged,
     domains: domains.length ? domains : [...DOMAIN_ORDER],
-    watch: Array.isArray(merged.watch) ? merged.watch.filter((id) => typeof id === 'string') : [],
+    domainKeys: [...DOMAIN_ORDER],
+    watch,
     windowHours: CONSOLE_WINDOWS.some((w) => w.id === Number(merged.windowHours))
       ? Number(merged.windowHours)
       : DEFAULT_CONSOLE_PREFS.windowHours,
@@ -78,7 +85,14 @@ export function saveConsolePrefs(prefs) {
 export function loadSavedViews() {
   const stored = readJson(CONSOLE_VIEWS_KEY, [])
   if (!Array.isArray(stored)) return []
-  return stored.filter((view) => view && typeof view.name === 'string').slice(0, 12)
+  return stored
+    .filter((view) => view && typeof view.name === 'string')
+    .map((view) => {
+      const domains = Array.isArray(view.domains) ? view.domains.filter((id) => DOMAIN_ORDER.includes(id)) : []
+      // A view saved before a domain existed keeps what it had; an empty set means all.
+      return { ...view, domains: domains.length ? domains : [...DOMAIN_ORDER] }
+    })
+    .slice(0, 12)
 }
 
 export function saveSavedViews(views) {

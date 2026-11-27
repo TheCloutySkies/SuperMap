@@ -799,6 +799,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
+  max-height: 92px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
 }
 
 .console-map-layers .console-chip {

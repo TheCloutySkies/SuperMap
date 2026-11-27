@@ -3,9 +3,11 @@
 #
 #   bash ~/CloutyKey/SuperMap/Documents/SuperMap/scripts/deploy-firebase.sh
 #
-# The CLI has to run inside the folder that holds firebase.json and .firebaserc;
-# from anywhere else `firebase use` says "must be run from a Firebase project
-# directory" and a deploy cannot find the rules.
+# Three things trip the CLI up, so this script handles all of them:
+#   - it has to run inside the folder holding firebase.json and .firebaserc;
+#   - the project name is read with sed, because that folder is an ES module
+#     package and `require('./.firebaserc')` tries to load it as JavaScript;
+#   - the deploy targets are one argument, with no spaces after the commas.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,20 +19,26 @@ if [ ! -f firebase.json ] || [ ! -f .firebaserc ]; then
   exit 1
 fi
 
-PROJECT="$(node -e "process.stdout.write(require('./.firebaserc').projects.default)")"
-echo "Folder:  $PROJECT_DIR"
-echo "Project: $PROJECT"
+PROJECT="$(sed -n 's/.*"default"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' .firebaserc | head -1)"
+if [ -z "$PROJECT" ]; then
+  echo "Could not read the project name from .firebaserc" >&2
+  exit 1
+fi
 
-# A global CLI when one is installed, otherwise the pinned latest through npx.
 if command -v firebase >/dev/null 2>&1; then
   FB=(firebase)
 else
   FB=(npx --yes firebase-tools@latest)
 fi
 
-"${FB[@]}" use "$PROJECT"
-# One --only argument: rules, indexes and Storage, and nothing else.
-"${FB[@]}" deploy --only firestore:rules,firestore:indexes,storage --project "$PROJECT"
+echo "Folder:  $PROJECT_DIR"
+echo "Project: $PROJECT"
+echo "Targets: --only firestore:rules,firestore:indexes,storage"
+echo
+
+set -x
+"${FB[@]}" deploy --only firestore:rules,firestore:indexes,storage --project "$PROJECT" --non-interactive
+set +x
 
 echo
 echo "Done. Check Firestore -> Indexes until the 'cases' index reads Enabled,"

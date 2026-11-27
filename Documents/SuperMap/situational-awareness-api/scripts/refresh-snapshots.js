@@ -2,16 +2,20 @@
 /**
  * Snapshot collector — the site's single data scheduler.
  *
- * Runs once every 4 hours on GitHub Actions: boots the API with every scheduler
- * switched off, restores the previous snapshot so gates and last-good are real,
- * refreshes each source in dependency order, and writes versioned files plus a
- * manifest into ./snapshot-out/staging. The workflow then force-pushes that tree
- * to the orphan `data` branch, so a data update never needs an app deploy and the
- * upstream request volume stays a fixed per-day budget.
+ * Runs on GitHub Actions every hour on the hour: boots the API with every
+ * scheduler switched off, restores the previous snapshot so gates and last-good
+ * are real, refreshes each source in dependency order, and writes versioned files
+ * plus a manifest into ./snapshot-out/staging. The workflow then force-pushes that
+ * tree to the orphan `data` branch, so a data update never needs an app deploy and
+ * the upstream request volume stays a fixed per-day budget.
  *
  *   node scripts/refresh-snapshots.js            # a full run
  *   node scripts/refresh-snapshots.js --dry-run  # write ./snapshot-out/dry-run, no publish
  *   node scripts/refresh-snapshots.js --only=home,news
+ *   node scripts/refresh-snapshots.js --if-stale-minutes=90
+ *                                               # exit 0 without touching a
+ *                                               # source when the published
+ *                                               # snapshot is younger than that
  */
 const fs = require('fs')
 const path = require('path')
@@ -25,6 +29,8 @@ const args = process.argv.slice(2)
 const DRY_RUN = args.includes('--dry-run')
 const onlyArg = args.find((a) => a.startsWith('--only='))
 const ONLY = onlyArg ? onlyArg.slice('--only='.length).split(',').map((s) => s.trim()).filter(Boolean) : null
+const staleArg = args.find((a) => a.startsWith('--if-stale-minutes='))
+const IF_STALE_MINUTES = staleArg ? Number(staleArg.slice('--if-stale-minutes='.length)) : 0
 
 const OUT_ROOT = path.resolve(API_ROOT, process.env.SNAPSHOT_OUT_DIR || 'snapshot-out')
 const OUT_DIR = path.join(OUT_ROOT, DRY_RUN ? 'dry-run' : 'staging')
@@ -159,6 +165,43 @@ function gateFor(name) {
   return Number.isFinite(GATE_HOURS[name]) ? GATE_HOURS[name] : 4
 }
 
+const DEFAULT_MANIFEST_URL = 'https://raw.githubusercontent.com/TheCloutySkies/SuperMap/data/manifest.json'
+
+/**
+ * Age in minutes of the snapshot visitors are actually being served, or null when
+ * it cannot be read. The CDN in front of raw.githubusercontent caches for a few
+ * minutes, so the query string is there to make sure the answer is the newest one.
+ */
+async function publishedAgeMinutes() {
+  const base = String(process.env.SNAPSHOT_MANIFEST_URL || DEFAULT_MANIFEST_URL).trim()
+  const url = `${base}${base.includes('?') ? '&' : '?'}t=${Date.now()}`
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 15000)
+  try {
+    const res = await fetch(url, {
+      signal: ctrl.signal,
+      headers: {
+        'User-Agent': 'SuperMap/1.0 (+https://github.com/TheCloutySkies/SuperMap)',
+        'Cache-Control': 'no-cache',
+        Accept: 'application/json',
+      },
+    })
+    if (!res.ok) {
+      console.log('[collector] published manifest: HTTP', res.status)
+      return null
+    }
+    const body = await res.json()
+    const at = Date.parse(body && body.generatedAt)
+    if (!Number.isFinite(at)) return null
+    return (Date.now() - at) / 60000
+  } catch (err) {
+    console.log('[collector] published manifest unreadable:', err.message)
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 /** Restore the published snapshot first, so gates and last-good are real. */
 async function restorePrevious() {
   const snapshotSeed = require('../services/snapshotSeed')
@@ -249,6 +292,25 @@ function prune(files, keepPerSource = 2) {
 
 async function main() {
   const startedAt = Date.now()
+
+  // 0) A scheduled tick can be redundant. The published manifest is the truth
+  // about what visitors already have, so leave every source alone while it is
+  // fresh; GitHub's own schedule can fire twice in a row after a delayed run.
+  if (IF_STALE_MINUTES > 0 && !ONLY && !DRY_RUN) {
+    const age = await publishedAgeMinutes()
+    if (age != null && age < IF_STALE_MINUTES) {
+      console.log(
+        `[collector] published snapshot is ${Math.round(age)} min old (< ${IF_STALE_MINUTES} min) — nothing to collect`,
+      )
+      process.exit(0)
+    }
+    console.log(
+      age == null
+        ? '[collector] published snapshot unreadable — collecting'
+        : `[collector] published snapshot is ${Math.round(age)} min old — collecting`,
+    )
+  }
+
   fs.mkdirSync(OUT_DIR, { recursive: true })
 
   // 1) Previous snapshot first: gates and never-shrink need real last-good.

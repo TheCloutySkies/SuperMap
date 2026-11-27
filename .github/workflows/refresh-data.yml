@@ -11,9 +11,12 @@ name: Refresh data snapshots
 
 on:
   schedule:
-    # Every 2 hours, at :23 UTC. Most sources are gated to 4h/24h/7d, so an
-    # extra run costs almost nothing while X, headlines and stocks stay fresh.
-    - cron: '23 */2 * * *'
+    # Every hour on the hour (UTC). The collector gates the real work: it exits
+    # without touching a source when the published snapshot is younger than 90
+    # minutes, so data is still refreshed every two hours at the top of the hour.
+    # GitHub's `schedule` is best-effort and can delay or drop a tick, and the
+    # extra hourly tick is what makes a dropped run heal on the next hour.
+    - cron: '0 * * * *'
   workflow_dispatch:
     inputs:
       only:
@@ -59,6 +62,10 @@ jobs:
           set -o pipefail
           if [ -n "${{ inputs.only }}" ]; then
             node scripts/refresh-snapshots.js --only="${{ inputs.only }}"
+          elif [ "${{ github.event_name }}" = "schedule" ]; then
+            # Do nothing while the published snapshot is still younger than 90
+            # minutes; a manual dispatch always collects.
+            node scripts/refresh-snapshots.js --if-stale-minutes=90
           else
             node scripts/refresh-snapshots.js
           fi
@@ -69,8 +76,10 @@ jobs:
           set -e
           OUT="Documents/SuperMap/situational-awareness-api/snapshot-out/staging"
           if [ ! -f "$OUT/manifest.json" ]; then
-            echo "::error::collector produced no manifest"
-            exit 1
+            # A scheduled tick that the collector gated out writes nothing, and a
+            # crash would already have failed the step above (non-zero exit).
+            echo "::notice::nothing to publish: the published snapshot is still fresh"
+            exit 0
           fi
           VERSION=$(node -p "require('./$OUT/manifest.json').version")
           # Stage the published tree outside the checkout before clearing it.

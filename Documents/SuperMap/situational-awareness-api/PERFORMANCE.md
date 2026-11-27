@@ -92,12 +92,19 @@ The old client gave up after 12s and never retried, so the desks stayed blank.
 
 ## Shared snapshots (one collector, one data branch)
 
-GitHub Actions now owns freshness; Render serves it. One 4-hourly run
-(`scripts/refresh-snapshots.js`) restores the previous snapshot, refreshes every
-display source through the local API, and publishes versioned files plus a
-manifest to the orphan `data` branch. `refresh-data.yml` is the only scheduler;
-`api-keepalive.yml` is untouched.
+GitHub Actions now owns freshness; Render serves it. One collector run every two
+hours at the top of the hour (`scripts/refresh-snapshots.js`) restores the previous
+snapshot, refreshes every display source through the local API, and publishes
+versioned files plus a manifest to the orphan `data` branch. `refresh-data.yml` is
+the only scheduler; `api-keepalive.yml` is untouched.
 
+- The workflow is scheduled hourly (`0 * * * *`) and passes
+  `--if-stale-minutes=90`, so the collector exits 0 without touching a source
+  while the published manifest is younger than that. GitHub's `schedule` is
+  best-effort and can delay or drop a tick; the extra hourly tick is what makes a
+  dropped run heal on the next hour instead of waiting for a manual dispatch.
+  A manual dispatch always collects, and a gated tick leaves no manifest behind,
+  so its publish step reports "nothing to publish" and exits 0.
 - `singleFlight` + `snapshotHttp` concurrency (4 global / 1 per host, 30s timeout,
   2 retries with full jitter, `Retry-After`) keep the per-day budget fixed.
 - Gates skip a source whose last success is younger than its window, and a failed

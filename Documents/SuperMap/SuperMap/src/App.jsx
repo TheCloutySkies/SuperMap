@@ -29,6 +29,7 @@ import WeatherView from './components/WeatherView'
 import StrategicView from './components/StrategicView'
 import BatmanView from './features/batman/BatmanView'
 import CasePickerHost from './features/batman/CasePicker'
+import SharedCaseView from './features/batman/SharedCaseView'
 import MapView from './components/MapView'
 import CommunityMapView from './components/CommunityMapView'
 import ForensicsView from './components/ForensicsView'
@@ -100,13 +101,18 @@ function App() {
   const navigate = useNavigate()
   const location = useLocation()
   const route = useMemo(() => viewFromPath(location.pathname), [location.pathname])
+  // A read-only case link is its own page: it needs no account and no mode rail.
+  const sharedCaseId = useMemo(() => {
+    const match = /^\/batman\/shared\/([A-Za-z0-9_-]{4,})$/.exec(location.pathname || '')
+    return match ? match[1] : null
+  }, [location.pathname])
   const activeView = route.viewId
   const appMode = modeFromView(activeView)
   const footerMode = appMode
 
   useEffect(() => {
-    if (route.unknown) navigate('/', { replace: true })
-  }, [route.unknown, navigate])
+    if (route.unknown && !sharedCaseId) navigate('/', { replace: true })
+  }, [route.unknown, sharedCaseId, navigate])
 
   const [configured, setConfigured] = useState(() => hasConfigured())
   const [subnavOpen, setSubnavOpen] = useState(true)
@@ -732,6 +738,11 @@ function App() {
     <div className={appClass}>
       <AmbientBackground />
       <CasePickerHost />
+      {sharedCaseId ? (
+        <div className="batman-shared-shell">
+          <SharedCaseView caseId={sharedCaseId} />
+        </div>
+      ) : null}
       <AmbientBgLight />
       {!isMobileLayout && (
       <header className="app-omnibar-strip">

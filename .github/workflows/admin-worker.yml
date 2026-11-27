@@ -1,0 +1,35 @@
+# Run the admin actions a browser is not allowed to run: delete or disable a
+# sign-in, grant the admin claim. The queue is `admin_actions`; every action is
+# audited. No Cloud Functions, no paid plan.
+name: Admin worker
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: admin-worker
+  cancel-in-progress: false
+
+jobs:
+  work:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install the Admin SDK
+        working-directory: Documents/SuperMap/situational-awareness-api
+        run: npm install firebase-admin --no-save --no-audit --no-fund
+      - name: Run pending admin actions
+        working-directory: Documents/SuperMap/situational-awareness-api
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+        run: node scripts/admin-worker.mjs

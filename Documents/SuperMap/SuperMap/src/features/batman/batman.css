@@ -118,3 +118,47 @@
   .batman-board-wrap { grid-template-columns: 1fr; }
   .batman-inspector { max-height: none; }
 }
+
+/* React Flow board, vis-timeline, analysis and the desk answer. */
+.batman-canvas { display: flex; flex-direction: column; gap: 8px; min-height: 540px; }
+.batman-canvas-tools { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.batman-canvas .react-flow {
+  height: 520px; border: 1px solid var(--bm-line); border-radius: 12px; background: #060b13;
+}
+.batman-rf-card {
+  width: 190px; padding: 8px 10px; border: 1px solid var(--bm-line); border-radius: 10px;
+  background: rgba(11, 18, 32, .96); color: var(--bm-ink); box-shadow: 0 10px 24px rgba(0, 0, 0, .45);
+}
+.batman-rf-card.is-selected { border-color: var(--bm-good); box-shadow: 0 0 0 1px var(--bm-good); }
+.batman-rf-card header { display: flex; gap: 6px; align-items: baseline; font-size: 13px; }
+.batman-rf-card header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.batman-rf-card p { margin: 4px 0 0; font-size: 11px; color: var(--bm-dim); }
+.batman-rf-note { color: var(--bm-ink) !important; opacity: .85; }
+.batman-rf-handle { width: 9px; height: 9px; background: var(--bm-good); border: 1px solid #060b13; }
+.batman-timeline-holder { min-height: 420px; border: 1px solid var(--bm-line); border-radius: 12px; background: #060b13; }
+.batman-timeline-holder .vis-timeline { border: 0; }
+.batman-timeline-holder .vis-item { background: rgba(87, 227, 137, .12); border-color: var(--bm-good); color: var(--bm-ink); }
+.batman-timeline-holder .vis-labelset .vis-label { color: var(--bm-dim); }
+.batman-timeline-holder .vis-time-axis .vis-text { color: var(--bm-dim); }
+.batman-analysis { display: flex; flex-direction: column; gap: 8px; }
+.batman-analysis ol, .batman-analysis ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.batman-analysis li {
+  display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap;
+  background: var(--bm-panel); border: 1px solid var(--bm-line); border-radius: 10px; padding: 8px 10px;
+}
+.batman-analysis li button { background: none; border: 0; color: var(--bm-ink); font: inherit; cursor: pointer; text-align: left; }
+.batman-analysis em, .batman-analysis li span { color: var(--bm-dim); font-size: 11px; }
+.batman-path { color: var(--bm-good); font-size: 12px; }
+.batman-ai { display: flex; flex-direction: column; gap: 10px; }
+.batman-ai .batman-row input { flex: 1 1 260px; }
+.batman-ai-answer { background: var(--bm-panel); border: 1px solid var(--bm-line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.batman-ai-answer h3 { color: var(--bm-good); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+.batman-ai-answer ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.batman-ai-answer em { display: block; color: var(--bm-dim); font-size: 11px; }
+.batman-ai-notes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.batman-ai-notes li { background: var(--bm-panel); border: 1px solid var(--bm-line); border-radius: 10px; padding: 8px 10px; font-size: 12px; }
+.batman-ai-notes em { color: var(--bm-dim); font-size: 11px; margin-left: 6px; }
+.batman-shared-shell {
+  position: fixed; inset: 0; z-index: 9995; overflow: auto;
+  background: #070b12;
+}

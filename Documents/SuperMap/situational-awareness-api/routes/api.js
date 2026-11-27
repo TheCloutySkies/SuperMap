@@ -44,6 +44,8 @@ router.use('/strategic', require('./strategic'))
 // Ten keyless console feeds (malicious infrastructure, routing, displacement, wastewater, H5N1,
 // river gauges, MeteoAlarm, advisories, airspace, cyclones). Same cache-first contract.
 router.use('/console', require('./consoleSources'))
+// Batman: read a case's own nodes and answer a question about them (no writes).
+router.use('/batman', require('./batman'))
 
 /**
  * Display routes serve the seeded snapshot. A visitor may not trigger an upstream

@@ -1,0 +1,45 @@
+# Passive enrichment for a Batman case.
+#
+# The panel writes a target into `scan_requests`; this worker runs SpiderFoot's
+# passive modules only and writes the result to `enrichment/{id}`, which the
+# rules keep private to the owner. Targets and results never enter the repo.
+name: SpiderFoot passive scan
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spiderfoot-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install SpiderFoot
+        run: |
+          git clone --depth 1 https://github.com/smicallef/spiderfoot.git ../spiderfoot
+          python3 -m pip install --quiet -r ../spiderfoot/requirements.txt
+      - name: Install the Admin SDK
+        working-directory: Documents/SuperMap/situational-awareness-api
+        run: npm install firebase-admin --no-save --no-audit --no-fund
+      - name: Run the queued passive scans
+        working-directory: Documents/SuperMap/situational-awareness-api
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          SPIDERFOOT_DIR: ${{ github.workspace }}/../spiderfoot/sf.py
+        run: node scripts/spiderfoot-scan.mjs

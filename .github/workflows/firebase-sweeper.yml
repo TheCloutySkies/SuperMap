@@ -1,0 +1,38 @@
+# Delete what has expired: disappearing photos and secure drops.
+#
+# Nothing is open at 4am, so this is the guarantee that a photo or a drop is
+# gone even when no client is. Kickless on purpose: the Admin SDK needs the
+# service-account secret, and nothing else.
+name: Firebase sweeper
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-sweeper
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install the Admin SDK
+        working-directory: Documents/SuperMap/situational-awareness-api
+        run: npm install firebase-admin --no-save --no-audit --no-fund
+      - name: Sweep expired media and drops
+        working-directory: Documents/SuperMap/situational-awareness-api
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_STORAGE_BUCKET: ${{ secrets.FIREBASE_STORAGE_BUCKET }}
+        run: node scripts/firebase-sweeper.mjs

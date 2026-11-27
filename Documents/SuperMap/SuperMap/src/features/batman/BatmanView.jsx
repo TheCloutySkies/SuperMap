@@ -1,12 +1,11 @@
 /**
  * Batman — the case workspace.
  *
- * v1 shipped without the canvas libraries: cards are positioned with plain CSS and
- * dragged with pointer events, so the board runs on the dependencies the app
- * already has. React Flow and vis-timeline replace the board and the list when
- * those packages are installed; the case document is the same either way.
+ * One case document opened three ways: a React Flow board, a vis-timeline and a
+ * report, with graph analysis and a desk answer on top. Everything writes back
+ * into the case, so the views never drift apart.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSuperMapAccount } from '../accounts/SuperMapAccounts'
 import {
   CASE_LIMITS,
@@ -25,25 +24,30 @@ import {
   fetchCase,
   persistCase,
   removeCase,
+  requestAddToCase,
   scheduleSave,
   setVisibility,
   shareUrl,
   subscribeCases,
 } from './caseStore'
-import { requestAddToCase } from './caseStore'
+import CanvasBoard from './CanvasBoard'
+import TimelineBoard from './TimelineBoard'
+import AnalysisPanel from './AnalysisPanel'
+import AiPanel from './AiPanel'
 import './batman.css'
 
 const TABS = [
   { id: 'board', label: 'Board' },
   { id: 'timeline', label: 'Timeline' },
+  { id: 'analysis', label: 'Analysis' },
   { id: 'evidence', label: 'Evidence' },
   { id: 'report', label: 'Report' },
+  { id: 'ai', label: 'AI' },
 ]
 
 function download(filename, text, mime = 'text/plain') {
   try {
-    const blob = new Blob([text], { type: mime })
-    const url = URL.createObjectURL(blob)
+    const url = URL.createObjectURL(new Blob([text], { type: mime }))
     const anchor = document.createElement('a')
     anchor.href = url
     anchor.download = filename
@@ -68,11 +72,8 @@ export default function BatmanView() {
   const [caseDoc, setCaseDoc] = useState(null)
   const [tab, setTab] = useState('board')
   const [selectedId, setSelectedId] = useState(null)
-  const [linkFrom, setLinkFrom] = useState(null)
   const [status, setStatus] = useState('')
   const [newTitle, setNewTitle] = useState('')
-  const dragRef = useRef(null)
-  const boardRef = useRef(null)
 
   useEffect(() => subscribeCases(ownerUid, setCases), [ownerUid])
 
@@ -91,6 +92,9 @@ export default function BatmanView() {
     () => (caseDoc?.nodes || []).find((node) => node.id === selectedId) || null,
     [caseDoc, selectedId],
   )
+  const nodes = caseDoc?.nodes || []
+  const edges = caseDoc?.edges || []
+  const byId = new Map(nodes.map((node) => [node.id, node]))
 
   const patch = (updater, { debounce = false } = {}) => {
     setCaseDoc((prev) => {
@@ -106,6 +110,60 @@ export default function BatmanView() {
       }
       return next
     })
+  }
+
+  function patchNode(nodeId, changes, options) {
+    patch((prev) => ({
+      ...prev,
+      nodes: (prev.nodes || []).map((node) => (node.id === nodeId ? { ...node, ...changes } : node)),
+    }), options)
+  }
+
+  function removeNode(nodeId) {
+    patch((prev) => ({
+      ...prev,
+      nodes: (prev.nodes || []).filter((node) => node.id !== nodeId),
+      edges: (prev.edges || []).filter((edge) => edge.from !== nodeId && edge.to !== nodeId),
+    }))
+    if (selectedId === nodeId) setSelectedId(null)
+  }
+
+  function patchEdge(edgeId, changes) {
+    patch((prev) => ({
+      ...prev,
+      edges: (prev.edges || []).map((edge) => (edge.id === edgeId ? { ...edge, ...changes } : edge)),
+    }))
+  }
+
+  function removeEdge(edgeId) {
+    patch((prev) => ({ ...prev, edges: (prev.edges || []).filter((edge) => edge.id !== edgeId) }))
+  }
+
+  function addNode(kind) {
+    if (!caseDoc) return
+    if (nodes.length >= CASE_LIMITS.nodes) {
+      setStatus(`A case holds ${CASE_LIMITS.nodes} items.`)
+      return
+    }
+    const node = nodeOf({ kind, title: kindMeta(kind).label })
+    patch((prev) => ({ ...prev, nodes: [...(prev.nodes || []), node] }))
+    setSelectedId(node.id)
+    setTab('board')
+  }
+
+  function moveNode(nodeId, position, dragging) {
+    patchNode(nodeId, { x: Math.round(position.x), y: Math.round(position.y) }, { debounce: Boolean(dragging) })
+  }
+
+  function connectNodes(from, to, type) {
+    if (!caseDoc || from === to) return
+    if (edges.length >= CASE_LIMITS.edges) {
+      setStatus(`A case holds ${CASE_LIMITS.edges} links.`)
+      return
+    }
+    if (edges.some((edge) => edge.from === from && edge.to === to)) return
+    const edge = edgeOf({ from, to, type: type || 'related', confidence: 0.6 })
+    patch((prev) => ({ ...prev, edges: [...(prev.edges || []), edge] }))
   }
 
   async function onCreateCase(event) {
@@ -145,109 +203,6 @@ export default function BatmanView() {
     setStatus(visible ? 'Read-only link on. Anyone with the link can read this case.' : 'Private again.')
   }
 
-  function addNode(kind) {
-    if (!caseDoc) return
-    if ((caseDoc.nodes || []).length >= CASE_LIMITS.nodes) {
-      setStatus(`A case holds ${CASE_LIMITS.nodes} items.`)
-      return
-    }
-    const index = (caseDoc.nodes || []).length
-    const node = nodeOf({
-      kind,
-      title: kindMeta(kind).label,
-      x: 40 + (index % 6) * 210,
-      y: 40 + Math.floor(index / 6) * 130,
-    })
-    patch((prev) => ({ ...prev, nodes: [...(prev.nodes || []), node] }))
-    setSelectedId(node.id)
-    setTab('board')
-  }
-
-  function patchNode(nodeId, changes, options) {
-    patch((prev) => ({
-      ...prev,
-      nodes: (prev.nodes || []).map((node) => (node.id === nodeId ? { ...node, ...changes } : node)),
-    }), options)
-  }
-
-  function removeNode(nodeId) {
-    patch((prev) => ({
-      ...prev,
-      nodes: (prev.nodes || []).filter((node) => node.id !== nodeId),
-      edges: (prev.edges || []).filter((edge) => edge.from !== nodeId && edge.to !== nodeId),
-    }))
-    if (selectedId === nodeId) setSelectedId(null)
-    if (linkFrom === nodeId) setLinkFrom(null)
-  }
-
-  function onNodeClick(node) {
-    if (linkFrom && linkFrom !== node.id) {
-      if ((caseDoc.edges || []).length >= CASE_LIMITS.edges) {
-        setStatus(`A case holds ${CASE_LIMITS.edges} links.`)
-        setLinkFrom(null)
-        return
-      }
-      const edge = edgeOf({ from: linkFrom, to: node.id, type: 'related', confidence: 0.6 })
-      patch((prev) => ({ ...prev, edges: [...(prev.edges || []), edge] }))
-      setLinkFrom(null)
-      return
-    }
-    setSelectedId(node.id)
-  }
-
-  function patchEdge(edgeId, changes) {
-    patch((prev) => ({
-      ...prev,
-      edges: (prev.edges || []).map((edge) => (edge.id === edgeId ? { ...edge, ...changes } : edge)),
-    }))
-  }
-
-  function removeEdge(edgeId) {
-    patch((prev) => ({ ...prev, edges: (prev.edges || []).filter((edge) => edge.id !== edgeId) }))
-  }
-
-  function onCardPointerDown(event, node) {
-    if (event.button !== 0) return
-    if (event.target.closest('button')) return
-    const board = boardRef.current
-    if (!board) return
-    const rect = board.getBoundingClientRect()
-    dragRef.current = {
-      id: node.id,
-      dx: event.clientX - rect.left + board.scrollLeft - (node.x || 0),
-      dy: event.clientY - rect.top + board.scrollTop - (node.y || 0),
-    }
-    event.currentTarget.setPointerCapture?.(event.pointerId)
-  }
-
-  function onCardPointerMove(event) {
-    const drag = dragRef.current
-    const board = boardRef.current
-    if (!drag || !board) return
-    const rect = board.getBoundingClientRect()
-    const x = Math.max(0, event.clientX - rect.left + board.scrollLeft - drag.dx)
-    const y = Math.max(0, event.clientY - rect.top + board.scrollTop - drag.dy)
-    setCaseDoc((prev) => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        nodes: (prev.nodes || []).map((node) => (node.id === drag.id ? { ...node, x, y } : node)),
-      }
-    })
-  }
-
-  function onCardPointerUp() {
-    const drag = dragRef.current
-    dragRef.current = null
-    if (!drag || !caseDoc) return
-    persistCase(caseDoc).then((result) => setStatus(result.ok ? '' : (result.error || '')))
-  }
-
-  const nodes = caseDoc?.nodes || []
-  const edges = caseDoc?.edges || []
-  const timeline = nodes.filter((node) => Number.isFinite(node.t)).sort((a, b) => a.t - b.t)
-  const byId = new Map(nodes.map((node) => [node.id, node]))
-
   return (
     <div className="batman-mode">
       <header className="batman-head">
@@ -257,7 +212,7 @@ export default function BatmanView() {
         </div>
         <div className="batman-head-tools">
           <select
-            value={caseId || ''}
+            value={pickedId || ''}
             onChange={(event) => { setPickedId(event.target.value || null); setSelectedId(null) }}
             aria-label="Open a case"
           >
@@ -351,83 +306,15 @@ export default function BatmanView() {
                     <span aria-hidden>{kind.icon}</span> {kind.label}
                   </button>
                 ))}
-                <button
-                  type="button"
-                  className={`batman-palette-btn ${linkFrom ? 'is-on' : ''}`}
-                  onClick={() => setLinkFrom(linkFrom ? null : (selectedId || true))}
-                  title="Connect two items"
-                >
-                  <span aria-hidden>↔</span> {linkFrom ? 'Pick the second item' : 'Connect'}
-                </button>
               </div>
 
-              <div
-                className="batman-board"
-                ref={boardRef}
-                onPointerMove={onCardPointerMove}
-                onPointerUp={onCardPointerUp}
-                onPointerCancel={onCardPointerUp}
-              >
-                {nodes.length === 0 ? (
-                  <p className="batman-hint">Add an item from the palette, or send evidence here from any screen.</p>
-                ) : null}
-                {nodes.map((node) => {
-                  const meta = kindMeta(node.kind)
-                  const isSelected = node.id === selectedId
-                  const isSource = linkFrom && (linkFrom === true ? node.id === selectedId : linkFrom === node.id)
-                  return (
-                    <article
-                      key={node.id}
-                      className={`batman-card ${isSelected ? 'is-selected' : ''} ${isSource ? 'is-link-source' : ''}`}
-                      style={{ left: `${node.x || 0}px`, top: `${node.y || 0}px` }}
-                      onPointerDown={(event) => onCardPointerDown(event, node)}
-                      onClick={() => onNodeClick(node)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(event) => { if (event.key === 'Enter') onNodeClick(node) }}
-                    >
-                      <header>
-                        <span aria-hidden>{meta.icon}</span>
-                        <strong>{node.title}</strong>
-                      </header>
-                      <p>{node.ref?.source || meta.label}{node.t ? ` · ${stamp(node.t)}` : ''}</p>
-                      {node.note ? <p className="batman-card-note">{node.note}</p> : null}
-                      {node.ref?.url ? (
-                        <a href={node.ref.url} target="_blank" rel="noopener noreferrer">Open source</a>
-                      ) : null}
-                    </article>
-                  )
-                })}
-                <svg className="batman-wires" aria-hidden>
-                  {edges.map((edge) => {
-                    const a = byId.get(edge.from)
-                    const b = byId.get(edge.to)
-                    if (!a || !b) return null
-                    const ax = (a.x || 0) + 90
-                    const ay = (a.y || 0) + 40
-                    const bx = (b.x || 0) + 90
-                    const by = (b.y || 0) + 40
-                    return (
-                      <line
-                        key={edge.id}
-                        x1={ax}
-                        y1={ay}
-                        x2={bx}
-                        y2={by}
-                        stroke={edgeMeta(edge.type).color}
-                        strokeWidth={edge.confidence > 0.75 ? 3 : 2}
-                        strokeDasharray={edge.confidence < 0.4 ? '6 6' : undefined}
-                        markerEnd={edge.direction === 'directed' ? 'url(#batman-arrow)' : undefined}
-                      />
-                    )
-                  })}
-                  <defs>
-                    <marker id="batman-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8b9bb4" />
-                    </marker>
-                  </defs>
-                </svg>
-              </div>
+              <CanvasBoard
+                caseDoc={caseDoc}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                onMoveNode={moveNode}
+                onConnectNodes={(from, to) => connectNodes(from, to, 'related')}
+              />
 
               {selected ? (
                 <aside className="batman-inspector">
@@ -494,25 +381,40 @@ export default function BatmanView() {
                       />
                     </label>
                   </div>
+                  {selected.ref?.url ? (
+                    <a href={selected.ref.url} target="_blank" rel="noopener noreferrer">Open the source</a>
+                  ) : null}
                   <div className="batman-row">
-                    <button type="button" className="batman-btn batman-btn-ghost" onClick={() => setLinkFrom(selected.id)}>Connect from here</button>
+                    <button type="button" className="batman-btn batman-btn-ghost" onClick={() => requestAddToCase(selected)}>
+                      Copy to another case
+                    </button>
                     <button type="button" className="batman-btn batman-btn-danger" onClick={() => removeNode(selected.id)}>Remove</button>
                   </div>
                   <h4>Links</h4>
                   {edges.filter((edge) => edge.from === selected.id || edge.to === selected.id).length === 0 ? (
-                    <p className="batman-hint">No links yet. Use Connect, then click a second item.</p>
+                    <p className="batman-hint">No links yet. Drag from a card&rsquo;s dot to another card to make one.</p>
                   ) : null}
                   <ul className="batman-edges">
                     {edges.filter((edge) => edge.from === selected.id || edge.to === selected.id).map((edge) => (
                       <li key={edge.id}>
                         <span>{byId.get(edge.from)?.title || '?'} → {byId.get(edge.to)?.title || '?'}</span>
-                        <select value={edge.type} onChange={(event) => patchEdge(edge.id, { type: event.target.value })}>
+                        <select value={edge.type} onChange={(event) => patchEdge(edge.id, { type: event.target.value })} aria-label="Link type">
                           {EDGE_TYPES.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}
                         </select>
-                        <select value={edge.direction} onChange={(event) => patchEdge(edge.id, { direction: event.target.value })}>
+                        <select value={edge.direction} onChange={(event) => patchEdge(edge.id, { direction: event.target.value })} aria-label="Link direction">
                           <option value="directed">Directed</option>
                           <option value="undirected">Undirected</option>
                         </select>
+                        <input
+                          type="number"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={edge.confidence ?? 0.6}
+                          onChange={(event) => patchEdge(edge.id, { confidence: Number(event.target.value) })}
+                          aria-label="Link confidence"
+                        />
+                        <em style={{ color: edgeMeta(edge.type).color }}>{Math.round((edge.confidence || 0) * 100)}%</em>
                         <button type="button" className="batman-btn batman-btn-ghost" onClick={() => removeEdge(edge.id)}>✕</button>
                       </li>
                     ))}
@@ -523,22 +425,19 @@ export default function BatmanView() {
           ) : null}
 
           {tab === 'timeline' ? (
-            <section className="batman-timeline">
-              {timeline.length === 0 ? (
-                <p className="batman-hint">No dated items yet. Set “When” on an item and it appears here in order.</p>
-              ) : null}
-              <ol>
-                {timeline.map((node) => (
-                  <li key={node.id}>
-                    <time>{stamp(node.t)}</time>
-                    <button type="button" onClick={() => { setSelectedId(node.id); setTab('board') }}>
-                      {kindMeta(node.kind).icon} {node.title}
-                    </button>
-                    <em>{node.ref?.source || kindMeta(node.kind).label}</em>
-                  </li>
-                ))}
-              </ol>
-            </section>
+            <TimelineBoard
+              caseDoc={caseDoc}
+              onSelect={(id) => { setSelectedId(id); setTab('board') }}
+              onRetime={(id, at) => patchNode(id, { t: at })}
+            />
+          ) : null}
+
+          {tab === 'analysis' ? (
+            <AnalysisPanel
+              caseDoc={caseDoc}
+              selectedId={selectedId}
+              onSelect={(id) => { setSelectedId(id); setTab('board') }}
+            />
           ) : null}
 
           {tab === 'evidence' ? (
@@ -606,6 +505,14 @@ export default function BatmanView() {
                 </button>
               </div>
             </section>
+          ) : null}
+
+          {tab === 'ai' ? (
+            <AiPanel
+              caseDoc={caseDoc}
+              selectedId={selectedId}
+              onSaveNote={(note) => patch((prev) => ({ ...prev, aiNotes: [...(prev.aiNotes || []), note].slice(-20) }))}
+            />
           ) : null}
         </>
       )}

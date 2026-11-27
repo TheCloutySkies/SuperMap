@@ -492,6 +492,7 @@ function App() {
   if (appMode === APP_MODES.MAPS) mobilePageTitle = 'Maps'
   else if (appMode === APP_MODES.CRIME) mobilePageTitle = 'Crime'
   else if (appMode === APP_MODES.WEATHER) mobilePageTitle = 'Weather'
+  else if (appMode === APP_MODES.STRATEGIC) mobilePageTitle = 'Strategic'
   else if (appMode === APP_MODES.FEEDS) {
     mobilePageTitle = 'News'
     mobileChipItems = FEED_VIEWS

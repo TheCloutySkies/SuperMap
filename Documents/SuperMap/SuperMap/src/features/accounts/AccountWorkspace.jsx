@@ -13,10 +13,15 @@ import {
   vaultUnlocked,
 } from './vaultLock'
 import {
+  clearTyping,
   conversationId,
   DISAPPEAR_CHOICES,
   disappearLabel,
   markConversationRead,
+  recountUnread,
+  setTyping,
+  subscribeTyping,
+  TYPING_LIVE_MS,
   openDirectConversation,
   searchDiscoverableUsers,
   sendDirectMessage,
@@ -31,6 +36,44 @@ import {
   markReportReviewed,
 } from './socialData'
 import ModerationPanel from './ModerationPanel'
+import { mediaReady } from './firebaseClient'
+import { MAX_MEDIA_BYTES } from './chatMedia'
+
+/** A ticking clock for live countdowns; pauses while the tab is hidden. */
+function useNow(intervalMs = 1000) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    let timer = null
+    const start = () => {
+      if (timer) return
+      setNow(Date.now())
+      timer = setInterval(() => setNow(Date.now()), intervalMs)
+    }
+    const stop = () => {
+      if (!timer) return
+      clearInterval(timer)
+      timer = null
+    }
+    const onVisibility = () => (document.hidden ? stop() : start())
+    start()
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      stop()
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [intervalMs])
+  return now
+}
+
+/** "0:28" under a minute, "1:04" under an hour, "2d 3h" above it. */
+function countdownText(msLeft) {
+  const left = Math.max(0, Number(msLeft) || 0)
+  const seconds = Math.ceil(left / 1000)
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+  const hours = Math.floor(seconds / 3600)
+  if (hours < 24) return `${Math.floor(hours)}h ${String(Math.floor((seconds % 3600) / 60)).padStart(2, '0')}m`
+  return `${Math.floor(hours / 24)}d ${hours % 24}h`
+}
 
 function presenceValue(value) {
   return value === 'online' || value === 'incognito' ? value : 'offline'
@@ -517,7 +560,11 @@ function MessagesPanel() {
   const [menuId, setMenuId] = useState(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [burst, setBurst] = useState('')
-  const [, setClock] = useState(0)
+  const [photo, setPhoto] = useState(null)
+  const [typingUids, setTypingUids] = useState([])
+  const [photoError, setPhotoError] = useState('')
+  const photoRef = useRef(null)
+  const now = useNow(1000)
   const logRef = useRef(null)
   const composerRef = useRef(null)
 
@@ -576,10 +623,26 @@ function MessagesPanel() {
   }, [messages, activeId])
 
   useEffect(() => {
-    if (!messages.some((message) => message.expiresAtMs)) return undefined
-    const timer = setInterval(() => setClock(Date.now()), 1000)
-    return () => clearInterval(timer)
-  }, [messages])
+    if (!activeId || !user?.uid) return undefined
+    return subscribeTyping(activeId, (rows) => {
+      setTypingUids(rows.filter((row) => row.uid !== user.uid))
+    })
+  }, [activeId, user?.uid])
+
+  // A typing row hides itself six seconds after the last keystroke.
+  useEffect(() => {
+    if (!typingUids.length) return undefined
+    const timer = setTimeout(() => setTypingUids([]), TYPING_LIVE_MS + 500)
+    return () => clearTimeout(timer)
+  }, [typingUids])
+
+  // Reading a thread while it is open keeps its badge at zero, and an expiry
+  // after that leaves it at zero because the count is recomputed, not stored.
+  useEffect(() => {
+    if (!activeId || !user?.uid) return
+    markConversationRead(activeId, user.uid).catch(() => {})
+    recountUnread(activeId).catch(() => {})
+  }, [activeId, user?.uid, messages.length])
 
   const active = conversations.find((row) => row.id === activeId) || null
   const partnerId = active?.memberUids?.find((id) => id !== user?.uid) || activePerson?.uid || null
@@ -674,15 +737,57 @@ function MessagesPanel() {
     event.preventDefault()
     if (!other) return
     const expiresInMs = Number(burst) || Number(active?.disappearMs) || 0
-    const result = await sendDirectMessage({ from: user, to: other, body: text, expiresInMs })
+    await clearTyping(activeId, user.uid).catch(() => {})
+    const result = await sendDirectMessage({ from: user, to: other, body: text, photo, expiresInMs })
     if (result.ok) {
       setText('')
+      setPhoto(null)
+      setPhotoError('')
       setSendError('')
       setPickedId(result.id)
+      if (photoRef.current) photoRef.current.value = ''
     } else {
       setSendError(result.error || 'Could not send')
     }
   }
+
+  function pickPhoto(event) {
+    const file = event.target.files?.[0] || null
+    setPhotoError('')
+    if (!file) {
+      setPhoto(null)
+      return
+    }
+    if (!/^image\//i.test(file.type || '')) {
+      setPhotoError('Photos only.')
+      setPhoto(null)
+      event.target.value = ''
+      return
+    }
+    if (file.size > MAX_MEDIA_BYTES) {
+      setPhotoError(`Keep the photo under ${Math.round(MAX_MEDIA_BYTES / 1048576)} MB.`)
+      setPhoto(null)
+      event.target.value = ''
+      return
+    }
+    setPhoto(file)
+  }
+
+  function onComposerChange(event) {
+    setText(event.target.value)
+    if (event.target.value.trim()) setTyping(activeId, user.uid).catch(() => {})
+  }
+
+  function onComposerBlur() {
+    clearTyping(activeId, user.uid).catch(() => {})
+  }
+
+  const typingNames = typingUids.length
+    ? typingUids.map((row) => {
+      const person = active?.members?.[row.uid] || {}
+      return person.displayName || 'Someone'
+    })
+    : []
 
   function onComposerKey(event) {
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -773,29 +878,68 @@ function MessagesPanel() {
               {liveMessages.length === 0 ? (
                 <p className="sm-msg-empty">This is the start of your conversation with {personTitle(other)}.</p>
               ) : null}
-              {liveMessages.map((message) => (
-                <article key={message.id} className={message.fromUid === user.uid ? 'is-mine' : ''}>
-                  {message.item?.title ? <p className="sm-message-card">{message.item.title}</p> : null}
-                  <p>{message.body}</p>
-                  <time>
-                    {when(message.createdAtMs)}
-                    {message.expiresAtMs ? ` · disappears ${disappearLabel(message.expiresAtMs - message.createdAtMs) || 'soon'}` : ''}
-                  </time>
-                </article>
-              ))}
+              {liveMessages.map((message) => {
+                const left = message.expiresAtMs ? Number(message.expiresAtMs) - now : null
+                return (
+                  <article
+                    key={message.id}
+                    className={`${message.fromUid === user.uid ? 'is-mine' : ''}${left != null && left <= 10000 ? ' is-expiring' : ''}`}
+                  >
+                    {message.item?.title ? <p className="sm-message-card">{message.item.title}</p> : null}
+                    {message.media?.path ? (
+                      <img
+                        className="sm-message-photo"
+                        src={message.media.url || null}
+                        alt=""
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        onError={(event) => { event.currentTarget.hidden = true }}
+                      />
+                    ) : null}
+                    {message.body ? <p>{message.body}</p> : null}
+                    <time>
+                      {when(message.createdAtMs)}
+                      {left != null ? ` · ⏳ ${countdownText(left)}` : ''}
+                    </time>
+                  </article>
+                )
+              })}
+              {typingNames.length ? (
+                <p className="sm-typing" aria-live="polite">
+                  <span className="sm-typing-dots" aria-hidden>•••</span> {typingNames.join(', ')} {typingNames.length === 1 ? 'is' : 'are'} typing
+                </p>
+              ) : null}
             </div>
             <form onSubmit={onSend} className="sm-reply-form">
               <textarea
                 ref={composerRef}
                 rows={1}
                 value={text}
-                onChange={(event) => setText(event.target.value)}
+                onChange={onComposerChange}
+                onBlur={onComposerBlur}
                 onKeyDown={onComposerKey}
                 placeholder={`Message ${personTitle(other)}`}
                 aria-label={`Message ${personTitle(other)}`}
               />
               <div className="sm-reply-tools">
                 <SystemEmojiButton label="Emoji" placement="up" targetRef={composerRef} onPick={insertEmoji} />
+                <input
+                  ref={photoRef}
+                  type="file"
+                  accept="image/*"
+                  className="sm-hidden-file"
+                  onChange={pickPhoto}
+                  aria-label="Attach a photo"
+                />
+                <button
+                  type="button"
+                  className={`sm-ghost-btn${photo ? ' is-on' : ''}`}
+                  onClick={() => photoRef.current?.click()}
+                  disabled={!mediaReady}
+                  title={mediaReady ? 'Attach a disappearing photo' : 'Photos need the live account database'}
+                >
+                  {photo ? 'Photo attached' : 'Photo'}
+                </button>
                 <label>
                   This message
                   <select value={burst} onChange={(event) => setBurst(event.target.value)} aria-label="Short disappearing time">
@@ -805,10 +949,11 @@ function MessagesPanel() {
                     ))}
                   </select>
                 </label>
-                <button type="submit" className="sm-primary-btn" disabled={!text.trim()}>Send</button>
+                <button type="submit" className="sm-primary-btn" disabled={!text.trim() && !photo}>Send</button>
               </div>
             </form>
             {sendError ? <p className="sm-auth-error">{sendError}</p> : null}
+            {photoError ? <p className="sm-auth-error">{photoError}</p> : null}
           </>
         ) : (
           <div className="sm-msg-empty-pane">

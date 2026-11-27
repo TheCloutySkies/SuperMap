@@ -152,7 +152,7 @@ check('two domains never fire', computeConvergence(twoDomains, { now: NOW }).len
 const paired = computeConvergence([
   ...['cyber', 'cyberinfra', 'conflict'].flatMap((domain) => [signal(domain, 'mideast'), signal(domain, 'mideast')]),
 ], { now: NOW })[0]
-check('cyber + cyberinfra cluster names the coincidence', Boolean(paired?.pairs?.includes('exploitation campaign in progress')), JSON.stringify(paired?.pairs))
+check('cyber + cyberinfra cluster names the coincidence', Boolean(paired?.pairs?.includes('an active hack on exposed systems')), JSON.stringify(paired?.pairs))
 
 console.log('\n4. advisory posture floor')
 const advisoryOnly = [signal('advisory', 'ukraine', 0.9, { meta: { level: '4', agreement: '2' } })]

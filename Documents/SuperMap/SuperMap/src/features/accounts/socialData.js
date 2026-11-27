@@ -16,6 +16,7 @@ import {
   where,
 } from 'firebase/firestore'
 import { getAccountsFirebase } from './firebaseClient'
+import { uploadChatMedia, deleteChatMedia } from './chatMedia'
 import { personHandle, personNumber } from './accountIdentity'
 import { STARTER_BOARDS } from './menuCatalog'
 
@@ -92,6 +93,8 @@ export function conversationId(a, b) {
 }
 
 export const DISAPPEAR_CHOICES = Object.freeze([
+  { id: '30s', label: '30 seconds', ms: 30 * 1000, short: true },
+  { id: '45s', label: '45 seconds', ms: 45 * 1000, short: true },
   { id: '1m', label: '1 minute', ms: 60 * 1000, short: true },
   { id: '10m', label: '10 minutes', ms: 10 * 60 * 1000, short: true },
   { id: '30m', label: '30 minutes', ms: 30 * 60 * 1000, short: true },
@@ -104,12 +107,27 @@ export const DISAPPEAR_CHOICES = Object.freeze([
 ])
 
 const MAX_DISAPPEAR_MS = DISAPPEAR_CHOICES[DISAPPEAR_CHOICES.length - 1].ms
+const MIN_DISAPPEAR_MS = 30 * 1000
+/** A photo never stays longer than a week, whatever the chat timer says. */
+export const MEDIA_MAX_MS = 7 * 24 * 60 * 60 * 1000
+export const MEDIA_DEFAULT_MS = MEDIA_MAX_MS
+/** One typing write per user per conversation, at most this often. */
+const TYPING_WRITE_MS = 5000
+/** A typing row counts as live for this long, so it hides on its own. */
+export const TYPING_LIVE_MS = 6000
 const purgeTried = new Set()
+const typingWrites = new Map()
 
 export function normalizeDisappearMs(value) {
   const ms = Number(value)
-  if (!Number.isFinite(ms) || ms < 60 * 1000 || ms > MAX_DISAPPEAR_MS) return 0
+  if (!Number.isFinite(ms) || ms < MIN_DISAPPEAR_MS || ms > MAX_DISAPPEAR_MS) return 0
   return ms
+}
+
+/** A photo's own time-to-live: shorter if chosen, never above a week. */
+export function normalizeMediaMs(value, fallback = MEDIA_DEFAULT_MS) {
+  const ms = normalizeDisappearMs(value) || Number(fallback) || MEDIA_DEFAULT_MS
+  return Math.min(ms, MEDIA_MAX_MS)
 }
 
 export function disappearLabel(ms) {
@@ -123,11 +141,14 @@ function messageIsLive(row, now = Date.now()) {
 
 function purgeExpiredMessages(conversationIdValue, rows) {
   const now = Date.now()
+  let expired = 0
   for (const row of rows) {
     if (messageIsLive(row, now) || !row?.id) continue
     const key = `${conversationIdValue}:${row.id}`
     if (purgeTried.has(key)) continue
     purgeTried.add(key)
+    expired += 1
+    if (row.media?.path) deleteChatMedia(row.media.path)
     const firestore = db()
     if (!firestore) {
       const store = readStore()
@@ -137,6 +158,50 @@ function purgeExpiredMessages(conversationIdValue, rows) {
     }
     deleteDoc(doc(firestore, 'conversations', conversationIdValue, 'messages', row.id)).catch(() => {})
   }
+  // The badge used to be a counter that only ever went up: recount it whenever
+  // a message disappears, so an expiry takes the unread count with it.
+  if (expired) recountUnread(conversationIdValue).catch(() => {})
+}
+
+/**
+ * Recompute both members' unread counts from the live messages. The conversation
+ * id is the sorted uid pair, so this needs no read of the conversation itself.
+ */
+export async function recountUnread(conversationIdValue) {
+  const members = String(conversationIdValue || '').split('__').filter(Boolean)
+  if (members.length !== 2) return { ok: false }
+  const now = Date.now()
+  const firestore = db()
+  if (!firestore) {
+    const store = readStore()
+    const convo = store.conversations.find((row) => row.id === conversationIdValue)
+    const live = store.messages.filter((row) => row.conversationId === conversationIdValue && messageIsLive(row, now))
+    const unread = {}
+    for (const reader of members) {
+      const since = Number(convo?.readAtMs?.[reader]) || 0
+      unread[reader] = live.filter((row) => row.fromUid !== reader && Number(row.createdAtMs) > since).length
+    }
+    store.conversations = store.conversations.map((row) => (
+      row.id === conversationIdValue ? { ...row, unread } : row
+    ))
+    writeStore(store)
+    return { ok: true, unread }
+  }
+  const [convoSnap, messageSnap] = await Promise.all([
+    getDoc(doc(firestore, 'conversations', conversationIdValue)).catch(() => null),
+    getDocs(query(collection(firestore, 'conversations', conversationIdValue, 'messages'), limit(200))).catch(() => null),
+  ])
+  const convo = convoSnap?.exists?.() ? convoSnap.data() : {}
+  const rows = messageSnap ? messageSnap.docs.map((row) => ({ id: row.id, ...row.data() })) : []
+  const unread = {}
+  for (const reader of members) {
+    const since = Number(convo?.readAtMs?.[reader]) || 0
+    unread[reader] = rows.filter((row) => (
+      row.fromUid !== reader && messageIsLive(row, now) && Number(row.createdAtMs) > since
+    )).length
+  }
+  await updateDoc(doc(firestore, 'conversations', conversationIdValue), { unread }).catch(() => {})
+  return { ok: true, unread }
 }
 
 /** Create or refresh a two-person thread in Firebase before the first message. */
@@ -594,7 +659,7 @@ export function subscribeMessages(conversationIdValue, cb) {
   }, () => cb([]))
 }
 
-export async function sendDirectMessage({ from, to, body, item, expiresInMs }) {
+export async function sendDirectMessage({ from, to, body, item, photo, expiresInMs }) {
   if (!to?.uid || to.uid === from.uid) return { ok: false, error: 'Pick someone else.' }
   const text = String(body || '').trim().slice(0, 4000)
   const card = item?.title ? {
@@ -603,20 +668,35 @@ export async function sendDirectMessage({ from, to, body, item, expiresInMs }) {
     url: item.url || null,
     type: item.type || 'article',
   } : null
-  if (!text && !card) return { ok: false, error: 'Write a message.' }
+  if (!text && !card && !photo) return { ok: false, error: 'Write a message.' }
   const id = conversationId(from.uid, to.uid)
   const now = Date.now()
-  const ttl = normalizeDisappearMs(expiresInMs)
+  // A photo keeps the one-week ceiling; text keeps the chat's own timer.
+  const ttl = photo ? normalizeMediaMs(expiresInMs) : normalizeDisappearMs(expiresInMs)
+  const messageId = uid()
+  const firestore = db()
+  if (photo && !firestore) return { ok: false, error: 'Photos need the live account database.' }
+  let media = null
+  if (photo) {
+    const uploaded = await uploadChatMedia({
+      conversationId: id,
+      messageId,
+      file: photo,
+      memberUids: [from.uid, to.uid],
+    })
+    if (!uploaded.ok) return uploaded
+    media = uploaded.media
+  }
   const message = {
-    id: uid(),
+    id: messageId,
     conversationId: id,
     fromUid: from.uid,
-    body: text || (card ? `Sent “${card.title}”` : ''),
+    body: text || (card ? `Sent “${card.title}”` : '') || 'Photo',
     item: card,
+    ...(media ? { media } : {}),
     createdAtMs: now,
     ...(ttl ? { expiresAtMs: now + ttl } : {}),
   }
-  const firestore = db()
   if (!firestore) {
     const store = readStore()
     let convo = store.conversations.find((row) => row.id === id)
@@ -715,9 +795,51 @@ export async function markConversationRead(conversationIdValue, userUid) {
     writeStore(store)
     return
   }
+  const now = Date.now()
   await updateDoc(doc(firestore, 'conversations', conversationIdValue), {
     [`unread.${userUid}`]: 0,
+    [`readAtMs.${userUid}`]: now,
   }).catch(() => {})
+}
+
+/** One write per 5s while the composer changes; nothing while it is idle. */
+export async function setTyping(conversationIdValue, userUid) {
+  if (!conversationIdValue || !userUid) return
+  const firestore = db()
+  if (!firestore) return
+  const key = `${conversationIdValue}:${userUid}`
+  const last = typingWrites.get(key) || 0
+  if (Date.now() - last < TYPING_WRITE_MS) return
+  typingWrites.set(key, Date.now())
+  await setDoc(doc(firestore, 'conversations', conversationIdValue, 'typing', userUid), {
+    atMs: Date.now(),
+    at: serverTimestamp(),
+  }, { merge: true }).catch(() => {})
+}
+
+export async function clearTyping(conversationIdValue, userUid) {
+  if (!conversationIdValue || !userUid) return
+  typingWrites.delete(`${conversationIdValue}:${userUid}`)
+  const firestore = db()
+  if (!firestore) return
+  await deleteDoc(doc(firestore, 'conversations', conversationIdValue, 'typing', userUid)).catch(() => {})
+}
+
+/** Live typing rows of the other member; stale ones hide on their own. */
+export function subscribeTyping(conversationIdValue, cb) {
+  if (!conversationIdValue) return () => {}
+  const firestore = db()
+  if (!firestore) return () => {}
+  return onSnapshot(
+    collection(firestore, 'conversations', conversationIdValue, 'typing'),
+    (snap) => {
+      const now = Date.now()
+      cb(snap.docs
+        .map((row) => ({ uid: row.id, ...row.data() }))
+        .filter((row) => row.uid && now - (Number(row.atMs) || 0) < TYPING_LIVE_MS))
+    },
+    () => cb([]),
+  )
 }
 
 export async function fileReport({ reporter, reason, note, item, suggestedScore }) {

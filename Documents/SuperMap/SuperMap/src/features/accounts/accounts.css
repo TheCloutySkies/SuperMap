@@ -536,3 +536,35 @@ button.sm-msg-go {
   .sm-vault-filters { grid-template-columns: 1fr; }
   .sm-acct-dock-label { display: none; }
 }
+
+/* Live disappearing countdown, attached photos, typing, and the minimised dock. */
+.sm-hidden-file { display: none; }
+.sm-reply-tools .sm-ghost-btn.is-on { border-color: #2a6f5a; color: #57e389; }
+.sm-message-photo {
+  display: block;
+  max-width: min(260px, 100%);
+  max-height: 260px;
+  border-radius: 12px;
+  border: 1px solid #1f3348;
+  object-fit: cover;
+  margin: 4px 0 6px;
+}
+.sm-message-log article.is-expiring { opacity: .55; }
+.sm-typing { display: flex; align-items: center; gap: 6px; margin: 4px 2px 8px; color: #8fa3bf; font-size: 12px; }
+.sm-typing-dots { letter-spacing: 2px; color: #57e389; animation: sm-typing-pulse 1.2s ease-in-out infinite; }
+@keyframes sm-typing-pulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sm-typing-dots { animation: none; } }
+.sm-acct-dock.is-minimized .sm-acct-dock-btn { padding-right: 10px; }
+.sm-acct-min {
+  align-self: flex-start;
+  margin: 4px 0 0 4px;
+  border: 1px solid #1f3348;
+  background: rgba(10, 20, 32, .85);
+  color: #8fa3bf;
+  border-radius: 999px;
+  width: 22px;
+  height: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.sm-acct-min:hover { color: #e6f1ff; border-color: #2a6f5a; }

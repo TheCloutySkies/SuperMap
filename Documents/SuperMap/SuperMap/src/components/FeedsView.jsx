@@ -6,6 +6,7 @@ import ThreatScoreButton from './ThreatScoreButton'
 import ItemMenu from '../features/accounts/ItemMenu'
 import { readHomeSnapshot, writeHomeSnapshot } from '../lib/homeBootstrap'
 import { isGlowieRelevant } from '../lib/glowieRelevance'
+import { dedupeStories } from '../lib/storyDedupe'
 import './FeedsView.css'
 import { getApiBase } from '../lib/homeBootstrap'
 
@@ -695,7 +696,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
   }, [newsItems])
 
   const filteredAndSortedNews = useMemo(() => {
-    let list = newsItems.filter((item) => {
+    const filtered = newsItems.filter((item) => {
       if (!isGlowieRelevant(item)) return false
       if (!matchesSource(item, sourceFilter, FEED_MODE.NEWS)) return false
       if (categoryFilter !== 'all' && item.category !== categoryFilter) return false
@@ -703,6 +704,9 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
       const hay = `${item.title || ''} ${item.source || ''} ${item.contentSnippet || ''} ${item.description || ''} ${item.category || ''}`.toLowerCase()
       return hay.includes(q)
     })
+    // One story, one row: the same article reaches the desk from the outlet, from
+    // its Google News mirror and from other feeds that syndicate it.
+    let list = dedupeStories(filtered)
     if (sortBy === 'newest') list = [...list].sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0))
     else if (sortBy === 'oldest') list = [...list].sort((a, b) => new Date(a.pubDate || 0) - new Date(b.pubDate || 0))
     else if (sortBy === 'source') list = [...list].sort((a, b) => (a.source || '').localeCompare(b.source || ''))

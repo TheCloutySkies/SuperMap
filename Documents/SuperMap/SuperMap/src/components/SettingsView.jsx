@@ -136,6 +136,7 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
     { id: 'tabs', label: 'Tab visibility' },
     { id: 'xhandles', label: 'X (Twitter) handles' },
     { id: 'stocktickers', label: 'Stock tickers' },
+    { id: 'firebase', label: 'Firebase' },
   ]
 
   return (
@@ -327,6 +328,31 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
                 </ul>
               </>
             )}
+          </section>
+        )}
+        {activeSection === 'firebase' && (
+          <section className="settings-view-section">
+            <h2>Firebase</h2>
+            <p className="settings-hint">
+              Accounts, chats and disappearing photos run on Firebase. The guide lists every console
+              step in order: the three sign-in methods, enabling Storage, deploying the rules and
+              indexes, the six values for Vercel, and the service-account key for GitHub Actions.
+            </p>
+            <div className="settings-field">
+              <label>Setup guide</label>
+              <a
+                className="settings-link-btn"
+                href="/firebase-setup.md"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Open the step-by-step Firebase setup →
+              </a>
+            </div>
+            <p className="settings-hint">
+              Storage is the step that turns on photos and secure drops; until it is enabled the Photo
+              button in a chat stays disabled.
+            </p>
           </section>
         )}
       </div>

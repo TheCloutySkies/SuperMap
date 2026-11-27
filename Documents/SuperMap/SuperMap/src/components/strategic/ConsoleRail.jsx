@@ -150,13 +150,13 @@ export default function ConsoleRail({
       <h2>Alerts</h2>
 
       <div className="console-switch-row">
-        <span>Convergence alerts</span>
+        <span>Tell me when things line up</span>
         <button
           type="button"
           className={`console-toggle ${prefs.alerts ? 'is-on' : ''}`}
           role="switch"
           aria-checked={prefs.alerts}
-          aria-label="Convergence alerts"
+          aria-label="Tell me when things line up"
           onClick={() => onPatch({ alerts: !prefs.alerts })}
         />
       </div>

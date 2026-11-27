@@ -849,6 +849,21 @@ export function AccountsOverlay() {
 
 function AccountDock() {
   const { user, setOverlay, vault, unread, setWorkspaceTab } = useSuperMapAccount()
+  const [minimized, setMinimized] = useState(() => {
+    try {
+      return localStorage.getItem('supermap.acct.minimized') === '1'
+    } catch {
+      return false
+    }
+  })
+  const toggleMinimized = () => {
+    setMinimized((value) => {
+      try {
+        localStorage.setItem('supermap.acct.minimized', value ? '0' : '1')
+      } catch { /* optional */ }
+      return !value
+    })
+  }
   const kind = dockKind(user)
   const mark = kind === 'google'
     ? <GoogleMark />
@@ -857,7 +872,16 @@ function AccountDock() {
       : <UserRound size={18} strokeWidth={2.25} />
   const label = user ? personTitle(user) : 'Account'
   return (
-    <div className="sm-acct-dock">
+    <div className={`sm-acct-dock${minimized ? ' is-minimized' : ''}`}>
+      <button
+        type="button"
+        className="sm-acct-min"
+        aria-label={minimized ? 'Show the account name' : 'Show the account icon only'}
+        aria-pressed={minimized}
+        onClick={toggleMinimized}
+      >
+        {minimized ? '‹' : '›'}
+      </button>
       <button type="button" className="sm-acct-dock-btn" aria-label={label} onClick={() => {
         if (!user) setOverlay('auth')
         else {
@@ -866,7 +890,7 @@ function AccountDock() {
         }
       }}>
         <span className={`sm-acct-avatar is-${kind}`}>{mark}</span>
-        <span className="sm-acct-dock-label">{label}</span>
+        {minimized ? null : <span className="sm-acct-dock-label">{label}</span>}
         {unread > 0 ? <span className="sm-acct-count">{unread}</span> : null}
         {unread === 0 && vault.length > 0 ? <span className="sm-acct-count">{vault.length}</span> : null}
       </button>

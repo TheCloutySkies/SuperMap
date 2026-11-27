@@ -32,25 +32,42 @@ function text(value, max = 200) {
 
 /* ------------------------------------------------------------------ domains */
 
+/**
+ * `plain` is the same domain said the way a reader who does not work a desk would
+ * say it: the brief uses it, the panels and pills keep `label`/`short`.
+ */
 export const DOMAINS = {
-  conflict: { label: 'Conflict', short: 'Conflict', hex: '#ff3b5c', icon: '⚔', source: 'GDELT · ACLED · UCDP', weight: 1.4 },
-  losses: { label: 'Equipment losses', short: 'Losses', hex: '#ffb020', icon: '🛡', source: 'WarSpotting', weight: 1.1 },
-  hazards: { label: 'Hazards', short: 'Hazards', hex: '#f97316', icon: '⚠', source: 'USGS · EMSC · NWS · MeteoAlarm · JTWC', weight: 1.15 },
-  infrastructure: { label: 'Infrastructure', short: 'Infra', hex: '#4f7cff', icon: '⌁', source: 'Utility outages', weight: 1 },
-  cyber: { label: 'Cyber', short: 'Cyber', hex: '#ff4fd8', icon: '🖧', source: 'CISA KEV · ransomware.live', weight: 1.2 },
-  cyberinfra: { label: 'Malicious infra', short: 'Malware', hex: '#e879f9', icon: '🕸', source: 'Feodo · OpenPhish · Spamhaus', weight: 1.25 },
-  censorship: { label: 'Censorship', short: 'Censor', hex: '#a78bfa', icon: '🚫', source: 'OONI', weight: 0.9 },
-  network: { label: 'Routing health', short: 'Routing', hex: '#93c5fd', icon: '🌐', source: 'RIPEstat', weight: 1.1 },
-  displacement: { label: 'Displacement', short: 'Displaced', hex: '#facc15', icon: '👥', source: 'UNHCR', weight: 0.35 },
-  radiation: { label: 'Radiation', short: 'Radiation', hex: '#57e389', icon: '☢', source: 'Safecast', weight: 1.5 },
-  health: { label: 'Wastewater', short: 'Wastewater', hex: '#34d399', icon: '🧬', source: 'CDC NWSS', weight: 1.05 },
-  outbreak: { label: 'H5N1', short: 'H5N1', hex: '#a3e635', icon: '🦠', source: 'USDA APHIS', weight: 1.15 },
-  hydro: { label: 'River / flood', short: 'River', hex: '#38bdf8', icon: '🌊', source: 'USGS Water · NWS', weight: 1.1 },
-  advisory: { label: 'Travel risk', short: 'Advisory', hex: '#fb7185', icon: '⚠', source: 'State Dept · FCDO', weight: 1 },
-  airspace: { label: 'Airspace', short: 'Airspace', hex: '#c4b5fd', icon: '✈', source: 'FAA NAS', weight: 1 },
-  orbital: { label: 'Orbital', short: 'Orbital', hex: '#22d3ee', icon: '🛰', source: 'CelesTrak · Launch Library', weight: 0.35 },
-  balloons: { label: 'Radiosondes', short: 'Sondes', hex: '#2dd4bf', icon: '🎈', source: 'SondeHub', weight: 0.15 },
-  assessments: { label: 'Assessments', short: 'Briefs', hex: '#8b9bb4', icon: '📋', source: 'ISW · Critical Threats', weight: 0.5 },
+  conflict: { label: 'Conflict', short: 'Conflict', plain: 'fighting', hex: '#ff3b5c', icon: '⚔', source: 'GDELT · ACLED · UCDP', weight: 1.4 },
+  losses: { label: 'Equipment losses', short: 'Losses', plain: 'destroyed equipment', hex: '#ffb020', icon: '🛡', source: 'WarSpotting', weight: 1.1 },
+  hazards: { label: 'Hazards', short: 'Hazards', plain: 'severe weather', hex: '#f97316', icon: '⚠', source: 'USGS · EMSC · NWS · MeteoAlarm · JTWC', weight: 1.15 },
+  infrastructure: { label: 'Infrastructure', short: 'Infra', plain: 'power and water outages', hex: '#4f7cff', icon: '⌁', source: 'Utility outages', weight: 1 },
+  cyber: { label: 'Cyber', short: 'Cyber', plain: 'hacking', hex: '#ff4fd8', icon: '🖧', source: 'CISA KEV · ransomware.live', weight: 1.2 },
+  cyberinfra: { label: 'Malicious infra', short: 'Malware', plain: 'malware hosting', hex: '#e879f9', icon: '🕸', source: 'Feodo · OpenPhish · Spamhaus', weight: 1.25 },
+  censorship: { label: 'Censorship', short: 'Censor', plain: 'internet blocking', hex: '#a78bfa', icon: '🚫', source: 'OONI', weight: 0.9 },
+  network: { label: 'Routing health', short: 'Routing', plain: 'internet routing problems', hex: '#93c5fd', icon: '🌐', source: 'RIPEstat', weight: 1.1 },
+  displacement: { label: 'Displacement', short: 'Displaced', plain: 'people fleeing', hex: '#facc15', icon: '👥', source: 'UNHCR', weight: 0.35 },
+  radiation: { label: 'Radiation', short: 'Radiation', plain: 'radiation readings', hex: '#57e389', icon: '☢', source: 'Safecast', weight: 1.5 },
+  health: { label: 'Wastewater', short: 'Wastewater', plain: 'sewage monitoring', hex: '#34d399', icon: '🧬', source: 'CDC NWSS', weight: 1.05 },
+  outbreak: { label: 'H5N1', short: 'H5N1', plain: 'bird flu', hex: '#a3e635', icon: '🦠', source: 'USDA APHIS', weight: 1.15 },
+  hydro: { label: 'River / flood', short: 'River', plain: 'flooding', hex: '#38bdf8', icon: '🌊', source: 'USGS Water · NWS', weight: 1.1 },
+  advisory: { label: 'Travel risk', short: 'Advisory', plain: 'travel warnings', hex: '#fb7185', icon: '⚠', source: 'State Dept · FCDO', weight: 1 },
+  airspace: { label: 'Airspace', short: 'Airspace', plain: 'airspace closures', hex: '#c4b5fd', icon: '✈', source: 'FAA NAS', weight: 1 },
+  orbital: { label: 'Orbital', short: 'Orbital', plain: 'satellites', hex: '#22d3ee', icon: '🛰', source: 'CelesTrak · Launch Library', weight: 0.35 },
+  balloons: { label: 'Radiosondes', short: 'Sondes', plain: 'weather balloons', hex: '#2dd4bf', icon: '🎈', source: 'SondeHub', weight: 0.15 },
+  assessments: { label: 'Assessments', short: 'Briefs', plain: 'war analysis', hex: '#8b9bb4', icon: '📋', source: 'ISW · Critical Threats', weight: 0.5 },
+}
+
+/** A domain's everyday name, for copy a non-specialist reads. */
+export function plainDomainName(id) {
+  return DOMAINS[id]?.plain || String(DOMAINS[id]?.label || id).toLowerCase()
+}
+
+/** The same, as a sentence-ready list: "Fighting, severe weather, flooding". */
+export function plainDomainList(ids) {
+  const names = ids.map(plainDomainName)
+  if (!names.length) return ''
+  const joined = names.join(', ')
+  return joined.charAt(0).toUpperCase() + joined.slice(1)
 }
 
 export const DOMAIN_ORDER = [
@@ -1366,16 +1383,17 @@ export function buildSignals(payloads = {}, now = Date.now()) {
 
 /**
  * Coincidences worth naming. A cluster still needs three domains and five
- * signals; these pairs only decide how loud an already-real cluster is.
+ * signals; these pairs only decide how loud an already-real cluster is, and each
+ * label has to read as a sentence fragment for someone who never opens the desk.
  */
 const COINCIDENCES = [
-  { domains: ['network', 'infrastructure', 'censorship'], label: 'information control or infrastructure failure', bonus: 8 },
-  { domains: ['hydro', 'hazards', 'infrastructure'], label: 'cascading weather infrastructure event', bonus: 8 },
-  { domains: ['cyberinfra', 'cyber'], label: 'exploitation campaign in progress', bonus: 6 },
-  { domains: ['airspace', 'conflict'], label: 'airspace restriction with active conflict', bonus: 6 },
-  { domains: ['health', 'outbreak'], label: 'compounding public-health stress', bonus: 6 },
-  { domains: ['advisory', 'conflict'], label: 'official travel risk with active conflict', bonus: 5 },
-  { domains: ['displacement', 'conflict'], label: 'conflict-driven displacement', bonus: 4 },
+  { domains: ['network', 'infrastructure', 'censorship'], label: 'internet shutdowns alongside outages', bonus: 8 },
+  { domains: ['hydro', 'hazards', 'infrastructure'], label: 'severe weather knocking out power and transport', bonus: 8 },
+  { domains: ['cyberinfra', 'cyber'], label: 'an active hack on exposed systems', bonus: 6 },
+  { domains: ['airspace', 'conflict'], label: 'closed airspace alongside fighting', bonus: 6 },
+  { domains: ['health', 'outbreak'], label: 'a health alert on top of existing strain', bonus: 6 },
+  { domains: ['advisory', 'conflict'], label: 'travel warnings alongside fighting', bonus: 5 },
+  { domains: ['displacement', 'conflict'], label: 'people fleeing the fighting', bonus: 4 },
 ]
 
 export function computeConvergence(signals, { windowHours = 6, minDomains = 3, now = Date.now() } = {}) {
@@ -1407,7 +1425,8 @@ export function computeConvergence(signals, { windowHours = 6, minDomains = 3, n
       count: list.length,
       signals: list.slice().sort((a, b) => b.magnitude - a.magnitude).slice(0, 4),
       pairs: pairs.map((entry) => entry.label),
-      why: `${domains.length} domains active in ${REGIONS[region]?.label || region} within ${windowHours} h (${list.length} signals)${pairs.length ? ` · ${pairs.map((entry) => entry.label).join('; ')}` : ''}.`,
+      // Reads as a sentence for a reader who does not know the desk's words.
+      why: `${REGIONS[region]?.label || region}: ${domains.length} kinds of sources filed ${list.length} reports in the last ${windowHours} hours${pairs.length ? ` — ${pairs.map((entry) => entry.label).join(', ')}` : ''}.`,
     })
   }
   return clusters.sort((a, b) => b.score - a.score)

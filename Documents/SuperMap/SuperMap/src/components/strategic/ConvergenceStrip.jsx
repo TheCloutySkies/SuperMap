@@ -1,25 +1,25 @@
-import { DOMAINS, REGIONS, relTime } from '../../lib/consoleSignals'
+import { DOMAINS, REGIONS, plainDomainList, relTime } from '../../lib/consoleSignals'
 
 /** Where independent domains co-occur in place and time. */
 export default function ConvergenceStrip({ convergence, mode, now, onFocus }) {
   if (!convergence.length) {
     return (
-      <section className="console-section" aria-label="Convergence alerts">
+      <section className="console-section" aria-label="Places where trouble lines up">
         <div className="console-section-head">
-          <span className="console-tag">Correlation engine</span>
-          <h2>Convergence alerts</h2>
+          <span className="console-tag">Where things overlap</span>
+          <h2>Places where trouble lines up</h2>
         </div>
         <p className="console-section-sub">
-          No multi-domain convergence right now. The engine flags a theater when three or more
-          independent domains report inside the same six hours.
+          Nothing lines up right now. A place only appears here when three or more unrelated
+          kinds of reports land inside the same six hours.
         </p>
         <div className="console-conv-strip">
           <div className="console-conv is-med is-quiet">
             <div className="console-conv-head">
               <span className="console-conv-icon" aria-hidden>✓</span>
-              <b>Dispersed activity</b>
+              <b>Nothing lines up</b>
             </div>
-            <p>Nothing is clustering. Single headlines are not treated as a finding.</p>
+            <p>One report on its own is not a pattern.</p>
           </div>
         </div>
       </section>
@@ -27,13 +27,14 @@ export default function ConvergenceStrip({ convergence, mode, now, onFocus }) {
   }
 
   return (
-    <section className="console-section" aria-label="Convergence alerts">
+    <section className="console-section" aria-label="Places where trouble lines up">
       <div className="console-section-head">
-        <span className="console-tag">Correlation engine</span>
-        <h2>Convergence alerts</h2>
+        <span className="console-tag">Where things overlap</span>
+        <h2>Places where trouble lines up</h2>
       </div>
       <p className="console-section-sub">
-        Independent domains reporting from the same theater in the same six hours. Click one to focus the map and board.
+        Unrelated kinds of reports from the same place in the same six hours. Click one to focus
+        the map and the board.
       </p>
 
       <div className="console-conv-strip">
@@ -51,7 +52,7 @@ export default function ConvergenceStrip({ convergence, mode, now, onFocus }) {
             </span>
             <span className="console-conv-copy">
               {mode === 'brief'
-                ? `${cluster.domains.map((id) => DOMAINS[id]?.label.toLowerCase() || id).join(', ')} signals are clustering here at once.`
+                ? `${plainDomainList(cluster.domains)} are all happening here at the same time.`
                 : `${cluster.domains.length}-domain coincidence over ${cluster.count} signals, composite ${cluster.score}.`}
             </span>
             <span className="console-conv-domains">
@@ -61,7 +62,9 @@ export default function ConvergenceStrip({ convergence, mode, now, onFocus }) {
                 </span>
               ))}
             </span>
-            <span className="console-conv-why">{cluster.why}</span>
+            {/* The head already names the place; the brief copy above already
+                says what is happening, so the desk's own sentence is analyst-only. */}
+            {mode === 'brief' ? null : <span className="console-conv-why">{cluster.why}</span>}
             <span className="console-conv-foot">
               Top: {cluster.signals[0]?.title?.slice(0, 64) || '—'} · {relTime(cluster.signals[0]?.at, now)}
             </span>

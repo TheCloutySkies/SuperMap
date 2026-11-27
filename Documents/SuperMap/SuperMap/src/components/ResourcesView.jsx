@@ -174,6 +174,13 @@ export const RESOURCE_SECTIONS = [
       { name: 'FLOCK Surveillance Map', url: 'https://ringmast4r.github.io/FLOCK/', desc: 'Flock Safety ALPR camera network map (336k+ cameras)' },
     ],
   },
+  {
+    id: 'setup',
+    title: '⚙️ Setup & docs',
+    items: [
+      { name: 'Firebase setup guide', url: '/firebase-setup.md', desc: 'Every console step in order: the three sign-in methods, enabling Storage, deploying the rules and indexes, the six Vercel values, and the service-account key for the GitHub Actions workers.' },
+    ],
+  },
 ]
 
 const ALL_CATEGORIES = [{ id: '', label: 'All categories' }, ...RESOURCE_SECTIONS.map((s) => ({ id: s.id, label: s.title }))]

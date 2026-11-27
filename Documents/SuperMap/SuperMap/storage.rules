@@ -1,0 +1,32 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // A chat photo is readable and deletable only by the two members, and the
+    // membership is stamped into the object's own metadata: Storage rules cannot
+    // read Firestore and have no split(), so the uids are two fields.
+    match /chat_media/{conversationId}/{fileName} {
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.metadata.memberA
+        || request.auth.uid == resource.metadata.memberB
+      );
+      allow create: if request.auth != null
+        && (
+          request.auth.uid == request.resource.metadata.memberA
+          || request.auth.uid == request.resource.metadata.memberB
+        )
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null && (
+        request.auth.uid == resource.metadata.memberA
+        || request.auth.uid == resource.metadata.memberB
+      );
+    }
+    // A secure drop is ciphertext; the key lives in the link fragment and never
+    // reaches the server. The id is unguessable, no listing is allowed.
+    match /secure_drops/{dropId} {
+      allow read: if true;
+      allow create: if request.auth != null && request.resource.size <= 100 * 1024 * 1024;
+      allow delete: if request.auth != null;
+    }
+  }
+}

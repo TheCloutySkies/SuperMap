@@ -10,6 +10,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "test:console": "node scripts/test-console-signals.mjs",
+    "test:dedupe": "node scripts/test-story-dedupe.mjs",
     "preview": "vite preview",
     "prebuild": "node ../scripts/build-home-seed.mjs"
   },

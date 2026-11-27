@@ -1,6 +1,7 @@
 import { initializeApp, getApp, getApps } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
+import { getStorage } from 'firebase/storage'
 
 const ENV = import.meta.env
 
@@ -26,7 +27,17 @@ export function getAccountsFirebase() {
   if (!firebaseReady) return null
   if (!firebaseSingleton) {
     const app = getApps().length ? getApp() : initializeApp(firebaseConfig)
-    firebaseSingleton = { app, auth: getAuth(app), db: getFirestore(app) }
+    firebaseSingleton = {
+      app,
+      auth: getAuth(app),
+      db: getFirestore(app),
+      // Photos and secure drops live in Storage; it stays null until the
+      // bucket is configured, so text chat keeps working without it.
+      storage: firebaseConfig.storageBucket ? getStorage(app) : null,
+    }
   }
   return firebaseSingleton
 }
+
+/** Photos need the Storage bucket as well as the rest of the config. */
+export const mediaReady = Boolean(firebaseReady && firebaseConfig.storageBucket)

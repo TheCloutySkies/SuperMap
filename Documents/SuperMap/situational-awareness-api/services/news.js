@@ -4,6 +4,7 @@ const { geotagArticles } = require('./geotagger')
 const { normalizeToEvent, ingestEvent, eventToFeature } = require('./ingest')
 const { assessItemsBatch } = require('./riskScoring')
 const { isGlowieRelevant } = require('./glowieRelevance')
+const { dedupeStories } = require('./storyDedupe')
 
 /** Browser-like UA — many CDNs (GDACS, Google News) return 406 for bare bot UAs. */
 const BROWSER_UA =
@@ -641,6 +642,13 @@ async function getNews() {
     .flatMap((r) => r.value)
   // MediaStack cache (filled only at 08:00 / 15:00 ET scheduled pulls)
   items = items.concat(getMediaStackItems())
+  // One story, one row: Google News mirrors, BBC + BBC World and MediaStack all
+  // carry the same articles, so the desk would otherwise show a story four times.
+  const beforeDedupe = items.length
+  items = dedupeStories(items)
+  if (items.length !== beforeDedupe) {
+    console.log(`[news] collapsed ${beforeDedupe - items.length} repeat copies of ${beforeDedupe} items`)
+  }
   // Keep feed diversity: cap per-source and reserve a few newest items per source
   // so prolific feeds don't crowd out everything else.
   const PER_SOURCE_CAP = 25

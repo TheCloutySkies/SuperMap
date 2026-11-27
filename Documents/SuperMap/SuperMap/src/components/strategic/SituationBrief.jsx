@@ -1,4 +1,4 @@
-import { DOMAINS, REGIONS } from '../../lib/consoleSignals'
+import { plainDomainList, plainDomainName } from '../../lib/consoleSignals'
 
 const GAUGE_LENGTH = 157
 
@@ -7,9 +7,25 @@ function clampText(value, max) {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text
 }
 
+function plural(count, one, many) {
+  return count === 1 ? one : many
+}
+
+/** What each band actually means, in ordinary words. */
+const BAND_PLAIN = {
+  CALM: 'nothing unusual',
+  GUARDED: 'a little more than usual',
+  ELEVATED: 'clearly more than usual',
+  HIGH: 'a lot happening at once',
+  CRITICAL: 'a major, widespread crisis',
+}
+
 /**
  * The brief: a computed headline, the numbers behind it and the posture gauge.
- * Every sentence here is assembled from signal counts and published fields.
+ * Every sentence here is assembled from signal counts and published fields, and
+ * written so it reads without any of the desk's own vocabulary: no "signals",
+ * no "domains", no "theaters", no "convergences". The analyst mode below is
+ * where the technical wording belongs.
  */
 export default function SituationBrief({
   posture,
@@ -32,24 +48,29 @@ export default function SituationBrief({
 
   const threatAverage = Number(threat?.average_score ?? threat?.threat_score)
   const threatSentence = threat?.threat_level && Number.isFinite(threatAverage)
-    ? `The threat summary reads ${threat.threat_level} at ${threatAverage.toFixed(1)}/5.`
+    ? `The overall threat level is ${threat.threat_level} — ${threatAverage.toFixed(1)} out of 5.`
     : ''
 
-  const headline = convergence.length
-    ? `${convergence.length} convergence${convergence.length === 1 ? '' : 's'} in ${regionLabel}`
-    : `Posture is ${posture.band.toLowerCase()} in ${regionLabel}`
+  // "all theaters" is the desk's name for the global scope; in a sentence read
+  // by anyone else it is simply "everywhere".
+  const everywhere = regionLabel === 'all theaters'
+  const scope = everywhere ? 'everywhere' : regionLabel
 
-  const convergedDomains = [...new Set(convergence.flatMap((cluster) => cluster.domains))]
-    .map((id) => DOMAINS[id]?.short || id)
-    .slice(0, 4)
+  const headline = convergence.length
+    ? everywhere
+      ? `Trouble is lining up in ${convergence.length} ${plural(convergence.length, 'region', 'regions')}`
+      : `${scope}: trouble is lining up on several fronts`
+    : `Nothing is lining up right now${everywhere ? '' : ` in ${scope}`}`
+
+  const convergedDomains = plainDomainList([...new Set(convergence.flatMap((cluster) => cluster.domains))].slice(0, 4))
 
   const lede = [
-    `${signals.length} signal${signals.length === 1 ? '' : 's'} across ${domainCount} domain${domainCount === 1 ? '' : 's'} in ${regionLabel} over the last ${windowHours} h.`,
-    heaviest ? `${DOMAINS[heaviest[0]]?.label || heaviest[0]} is the heaviest at ${heaviest[1]}.` : '',
+    `${signals.length} ${plural(signals.length, 'report', 'reports')} from ${domainCount} different ${plural(domainCount, 'kind', 'kinds')} of source${plural(domainCount, '', 's')}${everywhere ? '' : ` in ${scope}`} over the last ${windowHours} hours.`,
+    heaviest ? `The biggest group is ${plainDomainName(heaviest[0])} (${heaviest[1]}).` : '',
     threatSentence,
     convergence.length
-      ? `Independent ${convergedDomains.join(', ')} signals cluster together — that coincidence is the finding, not any single headline.`
-      : 'Signals are dispersed; no multi-domain clustering in this window.',
+      ? `${convergedDomains} keep turning up in the same places at the same time. That overlap is the real signal — not any single report.`
+      : 'The reports are spread out, so nothing lines up in one place.',
   ].filter(Boolean).join(' ')
 
   const analystLede = [
@@ -66,29 +87,31 @@ export default function SituationBrief({
         key: "What's happening",
         color: '#ff3b5c',
         value: convergence.length
-          ? convergence.length === 1
-            ? `${convergence[0].domains.length} domains converging in ${REGIONS[convergence[0].region]?.label || convergence[0].region}`
-            : `${convergence.length} theaters converging · ${REGIONS[convergence[0].region]?.label || convergence[0].region} first`
-          : `${signals.length} signals, no clustering`,
+          ? everywhere
+            ? `${convergence.length} ${plural(convergence.length, 'region', 'regions')} with several problems at once`
+            : `${convergence[0].domains.length} kinds of trouble at once`
+          : `${signals.length} reports, nothing lining up`,
         sub: convergence.length
-          ? `${convergence[0].why}${convergence.length > 1 ? ` Plus ${convergence.length - 1} more theater${convergence.length === 2 ? '' : 's'}.` : ''}`
-          : `Window ${windowHours} h · ${domainCount} domains active.`,
+          ? everywhere
+            ? `${convergence[0].why}${convergence.length > 1 ? ` Plus ${convergence.length - 1} more region${convergence.length === 2 ? '' : 's'}.` : ''}`
+            : convergence[0].why
+          : `Last ${windowHours} hours · ${domainCount} kinds of sources reporting.`,
       },
       {
         key: 'Why it matters',
         color: '#ffb020',
         value: topSignal ? clampText(topSignal.title, 76) : 'Nothing notable in this window',
         sub: topSignal
-          ? `${DOMAINS[topSignal.domain]?.label || topSignal.domain} · confidence ${(topSignal.confidence * 100).toFixed(0)}% · ${topSignal.corroboration} source${topSignal.corroboration === 1 ? '' : 's'}`
-          : 'Widen the window or lower the confidence floor.',
+          ? `${plainDomainList([topSignal.domain])} · ${Math.round(topSignal.confidence * 100)}% sure · ${topSignal.corroboration} ${plural(topSignal.corroboration, 'source', 'sources')}`
+          : 'Nothing stands out — try a longer time window.',
       },
       {
         key: 'What to do',
         color: '#57e389',
         value: anomalies.length
-          ? `${anomalies.length} high-severity signal${anomalies.length === 1 ? '' : 's'} to review`
-          : 'Keep watching the board',
-        sub: 'Open any tile for its evidence and sources.',
+          ? `${anomalies.length} urgent ${plural(anomalies.length, 'report', 'reports')} worth a look`
+          : 'Nothing urgent right now',
+        sub: 'Click any card to see where it came from.',
       },
     ]
     : [
@@ -101,7 +124,7 @@ export default function SituationBrief({
 
   return (
     <section className="console-brief" aria-label="Situation brief">
-      <p className="console-brief-eyebrow">Synthesized situation brief · computed from published data</p>
+      <p className="console-brief-eyebrow">The short version · written from the latest published reports</p>
       <h2 className="console-brief-head">{headline}</h2>
       <p className="console-lede">{mode === 'brief' ? lede : analystLede}</p>
 
@@ -137,12 +160,13 @@ export default function SituationBrief({
         <div className="console-posture-text">
           {mode === 'brief' ? (
             <>
-              Overall posture is <b style={{ color: posture.color }}>{posture.band}</b>.{' '}
+              Overall risk: <b style={{ color: posture.color }}>{posture.band}</b> — {posture.score} out of 100,{' '}
+              {BAND_PLAIN[posture.band] || 'worth a look'}.{' '}
               {posture.score >= 66
-                ? 'Several stressors are compounding; stay close to the board.'
+                ? 'Several serious things are happening at once, so this deserves your attention.'
                 : posture.score >= 48
-                  ? 'Elevated but manageable; watch the convergences.'
-                  : 'Routine. The console flags you when independent signals start clustering.'}
+                  ? 'Raised, but not a crisis: several problems overlap, and that overlap is what pushes it up.'
+                  : 'Nothing unusual. We will point it out if separate reports start saying the same thing.'}
             </>
           ) : (
             <>

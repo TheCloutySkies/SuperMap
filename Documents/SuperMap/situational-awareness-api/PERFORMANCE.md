@@ -99,8 +99,10 @@ versioned files plus a manifest to the orphan `data` branch. `refresh-data.yml` 
 the only scheduler; `api-keepalive.yml` is untouched.
 
 - The workflow is scheduled hourly (`0 * * * *`) and passes
-  `--if-stale-minutes=90`, so the collector exits 0 without touching a source
-  while the published manifest is younger than that. GitHub's `schedule` is
+  `--if-stale-minutes=70`, so the collector exits 0 without touching a source
+  while the published manifest is younger than that: above one hour, so the tick
+  right after a publish skips, and below two hours minus a run, so the tick two
+  hours later still collects. GitHub's `schedule` is
   best-effort and can delay or drop a tick; the extra hourly tick is what makes a
   dropped run heal on the next hour instead of waiting for a manual dispatch.
   A manual dispatch always collects, and a gated tick leaves no manifest behind,

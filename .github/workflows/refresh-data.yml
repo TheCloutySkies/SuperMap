@@ -12,8 +12,10 @@ name: Refresh data snapshots
 on:
   schedule:
     # Every hour on the hour (UTC). The collector gates the real work: it exits
-    # without touching a source when the published snapshot is younger than 90
+    # without touching a source when the published snapshot is younger than 70
     # minutes, so data is still refreshed every two hours at the top of the hour.
+    # (Above one hour, so the tick right after a publish skips; below two hours
+    # minus a run, so the tick two hours later still collects.)
     # GitHub's `schedule` is best-effort and can delay or drop a tick, and the
     # extra hourly tick is what makes a dropped run heal on the next hour.
     - cron: '0 * * * *'
@@ -63,9 +65,9 @@ jobs:
           if [ -n "${{ inputs.only }}" ]; then
             node scripts/refresh-snapshots.js --only="${{ inputs.only }}"
           elif [ "${{ github.event_name }}" = "schedule" ]; then
-            # Do nothing while the published snapshot is still younger than 90
+            # Do nothing while the published snapshot is still younger than 70
             # minutes; a manual dispatch always collects.
-            node scripts/refresh-snapshots.js --if-stale-minutes=90
+            node scripts/refresh-snapshots.js --if-stale-minutes=70
           else
             node scripts/refresh-snapshots.js
           fi

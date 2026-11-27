@@ -12,7 +12,7 @@
  *   node scripts/refresh-snapshots.js            # a full run
  *   node scripts/refresh-snapshots.js --dry-run  # write ./snapshot-out/dry-run, no publish
  *   node scripts/refresh-snapshots.js --only=home,news
- *   node scripts/refresh-snapshots.js --if-stale-minutes=90
+ *   node scripts/refresh-snapshots.js --if-stale-minutes=70
  *                                               # exit 0 without touching a
  *                                               # source when the published
  *                                               # snapshot is younger than that

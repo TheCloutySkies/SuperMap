@@ -309,6 +309,13 @@ const server = app.listen(COLLECTOR_MODE ? 0 : PORT, () => {
   try {
     dataPaths.logOnce()
   } catch (_) { /* optional */ }
+  try {
+    const { tokenStatus } = require('./services/freeSources')
+    const status = tokenStatus()
+    const present = Object.entries(status).filter(([, ok]) => ok).map(([name]) => name)
+    const absent = Object.entries(status).filter(([, ok]) => !ok).map(([name]) => name)
+    console.log(`[console] optional tokens present: ${present.join(', ') || 'none'} · absent: ${absent.join(', ') || 'none'}`)
+  } catch (_) { /* optional */ }
   // Prefer keepalive hitting /api/home (not only /health) so in-memory last-good stays warm.
 
   if (COLLECTOR_MODE) {

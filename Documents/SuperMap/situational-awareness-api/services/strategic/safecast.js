@@ -29,6 +29,9 @@ async function fetchSafecast({ etag = null, lastModified = null } = {}) {
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue
     if (!Number.isFinite(value) || value < MIN_VALUE || value > MAX_VALUE) continue
     const unit = String(row.unit || 'cpm').toLowerCase()
+    // Safecast also streams device telemetry (temperature, status). Only a dose
+    // rate belongs in this summary.
+    if (!/(cpm|counts? per minute|(µ|u)sv|microsievert|msv|gy\/h|ngy)/.test(unit)) continue
     byUnit.set(unit, (byUnit.get(unit) || 0) + 1)
     if (!highest || value > highest.value) {
       highest = { value, unit, lat, lon, at: row.captured_at || null }

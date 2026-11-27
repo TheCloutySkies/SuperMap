@@ -34,6 +34,7 @@ import CanvasBoard from './CanvasBoard'
 import TimelineBoard from './TimelineBoard'
 import AnalysisPanel from './AnalysisPanel'
 import AiPanel from './AiPanel'
+import EnrichmentPanel from './EnrichmentPanel'
 import './batman.css'
 
 const TABS = [
@@ -41,6 +42,7 @@ const TABS = [
   { id: 'timeline', label: 'Timeline' },
   { id: 'analysis', label: 'Analysis' },
   { id: 'evidence', label: 'Evidence' },
+  { id: 'enrich', label: 'Enrichment' },
   { id: 'report', label: 'Report' },
   { id: 'ai', label: 'AI' },
 ]
@@ -505,6 +507,17 @@ export default function BatmanView() {
                 </button>
               </div>
             </section>
+          ) : null}
+
+          {tab === 'enrich' ? (
+            <EnrichmentPanel
+              caseDoc={caseDoc}
+              ownerUid={ownerUid}
+              onImport={(incoming) => patch((prev) => ({
+                ...prev,
+                nodes: [...(prev.nodes || []), ...incoming].slice(0, CASE_LIMITS.nodes),
+              }))}
+            />
           ) : null}
 
           {tab === 'ai' ? (

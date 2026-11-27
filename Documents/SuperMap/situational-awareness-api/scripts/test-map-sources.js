@@ -79,7 +79,11 @@ async function testHeadOrGet(name, url, { method = 'GET' } = {}) {
 }
 
 async function testFirms() {
-  const key = '09415b5df0304c3802335984b511c111'
+  const key = String(process.env.FIRMS_MAP_KEY || '').trim()
+  if (!key) {
+    console.log('FIRMS_MAP_KEY is not set — skipping the fires check')
+    return
+  }
   // Free keys often only allow `world` area; app fetches world then filters by bbox.
   const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${key}/VIIRS_NOAA20_NRT/world/1`
   try {

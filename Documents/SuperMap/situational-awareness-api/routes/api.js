@@ -1934,6 +1934,16 @@ router.get('/stream/proxy', async (req, res) => {
       timeout: 15000,
       headers,
       validateStatus: () => true,
+      maxRedirects: 3,
+      // A streaming host on the allowlist must not redirect the fetch inward.
+      beforeRedirect: (options) => {
+        const { isPrivateHost } = require('../services/urlSafety')
+        if (isPrivateHost(options.hostname || options.host)) {
+          const error = new Error('Redirect target is a private address')
+          error.code = 'REDIRECT_BLOCKED'
+          throw error
+        }
+      },
     })
     let data = resp.data
     const contentType = resp.headers?.['content-type'] || ''

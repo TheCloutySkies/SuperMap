@@ -15,7 +15,18 @@ const app = express()
 const PORT = process.env.PORT || 3001
 
 app.use(cors())
-app.use(express.json())
+// A body larger than this is never a request this API makes, so the limit keeps
+// an unauthenticated POST from parking megabytes in memory on a 512 MB instance.
+app.use(express.json({ limit: '256kb' }))
+// Baseline response headers: no MIME sniffing, no framing by another origin, and
+// no referrer leak when a visitor follows a source link out of the app.
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN')
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+  res.setHeader('Permissions-Policy', 'geolocation=(self), camera=(), microphone=()')
+  next()
+})
 app.use('/api', apiRouter)
 
 app.get('/', (req, res) => {

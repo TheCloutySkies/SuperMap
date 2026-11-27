@@ -141,8 +141,14 @@ async function getSurveillance({ etag = null, lastModified = null } = {}) {
 async function getFirms({ etag = null, lastModified = null } = {}) {
   // The public key this app already shipped in the browser, so the fires layer
   // works before a FIRMS_MAP_KEY secret exists. Set your own to replace it.
-  const DEFAULT_FIRMS_KEY = '09415b5df0304c3802335984b511c111'
-  const key = String(process.env.FIRMS_MAP_KEY || DEFAULT_FIRMS_KEY).trim()
+  // No key is committed: the shared key that used to sit here is public in the
+  // repository's history, so it is read from the environment only and the
+  // source reports itself as unavailable when it is missing.
+  const key = String(process.env.FIRMS_MAP_KEY || '').trim()
+  if (!key) {
+    console.warn('[snapshotSources] fires: FIRMS_MAP_KEY is not set')
+    return { type: 'FeatureCollection', features: [] }
+  }
   if (!key) {
     const err = new Error('FIRMS_MAP_KEY is not set')
     err.gated = true

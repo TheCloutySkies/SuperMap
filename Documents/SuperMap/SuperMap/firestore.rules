@@ -152,19 +152,26 @@ service cloud.firestore {
       allow update, delete: if false;
     }
     match /secure_drops/{dropId} {
-      allow read: if true;
+      // The unguessable id is the capability, so a single document may be read.
+      // Listing is refused: it would hand out every id in the collection.
+      allow get: if true;
+      allow list: if false;
       allow create: if signedIn()
         && request.resource.data.expiresAtMs is number
         && request.resource.data.expiresAtMs <= request.time.toMillis() + 600000;
       allow update: if false;
-      allow delete: if signedIn();
+      // Only the sweeper (Admin SDK, which bypasses rules) deletes a drop.
+      allow delete: if false;
     }
     // Batman cases: one document per case, private by default. A case marked
     // 'link' is readable by anyone holding its unguessable id; only the owner
     // may write it. Cases shipped without the account database stay local.
     match /cases/{caseId} {
-      allow read: if resource.data.visibility == 'link'
+      // `get` is the share capability; `list` is only ever the owner's own cases,
+      // so nobody can page through every case that has ever been shared.
+      allow get: if resource.data.visibility == 'link'
         || (signedIn() && request.auth.uid in resource.data.memberUids);
+      allow list: if signedIn() && request.auth.uid in resource.data.memberUids;
       allow create: if signedIn() && notBanned()
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.memberUids == [request.auth.uid];

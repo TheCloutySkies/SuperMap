@@ -1,5 +1,6 @@
 const express = require('express')
 const axios = require('axios')
+const { isPrivateHost, redirectGuard, safeUrl } = require('../services/urlSafety')
 
 const router = express.Router()
 const MAX_BYTES = 25 * 1024 * 1024
@@ -43,15 +44,9 @@ function blockedHost(hostname) {
 }
 
 router.get('/fetch', async (req, res) => {
-  let target
-  try {
-    target = new URL(String(req.query.url || ''))
-  } catch {
-    return res.status(400).json({ error: 'That URL is not usable.' })
-  }
-  if (target.protocol !== 'http:' && target.protocol !== 'https:') {
-    return res.status(400).json({ error: 'Only http and https URLs can be loaded.' })
-  }
+  const checked = safeUrl(req.query.url)
+  if (!checked.ok) return res.status(400).json({ error: checked.error })
+  const target = new URL(checked.url)
   if (blockedHost(target.hostname)) {
     return res.status(400).json({ error: 'That host is not allowed.' })
   }
@@ -60,6 +55,15 @@ router.get('/fetch', async (req, res) => {
       responseType: 'arraybuffer',
       timeout: 15000,
       maxRedirects: 3,
+      // Every redirect hop is checked too: an allowed host must not hand the
+      // request to 127.0.0.1 or to the metadata service.
+      beforeRedirect: (options) => {
+        if (isPrivateHost(options.hostname || options.host)) {
+          const error = new Error('Redirect target is a private address')
+          error.code = 'REDIRECT_BLOCKED'
+          throw error
+        }
+      },
       maxContentLength: MAX_BYTES,
       maxBodyLength: MAX_BYTES,
       validateStatus: (status) => status >= 200 && status < 300,

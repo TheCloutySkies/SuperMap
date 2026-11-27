@@ -18,6 +18,12 @@ export const WEATHER_VIEW_ID = 'weather'
 /** Strategic desk: conflict, orbital, cyber and infrastructure. */
 export const STRATEGIC_VIEW_ID = 'strategic'
 
+/** Batman: the investigation workspace — cases, evidence board, timeline, report. */
+export const BATMAN_VIEW_ID = 'batman'
+export function isBatmanView(viewId) {
+  return viewId === BATMAN_VIEW_ID
+}
+
 export function resolveCrimeViewId(viewId) {
   if (viewId === CRIME_VIEW_ID || CRIME_VIEW_ALIASES.includes(viewId)) return CRIME_VIEW_ID
   return viewId

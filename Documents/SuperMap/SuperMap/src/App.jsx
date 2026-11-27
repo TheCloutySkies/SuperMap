@@ -11,6 +11,7 @@ import {
   isCrimeIntelligenceView,
   isWeatherView,
   isStrategicView,
+  isBatmanView,
   BRAND_LOGO_SRC,
   BRAND_LOGO_ALT,
 } from './constants'
@@ -26,6 +27,8 @@ import HomeScreen from './components/HomeScreen'
 import CrimeIntelligenceView from './components/CrimeIntelligenceView'
 import WeatherView from './components/WeatherView'
 import StrategicView from './components/StrategicView'
+import BatmanView from './features/batman/BatmanView'
+import CasePickerHost from './features/batman/CasePicker'
 import MapView from './components/MapView'
 import CommunityMapView from './components/CommunityMapView'
 import ForensicsView from './components/ForensicsView'
@@ -348,6 +351,7 @@ function App() {
   const isCrimeView = isCrimeIntelligenceView(activeView)
   const isWeatherPage = isWeatherView(activeView)
   const isStrategicPage = isStrategicView(activeView)
+  const isBatmanPage = isBatmanView(activeView)
   const isFeedView = ['osint-feeds', 'news-feeds', 'recent-videos', 'osint-x', 'advanced-search', 'broadcasts'].includes(activeView)
   const isSettingsView = activeView === 'settings'
   const tabVisibility = getTabVisibility()
@@ -623,6 +627,11 @@ function App() {
             <StrategicView />
           </div>
         )}
+        {isBatmanPage && (
+          <div className="main-content-scroll main-content-scroll--batman">
+            <BatmanView />
+          </div>
+        )}
         {activeView === 'osint-feeds' && (
           <FeedsView title="OSINT Feeds" activeView="osint-feeds" keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} onPinnedToMap={handlePinnedToMap} />
         )}
@@ -722,6 +731,7 @@ function App() {
     <>
     <div className={appClass}>
       <AmbientBackground />
+      <CasePickerHost />
       <AmbientBgLight />
       {!isMobileLayout && (
       <header className="app-omnibar-strip">

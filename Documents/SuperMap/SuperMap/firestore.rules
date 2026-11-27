@@ -8,7 +8,9 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
     function isAdmin() {
-      return signedIn() && request.auth.token.email == 'lonnie034@gmail.com';
+      return signedIn()
+        && request.auth.token.email == 'lonnie034@gmail.com'
+        && request.auth.token.email_verified == true;
     }
     function notBanned() {
       return signedIn() && !exists(/databases/$(database)/documents/bans/$(request.auth.uid));
@@ -105,9 +107,11 @@ service cloud.firestore {
         allow create: if signedIn()
           && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.memberUids
           && request.resource.data.fromUid == request.auth.uid
-          && request.resource.data.body is string
-          && request.resource.data.body.size() > 0
-          && request.resource.data.body.size() <= 4000
+          && (
+            (request.resource.data.body is string && request.resource.data.body.size() > 0)
+            || request.resource.data.keys().hasAny(['media', 'item'])
+          )
+          && (!request.resource.data.keys().hasAny(['body']) || request.resource.data.body.size() <= 4000)
           && (
             !request.resource.data.keys().hasAny(['expiresAtMs'])
             || (
@@ -115,13 +119,67 @@ service cloud.firestore {
               && request.resource.data.expiresAtMs >= request.time.toMillis() - 120000
               && request.resource.data.expiresAtMs <= request.time.toMillis() + 2764800000
             )
+          )
+          // A disappearing photo never stays longer than a week.
+          && (
+            !request.resource.data.keys().hasAny(['media'])
+            || request.resource.data.expiresAtMs <= request.time.toMillis() + 604800000
           );
         allow update: if false;
         allow delete: if signedIn()
           && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.memberUids
           && resource.data.expiresAtMs is number
           && resource.data.expiresAtMs <= request.time.toMillis();
+        // A photo message carries `media` with the object path; a photo never
+        // outlives a week, whatever the chat's own timer says.
+        match /typing/{uid} {
+          allow read: if signedIn()
+            && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.memberUids;
+          allow write: if signedIn()
+            && uid == request.auth.uid
+            && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.memberUids;
+        }
       }
+    }
+    match /admin_actions/{actionId} {
+      allow create: if isAdmin();
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+    match /audit/{entryId} {
+      allow create: if isAdmin();
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+    match /secure_drops/{dropId} {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.expiresAtMs is number
+        && request.resource.data.expiresAtMs <= request.time.toMillis() + 600000;
+      allow update: if false;
+      allow delete: if signedIn();
+    }
+    // Batman cases: one document per case, private by default. A case marked
+    // 'link' is readable by anyone holding its unguessable id; only the owner
+    // may write it. Cases shipped without the account database stay local.
+    match /cases/{caseId} {
+      allow read: if resource.data.visibility == 'link'
+        || (signedIn() && request.auth.uid in resource.data.memberUids);
+      allow create: if signedIn() && notBanned()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.memberUids == [request.auth.uid];
+      allow update, delete: if signedIn() && request.auth.uid == resource.data.ownerUid;
+    }
+    // Enrichment queue: the client only ever asks; the Actions worker answers
+    // with the Admin SDK, which bypasses these rules.
+    match /scan_requests/{requestId} {
+      allow read: if signedIn() && request.auth.uid == resource.data.ownerUid;
+      allow create: if signedIn() && request.data.ownerUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+    match /enrichment/{enrichmentId} {
+      allow read: if signedIn() && request.auth.uid == resource.data.ownerUid;
+      allow write: if false;
     }
     match /reports/{reportId} {
       allow create: if signedIn()

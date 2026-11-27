@@ -9,6 +9,7 @@ export const MODE_CATALOG = [
   { id: APP_MODES.CRIME, label: 'Crime', icon: '📉' },
   { id: APP_MODES.WEATHER, label: 'Weather', icon: '☁' },
   { id: APP_MODES.STRATEGIC, label: 'Strategic', icon: '◇' },
+  { id: APP_MODES.BATMAN, label: 'Batman', icon: '🦇' },
   { id: APP_MODES.FEEDS, label: 'News', icon: '☰' },
   { id: APP_MODES.BULLETIN, label: 'Bulletin', icon: '▤' },
   { id: APP_MODES.TOOLS, label: 'Tools', icon: '⚒' },

@@ -6,6 +6,7 @@ import { createProfilePost, deleteProfilePost, fileReport, queueReportClip, sear
 import { firebaseReady } from './firebaseClient'
 import './ItemMenu.css'
 import { getApiBase } from '../../lib/homeBootstrap'
+import { requestAddToCase } from '../batman/caseStore'
 
 const API_BASE = getApiBase()
 
@@ -322,6 +323,15 @@ export default function ItemMenu({ item, inline = false, profilePost = false }) 
               <button type="button" onClick={() => { setStep('send'); loadPeople('') }}>Send to User</button>
               <button type="button" onClick={addToVault}>Add to vault</button>
               <button type="button" onClick={addToReport}>Add to report</button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false)
+                  requestAddToCase(item)
+                }}
+              >
+                🦇 Add to Batman case
+              </button>
               <button type="button" onClick={() => locatePin('mine')} disabled={busy}>Pin to my maps</button>
               <button type="button" onClick={() => locatePin('community')} disabled={busy}>Pin to community</button>
               <button type="button" onClick={() => setStep('report')}>Report</button>

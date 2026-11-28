@@ -53,6 +53,8 @@ import OsintXView from './components/OsintXView'
 import BroadcastsView from './components/BroadcastsView'
 import SettingsView from './components/SettingsView'
 import AccountWorkspace from './features/accounts/AccountWorkspace'
+import MobileApp from './mobile/MobileApp'
+import { usePhoneShell } from './lib/layoutPref'
 import XpMenuBar from './components/xp/XpMenuBar'
 import XpErrorBox from './components/xp/XpErrorBox'
 import { useSuperMapAccount } from './features/accounts/SuperMapAccounts'
@@ -523,6 +525,7 @@ function App() {
   const appClass = ['app', `app--theme-${visuals.theme || 'dark'}`, visuals.compact ? 'app--compact' : '', `app--font-${visuals.fontSize || 'normal'}`, `app--device-${resolvedDeviceType}`].filter(Boolean).join(' ')
 
   const isMobileLayout = resolvedDeviceType === 'mobile'
+  const phoneShell = usePhoneShell()
 
   useEffect(() => {
     if (isMobileLayout) setIsRightSidebarOpen(false)
@@ -591,6 +594,9 @@ function App() {
     }
     return { label: 'View', items: [] }
   })()
+
+  // Phones get the phone app; the desktop shell is for pointer devices.
+  if (phoneShell) return <MobileApp />
 
   const mainContent = (
     <>

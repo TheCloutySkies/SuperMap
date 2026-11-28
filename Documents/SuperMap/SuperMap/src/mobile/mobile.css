@@ -1,0 +1,225 @@
+/* The phone app. Its own tokens and density: 16px body text, 44px targets,
+   one column, one bottom tab bar, sheets for anything that was a window. */
+
+.mob-app {
+  --mob-bg: #f7f7f5;
+  --mob-surface: #ffffff;
+  --mob-line: #d6d2c2;
+  --mob-ink: #1a1a1a;
+  --mob-dim: #555555;
+  --mob-accent: #003399;
+  --mob-tab-h: 58px;
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  background: var(--mob-bg);
+  color: var(--mob-ink);
+  font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+.mob-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 50px;
+  padding: 0 8px;
+  background: var(--mob-surface);
+  border-bottom: 1px solid var(--mob-line);
+}
+.mob-head-mark { width: 40px; display: inline-flex; align-items: center; justify-content: center; }
+.mob-head-blocks {
+  width: 16px;
+  height: 14px;
+  background: linear-gradient(90deg, #000 0 4px, transparent 4px 6px, #000 6px 10px, transparent 10px 12px, #000 12px 16px);
+}
+.mob-back,
+.mob-menu-btn {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--mob-accent);
+  font-size: 24px;
+  line-height: 1;
+}
+.mob-menu-btn { color: var(--mob-dim); font-size: 20px; }
+.mob-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mob-body { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.mob-body:has(.mob-map),
+.mob-body:has(.mob-account) { overflow: hidden; position: relative; }
+
+.mob-stack { display: flex; flex-direction: column; gap: 10px; padding: 10px; }
+
+.mob-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--mob-line);
+  border-radius: 12px;
+  background: var(--mob-surface);
+}
+.mob-card-kicker {
+  margin: 0;
+  color: var(--mob-dim);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.mob-card-title { margin: 0; font-size: 22px; line-height: 1.2; }
+.mob-card-text { margin: 0; font-size: 15px; color: var(--mob-ink); }
+.mob-card-meta { margin: 0; font-size: 13px; color: var(--mob-dim); }
+.mob-action {
+  min-height: 44px;
+  margin-top: 4px;
+  padding: 0 14px;
+  border: 1px solid var(--mob-accent);
+  border-radius: 10px;
+  background: var(--mob-accent);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.mob-list { list-style: none; margin: 0; padding: 0; }
+.mob-list li { display: flex; flex-direction: column; gap: 2px; padding: 10px 0; border-bottom: 1px solid var(--mob-line); }
+.mob-list li:last-child { border-bottom: 0; }
+.mob-list a { color: var(--mob-accent); font-size: 16px; text-decoration: none; }
+.mob-list span { color: var(--mob-dim); font-size: 13px; }
+.mob-list--cards li { padding: 0; border-bottom: 0; }
+
+.mob-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-height: 52px;
+  justify-content: center;
+  padding: 8px 12px;
+  border: 1px solid var(--mob-line);
+  border-radius: 12px;
+  background: var(--mob-surface);
+  color: var(--mob-ink);
+  text-align: left;
+  font-size: 16px;
+}
+.mob-row-title { font-weight: 600; }
+.mob-row-meta { color: var(--mob-dim); font-size: 13px; }
+.mob-row--quiet { color: var(--mob-dim); border-style: dashed; }
+
+.mob-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px;
+  background: var(--mob-surface);
+  border-bottom: 1px solid var(--mob-line);
+}
+.mob-chip {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--mob-line);
+  border-radius: 18px;
+  background: transparent;
+  color: var(--mob-dim);
+  font-size: 14px;
+  font-weight: 600;
+}
+.mob-chip.is-on { border-color: var(--mob-accent); color: var(--mob-accent); background: #eef2fa; }
+.mob-chip--action { margin-left: auto; }
+
+.mob-stories { list-style: none; margin: 0; padding: 0; }
+.mob-stories li { border-bottom: 1px solid var(--mob-line); }
+.mob-story {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  min-height: 84px;
+  padding: 12px;
+  border: 0;
+  background: var(--mob-surface);
+  color: var(--mob-ink);
+  text-align: left;
+  align-items: flex-start;
+}
+.mob-story img,
+.mob-story-blank {
+  flex: 0 0 auto;
+  width: 84px;
+  height: 62px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #ece9d8;
+}
+.mob-story-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.mob-story-title { font-size: 16px; font-weight: 600; line-height: 1.3; }
+.mob-story-meta { color: var(--mob-dim); font-size: 13px; }
+
+.mob-tabs {
+  display: flex;
+  min-height: var(--mob-tab-h);
+  background: var(--mob-surface);
+  border-top: 1px solid var(--mob-line);
+}
+.mob-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--mob-tab-h);
+  border: 0;
+  border-top: 2px solid transparent;
+  background: transparent;
+  color: var(--mob-dim);
+  font-size: 13px;
+  font-weight: 600;
+}
+.mob-tab.is-on { color: var(--mob-accent); border-top-color: var(--mob-accent); }
+
+.mob-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(0, 0, 0, 0.35);
+}
+.mob-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-height: 82dvh;
+  overflow-y: auto;
+  padding: 14px 14px calc(14px + env(safe-area-inset-bottom, 0));
+  border-radius: 16px 16px 0 0;
+  background: var(--mob-surface);
+}
+.mob-sheet-title { margin: 0 0 4px; font-size: 18px; font-weight: 700; }
+.mob-sheet-list { display: flex; flex-direction: column; gap: 8px; }
+
+.mob-map { position: absolute; inset: 0; }
+.mob-account { height: 100%; display: flex; flex-direction: column; }
+.mob-account .xp-page { height: 100%; }
+.mob-foot { margin: 4px 0 0; color: var(--mob-dim); font-size: 13px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mob-app * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

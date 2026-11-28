@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom'
 import { visibleModes } from '../../features/accounts/menuCatalog'
 import { useSuperMapAccount } from '../../features/accounts/SuperMapAccounts'
 import { presenceLabel } from '../../features/accounts/messageBits'
+import { getLayoutPref, setLayoutPref } from '../../lib/layoutPref'
 
 export default function StartMenu({ open, onClose, onMode, onView, onRefresh }) {
   const menuRef = useRef(null)
@@ -107,6 +108,15 @@ export default function StartMenu({ open, onClose, onMode, onView, onRefresh }) 
           {user ? 'Log Off' : 'Sign in'}
         </button>
         <button type="button" onClick={() => { onRefresh?.(); onClose() }}>Refresh data</button>
+        <button
+          type="button"
+          onClick={() => {
+            setLayoutPref(getLayoutPref() === 'mobile' ? 'desktop' : 'mobile')
+            onClose()
+          }}
+        >
+          {getLayoutPref() === 'mobile' ? 'Desktop layout' : 'Phone layout'}
+        </button>
         <button type="button" onClick={onClose}>Close</button>
       </div>
     </div>

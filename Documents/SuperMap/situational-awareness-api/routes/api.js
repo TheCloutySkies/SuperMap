@@ -46,6 +46,8 @@ router.use('/strategic', require('./strategic'))
 router.use('/console', require('./consoleSources'))
 // Batman: read a case's own nodes and answer a question about them (no writes).
 router.use('/batman', require('./batman'))
+// Entity graph from the SQLite ingest tables — read-only, published by the collector.
+router.use('/entities', require('./entities'))
 
 /**
  * Display routes serve the seeded snapshot. A visitor may not trigger an upstream

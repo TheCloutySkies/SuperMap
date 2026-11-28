@@ -1,37 +1,37 @@
 /**
- * Batman Mode's unified index.
+ * Batman Mode's unified object index.
  *
- * Every searchable object comes from data the app already publishes: the home
- * payload (news, X posts, events), the strategic console's signal engine and
- * the account vault/community pins. Nothing here calls an upstream on its own;
- * the index is rebuilt when a store emits a new version.
- *
- * A record is deliberately small and flat: one shape for every source, so one
- * query and one set of facets work across all of them.
+ * Sources are the app's existing stores, never a visitor-triggered upstream:
+ * published snapshot/API (news, X, events, console signals, entity graph),
+ * community pins (Firestore or local), the account vault and local cases.
+ * A record is deliberately flat: one shape for every kind, so one query and
+ * one set of facets can span all of them.
  */
 import Fuse from 'fuse.js'
 import { getConsoleState } from '../../../lib/consoleStore'
 import { getHomeState } from '../../../lib/homeStore'
 import { DOMAINS, REGIONS, REGION_OPTIONS, regionForPoint } from '../../../lib/consoleSignals'
 import { dedupeStories } from '../../../lib/storyDedupe'
+import { apiGetJson } from '../../../lib/homeBootstrap'
+import { loadSnapshot, subscribeSnapshot, startSnapshotPolling } from '../../../lib/snapshotClient'
+import { subscribeCommunityPins } from '../../accounts/communityPins'
 import { localCases } from '../caseStore'
 
 export const OBJECT_KINDS = Object.freeze([
-  { id: 'article', label: 'Articles', icon: '📰' },
-  { id: 'xpost', label: 'X posts', icon: '𝕏' },
-  { id: 'event', label: 'Events', icon: '📍' },
-  { id: 'signal', label: 'Signals', icon: '📡' },
-  { id: 'person', label: 'People', icon: '👤' },
-  { id: 'org', label: 'Organizations', icon: '🏛' },
-  { id: 'location', label: 'Locations', icon: '🗺' },
-  { id: 'document', label: 'Documents', icon: '📄' },
-  { id: 'pin', label: 'Community pins', icon: '📌' },
-  { id: 'case', label: 'Cases', icon: '🦇' },
+  { id: 'article', label: 'Articles', icon: 'FileText' },
+  { id: 'xpost', label: 'X posts', icon: 'AtSign' },
+  { id: 'event', label: 'Events', icon: 'MapPin' },
+  { id: 'signal', label: 'Signals', icon: 'Radio' },
+  { id: 'person', label: 'People', icon: 'User' },
+  { id: 'org', label: 'Organizations', icon: 'Building2' },
+  { id: 'location', label: 'Locations', icon: 'Globe' },
+  { id: 'document', label: 'Documents', icon: 'FolderOpen' },
+  { id: 'pin', label: 'Community pins', icon: 'Crosshair' },
+  { id: 'case', label: 'Cases', icon: 'Briefcase' },
 ])
 
 const KIND_IDS = new Set(OBJECT_KINDS.map((kind) => kind.id))
-const VAULT_KEY = 'supermap_vault_items_v1'
-const PIN_KEY = 'supermap_community_pins_v1'
+const ACCOUNTS_KEY = 'supermap.accounts.local.v1'
 
 function num(value, fallback = null) {
   const n = Number(value)
@@ -151,54 +151,131 @@ function fromSignals(signals) {
   return out
 }
 
-function readJson(key) {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(key) || 'null')
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
+/** Map the database's entity types onto the navigator's object kinds. */
+export function entityKind(type) {
+  const value = String(type || '').toLowerCase()
+  if (value === 'person') return 'person'
+  if (value === 'organization' || value === 'company') return 'org'
+  if (['city', 'country', 'region', 'airport', 'facility', 'infrastructure', 'place'].includes(value)) return 'location'
+  return null
 }
 
-function fromLocalSources(userUid) {
+function fromEntities(payload) {
   const out = []
-  const vault = readJson(VAULT_KEY)
-  for (const row of vault) {
+  const rows = Array.isArray(payload?.entities) ? payload.entities : (Array.isArray(payload) ? payload : [])
+  for (const row of rows) {
+    const kind = entityKind(row?.type)
+    if (!kind || !row.name) continue
+    const item = record({
+      id: `entity:${row.id || `${row.type}:${row.name}`}`,
+      kind,
+      title: row.name,
+      summary: `${row.type}${row.eventCount ? ` · ${row.eventCount} published event${row.eventCount === 1 ? '' : 's'}` : ''}${row.aliases?.length ? ` · also ${row.aliases.slice(0, 3).join(', ')}` : ''}`,
+      source: 'extracted from published reports',
+      sourceId: row.id,
+      lat: row.lat,
+      lon: row.lon,
+      t: row.lastSeen,
+      tags: [row.type, ...(row.aliases || []).slice(0, 3)],
+      confidence: Math.min(0.95, 0.55 + Math.min(5, row.eventCount || 0) * 0.08),
+      theater: row.theater,
+      ref: { source: 'entity graph', sourceId: row.id, url: null, entity: row },
+    })
+    if (item) out.push(item)
+  }
+  return out
+}
+
+/** Outlets and accounts are organisations too — a second, always-present feed. */
+function fromAttributedSources(payload) {
+  const out = []
+  const seen = new Set()
+  const features = Array.isArray(payload?.news?.features) ? payload.news.features : []
+  const posts = Array.isArray(payload?.osintX) ? payload.osintX : []
+  const add = (name, source, tag) => {
+    const clean = String(name || '').replace(/^@/, '').trim()
+    if (clean.length < 2 || clean.length > 80 || seen.has(clean.toLowerCase())) return
+    seen.add(clean.toLowerCase())
+    const item = record({
+      id: `org:ref:${clean.toLowerCase()}`,
+      kind: 'org',
+      title: clean,
+      summary: `Mentioned as ${source} in the published feed.`,
+      source,
+      tags: [tag],
+      confidence: 0.5,
+    })
+    if (item) out.push(item)
+  }
+  for (const feature of features) add(feature?.properties?.source, 'news outlet', 'outlet')
+  for (const post of posts) add(post?.account, 'X account', 'account')
+  return out
+}
+
+function readVault() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(ACCOUNTS_KEY) || '{}')
+    return Array.isArray(parsed?.vault) ? parsed.vault : []
+  } catch { return [] }
+}
+
+/** The account vault: Firestore rows when signed in, the real local shape otherwise. */
+function fromVault(vault) {
+  const out = []
+  for (const row of Array.isArray(vault) ? vault : []) {
+    const location = row.location || row.payload?.location
     const item = record({
       id: `document:${row.id || row.url || row.title}`,
       kind: 'document',
       title: row.title || row.name,
-      summary: row.summary || row.description || '',
-      source: row.source || 'vault',
-      url: row.url || row.link,
-      t: atOf(row.savedAtMs, row.createdAtMs, row.timestamp),
-      tags: row.tags,
-      confidence: 0.6,
-    })
-    if (item) out.push(item)
-  }
-  const pins = readJson(PIN_KEY)
-  for (const row of pins) {
-    const geometry = typeof row.geometryJson === 'string' ? JSON.parse(row.geometryJson || '{}') : (row.geometryJson || {})
-    const coords = geometry?.coordinates
-    const lon = Array.isArray(coords) ? num(coords[0]) : num(row.lon)
-    const lat = Array.isArray(coords) ? num(coords[1]) : num(row.lat)
-    const item = record({
-      id: `pin:${row.id}`,
-      kind: 'pin',
-      title: row.title,
-      summary: row.description || row.note || '',
-      source: row.ownerUid === userUid ? 'my pin' : 'community pin',
-      sourceId: row.id,
-      url: row.url,
-      lat,
-      lon,
+      summary: row.summary || '',
+      source: 'saved in vault',
+      url: row.sourceUrl || row.url || row.link,
+      lat: location?.lat,
+      lon: location?.lon ?? location?.lng,
       t: atOf(row.createdAtMs, row.updatedAtMs),
       tags: row.tags,
       confidence: 0.6,
     })
     if (item) out.push(item)
   }
+  return out
+}
+
+function pinPoint(row) {
+  const geometry = typeof row.geometryJson === 'string' ? JSON.parse(row.geometryJson || '{}') : (row.geometryJson || {})
+  const point = geometry?.coordinates
+  const fallback = typeof row.geometry === 'object' ? row.geometry?.coordinates : null
+  const coords = Array.isArray(point) && typeof point[0] === 'number' ? point : (Array.isArray(fallback) && typeof fallback[0] === 'number' ? fallback : null)
+  const at = row.createdAtMs || (row.createdAt?.toMillis ? row.createdAt.toMillis() : null)
+  return { point: coords, at }
+}
+
+function fromPins(pins) {
+  const out = []
+  for (const row of Array.isArray(pins) ? pins : []) {
+    const { point, at } = pinPoint(row)
+    const item = record({
+      id: `pin:${row.id}`,
+      kind: 'pin',
+      title: row.title || row.label,
+      summary: row.summary || row.description || row.note || '',
+      source: row.ownerName || 'community pin',
+      sourceId: row.id,
+      url: row.url,
+      lat: point ? num(point[1]) : null,
+      lon: point ? num(point[0]) : null,
+      t: atOf(at, row.updatedAtMs),
+      tags: row.tags || [row.kind].filter(Boolean),
+      confidence: 0.6,
+    })
+    if (item) out.push(item)
+  }
+  return out
+}
+
+function fromCases(userUid) {
+  const out = []
   for (const row of localCases(userUid)) {
     const item = record({
       id: `case:${row.id}`,
@@ -210,16 +287,66 @@ function fromLocalSources(userUid) {
       t: atOf(row.updatedAtMs, row.createdAtMs),
       tags: ['case'],
       confidence: 0.6,
-      ref: { source: 'case', sourceId: row.id, url: `/batman/cases`, caseId: row.id },
+      ref: { source: 'case', sourceId: row.id, url: '/batman/cases', caseId: row.id },
     })
     if (item) out.push(item)
   }
   return out
 }
 
+/* --------------------------------------------------------- live source state */
+
+let entitiesPayload = null
+let pins = []
+let vault = []
+let pinnedUid = null
+let entityListener = null
+
+/** Entities: published snapshot first, API cache second. Never an upstream call. */
+export function startDiscoverySources() {
+  startSnapshotPolling()
+  if (!entityListener) {
+    entityListener = subscribeSnapshot(({ state, manifest }) => {
+      if (state !== 'ready' || !manifest?.sources?.entities?.file) return
+      loadSnapshot('entities').then((data) => {
+        if (data) { entitiesPayload = data; window.dispatchEvent(new CustomEvent('supermap:discovery-changed')) }
+      }).catch(() => {})
+    })
+  }
+  if (!entitiesPayload) {
+    loadSnapshot('entities').then((data) => {
+      if (data) { entitiesPayload = data; window.dispatchEvent(new CustomEvent('supermap:discovery-changed')) }
+    }).catch(() => {})
+    apiGetJson('/api/entities', { timeoutMs: 10000 }).then((res) => {
+      if (res?.data?.entities) {
+        entitiesPayload = res.data
+        window.dispatchEvent(new CustomEvent('supermap:discovery-changed'))
+      }
+    }).catch(() => {})
+  }
+  return () => {}
+}
+
+/** Community pins use the real Firestore/local subscription. */
+export function subscribePins(cb) {
+  return subscribeCommunityPins((rows) => {
+    pins = Array.isArray(rows) ? rows : []
+    cb(pins)
+  })
+}
+
+export function setDiscoveryVault(rows, uid) {
+  vault = Array.isArray(rows) ? rows : readVault()
+  pinnedUid = uid || null
+}
+
+export function readLocalVault() {
+  return readVault()
+}
+
 let cached = { key: '', records: [], fuse: null }
 
-/** Build (or reuse) the index from the current store state. Pure and read-only. */
+/** Build (or reuse) the index from the current store state. */
 export function getDiscoveryIndex({ userUid = null, force = false } = {}) {
   const home = getHomeState().payload
   const consoleState = getConsoleState()
@@ -227,14 +354,21 @@ export function getDiscoveryIndex({ userUid = null, force = false } = {}) {
     home?.savedAt || null,
     consoleState.version || null,
     consoleState.computedAt || null,
-    userUid || '',
-    Object.keys(localStorage || {}).length ? (localStorage.getItem(VAULT_KEY) || '').length : 0,
-    (typeof localStorage !== 'undefined' ? localStorage.getItem(PIN_KEY) : '')?.length || 0,
+    entitiesPayload?.exportedAt || null,
+    entitiesPayload?.entities?.length || 0,
+    pins.length,
+    vault.length,
+    userUid || pinnedUid || '',
+    localCases(userUid).length,
   ])
   if (!force && cached.key === key) return cached
   const deduped = new Map()
   for (const item of [
-    ...fromLocalSources(userUid),
+    ...fromCases(userUid),
+    ...fromPins(pins),
+    ...fromVault(vault),
+    ...fromAttributedSources(home),
+    ...fromEntities(entitiesPayload),
     ...fromSignals(consoleState.signals),
     ...fromHome(home),
   ]) {
@@ -295,7 +429,7 @@ export function theaterLabel(id) {
   return REGIONS[id]?.label || REGION_OPTIONS.find((entry) => entry.id === id)?.label || id || 'Everywhere'
 }
 
-/** Shared entities/tags/theater/time: the "related objects" in a Browser drawer. */
+/** Shared entities/tags/theater/time: the "related objects" in a record panel. */
 export function relatedObjects(index, object, limit = 6) {
   if (!object) return []
   const tags = new Set(object.tags || [])

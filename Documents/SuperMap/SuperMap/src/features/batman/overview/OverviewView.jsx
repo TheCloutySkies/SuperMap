@@ -7,7 +7,10 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSuperMapAccount } from '../../accounts/SuperMapAccounts'
-import { OBJECT_KINDS, getDiscoveryIndex, facetCounts, searchIndex } from './discoveryIndex'
+import {
+  OBJECT_KINDS, getDiscoveryIndex, facetCounts, searchIndex,
+  startDiscoverySources, subscribePins, setDiscoveryVault, readLocalVault,
+} from './discoveryIndex'
 import FacetRail from './FacetRail'
 import ResultsGrid from './ResultsGrid'
 import ObjectBrowser from './ObjectBrowser'
@@ -41,7 +44,7 @@ function toggle(list, value) {
 const TIME_MS = { any: 0, '24h': 86400000, '7d': 604800000, '30d': 2592000000 }
 
 export default function OverviewView({ onGoCases }) {
-  const { user } = useSuperMapAccount()
+  const { user, vault } = useSuperMapAccount()
   const [query, setQuery] = useState('')
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [indexVersion, setIndexVersion] = useState(0)
@@ -54,13 +57,27 @@ export default function OverviewView({ onGoCases }) {
   useEffect(() => {
     startHomePolling()
     startConsole()
-    const stopHome = subscribeHome(() => setIndexVersion((n) => n + 1))
+    const bump = () => setIndexVersion((n) => n + 1)
+    const stopHome = subscribeHome(bump)
     const stopConsole = subscribeConsole((state) => {
       setSituation({ posture: state.posture || null, convergence: state.convergence || [] })
-      setIndexVersion((n) => n + 1)
+      bump()
     })
-    return () => { stopHome(); stopConsole() }
+    const stopEntities = startDiscoverySources()
+    const stopPins = subscribePins(bump)
+    window.addEventListener('supermap:discovery-changed', bump)
+    return () => {
+      stopHome(); stopConsole(); stopEntities(); stopPins()
+      window.removeEventListener('supermap:discovery-changed', bump)
+    }
   }, [])
+
+  useEffect(() => {
+    setDiscoveryVault(vault || readLocalVault(), user?.uid || null)
+    const bump = () => setIndexVersion((n) => n + 1)
+    const timer = setTimeout(bump, 0)
+    return () => clearTimeout(timer)
+  }, [vault, user?.uid])
 
   const index = useMemo(
     () => getDiscoveryIndex({ userUid: user?.uid || null, force: indexVersion > 0 }),

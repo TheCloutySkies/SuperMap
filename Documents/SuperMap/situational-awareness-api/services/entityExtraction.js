@@ -41,6 +41,20 @@ function extractOrganizations(text) {
   }
 }
 
+/** Named people, conservative: compromise's person tagger, full names only. */
+function extractPeople(text) {
+  if (!text || typeof text !== 'string') return []
+  try {
+    const out = nlp(text).people().out('array')
+    const arr = Array.isArray(out) ? out : (typeof out === 'string' ? [out] : [])
+    return [...new Set(arr
+      .map((name) => String(name).replace(/[“”"',]/g, '').trim())
+      .filter((name) => name.length >= 4 && name.length <= 60 && /\s/.test(name) && !/^\d/.test(name)))]
+  } catch {
+    return []
+  }
+}
+
 /**
  * Extract entities from text. Returns [{ type, name }].
  * Uses compromise for places and organizations; type inferred heuristically.
@@ -64,6 +78,9 @@ function extractEntities(text) {
   const orgs = extractOrganizations(text)
   orgs.forEach((o) => add(o, 'organization'))
 
+  const people = extractPeople(text)
+  people.forEach((name) => add(name, 'person'))
+
   return entities
 }
 
@@ -71,5 +88,6 @@ module.exports = {
   extractEntities,
   extractPlaces,
   extractOrganizations,
+  extractPeople,
   ENTITY_TYPES,
 }

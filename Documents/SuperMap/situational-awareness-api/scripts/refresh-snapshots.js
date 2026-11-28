@@ -76,6 +76,8 @@ const GATE_HOURS = {
   'conflict-acled': 24,
   'major-hazards': 4,
   events: 4,
+  // Entity graph: derived from ingested SQLite rows, no upstream call.
+  entities: 4,
   home: 4,
 }
 
@@ -501,7 +503,7 @@ async function main() {
   }
 
   // 2) Sources that are services rather than routes.
-  if (!ONLY || ONLY.includes('keyword-tags') || ONLY.includes('events')) {
+  if (!ONLY || ONLY.includes('keyword-tags') || ONLY.includes('events') || ONLY.includes('entities')) {
     try {
       if (!ONLY || ONLY.includes('keyword-tags')) {
         const keywordTags = require('../services/keywordTags')
@@ -549,6 +551,25 @@ async function main() {
         }
         okCount += 1
         console.log('[collector] events: ok', capped.length)
+      }
+      if (!ONLY || ONLY.includes('entities')) {
+        const { listEntities, refreshEntityGraph } = require('../routes/entities')
+        refreshEntityGraph({ limit: 1500 })
+        const rows = listEntities({ limit: 1200 })
+        fs.writeFileSync(
+          path.join(OUT_DIR, `entities.${RUN_ID}.json`),
+          `${scrub(JSON.stringify({ entities: rows, exportedAt: new Date().toISOString() }))}\n`,
+          'utf8',
+        )
+        manifestSources.entities = {
+          file: `entities.${RUN_ID}.json`,
+          fetchedAt: new Date().toISOString(),
+          ok: true,
+          stale: false,
+          count: rows.length,
+        }
+        okCount += 1
+        console.log('[collector] entities: ok', rows.length)
       }
     } catch (err) {
       failCount += 1

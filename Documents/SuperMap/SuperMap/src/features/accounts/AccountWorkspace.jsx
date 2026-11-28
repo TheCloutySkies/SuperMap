@@ -41,62 +41,52 @@ export default function AccountWorkspace() {
     ['settings', 'Settings'],
   ]
   return (
-    <div className="sm-workspace-scrim" role="dialog" aria-modal="true">
-      <div className="sm-workspace">
-        <div className="sm-workspace-header xp-page-tools">
-          <div className="sm-workspace-title">
-            <span className="sm-auth-mark">{user?.emoji || '◈'}</span>
-            <div>
-              <h2><PresenceDot presence={user?.presence} />{personTitle(user)}</h2>
-              <p>{personHandle(user)} · #{personNumber(user)} · {user?.anonymous ? 'Anonymous account' : (user?.email || 'Signed in')}</p>
-            </div>
-          </div>
-          <div className="sm-workspace-user">
-            <button type="button" className="sm-ghost-btn" onClick={account.signOutUser}>Sign out</button>
-            <button type="button" className="sm-modal-close" onClick={() => account.setOverlay(null)} aria-label="Close">
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-              </svg>
-            </button>
-          </div>
+    <div className="xp-page sm-account-page">
+      <div className="xp-page-tools" role="toolbar" aria-label="User Accounts">
+        <span className="sm-auth-mark" aria-hidden="true">{user?.emoji || '◈'}</span>
+        <div className="sm-account-ident">
+          <p className="sm-account-name"><PresenceDot presence={user?.presence} />{personTitle(user)}</p>
+          <p className="sm-account-meta">
+            {personHandle(user)} · #{personNumber(user)} · {user?.anonymous ? 'Anonymous account' : (user?.email || 'Signed in')}
+          </p>
         </div>
-        <div className="sm-workspace-body">
-          <menu role="tablist" className="sm-workspace-nav xp-tabs" aria-label="Account sections">
-            {tabs.map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={tab === id}
-                className={tab === id ? 'active' : ''}
-                onClick={() => setWorkspaceTab(id)}
-              >
-                {label}
-              </button>
-            ))}
-          </menu>
-          <main className="sm-workspace-main">
-            {tab === 'vault' ? <VaultPanel /> : null}
-            {tab === 'profile' ? <ProfilePanel /> : null}
-            {tab === 'messages' ? (
-              <section className="sm-messages-standin">
-                <h3>GPN Messenger is open on the desktop</h3>
-                <p className="sm-local-note">
-                  The contact list and the conversation float above this page. Close the contact list to come back here.
-                </p>
-              </section>
-            ) : null}
-            {tab === 'settings' ? <SettingsPanel /> : null}
-            {tab === 'reports' ? (
-              <section className="sm-account-reports">
-                <ReportMakerView />
-                <InfrastructurePanel />
-                {isOwner ? <ReportsPanel /> : null}
-                {isOwner ? <ModerationPanel /> : null}
-              </section>
-            ) : null}
-          </main>
-        </div>
+        <span className="xp-spacer" />
+        <button type="button" onClick={account.signOutUser}>Sign out</button>
+      </div>
+      <menu role="tablist" className="xp-tabs" aria-label="Account sections">
+        {tabs.map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            className={tab === id ? 'active' : ''}
+            onClick={() => setWorkspaceTab(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </menu>
+      <div className="xp-page-body">
+        {tab === 'vault' ? <VaultPanel /> : null}
+        {tab === 'profile' ? <ProfilePanel /> : null}
+        {tab === 'messages' ? (
+          <section className="sm-messages-standin">
+            <h3>GPN Messenger is open on the desktop</h3>
+            <p className="sm-local-note">
+              The contact list and the conversation float above this page. Close the contact list to come back here.
+            </p>
+          </section>
+        ) : null}
+        {tab === 'settings' ? <SettingsPanel /> : null}
+        {tab === 'reports' ? (
+          <section className="sm-account-reports">
+            <ReportMakerView />
+            <InfrastructurePanel />
+            {isOwner ? <ReportsPanel /> : null}
+            {isOwner ? <ModerationPanel /> : null}
+          </section>
+        ) : null}
       </div>
       {tab === 'messages' ? <MsnMessenger /> : null}
     </div>

@@ -3,12 +3,14 @@
  * the top, the mode list on the left, the places on the right, and the footer.
  */
 import { useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { visibleModes } from '../../features/accounts/menuCatalog'
 import { useSuperMapAccount } from '../../features/accounts/SuperMapAccounts'
 import { presenceLabel } from '../../features/accounts/messageBits'
 
 export default function StartMenu({ open, onClose, onMode, onView, onRefresh }) {
   const menuRef = useRef(null)
+  const navigate = useNavigate()
   const { user, setOverlay, setWorkspaceTab, signOutUser } = useSuperMapAccount()
 
   useEffect(() => {
@@ -39,7 +41,7 @@ export default function StartMenu({ open, onClose, onMode, onView, onRefresh }) 
       return
     }
     setWorkspaceTab('vault')
-    setOverlay('workspace')
+    navigate('/accounts')
   }
 
   return (

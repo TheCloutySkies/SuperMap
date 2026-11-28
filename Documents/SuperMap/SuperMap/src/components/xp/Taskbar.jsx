@@ -5,6 +5,7 @@
  * The account lives at the top of the start menu, so there is no tray chip.
  */
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Grid2X2, House, CloudSun, Vault, Settings } from 'lucide-react'
 import { useSuperMapAccount } from '../../features/accounts/SuperMapAccounts'
 import { HOME_STATE, getHomeState, subscribeHome } from '../../lib/homeStore'
@@ -29,6 +30,7 @@ export default function Taskbar({
   onQuickLaunch,
 }) {
   const now = useClock()
+  const navigate = useNavigate()
   const { user, unread, vault, setOverlay, setWorkspaceTab } = useSuperMapAccount()
   const badge = unread > 0 ? unread : vault.length > 0 ? vault.length : 0
   const [homeState, setHomeState] = useState(() => getHomeState()?.state || HOME_STATE.SEED)
@@ -41,7 +43,7 @@ export default function Taskbar({
       return
     }
     setWorkspaceTab('vault')
-    setOverlay('workspace')
+    navigate('/accounts')
   }
 
   return (

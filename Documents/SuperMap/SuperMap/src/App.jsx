@@ -52,6 +52,8 @@ import WeatherHUD from './components/WeatherHUD'
 import OsintXView from './components/OsintXView'
 import BroadcastsView from './components/BroadcastsView'
 import SettingsView from './components/SettingsView'
+import AccountWorkspace from './features/accounts/AccountWorkspace'
+import { useSuperMapAccount } from './features/accounts/SuperMapAccounts'
 import ResourcesView, { RESOURCE_SECTIONS } from './components/ResourcesView'
 import ToolsView from './components/ToolsView'
 import { TOOLS_LIST } from './components/toolsList'
@@ -111,6 +113,7 @@ const FEED_VIEWS = [
 
 function App() {
   const navigate = useNavigate()
+  const { user } = useSuperMapAccount()
   const location = useLocation()
   const route = useMemo(() => viewFromPath(location.pathname), [location.pathname])
   // A read-only case link is its own page: it needs no account and no mode rail.
@@ -345,7 +348,9 @@ function App() {
   }, [location.pathname, navigate])
   const xpTitle = activeView === 'home'
     ? 'Good Palantir'
-    : (menuModes.find((mode) => mode.id === appMode)?.label || 'Good Palantir')
+    : activeView === 'accounts'
+      ? `User Accounts${user?.displayName ? ` — ${user.displayName}` : ''}`
+      : (menuModes.find((mode) => mode.id === appMode)?.label || 'Good Palantir')
 
   useEffect(() => subscribeXpWindows(setXpState), [])
 
@@ -751,6 +756,7 @@ function App() {
             }}
           />
         )}
+        {activeView === 'accounts' && <AccountWorkspace />}
         {activeView === 'settings' && (
           <SettingsView
             apiBase={apiBase}

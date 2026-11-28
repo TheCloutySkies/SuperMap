@@ -81,6 +81,7 @@ const VIEW_TO_PATH = Object.freeze({
   forensics: '/forensics',
   bulletin: '/bulletin',
   settings: '/settings',
+  accounts: '/accounts',
   'search-results': '/search',
 })
 
@@ -105,6 +106,7 @@ const PATH_TO_VIEW = Object.freeze({
   '/forensics': 'forensics',
   '/bulletin': 'bulletin',
   '/settings': 'settings',
+  '/accounts': 'accounts',
   '/search': 'search-results',
 })
 
@@ -222,6 +224,7 @@ export function modeFromView(viewId) {
   if (resolved === 'report-maker') return APP_MODES.REPORTS
   if (resolved === 'bulletin') return APP_MODES.BULLETIN
   if (resolved === 'settings') return APP_MODES.SETTINGS
+  if (resolved === 'accounts') return APP_MODES.SETTINGS
   return APP_MODES.HOME
 }
 

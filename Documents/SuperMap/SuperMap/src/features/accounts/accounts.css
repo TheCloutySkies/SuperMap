@@ -296,3 +296,184 @@
   background: #0d1824;
 }
 .sm-messages-standin h3 { margin: 0; color: #e9f3fb; }
+
+/* ── Windows faces for the account surfaces ─────────────────────────
+   The workspace is a page inside the XP window now, and the two dialogs
+   (sign in, public profile) are XP dialogs. These rules replace the dark
+   night-ops colours with XP faces; they come last, so they win. */
+
+.sm-account-page,
+.sm-auth-card,
+.sm-public {
+  color: #1a1a1a;
+  font-family: Tahoma, "Segoe UI", sans-serif;
+  font-size: 12px;
+}
+
+.sm-account-ident { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sm-account-ident .sm-auth-mark { font-size: 18px; line-height: 1; }
+.sm-account-name { margin: 0; display: flex; align-items: center; gap: 5px; font-weight: 700; }
+.sm-account-meta { margin: 0; color: #555; font-size: 11px; }
+
+.sm-account-page .xp-page-body { gap: 10px; }
+.sm-account-page .sm-local-note,
+.sm-auth-card .sm-local-note,
+.sm-public .sm-local-note { color: #555; }
+
+/* Forms read as Windows fields. */
+.sm-account-page .sm-form,
+.sm-auth-card .sm-auth-form,
+.sm-auth-card .sm-form { display: grid; gap: 8px; }
+.sm-account-page .sm-form label,
+.sm-auth-card .sm-form label,
+.sm-auth-card .sm-auth-form label { color: #1a1a1a; font-size: 11px; display: grid; gap: 3px; }
+.sm-account-page .sm-form :is(input, select, textarea),
+.sm-auth-card .sm-form :is(input, select, textarea),
+.sm-auth-card .sm-auth-form :is(input, select, textarea) {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 22px;
+  padding: 2px 4px;
+  border: 1px solid #7f9db9;
+  border-radius: 0;
+  background: #fff;
+  color: #1a1a1a;
+  font: 11px Tahoma, "Segoe UI", sans-serif;
+}
+
+/* Buttons are Windows controls. */
+.sm-account-page button,
+.sm-auth-card button,
+.sm-public button,
+.sm-modal-close {
+  border-radius: 0;
+  box-shadow: none;
+  font: 11px Tahoma, "Segoe UI", sans-serif;
+  cursor: pointer;
+}
+.sm-account-page .sm-primary-btn,
+.sm-account-page .sm-ghost-btn,
+.sm-account-page .sm-danger-btn,
+.sm-account-page .sm-google-btn,
+.sm-auth-card .sm-primary-btn,
+.sm-auth-card .sm-ghost-btn,
+.sm-auth-card .sm-google-btn,
+.sm-public .sm-primary-btn {
+  padding: 0 10px;
+  min-height: 23px;
+  border: 1px solid #7f9db9;
+  background: #ece9d8;
+  color: #1a1a1a;
+  box-shadow: inset -1px -1px #aca899, inset 1px 1px #fff;
+}
+.sm-account-page :is(.sm-primary-btn, .sm-ghost-btn, .sm-danger-btn):active,
+.sm-auth-card :is(.sm-primary-btn, .sm-ghost-btn):active {
+  box-shadow: inset -1px -1px #fff, inset 1px 1px #aca899;
+}
+.sm-account-page .sm-danger-btn { color: #a4262c; }
+.sm-auth-card .sm-auth-error,
+.sm-account-page .sm-auth-error { margin: 0; color: #a4262c; font-size: 11px; }
+
+/* Panes, cards and lists. */
+.sm-account-page :is(.sm-vault, .sm-card, .sm-thought, .sm-bulletin-preview, .sm-list-head, .sm-vault-create, .sm-vault-toolbar, .sm-vault-filters, .sm-organize, .sm-tag-row, .sm-thought-form, .sm-pin-form),
+.sm-public :is(.sm-card, .sm-thought, .sm-public-head) {
+  border: 1px solid #aca899;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: none;
+  padding: 6px 8px;
+}
+.sm-account-page :is(.sm-vault-toolbar, .sm-vault-filters, .sm-tag-row) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  background: #ece9d8;
+}
+.sm-account-page .sm-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.sm-account-page .sm-list-head { font-weight: 700; color: #003399; }
+.sm-account-page .sm-type-badge,
+.sm-public .sm-type-badge {
+  display: inline-block;
+  margin-bottom: 3px;
+  padding: 0 4px;
+  border: 1px solid #aca899;
+  background: #ece9d8;
+  color: #003399;
+  font-size: 10px;
+  font-weight: 700;
+}
+.sm-account-page :is(h3, h4),
+.sm-public :is(h2, h3) { margin: 0 0 4px; font-size: 12px; color: #003399; }
+.sm-account-page .sm-card-summary,
+.sm-public .sm-card-summary { color: #444; }
+.sm-account-page .sm-check { display: flex; align-items: center; gap: 6px; color: #1a1a1a; }
+.sm-account-page .sm-bio,
+.sm-public .sm-bio { color: #333; }
+.sm-account-page .sm-profile-head,
+.sm-public .sm-public-head { display: flex; align-items: flex-start; gap: 8px; }
+.sm-account-page .sm-public-tagline,
+.sm-public .sm-public-tagline { margin: 0; color: #555; font-style: italic; }
+.sm-account-page .sm-auth-mark,
+.sm-auth-card .sm-auth-mark { color: #003399; }
+.sm-auth-card .sm-auth-brand h2 { font-size: 15px; color: #003399; }
+.sm-auth-card .sm-auth-free { color: #333; }
+.sm-auth-card .sm-auth-tabs { display: flex; gap: 4px; margin: 8px 0; }
+.sm-auth-card .sm-auth-tabs button {
+  padding: 0 12px;
+  min-height: 23px;
+  border: 1px solid #7f9db9;
+  background: #ece9d8;
+  color: #1a1a1a;
+}
+.sm-auth-card .sm-auth-tabs button.active { border-color: #316ac5; background: #dbe7ff; font-weight: 700; }
+.sm-auth-card .sm-modal-close,
+.sm-public .sm-modal-close {
+  width: 21px;
+  height: 21px;
+  min-width: 21px;
+  border: 1px solid #7f9db9;
+  border-radius: 0;
+  background: #ece9d8;
+  color: #1a1a1a;
+  box-shadow: inset -1px -1px #aca899, inset 1px 1px #fff;
+}
+
+/* The sign-in card and the profile are dialogs over a plain scrim. */
+.sm-modal-scrim { background: rgba(0, 0, 0, 0.28); }
+.sm-public-scrim { background: rgba(0, 0, 0, 0.28); }
+.sm-auth-card,
+.sm-public {
+  border: 1px solid #7f9db9;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.35);
+  padding: 10px 12px;
+}
+.sm-auth-card { width: min(420px, 100%); }
+.sm-public { width: min(560px, 100%); max-height: min(78vh, 620px); overflow: auto; }
+.sm-public .sm-public-emoji { font-size: 26px; margin: 0 0 2px; }
+
+/* The emoji picker is a Windows popup here too. */
+.sm-account-page .sm-emoji-panel,
+.sm-auth-card .sm-emoji-panel {
+  border: 1px solid #7f9db9;
+  border-radius: 0;
+  background: #fff;
+  color: #1a1a1a;
+}
+.sm-account-page .sm-emoji-grid button,
+.sm-auth-card .sm-emoji-grid button {
+  width: 26px;
+  height: 26px;
+  border: 1px solid #aca899;
+  border-radius: 0;
+  background: #fff;
+}
+.sm-account-page .sm-emoji-grid button.active { border-color: #316ac5; background: #dbe7ff; }
+.sm-account-page .sm-messages-standin,
+.sm-account-page .sm-account-reports {
+  border: 1px solid #aca899;
+  background: #fff;
+}
+.sm-account-page .sm-messages-standin h3 { color: #003399; }

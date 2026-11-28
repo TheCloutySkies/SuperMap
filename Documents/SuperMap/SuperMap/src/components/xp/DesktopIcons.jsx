@@ -4,6 +4,7 @@
  * Click selects, double-click or Enter opens, a single tap opens on touch.
  */
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import XpIcon from './XpIcon'
 import { visibleModes } from '../../features/accounts/menuCatalog'
 import { useSuperMapAccount } from '../../features/accounts/SuperMapAccounts'
@@ -29,6 +30,7 @@ const MODE_ICONS = {
 }
 
 export default function DesktopIcons({ onMode, onView, onOpenApplet }) {
+  const navigate = useNavigate()
   const { user, setOverlay, setWorkspaceTab } = useSuperMapAccount()
   const [selected, setSelected] = useState('dashboard')
   const [menu, setMenu] = useState(null)
@@ -61,7 +63,7 @@ export default function DesktopIcons({ onMode, onView, onOpenApplet }) {
         return
       }
       setWorkspaceTab('vault')
-      setOverlay('workspace')
+      navigate('/accounts')
     } else if (entry.mode) onMode?.(entry.mode)
   }
 

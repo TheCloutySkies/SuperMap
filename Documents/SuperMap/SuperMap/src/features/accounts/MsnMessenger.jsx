@@ -26,6 +26,7 @@ import {
   subscribeTyping,
   TYPING_LIVE_MS,
 } from './socialData'
+import { raiseError } from '../../lib/xpErrors'
 import './msn.css'
 
 /**
@@ -475,6 +476,7 @@ export default function MsnMessenger() {
       if (photoRef.current) photoRef.current.value = ''
     } else {
       setSendError(result.error || 'Could not send')
+      raiseError('Message not sent', result.error || 'The message did not go through.')
     }
   }
 
@@ -492,12 +494,14 @@ export default function MsnMessenger() {
     }
     if (!/^image\//i.test(file.type || '')) {
       setPhotoError('Photos only.')
+      raiseError('Not a photo', 'Only image files can be attached.')
       setPhoto(null)
       event.target.value = ''
       return
     }
     if (file.size > MAX_MEDIA_BYTES) {
       setPhotoError(`Keep the photo under ${Math.round(MAX_MEDIA_BYTES / 1048576)} MB.`)
+      raiseError('Photo too large', `Keep the photo under ${Math.round(MAX_MEDIA_BYTES / 1048576)} MB.`)
       setPhoto(null)
       event.target.value = ''
       return

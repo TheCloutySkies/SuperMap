@@ -22,6 +22,7 @@ import {
   markReportReviewed,
 } from './socialData'
 import ModerationPanel from './ModerationPanel'
+import { raiseError } from '../../lib/xpErrors'
 
 function PresenceDot({ presence }) {
   const label = presenceLabel(presence)
@@ -498,7 +499,10 @@ function SettingsPanel() {
     setError('')
     const result = await updateAccount({ displayName: name, emoji, discoverable, bio, presence, bulletinTagline: tagline })
     setSaved(result.ok ? 'Saved' : '')
-    if (!result.ok) setError(result.error || 'Could not save')
+    if (!result.ok) {
+      setError(result.error || 'Could not save')
+      raiseError('Settings not saved', result.error || 'The account settings did not save.')
+    }
   }
 
   function toggleMode(id) {

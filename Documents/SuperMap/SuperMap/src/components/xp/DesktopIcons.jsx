@@ -29,7 +29,7 @@ const MODE_ICONS = {
   SETTINGS: 'settings',
 }
 
-export default function DesktopIcons({ onMode, onView, onOpenApplet }) {
+export default function DesktopIcons({ onMode, onView, onOpenApplet, onRefresh }) {
   const navigate = useNavigate()
   const { user, setOverlay, setWorkspaceTab } = useSuperMapAccount()
   const [selected, setSelected] = useState('dashboard')
@@ -86,7 +86,17 @@ export default function DesktopIcons({ onMode, onView, onOpenApplet }) {
   }, [])
 
   return (
-    <div className="xp-desktop-icons" ref={gridRef} role="list" aria-label="Desktop">
+    <div
+      className="xp-desktop-icons"
+      ref={gridRef}
+      role="list"
+      aria-label="Desktop"
+      onContextMenu={(event) => {
+        if (event.target.closest?.('.xp-desk-icon')) return
+        event.preventDefault()
+        setMenu({ id: null, x: event.clientX, y: event.clientY })
+      }}
+    >
       {icons.map((entry) => (
         <button
           key={entry.id}
@@ -119,11 +129,38 @@ export default function DesktopIcons({ onMode, onView, onOpenApplet }) {
       ))}
       {menu ? (
         <div className="xp-context" style={{ left: `${menu.x}px`, top: `${menu.y}px` }} role="menu">
-          <button type="button" role="menuitem" onClick={() => { const entry = icons.find((row) => row.id === menu.id); if (entry) open(entry); setMenu(null) }}>
-            Open
+          {menu.id ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                const entry = icons.find((row) => row.id === menu.id)
+                if (entry) open(entry)
+                setMenu(null)
+              }}
+            >
+              Open
+            </button>
+          ) : null}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              onRefresh?.()
+              setMenu(null)
+            }}
+          >
+            Refresh data
           </button>
-          <button type="button" role="menuitem" onClick={() => setMenu(null)}>
-            Properties
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              onView?.('settings')
+              setMenu(null)
+            }}
+          >
+            {menu.id ? 'Properties' : 'Display Properties'}
           </button>
         </div>
       ) : null}

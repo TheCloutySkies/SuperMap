@@ -54,6 +54,7 @@ import BroadcastsView from './components/BroadcastsView'
 import SettingsView from './components/SettingsView'
 import AccountWorkspace from './features/accounts/AccountWorkspace'
 import XpMenuBar from './components/xp/XpMenuBar'
+import XpErrorBox from './components/xp/XpErrorBox'
 import { useSuperMapAccount } from './features/accounts/SuperMapAccounts'
 import ResourcesView, { RESOURCE_SECTIONS } from './components/ResourcesView'
 import ToolsView from './components/ToolsView'
@@ -654,6 +655,7 @@ function App() {
             onView={(viewId) => setActiveViewWithMode(viewId)}
             onMode={(mode) => handleFooterNav(mode)}
             onOpenApplet={(panel) => openApplet(panel)}
+            onRefresh={() => refreshHomeNow({ force: true })}
           />
         )}
         {activeView === 'home' && (
@@ -969,6 +971,7 @@ function App() {
       onView={(viewId) => setActiveViewWithMode(viewId)}
       onRefresh={() => refreshHomeNow({ force: true })}
     />
+    <XpErrorBox />
     {welcomeOpen ? <WelcomeWindow onClose={() => setWelcomeOpen(false)} /> : null}
     <MobileLayoutPrompt onChoice={() => setVisualsKey((k) => k + 1)} />
     {showTutorial && (

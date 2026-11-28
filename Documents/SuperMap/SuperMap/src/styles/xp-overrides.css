@@ -546,3 +546,5 @@ select,
   border-bottom: 1px solid var(--xp-shadow);
 }
 .mobile-page-title { font: 700 11px var(--xp-font); color: #1a1a1a; }
+
+.xp-error-text { margin: 0; font: 11px/1.45 var(--xp-font); color: #1a1a1a; }

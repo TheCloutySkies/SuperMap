@@ -6,12 +6,12 @@
 import { useEffect, useRef, useState } from 'react'
 import XpIcon from './XpIcon'
 import { visibleModes } from '../../features/accounts/menuCatalog'
+import { useSuperMapAccount } from '../../features/accounts/SuperMapAccounts'
 import { PANEL_PREVIEWS } from '../operations/panels/panelRegistry'
 
 const SHORTCUTS = [
   { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', view: 'home' },
   { id: 'vault', label: 'My Vault', icon: 'vault', vault: true },
-  { id: 'trash', label: 'Recycle Bin', icon: 'trash', trash: true },
 ]
 
 const MODE_ICONS = {
@@ -28,7 +28,8 @@ const MODE_ICONS = {
   SETTINGS: 'settings',
 }
 
-export default function DesktopIcons({ onMode, onView, onOpenVault, onOpenTrash, onOpenApplet }) {
+export default function DesktopIcons({ onMode, onView, onOpenApplet }) {
+  const { user, setOverlay, setWorkspaceTab } = useSuperMapAccount()
   const [selected, setSelected] = useState('dashboard')
   const [menu, setMenu] = useState(null)
   const gridRef = useRef(null)
@@ -54,9 +55,14 @@ export default function DesktopIcons({ onMode, onView, onOpenVault, onOpenTrash,
   const open = (entry) => {
     if (entry.applet) onOpenApplet?.(entry.applet)
     else if (entry.view) onView?.(entry.view)
-    else if (entry.vault) onOpenVault?.()
-    else if (entry.trash) onOpenTrash?.()
-    else if (entry.mode) onMode?.(entry.mode)
+    else if (entry.vault) {
+      if (!user) {
+        setOverlay('auth')
+        return
+      }
+      setWorkspaceTab('vault')
+      setOverlay('workspace')
+    } else if (entry.mode) onMode?.(entry.mode)
   }
 
   useEffect(() => {

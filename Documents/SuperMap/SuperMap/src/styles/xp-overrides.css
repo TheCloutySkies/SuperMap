@@ -264,46 +264,68 @@ body .app .xp-frame {
   * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
 }
 
-/* The account pill lives in the tray now; the floating dock is retired. */
-.sm-acct-dock { display: none !important; }
-.xp-tray-account {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  max-width: 160px;
-  padding: 2px 6px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: #fff;
-  font: 11px/1 var(--xp-font);
-  cursor: pointer;
-}
-.xp-tray-account:hover { background: rgba(255, 255, 255, 0.18); border-color: rgba(255, 255, 255, 0.35); }
-.xp-tray-avatar {
+/* The account lives in the start menu now; the tray carries quick launch. */
+.xp-tray-quick { display: flex; align-items: center; gap: 1px; }
+.xp-tray-quick-btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 2px;
-  background: #ece9d8;
-  color: #1a1a1a;
-  font: 10px/1 var(--xp-font);
-  overflow: hidden;
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
 }
-.xp-tray-name { max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.xp-tray-count {
-  min-width: 14px;
-  padding: 0 3px;
-  border-radius: 7px;
+.xp-tray-quick-btn:hover { background: rgba(255, 255, 255, 0.22); border-color: rgba(255, 255, 255, 0.4); }
+.xp-tray-quick-btn:active { background: rgba(255, 255, 255, 0.12); }
+.xp-tray-quick-btn:focus-visible { outline: 1px dotted #fff; outline-offset: -2px; }
+.xp-tray-badge {
+  position: absolute;
+  top: -2px;
+  right: -1px;
+  min-width: 12px;
+  padding: 0 2px;
+  border-radius: 6px;
   background: #c0392b;
   color: #fff;
-  font: 700 10px/14px var(--xp-font);
+  font: 700 9px/12px var(--xp-font);
   text-align: center;
 }
-@media (max-width: 900px) {
-  .xp-tray-name { display: none; }
+
+/* The signed-in user at the top of the start menu. */
+.xp-start-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
+.xp-start-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  border-radius: 3px;
+  background: #ece9d8;
+  color: #1a1a1a;
+  font-size: 18px;
+  line-height: 1;
+}
+.xp-start-user-copy { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.xp-start-user-copy strong { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xp-start-user-copy em { font-style: normal; font-size: 10px; color: #d8e6ff; }
 
 /* Floating previews on the desktop. */
 .xp-applet {

@@ -1,27 +1,21 @@
 /**
- * The taskbar: start button, the open window, the tray.
+ * The taskbar: start button, the open windows, and the tray.
  *
- * One window at a time (v1), so the task list is the current window plus any
- * minimised ones; clicking an active task minimises it, a minimised task
- * restores it.
+ * The tray carries the freshness dot, four quick-launch icons and the clock.
+ * The account lives at the top of the start menu, so there is no tray chip.
  */
 import { useEffect, useState } from 'react'
-import { Grid2X2, UserRound } from 'lucide-react'
+import { Grid2X2, House, CloudSun, Vault, Settings } from 'lucide-react'
 import { useSuperMapAccount } from '../../features/accounts/SuperMapAccounts'
 import { HOME_STATE, getHomeState, subscribeHome } from '../../lib/homeStore'
 
-function useUtcClock() {
+function useClock() {
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(timer)
   }, [])
   return now
-}
-
-function accountName(user) {
-  if (!user) return 'Sign in'
-  return user.displayName || String(user.email || '').split('@')[0] || 'Account'
 }
 
 export default function Taskbar({
@@ -32,13 +26,23 @@ export default function Taskbar({
   onMinimize,
   onRestore,
   onSettings,
+  onQuickLaunch,
 }) {
-  const now = useUtcClock()
+  const now = useClock()
   const { user, unread, vault, setOverlay, setWorkspaceTab } = useSuperMapAccount()
   const badge = unread > 0 ? unread : vault.length > 0 ? vault.length : 0
   const [homeState, setHomeState] = useState(() => getHomeState()?.state || HOME_STATE.SEED)
   useEffect(() => subscribeHome((next) => setHomeState(next?.state || HOME_STATE.SEED)), [])
   const dot = homeState === HOME_STATE.FAILED ? 'is-error' : homeState === HOME_STATE.SEED ? 'is-stale' : ''
+
+  function openVault() {
+    if (!user) {
+      setOverlay('auth')
+      return
+    }
+    setWorkspaceTab('vault')
+    setOverlay('workspace')
+  }
 
   return (
     <footer className="xp-taskbar">
@@ -66,26 +70,48 @@ export default function Taskbar({
       </div>
       <div className="xp-tray">
         <span className={`xp-tray-dot ${dot}`} aria-hidden />
+        <div className="xp-tray-quick" role="toolbar" aria-label="Quick launch">
+          <button
+            type="button"
+            className="xp-tray-quick-btn"
+            title="Dashboard"
+            aria-label="Dashboard"
+            onClick={() => onQuickLaunch?.('home')}
+          >
+            <House size={14} strokeWidth={1.9} aria-hidden />
+          </button>
+          <button
+            type="button"
+            className="xp-tray-quick-btn"
+            title="Weather"
+            aria-label="Weather"
+            onClick={() => onQuickLaunch?.('weather')}
+          >
+            <CloudSun size={14} strokeWidth={1.9} aria-hidden />
+          </button>
+          <button
+            type="button"
+            className="xp-tray-quick-btn"
+            title="My Vault"
+            aria-label="My Vault"
+            onClick={openVault}
+          >
+            <Vault size={14} strokeWidth={1.9} aria-hidden />
+            {badge ? <b className="xp-tray-badge">{badge}</b> : null}
+          </button>
+          <button
+            type="button"
+            className="xp-tray-quick-btn"
+            title="Settings"
+            aria-label="Settings"
+            onClick={() => onSettings?.()}
+          >
+            <Settings size={14} strokeWidth={1.9} aria-hidden />
+          </button>
+        </div>
         <time className="xp-tray-clock" dateTime={now.toISOString()} title={now.toLocaleString()}>
-          {now.toISOString().slice(11, 16)}
+          {now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
         </time>
-        <button
-          type="button"
-          className="xp-tray-account"
-          title={user ? accountName(user) : 'Sign in'}
-          onClick={() => {
-            if (!user) setOverlay('auth')
-            else {
-              if (unread > 0) setWorkspaceTab('messages')
-              setOverlay('workspace')
-            }
-            onSettings?.()
-          }}
-        >
-          <span className="xp-tray-avatar" aria-hidden>{user?.emoji || <UserRound size={12} strokeWidth={1.8} />}</span>
-          <span className="xp-tray-name">{accountName(user)}</span>
-          {badge ? <b className="xp-tray-count">{badge}</b> : null}
-        </button>
       </div>
     </footer>
   )

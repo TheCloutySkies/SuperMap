@@ -29,7 +29,6 @@ import StartMenu from './components/xp/StartMenu'
 import DesktopIcons from './components/xp/DesktopIcons'
 import WelcomeWindow from './components/xp/WelcomeWindow'
 import { shouldShowWelcome } from './lib/welcomePrefs'
-import TrashWindow from './components/xp/TrashWindow'
 import XpDialog from './components/xp/XpDialog'
 import AppletWindow from './components/xp/AppletWindow'
 import {
@@ -334,7 +333,6 @@ function App() {
   const menuModes = visibleModes(modeVisibility)
   const [xpState, setXpState] = useState(() => getXpWindows())
   const [xpMaximized, setXpMaximized] = useState(true)
-  const [trashOpen, setTrashOpen] = useState(false)
   const [welcomeOpen, setWelcomeOpen] = useState(() => shouldShowWelcome())
 
   // First visit lands on the dashboard, so nobody meets an empty desktop.
@@ -606,11 +604,6 @@ function App() {
           <DesktopIcons
             onView={(viewId) => setActiveViewWithMode(viewId)}
             onMode={(mode) => handleFooterNav(mode)}
-            onOpenVault={() => {
-              setActiveViewWithMode('settings')
-              requestAnimationFrame(() => document.querySelector('.sm-acct-dock-btn')?.click())
-            }}
-            onOpenTrash={() => setTrashOpen(true)}
             onOpenApplet={(panel) => openApplet(panel)}
           />
         )}
@@ -968,6 +961,7 @@ function App() {
       onMinimize={() => { minimizeWindow(); navigate('/') }}
       onRestore={(entry) => { restorePage(entry.route); navigate(entry.route) }}
       onSettings={() => handleFooterNav('SETTINGS')}
+      onQuickLaunch={setActiveViewWithMode}
     />
     <StartMenu
       open={xpState.startOpen}
@@ -977,11 +971,6 @@ function App() {
       onRefresh={() => refreshHomeNow({ force: true })}
     />
     {welcomeOpen ? <WelcomeWindow onClose={() => setWelcomeOpen(false)} /> : null}
-    {trashOpen ? (
-      <XpDialog title="Recycle Bin" width={560} onClose={() => setTrashOpen(false)}>
-        <TrashWindow />
-      </XpDialog>
-    ) : null}
     <MobileLayoutPrompt onChoice={() => setVisualsKey((k) => k + 1)} />
     {showTutorial && (
       <QuickTutorialModal

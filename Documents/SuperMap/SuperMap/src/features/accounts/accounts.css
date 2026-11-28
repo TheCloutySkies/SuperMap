@@ -1,57 +1,4 @@
-.sm-acct-dock,
-.sm-modal-scrim,
-.sm-workspace-scrim,
-.sm-toast {
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  color: #e9f3fb;
-}
-.sm-acct-dock { position: fixed; right: 18px; bottom: 18px; z-index: 9990; }
-.sm-acct-dock-btn,
-.sm-primary-btn,
-.sm-ghost-btn,
-.sm-danger-btn,
-.sm-google-btn,
-.sm-save-btn {
-  cursor: pointer;
-  border-radius: 10px;
-  font-weight: 700;
-}
-.sm-acct-dock-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 14px 8px 8px;
-  border: 1px solid #2c4a66;
-  border-radius: 999px;
-  background: rgba(10, 17, 26, 0.94);
-  color: #e9f3fb;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
-}
-.sm-acct-avatar {
-  display: inline-grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #38e1ff, #4da3ff);
-  color: #041018;
-  font-weight: 800;
-  flex: 0 0 32px;
-}
-.sm-acct-avatar svg { display: block; }
-.sm-acct-avatar.is-google { background: #fff; }
-.sm-acct-avatar.is-anonymous {
-  background: linear-gradient(160deg, #2a3848, #121820);
-  color: #e7eef6;
-}
-.sm-acct-count {
-  min-width: 20px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: rgba(124, 255, 107, 0.16);
-  color: #7cff6b;
-  font-size: 11px;
-}
+
 .sm-modal-scrim,
 .sm-workspace-scrim {
   position: fixed;
@@ -282,13 +229,11 @@
 .app--device-mobile .sm-workspace-body { grid-template-columns: 1fr; }
 .app--device-mobile .sm-workspace-nav { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid #1f3348; }
 .app--device-mobile .sm-vault-filters { grid-template-columns: 1fr; }
-.app--device-mobile .sm-acct-dock-label { display: none; }
 
 @media (max-width: 800px) {
   .sm-workspace-body { grid-template-columns: 1fr; }
   .sm-workspace-nav { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid #1f3348; }
   .sm-vault-filters { grid-template-columns: 1fr; }
-  .sm-acct-dock-label { display: none; }
 }
 
 /* Live disappearing countdown, attached photos, typing, and the minimised dock. */
@@ -297,20 +242,6 @@
 .sm-typing-dots { letter-spacing: 2px; color: #57e389; animation: sm-typing-pulse 1.2s ease-in-out infinite; }
 @keyframes sm-typing-pulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .sm-typing-dots { animation: none; } }
-.sm-acct-dock.is-minimized .sm-acct-dock-btn { padding-right: 10px; }
-.sm-acct-min {
-  align-self: flex-start;
-  margin: 4px 0 0 4px;
-  border: 1px solid #1f3348;
-  background: rgba(10, 20, 32, .85);
-  color: #8fa3bf;
-  border-radius: 999px;
-  width: 22px;
-  height: 22px;
-  line-height: 1;
-  cursor: pointer;
-}
-.sm-acct-min:hover { color: #e6f1ff; border-color: #2a6f5a; }
 
 /* XP pass: the membership and workspace sheets use Windows chrome. Emoji the
    people chose stay as their avatars. */
@@ -353,7 +284,6 @@
   border-radius: 0;
   color: #1a1a1a;
 }
-
 
 /* The Messages tab holds the floating messenger, so its body says where it is. */
 .sm-messages-standin {

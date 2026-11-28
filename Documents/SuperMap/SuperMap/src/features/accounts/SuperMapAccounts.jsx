@@ -8,7 +8,6 @@ import {
   useState,
 } from 'react'
 import XpBalloon from '../../components/xp/XpBalloon'
-import { UserRound, VenetianMask } from 'lucide-react'
 import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
@@ -36,7 +35,7 @@ import {
 } from 'firebase/firestore'
 import { firebaseReady, getAccountsFirebase } from './firebaseClient'
 import { readVaultLock, setVaultUnlocked } from './vaultLock'
-import { accountHandle, accountNumber, personHandle, personNumber, personTitle } from './accountIdentity'
+import { accountHandle, accountNumber, personHandle, personNumber } from './accountIdentity'
 import { getModeVisibility, setModeVisibility } from './menuCatalog'
 import { deleteOwnedContent, subscribeConversations } from './socialData'
 import AccountWorkspace from './AccountWorkspace'
@@ -65,13 +64,6 @@ function signInProvider(fbUser) {
   const ids = new Set((fbUser.providerData || []).map((entry) => entry.providerId))
   if (ids.has('google.com')) return 'google'
   return 'password'
-}
-
-function dockKind(user) {
-  if (!user) return 'profile'
-  if (user.anonymous || user.provider === 'anonymous') return 'anonymous'
-  if (user.provider === 'google') return 'google'
-  return 'profile'
 }
 
 function GoogleMark() {
@@ -839,63 +831,11 @@ export function AccountsOverlay() {
   const { overlay, publicProfile, closePublicProfile, toast, setToast } = useSuperMapAccount()
   return (
     <>
-      <AccountDock />
       {overlay === 'auth' ? <AuthModal /> : null}
       {overlay === 'workspace' ? <AccountWorkspace /> : null}
       {publicProfile ? <PublicProfile seed={publicProfile} onClose={closePublicProfile} /> : null}
       <XpBalloon toast={toast} onClose={() => setToast(null)} />
     </>
-  )
-}
-
-function AccountDock() {
-  const { user, setOverlay, vault, unread, setWorkspaceTab } = useSuperMapAccount()
-  const [minimized, setMinimized] = useState(() => {
-    try {
-      return localStorage.getItem('supermap.acct.minimized') === '1'
-    } catch {
-      return false
-    }
-  })
-  const toggleMinimized = () => {
-    setMinimized((value) => {
-      try {
-        localStorage.setItem('supermap.acct.minimized', value ? '0' : '1')
-      } catch { /* optional */ }
-      return !value
-    })
-  }
-  const kind = dockKind(user)
-  const mark = kind === 'google'
-    ? <GoogleMark />
-    : kind === 'anonymous'
-      ? <VenetianMask size={18} strokeWidth={2.25} />
-      : <UserRound size={18} strokeWidth={2.25} />
-  const label = user ? personTitle(user) : 'Account'
-  return (
-    <div className={`sm-acct-dock${minimized ? ' is-minimized' : ''}`}>
-      <button
-        type="button"
-        className="sm-acct-min"
-        aria-label={minimized ? 'Show the account name' : 'Show the account icon only'}
-        aria-pressed={minimized}
-        onClick={toggleMinimized}
-      >
-        {minimized ? '‹' : '›'}
-      </button>
-      <button type="button" className="sm-acct-dock-btn" aria-label={label} onClick={() => {
-        if (!user) setOverlay('auth')
-        else {
-          if (unread > 0) setWorkspaceTab('messages')
-          setOverlay('workspace')
-        }
-      }}>
-        <span className={`sm-acct-avatar is-${kind}`}>{mark}</span>
-        {minimized ? null : <span className="sm-acct-dock-label">{label}</span>}
-        {unread > 0 ? <span className="sm-acct-count">{unread}</span> : null}
-        {unread === 0 && vault.length > 0 ? <span className="sm-acct-count">{vault.length}</span> : null}
-      </button>
-    </div>
   )
 }
 

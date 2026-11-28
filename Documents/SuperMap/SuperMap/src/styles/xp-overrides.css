@@ -639,3 +639,14 @@ select,
   .sm-account-page .sm-row,
   .sm-account-page .sm-card-actions button { min-height: 44px; }
 }
+
+/* index.css asks the browser for dark controls, which paints every native
+   input, select and textarea black — the Report Maker's title box and the X
+   feed's filters among them. XP surfaces ask for light ones instead. */
+body .xp-window-body,
+body .xp-applet-body,
+body .xp-dialog .window-body,
+body .xp-scrim,
+body .sm-account-page {
+  color-scheme: light;
+}

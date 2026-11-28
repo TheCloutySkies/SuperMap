@@ -69,9 +69,13 @@ function longStamp(iso) {
   return `${weekday}, ${day.replace(' ', ', ')}, ${clock} GMT`
 }
 
-function summaryOf(item, max = 180) {
+function summaryOf(item, max = 240) {
   const text = String(item?.contentSnippet || item?.description || '').replace(/\s+/g, ' ').trim()
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text
+  if (!text) return ''
+  if (text.length <= max) return text
+  const cut = text.slice(0, max)
+  const space = cut.lastIndexOf(' ')
+  return `${(space > max * 0.6 ? cut.slice(0, space) : cut).trim()}…`
 }
 
 /** A story's theatre: from its point when it has one, else from its words. */
@@ -458,7 +462,7 @@ export default function GpnNewsPage({
                         </button>
                         <div>
                           <Headline item={item} size="secondary" onOpen={onOpen} />
-                          {summaryOf(item, 110) ? <p className="gpn-summary">{summaryOf(item, 110)}</p> : null}
+                          {summaryOf(item, 150) ? <p className="gpn-summary">{summaryOf(item, 150)}</p> : null}
                           <StoryActions item={item} toMenuItem={toMenuItem} />
                         </div>
                       </div>
@@ -479,7 +483,7 @@ export default function GpnNewsPage({
                         <Thumb item={item} variant="box" />
                       </button>
                       <StoryLink item={item} onOpen={onOpen} bold />
-                      {summaryOf(item, 90) ? <p className="gpn-box-text">{summaryOf(item, 90)}</p> : null}
+                      {summaryOf(item, 120) ? <p className="gpn-box-text">{summaryOf(item, 120)}</p> : null}
                       <StoryActions item={item} toMenuItem={toMenuItem} />
                     </div>
                   ))}
@@ -540,7 +544,7 @@ export default function GpnNewsPage({
                         <Thumb item={item} variant="box" />
                       </button>
                       <StoryLink item={item} onOpen={onOpen} bold />
-                      {summaryOf(item, 90) ? <p className="gpn-box-text">{summaryOf(item, 90)}</p> : null}
+                      {summaryOf(item, 120) ? <p className="gpn-box-text">{summaryOf(item, 120)}</p> : null}
                       <StoryActions item={item} toMenuItem={toMenuItem} />
                     </div>
                   ))}

@@ -12,6 +12,13 @@
   background: rgba(0, 0, 0, 0.28);
 }
 
+/* A long headline stays on the title bar's one line instead of spilling. */
+.xp-dialog .title-bar-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .article-preview-body {
   display: flex;
   flex-direction: column;

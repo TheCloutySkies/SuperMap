@@ -53,7 +53,7 @@ export default function ArticlePreviewSheet({
     <XpDialog
       title={title}
       onClose={onClose}
-      width={520}
+      width={640}
       actions={(
         <>
           {href && (

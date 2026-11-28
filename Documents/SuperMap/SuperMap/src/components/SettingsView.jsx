@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import {
   getTabVisibility,
@@ -7,7 +8,7 @@ import {
   getVisualsPrefs,
   setVisualsPrefs,
 } from '../constants'
-import './SettingsView.css'
+import XpListview from './xp/XpListview'
 
 const TAB_LABELS = {
   osintMap: 'OSINT Map',
@@ -32,23 +33,30 @@ function readConfigWriteToken() {
   }
 }
 
+const sameList = (a, b) => JSON.stringify(a) === JSON.stringify(b)
+
 export default function SettingsView({ apiBase, onVisualsChange }) {
+  const navigate = useNavigate()
   const [activeSection, setActiveSection] = useState('visuals')
-  const [tabPrefs, setTabPrefs] = useState(() => getTabVisibility())
+
+  // The sheet edits a draft; nothing is written until Apply or OK.
+  const [savedVisuals, setSavedVisuals] = useState(() => getVisualsPrefs())
   const [visuals, setVisuals] = useState(() => getVisualsPrefs())
+  const [savedTabPrefs, setSavedTabPrefs] = useState(() => getTabVisibility())
+  const [tabPrefs, setTabPrefs] = useState(() => getTabVisibility())
+
+  const [savedHandles, setSavedHandles] = useState([])
   const [osintXHandles, setOsintXHandles] = useState([])
   const [defaultOsintXHandles, setDefaultOsintXHandles] = useState([])
+  const [savedTickers, setSavedTickers] = useState([])
   const [stockTickers, setStockTickers] = useState([])
+
   const [configLoading, setConfigLoading] = useState(true)
   const [configSaving, setConfigSaving] = useState(false)
   const [configWriteError, setConfigWriteError] = useState('')
   const [newHandle, setNewHandle] = useState('')
-
-  useEffect(() => setTabVisibility(tabPrefs), [tabPrefs])
-  useEffect(() => {
-    setVisualsPrefs(visuals)
-    onVisualsChange?.()
-  }, [visuals, onVisualsChange])
+  const [newTickerSymbol, setNewTickerSymbol] = useState('')
+  const [newTickerName, setNewTickerName] = useState('')
 
   const fetchConfig = useCallback(() => {
     if (!apiBase) {
@@ -59,14 +67,20 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
     axios
       .get(`${apiBase}/api/config`, { timeout: 5000 })
       .then((res) => {
-        setOsintXHandles(res.data.osintXHandles || [])
+        const handles = res.data.osintXHandles || []
+        const tickers = Array.isArray(res.data.stockTickers) ? res.data.stockTickers : []
+        setOsintXHandles(handles)
+        setSavedHandles(handles)
         setDefaultOsintXHandles(res.data.defaultOsintXHandles || [])
-        setStockTickers(Array.isArray(res.data.stockTickers) ? res.data.stockTickers : [])
+        setStockTickers(tickers)
+        setSavedTickers(tickers)
       })
       .catch(() => {
         setOsintXHandles([])
+        setSavedHandles([])
         setDefaultOsintXHandles([])
         setStockTickers([])
+        setSavedTickers([])
       })
       .finally(() => setConfigLoading(false))
   }, [apiBase])
@@ -74,7 +88,10 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
   useEffect(() => fetchConfig(), [fetchConfig])
 
   const saveConfig = (updates) => {
-    if (!apiBase) return
+    if (!apiBase) {
+      setConfigWriteError('The API is not reachable, so this could not be saved.')
+      return
+    }
     setConfigSaving(true)
     setConfigWriteError('')
     const headers = {}
@@ -83,8 +100,14 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
     axios
       .post(`${apiBase}/api/config`, updates, { timeout: 5000, headers })
       .then((res) => {
-        setOsintXHandles(res.data.osintXHandles || [])
-        if (res.data.stockTickers !== undefined) setStockTickers(res.data.stockTickers || [])
+        const handles = res.data.osintXHandles || []
+        setOsintXHandles(handles)
+        setSavedHandles(handles)
+        if (res.data.stockTickers !== undefined) {
+          const tickers = res.data.stockTickers || []
+          setStockTickers(tickers)
+          setSavedTickers(tickers)
+        }
       })
       .catch(() => {
         setConfigWriteError('Could not save.')
@@ -92,43 +115,61 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
       .finally(() => setConfigSaving(false))
   }
 
+  const dirty = useMemo(() => (
+    !sameList(savedVisuals, visuals) ||
+    !sameList(savedTabPrefs, tabPrefs) ||
+    !sameList(savedHandles, osintXHandles) ||
+    !sameList(savedTickers, stockTickers)
+  ), [savedVisuals, visuals, savedTabPrefs, tabPrefs, savedHandles, osintXHandles, savedTickers, stockTickers])
+
+  const apply = () => {
+    setVisualsPrefs(visuals)
+    setTabVisibility(tabPrefs)
+    onVisualsChange?.()
+    setSavedVisuals(visuals)
+    setSavedTabPrefs(tabPrefs)
+
+    const updates = {}
+    if (!sameList(savedHandles, osintXHandles)) updates.osintXHandles = osintXHandles
+    if (!sameList(savedTickers, stockTickers)) updates.stockTickers = stockTickers
+    if (Object.keys(updates).length > 0) saveConfig(updates)
+  }
+
+  const revert = () => {
+    setVisuals(savedVisuals)
+    setTabPrefs(savedTabPrefs)
+    setOsintXHandles(savedHandles)
+    setStockTickers(savedTickers)
+    setConfigWriteError('')
+  }
+
   const addHandle = () => {
     const handle = newHandle.trim().replace(/^@/, '')
     if (!handle) return
-    const next = [...osintXHandles, { name: handle, handle, priority: 'medium' }]
-    setOsintXHandles(next)
+    setOsintXHandles((list) => [...list, { name: handle, handle, priority: 'medium' }])
     setNewHandle('')
-    saveConfig({ osintXHandles: next })
   }
 
   const removeHandle = (index) => {
-    const next = osintXHandles.filter((_, i) => i !== index)
-    setOsintXHandles(next)
-    saveConfig({ osintXHandles: next })
+    setOsintXHandles((list) => list.filter((_, i) => i !== index))
   }
 
   const restoreDefaultOsintX = () => {
     if (defaultOsintXHandles.length === 0) return
     setOsintXHandles(defaultOsintXHandles)
-    saveConfig({ osintXHandles: defaultOsintXHandles })
   }
 
-  const [newTickerSymbol, setNewTickerSymbol] = useState('')
-  const [newTickerName, setNewTickerName] = useState('')
   const addStockTicker = () => {
     const symbol = newTickerSymbol.trim()
     if (!symbol) return
     const name = newTickerName.trim() || symbol
-    const next = [...stockTickers, { symbol, name }]
-    setStockTickers(next)
+    setStockTickers((list) => [...list, { symbol, name }])
     setNewTickerSymbol('')
     setNewTickerName('')
-    saveConfig({ stockTickers: next })
   }
+
   const removeStockTicker = (index) => {
-    const next = stockTickers.filter((_, i) => i !== index)
-    setStockTickers(next)
-    saveConfig({ stockTickers: next })
+    setStockTickers((list) => list.filter((_, i) => i !== index))
   }
 
   const sections = [
@@ -139,222 +180,245 @@ export default function SettingsView({ apiBase, onVisualsChange }) {
     { id: 'firebase', label: 'Firebase' },
   ]
 
+  const handleColumns = [
+    { key: 'handle', label: 'Handle' },
+    { key: 'name', label: 'Name', render: (row) => (row.name && row.name !== row.handle ? row.name : '') },
+    {
+      key: 'remove',
+      label: '',
+      width: '76px',
+      render: (row) => (
+        <button type="button" onClick={() => removeHandle(row.index)} aria-label={`Remove @${row.handle}`}>
+          Remove
+        </button>
+      ),
+    },
+  ]
+
+  const tickerColumns = [
+    { key: 'symbol', label: 'Symbol' },
+    { key: 'name', label: 'Label', render: (row) => (row.name && row.name !== row.symbol ? row.name : '') },
+    {
+      key: 'remove',
+      label: '',
+      width: '76px',
+      render: (row) => (
+        <button type="button" onClick={() => removeStockTicker(row.index)} aria-label={`Remove ${row.symbol}`}>
+          Remove
+        </button>
+      ),
+    },
+  ]
+
   return (
-    <div className="settings-view">
-      <header className="settings-view-header">
-        <h1 className="settings-view-title">Settings</h1>
-      </header>
+    <div className="xp-page">
+      <div className="xp-page-tools">
+        <menu role="tablist" className="xp-tabs" aria-label="Settings sections">
+          {sections.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              role="tab"
+              aria-selected={activeSection === s.id}
+              onClick={() => setActiveSection(s.id)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </menu>
+        <p>{dirty ? 'Changes not applied yet' : 'All changes applied'}</p>
+      </div>
 
-      <nav className="settings-view-nav">
-        {sections.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            className={`settings-view-nav-btn ${activeSection === s.id ? 'active' : ''}`}
-            onClick={() => setActiveSection(s.id)}
-          >
-            {s.label}
-          </button>
-        ))}
-      </nav>
-
-      <div className="settings-view-body">
+      <div className="xp-page-body">
         {activeSection === 'visuals' && (
-          <section className="settings-view-section">
-            <h2>Visuals</h2>
-            <div className="settings-field">
-              <label>Theme</label>
-              <p className="settings-hint">Night ops (charcoal + emerald) is always on.</p>
+          <fieldset>
+            <legend>Visuals</legend>
+            <p className="xp-note">Night ops (charcoal + emerald) always runs inside the windows.</p>
+            <div className="field-row">
+              <input
+                id="settings-compact"
+                type="checkbox"
+                checked={!!visuals.compact}
+                onChange={(e) => setVisuals((v) => ({ ...v, compact: e.target.checked }))}
+              />
+              <label htmlFor="settings-compact">Compact density</label>
             </div>
-            <div className="settings-field">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={!!visuals.compact}
-                  onChange={(e) => setVisuals((v) => ({ ...v, compact: e.target.checked }))}
-                />
-                <span>Compact density</span>
-              </label>
-            </div>
-            <div className="settings-field">
-              <label>Font size</label>
+            <div className="field-row">
+              <label htmlFor="settings-font-size">Font size</label>
               <select
+                id="settings-font-size"
                 value={visuals.fontSize || 'normal'}
                 onChange={(e) => setVisuals((v) => ({ ...v, fontSize: e.target.value }))}
-                className="settings-select"
               >
                 <option value="small">Small</option>
                 <option value="normal">Normal</option>
                 <option value="large">Large</option>
               </select>
             </div>
-            <div className="settings-field">
-              <label>Layout mode</label>
+            <div className="field-row">
+              <label htmlFor="settings-layout">Layout mode</label>
               <select
+                id="settings-layout"
                 value={visuals.layoutMode || 'auto'}
                 onChange={(e) => setVisuals((v) => ({ ...v, layoutMode: e.target.value }))}
-                className="settings-select"
               >
                 <option value="auto">Auto (detect device)</option>
                 <option value="desktop">Force desktop layout</option>
                 <option value="mobile">Force mobile layout</option>
               </select>
-              <p className="settings-hint">If the UI does not update instantly after forcing mobile/desktop, click apply below.</p>
-              <button
-                type="button"
-                className="settings-reset"
-                onClick={() => window.location.reload()}
-              >
-                Apply layout (refresh page)
-              </button>
             </div>
-            <div className="settings-field">
-              <a className="settings-link" href="https://github.com/TheCloutySkies/SuperMap.git" target="_blank" rel="noopener noreferrer">
-                Open GitHub Repository
+            <div className="field-row">
+              <button type="button" onClick={() => window.location.reload()}>
+                Apply layout and reload
+              </button>
+              <a href="https://github.com/TheCloutySkies/SuperMap.git" target="_blank" rel="noopener noreferrer">
+                Open GitHub repository
               </a>
             </div>
-          </section>
+          </fieldset>
         )}
 
         {activeSection === 'tabs' && (
-          <section className="settings-view-section">
-            <h2>Tab visibility</h2>
-            <p className="settings-hint">Show or hide tabs in the sidebar.</p>
-            <ul className="settings-toggles">
+          <fieldset>
+            <legend>Tab visibility</legend>
+            <p className="xp-note">Show or hide tabs in the Start menu and the sub-navigation.</p>
+            <div className="xp-check-grid">
               {Object.entries(TAB_LABELS).map(([key, label]) => (
-                <li key={key}>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={tabPrefs[key] !== false}
-                      onChange={() => setTabPrefs((p) => ({ ...p, [key]: !p[key] }))}
-                    />
-                    <span>{label}</span>
-                  </label>
-                </li>
+                <div className="field-row" key={key}>
+                  <input
+                    id={`settings-tab-${key}`}
+                    type="checkbox"
+                    checked={tabPrefs[key] !== false}
+                    onChange={() => setTabPrefs((p) => ({ ...p, [key]: !p[key] }))}
+                  />
+                  <label htmlFor={`settings-tab-${key}`}>{label}</label>
+                </div>
               ))}
-            </ul>
-            <button type="button" className="settings-reset" onClick={() => setTabPrefs({ ...DEFAULT_TAB_VISIBILITY })}>
-              Reset to default
-            </button>
-          </section>
+            </div>
+            <div className="xp-page-actions">
+              <button type="button" onClick={() => setTabPrefs({ ...DEFAULT_TAB_VISIBILITY })}>
+                Reset to default
+              </button>
+            </div>
+          </fieldset>
         )}
 
         {activeSection === 'xhandles' && (
-          <section className="settings-view-section">
-            <h2>X (Twitter) handles</h2>
-            {configWriteError && <p className="settings-hint settings-hint--warn">{configWriteError}</p>}
+          <fieldset>
+            <legend>X (Twitter) handles</legend>
+            {configWriteError && <p className="xp-note">{configWriteError}</p>}
+            <div className="field-row">
+              <input
+                type="text"
+                value={newHandle}
+                onChange={(e) => setNewHandle(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addHandle()}
+                placeholder="@handle"
+                aria-label="Handle to add"
+              />
+              <button type="button" onClick={addHandle} disabled={configSaving}>
+                Add
+              </button>
+              {defaultOsintXHandles.length > 0 && (
+                <button
+                  type="button"
+                  onClick={restoreDefaultOsintX}
+                  disabled={configSaving || osintXHandles.length >= defaultOsintXHandles.length}
+                >
+                  Restore all {defaultOsintXHandles.length} defaults
+                </button>
+              )}
+            </div>
             {configLoading ? (
-              <p className="settings-loading">Loading…</p>
+              <p className="xp-note">Loading…</p>
             ) : (
-              <>
-                {defaultOsintXHandles.length > 0 && (
-                  <button
-                    type="button"
-                    className="settings-restore-default-btn"
-                    onClick={restoreDefaultOsintX}
-                    disabled={configSaving || osintXHandles.length >= defaultOsintXHandles.length}
-                  >
-                    Restore all {defaultOsintXHandles.length} default OSINT X feeds
-                  </button>
-                )}
-                <div className="settings-list-add">
-                  <input
-                    type="text"
-                    value={newHandle}
-                    onChange={(e) => setNewHandle(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && addHandle()}
-                    placeholder="@handle or handle"
-                    className="settings-input"
-                  />
-                  <button type="button" className="settings-add-btn" onClick={addHandle} disabled={configSaving}>
-                    Add
-                  </button>
-                </div>
-                <ul className="settings-list">
-                  {osintXHandles.map((entry, i) => (
-                    <li key={`${entry.handle}-${i}`} className="settings-list-item">
-                      <span className="settings-list-label">@{entry.handle}</span>
-                      <span className="settings-list-meta">{entry.name !== entry.handle ? entry.name : ''}</span>
-                      <button type="button" className="settings-remove-btn" onClick={() => removeHandle(i)} aria-label="Remove">
-                        ×
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </>
+              <XpListview
+                label="X handles"
+                columns={handleColumns}
+                rows={osintXHandles.map((entry, index) => ({ ...entry, id: `${entry.handle}-${index}`, index }))}
+                rowKey={(row) => row.id}
+                emptyLabel="No handles yet."
+              />
             )}
-          </section>
+          </fieldset>
         )}
 
         {activeSection === 'stocktickers' && (
-          <section className="settings-view-section">
-            <h2>Stock tickers</h2>
+          <fieldset>
+            <legend>Stock tickers</legend>
+            <div className="field-row">
+              <input
+                type="text"
+                value={newTickerSymbol}
+                onChange={(e) => setNewTickerSymbol(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addStockTicker()}
+                placeholder="Symbol (SPY, AAPL)"
+                aria-label="Ticker symbol"
+              />
+              <input
+                type="text"
+                value={newTickerName}
+                onChange={(e) => setNewTickerName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addStockTicker()}
+                placeholder="Label (optional)"
+                aria-label="Ticker label"
+              />
+              <button type="button" onClick={addStockTicker} disabled={configSaving}>
+                Add
+              </button>
+            </div>
             {configLoading ? (
-              <p className="settings-loading">Loading…</p>
+              <p className="xp-note">Loading…</p>
             ) : (
-              <>
-                <div className="settings-list-add">
-                  <input
-                    type="text"
-                    value={newTickerSymbol}
-                    onChange={(e) => setNewTickerSymbol(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && addStockTicker()}
-                    placeholder="Symbol (e.g. SPY, AAPL)"
-                    className="settings-input"
-                  />
-                  <input
-                    type="text"
-                    value={newTickerName}
-                    onChange={(e) => setNewTickerName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && addStockTicker()}
-                    placeholder="Label (optional)"
-                    className="settings-input"
-                  />
-                  <button type="button" className="settings-add-btn" onClick={addStockTicker} disabled={configSaving}>
-                    Add
-                  </button>
-                </div>
-                <ul className="settings-list">
-                  {stockTickers.map((t, i) => (
-                    <li key={`${t.symbol}-${i}`} className="settings-list-item">
-                      <span className="settings-list-label">{t.symbol}</span>
-                      <span className="settings-list-meta">{t.name !== t.symbol ? t.name : ''}</span>
-                      <button type="button" className="settings-remove-btn" onClick={() => removeStockTicker(i)} aria-label="Remove">
-                        ×
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </>
+              <XpListview
+                label="Stock tickers"
+                columns={tickerColumns}
+                rows={stockTickers.map((t, index) => ({ ...t, id: `${t.symbol}-${index}`, index }))}
+                rowKey={(row) => row.id}
+                emptyLabel="No tickers yet."
+              />
             )}
-          </section>
+          </fieldset>
         )}
+
         {activeSection === 'firebase' && (
-          <section className="settings-view-section">
-            <h2>Firebase</h2>
-            <p className="settings-hint">
+          <fieldset>
+            <legend>Firebase</legend>
+            <p>
               Accounts, chats and disappearing photos run on Firebase. The guide lists every console
               step in order: the three sign-in methods, enabling Storage, deploying the rules and
               indexes, the six values for Vercel, and the service-account key for GitHub Actions.
             </p>
-            <div className="settings-field">
-              <label>Setup guide</label>
-              <a
-                className="settings-link-btn"
-                href="/firebase-setup.md"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Open the step-by-step Firebase setup →
+            <div className="field-row">
+              <a href="/firebase-setup.md" target="_blank" rel="noopener noreferrer">
+                Open the step-by-step Firebase setup
               </a>
             </div>
-            <p className="settings-hint">
+            <p className="xp-note">
               Storage is the step that turns on photos and secure drops; until it is enabled the Photo
               button in a chat stays disabled.
             </p>
-          </section>
+          </fieldset>
         )}
+      </div>
+
+      <div className="xp-page-actions">
+        <button type="button" onClick={apply} disabled={!dirty || configSaving}>
+          Apply
+        </button>
+        <button type="button" onClick={revert} disabled={!dirty}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            apply()
+            navigate('/')
+          }}
+          disabled={configSaving}
+        >
+          OK
+        </button>
       </div>
     </div>
   )

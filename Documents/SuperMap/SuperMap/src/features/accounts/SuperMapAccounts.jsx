@@ -836,7 +836,7 @@ export function SaveMapRecipeButton(props) {
 }
 
 export function AccountsOverlay() {
-  const { overlay, publicProfile, closePublicProfile } = useSuperMapAccount()
+  const { overlay, publicProfile, closePublicProfile, toast, setToast } = useSuperMapAccount()
   return (
     <>
       <AccountDock />

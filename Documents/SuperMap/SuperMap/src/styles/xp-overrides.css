@@ -263,3 +263,44 @@ body .app .xp-frame {
 @media (prefers-reduced-motion: reduce) {
   * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
 }
+
+/* The account pill lives in the tray now; the floating dock is retired. */
+.sm-acct-dock { display: none !important; }
+.xp-tray-account {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 160px;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #fff;
+  font: 11px/1 var(--xp-font);
+  cursor: pointer;
+}
+.xp-tray-account:hover { background: rgba(255, 255, 255, 0.18); border-color: rgba(255, 255, 255, 0.35); }
+.xp-tray-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  background: #ece9d8;
+  color: #1a1a1a;
+  font: 10px/1 var(--xp-font);
+  overflow: hidden;
+}
+.xp-tray-name { max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xp-tray-count {
+  min-width: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: #c0392b;
+  color: #fff;
+  font: 700 10px/14px var(--xp-font);
+  text-align: center;
+}
+@media (max-width: 900px) {
+  .xp-tray-name { display: none; }
+}

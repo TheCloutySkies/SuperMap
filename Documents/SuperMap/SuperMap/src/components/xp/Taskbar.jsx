@@ -6,7 +6,8 @@
  * restores it.
  */
 import { useEffect, useState } from 'react'
-import { Grid2X2 } from 'lucide-react'
+import { Grid2X2, UserRound } from 'lucide-react'
+import { useSuperMapAccount } from '../../features/accounts/SuperMapAccounts'
 import { HOME_STATE, getHomeState, subscribeHome } from '../../lib/homeStore'
 
 function useUtcClock() {
@@ -16,6 +17,11 @@ function useUtcClock() {
     return () => clearInterval(timer)
   }, [])
   return now
+}
+
+function accountName(user) {
+  if (!user) return 'Sign in'
+  return user.displayName || String(user.email || '').split('@')[0] || 'Account'
 }
 
 export default function Taskbar({
@@ -28,6 +34,8 @@ export default function Taskbar({
   onSettings,
 }) {
   const now = useUtcClock()
+  const { user, unread, vault, setOverlay, setWorkspaceTab } = useSuperMapAccount()
+  const badge = unread > 0 ? unread : vault.length > 0 ? vault.length : 0
   const [homeState, setHomeState] = useState(() => getHomeState()?.state || HOME_STATE.SEED)
   useEffect(() => subscribeHome((next) => setHomeState(next?.state || HOME_STATE.SEED)), [])
   const dot = homeState === HOME_STATE.FAILED ? 'is-error' : homeState === HOME_STATE.SEED ? 'is-stale' : ''
@@ -61,8 +69,22 @@ export default function Taskbar({
         <time className="xp-tray-clock" dateTime={now.toISOString()} title={now.toLocaleString()}>
           {now.toISOString().slice(11, 16)}
         </time>
-        <button type="button" className="xp-tray-btn" onClick={onSettings} aria-label="Account and settings">
-          <Grid2X2 size={13} strokeWidth={1.6} aria-hidden />
+        <button
+          type="button"
+          className="xp-tray-account"
+          title={user ? accountName(user) : 'Sign in'}
+          onClick={() => {
+            if (!user) setOverlay('auth')
+            else {
+              if (unread > 0) setWorkspaceTab('messages')
+              setOverlay('workspace')
+            }
+            onSettings?.()
+          }}
+        >
+          <span className="xp-tray-avatar" aria-hidden>{user?.emoji || <UserRound size={12} strokeWidth={1.8} />}</span>
+          <span className="xp-tray-name">{accountName(user)}</span>
+          {badge ? <b className="xp-tray-count">{badge}</b> : null}
         </button>
       </div>
     </footer>

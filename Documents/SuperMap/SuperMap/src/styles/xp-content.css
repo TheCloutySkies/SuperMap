@@ -239,3 +239,100 @@ body.xp-dragging { overflow: hidden; }
   .op-panel-move button { width: 28px; height: 28px; }
   .op-panel-resize { width: 24px; height: 24px; }
 }
+
+
+/* ── Page chrome shared by every view ────────────────────── */
+/* A view is a page inside the window: a toolbar, one scrolling body, and its
+   own footer when it has Apply/Cancel. The window bar already carries the title. */
+.xp-page { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.xp-page-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 4px 6px;
+  background: var(--xp-face);
+  border-bottom: 1px solid var(--xp-shadow);
+}
+.xp-page-tools > p { margin: 0 0 0 auto; color: #444; }
+.xp-spacer { flex: 1 1 auto; }
+.xp-page-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.xp-page-actions { display: flex; gap: 6px; justify-content: flex-end; padding: 6px 8px 8px; }
+.xp-pane { background: #fff; border: 1px solid var(--xp-shadow); padding: 6px 8px; }
+.xp-pane-title { margin: 0 0 6px; color: #003399; font-weight: 700; }
+.xp-kv { display: grid; grid-template-columns: minmax(110px, 30%) 1fr; gap: 2px 10px; margin: 0; }
+.xp-kv dt { color: #444; }
+.xp-kv dd { margin: 0; }
+.xp-check-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 4px 12px; }
+menu[role="tablist"].xp-tabs { margin: 0; padding: 0 0 2px; display: flex; flex-wrap: wrap; }
+
+/* Rows for links, resources and anything that is not a sortable list. */
+.xp-list { list-style: none; margin: 0; padding: 0; background: #fff; border: 1px solid #7f9db9; }
+.xp-list > li { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-bottom: 1px solid #f1efe2; }
+.xp-list > li:last-child { border-bottom: 0; }
+.xp-list > li:hover { background: #e8f0f8; }
+.xp-list-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.xp-list-title { font-weight: 700; }
+.xp-list-desc { color: #666; }
+.xp-list-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+/* Windows controls win over the night-ops base button in index.css. */
+.xp-window-body :is(button, input, select, textarea) { border-radius: 0; }
+.xp-window-body button {
+  min-width: 0;
+  padding: 0 10px;
+  border: 0;
+  background: var(--xp-face);
+  color: #1a1a1a;
+  font: 11px/1 var(--xp-font);
+  box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px grey, inset 2px 2px #dfdfdf;
+}
+.xp-window-body button:hover { border-color: transparent; }
+.xp-window-body button:active {
+  box-shadow: inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px grey;
+}
+.xp-window-body button:disabled { color: grey; text-shadow: 1px 1px 0 #fff; }
+
+/* Dark islands keep their own surfaces and tokens: maps, radar, the Batman
+   board, the media bench. Everything outside them is the light XP face. */
+.xp-dark-island {
+  --y2k-bg: #070a08;
+  --y2k-bg-deep: #050706;
+  --y2k-surface: #0c110e;
+  --y2k-surface-raised: #121a15;
+  --y2k-border: #1c2a22;
+  --y2k-border-light: #2a3d32;
+  --y2k-accent: #3dd68c;
+  --y2k-accent-hover: #5ee4a3;
+  --y2k-accent-soft: rgba(61, 214, 140, 0.12);
+  --y2k-text: #e8f0ea;
+  --y2k-text-muted: #8a9a90;
+  --y2k-text-dim: #6f7d74;
+  --y2k-danger: #f07178;
+  color: #e8f0ea;
+}
+.xp-dark-island :is(button, input, select, textarea) { font-family: var(--xp-font); }
+.xp-dark-island button {
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  box-shadow: inset -1px -1px rgba(0, 0, 0, 0.5), inset 1px 1px rgba(255, 255, 255, 0.18);
+}
+.xp-dark-island :is(select, input[type="text"], input[type="search"], input[type="url"], input[type="number"]) {
+  background: #0c110e;
+  color: #e8f0ea;
+  border: 1px solid #2a3d32;
+}
+
+@media (max-width: 900px) {
+  .xp-page-body { padding: 6px; }
+  .xp-page-tools { padding: 4px; }
+  .xp-page-actions { padding: 6px 4px 8px; }
+}

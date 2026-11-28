@@ -8,43 +8,41 @@ export default function ToolsView({ activeToolId, onToolChange }) {
 
   if (tool?.native === 'forensics') {
     return (
-      <div className="tools-view tools-view--native">
+      <div className="xp-page">
         <ForensicsView />
       </div>
     )
   }
 
   return (
-    <div className="tools-view">
-      <header className="tools-view-header">
-        <h1 className="tools-view-title">Tools</h1>
-        <p className="tools-view-subtitle">Embedded OSINT and monitoring tools. Select a tool below or in the sidebar.</p>
-        <div className="tools-view-tabs" role="tablist" aria-label="Select tool">
+    <div className="xp-page">
+      <div className="xp-page-tools">
+        <menu role="tablist" className="xp-tabs" aria-label="Select tool">
           {TOOLS_LIST.map((t) => (
             <button
               key={t.id}
               type="button"
               role="tab"
               aria-selected={activeTool === t.id}
-              className={`tools-view-tab ${activeTool === t.id ? 'active' : ''}`}
               onClick={() => onToolChange && onToolChange(t.id)}
             >
               {t.title}
             </button>
           ))}
-        </div>
-      </header>
-      <div className="tools-view-content">
+        </menu>
+      </div>
+      <div className="xp-page-body">
         {tool && (
           <>
-            <div className="tools-view-tool-meta">
-              <p className="tools-view-tool-desc">{tool.desc}</p>
-              {tool.apiDocsUrl && (
-                <a href={tool.apiDocsUrl} target="_blank" rel="noopener noreferrer" className="tools-view-api-link">
-                  API docs →
-                </a>
-              )}
-            </div>
+            <p className="xp-note">
+              {tool.desc}
+              {tool.apiDocsUrl ? (
+                <>
+                  {' '}
+                  <a href={tool.apiDocsUrl} target="_blank" rel="noopener noreferrer">API docs</a>
+                </>
+              ) : null}
+            </p>
             <div className="tools-view-embed-wrap">
               <iframe
                 title={tool.title}

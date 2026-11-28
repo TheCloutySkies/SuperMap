@@ -716,7 +716,7 @@ export default function ForensicsView() {
 
   return (
     <div
-      className={`bench ${dragOver ? 'is-drag' : ''}`}
+      className={`bench xp-dark-island ${dragOver ? 'is-drag' : ''}`}
       onDragOver={(event) => { event.preventDefault(); setDragOver(true) }}
       onDragLeave={() => setDragOver(false)}
       onDrop={(event) => {
@@ -725,11 +725,7 @@ export default function ForensicsView() {
         openFile(event.dataTransfer.files?.[0])
       }}
     >
-      <header className="bench-bar">
-        <div>
-          <p className="bench-kicker">On this machine</p>
-          <h1 className="bench-title">Media bench</h1>
-        </div>
+      <div className="bench-tools">
         <form className="bench-intake" onSubmit={(event) => {
           event.preventDefault()
           const value = event.currentTarget.querySelector('input[type="url"]').value
@@ -752,7 +748,7 @@ export default function ForensicsView() {
         <p className="bench-note">
           The file is decoded in this browser. A URL is fetched once through a 25 MB cap and is not kept on the server. These plates are measurements, not a real or fake verdict.
         </p>
-      </header>
+      </div>
       <div className="bench-work">
         <nav className="bench-rail" aria-label="Instruments">
           <p>Image</p>

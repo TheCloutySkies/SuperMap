@@ -234,38 +234,37 @@ export default function ResourcesView({ resourcesScrollRef }) {
     })).filter((section) => section.items.length > 0)
   }, [categoryId, q])
 
+  const linkCount = filteredSections.reduce((total, section) => total + section.items.length, 0)
+
   return (
-    <div className="resources-view">
-      <header className="resources-header">
-        <h1 className="resources-title">Resources</h1>
-        <p className="resources-subtitle">Web-only OSINT, maps, news, and situational awareness links. Filter and open in app where supported.</p>
-        <div className="resources-filters">
-          <input
-            type="search"
-            placeholder="Filter by name or description…"
-            value={filterText}
-            onChange={(e) => setFilterText(e.target.value)}
-            className="resources-filter-input"
-            aria-label="Filter resources"
-          />
-          <select
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            className="resources-category-select"
-            aria-label="Category"
-          >
-            {ALL_CATEGORIES.map((c) => (
-              <option key={c.id || 'all'} value={c.id}>{c.label}</option>
-            ))}
-          </select>
-        </div>
-      </header>
+    <div className="xp-page">
+      <div className="xp-page-tools">
+        <input
+          type="search"
+          placeholder="Filter by name or description…"
+          value={filterText}
+          onChange={(e) => setFilterText(e.target.value)}
+          aria-label="Filter resources"
+        />
+        <select
+          value={categoryId}
+          onChange={(e) => setCategoryId(e.target.value)}
+          aria-label="Category"
+        >
+          {ALL_CATEGORIES.map((c) => (
+            <option key={c.id || 'all'} value={c.id}>{c.label}</option>
+          ))}
+        </select>
+        <p>{linkCount} links</p>
+      </div>
 
       {embedUrl && (
         <div className="resources-embed-overlay">
-          <div className="resources-embed-header">
-            <span className="resources-embed-title">{embedTitle}</span>
-            <button type="button" className="resources-embed-close" onClick={closeEmbed} aria-label="Close">×</button>
+          <div className="title-bar">
+            <div className="title-bar-text">{embedTitle}</div>
+            <div className="title-bar-controls">
+              <button type="button" aria-label="Close" onClick={closeEmbed} />
+            </div>
           </div>
           <iframe
             title={embedTitle}
@@ -276,44 +275,36 @@ export default function ResourcesView({ resourcesScrollRef }) {
         </div>
       )}
 
-      <div className="resources-scroll">
-        <div className="resources-sections">
-          {filteredSections.length === 0 ? (
-            <p className="resources-no-results">No resources match the filter.</p>
-          ) : (
-            filteredSections.map((section) => (
-              <section key={section.id} id={'section-' + section.id} className="resources-section">
-                <h2 className="resources-section-title">{section.title}</h2>
-                <ul className="resources-list">
-                  {section.items.map((item) => (
-                    <li key={item.url} className="resources-item">
-                      <div className="resources-item-main">
-                        <a href={item.url} target="_blank" rel="noopener noreferrer" className="resources-link">
-                          {item.name}
-                        </a>
-                        {item.desc && <span className="resources-desc">{item.desc}</span>}
-                      </div>
-                      <div className="resources-item-actions">
-                        {item.embed && (
-                          <button
-                            type="button"
-                            className="resources-open-in-app"
-                            onClick={() => openEmbed(item.url, item.name)}
-                          >
-                            Open in app
-                          </button>
-                        )}
-                        <a href={item.url} target="_blank" rel="noopener noreferrer" className="resources-external">
-                          Open in new tab →
-                        </a>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))
-          )}
-        </div>
+      <div className="xp-page-body">
+        {filteredSections.length === 0 ? (
+          <p className="xp-note">No resources match the filter.</p>
+        ) : (
+          filteredSections.map((section) => (
+            <fieldset key={section.id} id={'section-' + section.id}>
+              <legend>{section.title.replace(/^[^A-Za-z0-9]+/, '')}</legend>
+              <ul className="xp-list">
+                {section.items.map((item) => (
+                  <li key={item.url}>
+                    <div className="xp-list-main">
+                      <a className="xp-list-title" href={item.url} target="_blank" rel="noopener noreferrer">
+                        {item.name}
+                      </a>
+                      {item.desc && <span className="xp-list-desc">{item.desc}</span>}
+                    </div>
+                    <div className="xp-list-actions">
+                      {item.embed && (
+                        <button type="button" onClick={() => openEmbed(item.url, item.name)}>
+                          Open here
+                        </button>
+                      )}
+                      <a href={item.url} target="_blank" rel="noopener noreferrer">New tab</a>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </fieldset>
+          ))
+        )}
       </div>
     </div>
   )

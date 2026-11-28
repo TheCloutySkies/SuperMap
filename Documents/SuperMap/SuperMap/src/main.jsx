@@ -22,8 +22,9 @@ createRoot(document.getElementById('root')).render(
       <AccountsProvider>
         <BrowserRouter>
           <App />
+          {/* Inside the router: the accounts overlay and the messenger use router hooks. */}
+          <AccountsOverlay />
         </BrowserRouter>
-        <AccountsOverlay />
       </AccountsProvider>
       <Analytics />
     </ErrorBoundary>

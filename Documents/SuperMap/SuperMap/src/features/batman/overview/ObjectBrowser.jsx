@@ -57,6 +57,7 @@ export default function ObjectBrowser({ object, index, onOpen, onOpenInMap }) {
   return (
     <aside className="gm-detail" aria-label={object.title}>
       <header className="gm-detail-head">
+        <button type="button" className="gm-detail-close" onClick={() => onOpen?.(null)} aria-label="Close record">✕</button>
         <div>
           <p className="gm-detail-kind">{meta?.label || object.kind} · {theaterLabel(object.theater)}</p>
           <h2>{object.title}</h2>

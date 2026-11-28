@@ -117,7 +117,12 @@
   background: var(--gm-surface); border-left: 1px solid var(--gm-border);
   max-height: calc(100dvh - 250px); overflow: auto; display: flex; flex-direction: column;
 }
-.batman-mode .gm-detail-head { padding: 12px 14px; border-bottom: 1px solid var(--gm-border); }
+.batman-mode .gm-detail-head { padding: 12px 14px; border-bottom: 1px solid var(--gm-border); display: flex; gap: 10px; align-items: flex-start; }
+.batman-mode .gm-detail-close {
+  flex: none; min-width: 44px; min-height: 44px;
+  background: transparent; border: 1px solid var(--gm-border); border-radius: var(--gm-radius);
+  color: var(--gm-dim); cursor: pointer; font: inherit;
+}
 .batman-mode .gm-detail-kind { margin: 0 0 5px; color: var(--gm-accent); font-size: 10px; }
 .batman-mode .gm-detail-head h2 { font-size: 14px; line-height: 1.35; }
 .batman-mode .gm-detail-summary { margin: 7px 0 0; color: var(--gm-dim); font-size: 11px; line-height: 1.55; }
@@ -166,4 +171,29 @@
   .batman-mode .gm-search { flex-wrap: wrap; }
   .batman-mode .gm-situation > button { flex-wrap: wrap; gap: 8px; }
   .batman-mode .gm-query-strips { padding: 7px 10px; }
+
+  /* The detail is a full-screen sheet, not a cramped third pane. */
+  .batman-mode .gm-detail {
+    position: fixed; inset: 0; z-index: 10030; border: 0;
+    background: var(--gm-surface); max-height: 100dvh;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .batman-mode .gm-detail-head { position: sticky; top: 0; z-index: 1; background: var(--gm-surface); }
+  .batman-mode .gm-detail-actions { position: sticky; bottom: 0; background: var(--gm-surface); padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  .batman-mode .gm-detail-actions button { min-height: 44px; }
+  .batman-mode .gm-related button, .batman-mode .gm-type-list button, .batman-mode .gm-facet button { min-height: 44px; }
+  .batman-mode .gm-table tbody tr { min-height: 44px; }
+  .batman-mode .gm-row-summary { max-width: 24ch; }
+  .batman-mode .gm-types, .batman-mode .gm-type-list { gap: 4px; }
+
+  /* Cases: horizontal chip tabs and a contained timeline. */
+  .batman-mode .batman-tabs { overflow-x: auto; flex-wrap: nowrap; padding: 0 10px; }
+  .batman-mode .batman-tab { flex: none; min-height: 44px; padding: 10px 12px; }
+  .batman-mode .batman-timeline-holder { overflow-x: auto; max-height: 50vh; }
+  .batman-mode .batman-inspector {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10030;
+    max-height: 70dvh; border: 1px solid var(--gm-border); border-bottom: 0;
+    overflow-y: auto; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  .batman-mode .batman-board { min-height: 60vh; }
 }

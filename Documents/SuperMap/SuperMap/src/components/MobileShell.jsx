@@ -17,6 +17,8 @@ export default function MobileShell({
   layersOpen,
   onToggleLayers,
   onGoHome,
+  activeMode,
+  onModeSelect,
   children,
 }) {
   if (isHub) {
@@ -50,7 +52,7 @@ export default function MobileShell({
       <div className={`mobile-page-body ${isMapPage ? 'mobile-page-body--map' : ''}`}>
         {children}
       </div>
-      <MobileHomeButton onClick={onGoHome} />
+      <MobileHomeButton onClick={onGoHome} activeMode={activeMode} onModeSelect={onModeSelect} />
     </div>
   )
 }

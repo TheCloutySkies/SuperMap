@@ -65,9 +65,12 @@ export default function OverviewView({ onGoCases }) {
     const stopEntities = startDiscoverySources()
     const stopPins = subscribePins(bump)
     window.addEventListener('supermap:discovery-changed', bump)
+    const onKey = (event) => { if (event.key === 'Escape') setSelected(null) }
+    window.addEventListener('keydown', onKey)
     return () => {
       stopHome(); stopConsole(); stopEntities(); stopPins()
       window.removeEventListener('supermap:discovery-changed', bump)
+      window.removeEventListener('keydown', onKey)
     }
   }, [])
 

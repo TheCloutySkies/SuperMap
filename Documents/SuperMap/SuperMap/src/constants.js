@@ -146,7 +146,6 @@ export const DEFAULT_TAB_VISIBILITY = {
   flockMap: true,
   liveWebcams: true,
   printMap: true,
-  osintFeeds: true,
   newsFeeds: true,
   osintX: true,
   broadcasts: true,

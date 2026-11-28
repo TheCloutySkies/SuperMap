@@ -17,7 +17,6 @@ const TAB_LABELS = {
   flockMap: 'Flock Cameras',
   liveWebcams: 'Live Webcams',
   printMap: 'Print Map',
-  osintFeeds: 'OSINT Feeds',
   newsFeeds: 'GPN — Good Palantir News',
   osintX: 'OSINT (X)',
   broadcasts: 'Broadcasts',

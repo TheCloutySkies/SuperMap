@@ -304,7 +304,7 @@ export const OMNIBAR_CORE_ENTRIES = Object.freeze([
     keywords: ['osint', 'feeds', 'intel feed'],
     synonyms: ['signals'],
     action: 'navigate',
-    viewId: 'osint-feeds',
+    viewId: 'news-feeds',
     weight: 8,
   },
   {

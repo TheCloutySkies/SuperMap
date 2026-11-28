@@ -43,7 +43,6 @@ const QUICK_LINKS = [
   { id: CRIME_VIEW_ID, label: 'Crime Intelligence', desc: 'National snapshot, state & city detail, ask ThielBot', icon: '📉', path: CRIME_VIEW_ID },
   { id: WEATHER_VIEW_ID, label: 'Weather', desc: 'Forecast, radar layers, air quality & marine', icon: '☁', path: WEATHER_VIEW_ID },
   { id: 'news-feeds', label: 'GPN — Good Palantir News', desc: 'Image-led headlines from trusted publishers', icon: '📰', path: 'news-feeds' },
-  { id: 'osint-feeds', label: 'OSINT Feeds', desc: 'Bellingcat, CISA, DW, tactical intel', icon: '📡', path: 'osint-feeds' },
   { id: 'osint-x', label: 'OSINT (X)', desc: 'Posts from OSINT accounts', icon: '𝕏', path: 'osint-x' },
   { id: 'report-maker', label: 'Report Maker', desc: 'Build and save intelligence reports', icon: '📝', path: 'report-maker' },
   { id: 'resources', label: 'Resources', desc: 'Open OSINT tools and reference resources', icon: '📚', path: 'resources' },

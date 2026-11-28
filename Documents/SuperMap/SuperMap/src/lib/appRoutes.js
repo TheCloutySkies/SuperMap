@@ -71,7 +71,6 @@ const VIEW_TO_PATH = Object.freeze({
   [BATMAN_OVERVIEW_VIEW_ID]: '/batman/overview',
   [BATMAN_CASES_VIEW_ID]: '/batman/cases',
   'news-feeds': '/news',
-  'osint-feeds': '/news/osint',
   'recent-videos': '/news/videos',
   'osint-x': '/news/x',
   broadcasts: '/news/broadcasts',
@@ -96,7 +95,7 @@ const PATH_TO_VIEW = Object.freeze({
   '/batman/overview': BATMAN_OVERVIEW_VIEW_ID,
   '/batman/cases': BATMAN_CASES_VIEW_ID,
   '/news': 'news-feeds',
-  '/news/osint': 'osint-feeds',
+  '/news/osint': 'news-feeds',
   '/news/videos': 'recent-videos',
   '/news/x': 'osint-x',
   '/news/broadcasts': 'broadcasts',
@@ -111,7 +110,6 @@ const PATH_TO_VIEW = Object.freeze({
 })
 
 const FEED_VIEW_IDS = new Set([
-  'osint-feeds',
   'osint-x',
   'advanced-search',
   'news-feeds',

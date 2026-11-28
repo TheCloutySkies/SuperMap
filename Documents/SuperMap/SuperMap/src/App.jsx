@@ -105,7 +105,6 @@ const MAP_VIEW_IDS = MAP_VIEWS.map((v) => v.id)
 
 const FEED_VIEWS = [
   { id: 'news-feeds', label: 'GPN — Good Palantir News', tabKey: 'newsFeeds' },
-  { id: 'osint-feeds', label: 'OSINT Feeds', tabKey: 'osintFeeds' },
   { id: 'recent-videos', label: 'Recent Videos', tabKey: 'recentVideos' },
   { id: 'osint-x', label: 'OSINT (X/Twitter)', tabKey: 'osintX' },
   { id: 'broadcasts', label: 'Broadcasts', tabKey: 'broadcasts' },
@@ -423,7 +422,7 @@ function App() {
   const isWeatherPage = isWeatherView(activeView)
   const isStrategicPage = activeView === 'strategic' // legacy alias; routes redirect to Batman Overview
   const isBatmanPage = isBatmanView(activeView)
-  const isFeedView = ['osint-feeds', 'news-feeds', 'recent-videos', 'osint-x', 'advanced-search', 'broadcasts'].includes(activeView)
+  const isFeedView = ['news-feeds', 'recent-videos', 'osint-x', 'advanced-search', 'broadcasts'].includes(activeView)
   const isSettingsView = activeView === 'settings'
   const tabVisibility = getTabVisibility()
 
@@ -458,7 +457,7 @@ function App() {
     if (!viewId) return
 
     // News / OSINT content: focus feeds by title (and optionally open URL already handled in Omnibar)
-    if (target.focusQuery && (viewId === 'news-feeds' || viewId === 'osint-feeds' || target.category === 'News' || target.category === 'OSINT')) {
+    if (target.focusQuery && (viewId === 'news-feeds' || target.category === 'News' || target.category === 'OSINT')) {
       setSearchQuery(String(target.focusQuery))
     }
 
@@ -693,14 +692,11 @@ function App() {
             <BatmanView key={activeView} view={activeView} />
           </div>
         )}
-        {activeView === 'osint-feeds' && (
-          <FeedsView title="OSINT Feeds" activeView="osint-feeds" keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} onPinnedToMap={handlePinnedToMap} />
-        )}
         {activeView === 'osint-x' && (
           <OsintXView keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} onPinnedToMap={handlePinnedToMap} />
         )}
         {activeView === 'news-feeds' && (
-          <FeedsView title="GPN — Good Palantir News" activeView="news-feeds" keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} initialNews={prefetchedNews} />
+          <FeedsView title="GPN — Good Palantir News" activeView="news-feeds" keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} initialNews={prefetchedNews} onPinnedToMap={handlePinnedToMap} />
         )}
         {activeView === 'recent-videos' && (
           <FeedsView title="Recent Videos" activeView="recent-videos" keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} />
@@ -824,7 +820,7 @@ function App() {
             onSearchResults={setSearchResultsGeoJson}
             onNavigateToMap={() => setActiveViewWithMode('community-map')}
             onNavigateToSearchResults={(q) => navigateSearch(q || searchQuery)}
-            onNavigateToFeeds={(q) => { setSearchQuery(q || ''); setActiveViewWithMode('osint-feeds') }}
+            onNavigateToFeeds={(q) => { setSearchQuery(q || ''); setActiveViewWithMode('news-feeds') }}
             onCommandNavigate={handleOmnibarNavigate}
             placeholder="Search or jump (Ctrl+K)…"
           />

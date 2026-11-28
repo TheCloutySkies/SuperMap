@@ -60,8 +60,28 @@ function preferRicherItems(next, prev) {
   return next
 }
 
-const FEED_MODE = { NEWS: 'GLOBAL_NEWS', OSINT: 'GENERAL_OSINT', VIDEOS: 'RECENT_VIDEOS' }
-const OSINT_SUB = { INTEL: 'intel' }
+const FEED_MODE = { NEWS: 'GLOBAL_NEWS', VIDEOS: 'RECENT_VIDEOS' }
+
+/** Intel rows become Glowie stories, named by the desk that filed them. */
+function osintStoriesFrom(items) {
+  return (Array.isArray(items) ? items : []).map((item) => ({
+    ...item,
+    source: osintSourceDisplayName(item.source),
+    kind: 'osint',
+  }))
+}
+
+/** Publisher stories and intel stories are one list, without duplicates. */
+function mergeDesks(base, extra) {
+  const seen = new Set(base.map((row) => row._key))
+  const out = [...base]
+  for (const row of extra) {
+    if (seen.has(row._key)) continue
+    seen.add(row._key)
+    out.push(row)
+  }
+  return out
+}
 
 const CATEGORY_OPTIONS = [
   { key: 'all', label: 'All topics' },
@@ -87,17 +107,6 @@ function osintSourceDisplayName(source) {
   return source || '—'
 }
 
-const SOURCE_SECTIONS_OSINT = [
-  { key: 'all', label: 'All sources' },
-  { key: 'bellingcat', label: 'Bellingcat' },
-  { key: 'cisa', label: 'CISA' },
-  { key: 'dw', label: 'DW' },
-  { key: 'isw', label: 'Institute for the Study of War' },
-  { key: 'defenseone', label: 'Defense One' },
-  { key: 'warontherocks', label: 'War on the Rocks' },
-  { key: 'defensenews', label: 'Defense News' },
-  { key: 'thewarzone', label: 'The War Zone' },
-]
 
 const SORT_OPTIONS = [
   { value: 'newest', label: 'Newest first' },
@@ -266,19 +275,6 @@ function geoJsonToItems(data) {
   return out
 }
 
-function relativeOsintTime(item) {
-  const raw = item?.pubDate || item?.timestamp
-  if (!raw) return '—'
-  const d = new Date(raw)
-  if (Number.isNaN(d.getTime())) return '—'
-  const sec = Math.floor((Date.now() - d.getTime()) / 1000)
-  if (sec < 60) return `${Math.max(1, sec)}s`
-  if (sec < 3600) return `${Math.floor(sec / 60)}m`
-  if (sec < 86400) return `${Math.floor(sec / 3600)}h`
-  if (sec < 604800) return `${Math.floor(sec / 86400)}d`
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-}
-
 function feedMenuItem(item) {
   const coords = Array.isArray(item.coordinates) ? item.coordinates : null
   return {
@@ -294,38 +290,6 @@ function feedMenuItem(item) {
   }
 }
 
-function OsintDeskCard({ item, onOpen }) {
-  const img = articleImage(item)
-  return (
-    <article
-      className={`feeds-osint-card feeds-osint-alert-${item.alertLevel || 'medium'} has-item-menu`}
-    >
-      <ItemMenu item={feedMenuItem(item)} />
-      <button type="button" className="feeds-osint-card-main" onClick={() => onOpen?.(item)}>
-        {img && (
-          <div className="feeds-osint-card-media" aria-hidden>
-            <img src={img} alt="" loading="lazy" />
-          </div>
-        )}
-        <div className="feeds-osint-card-body">
-          <div className="feeds-osint-card-meta">
-            <span className="feeds-osint-card-source">{osintSourceDisplayName(item.source)}</span>
-            <span className="feeds-osint-card-time">{relativeOsintTime(item)}</span>
-            {item.risk_score == null && item.alertLevel ? (
-              <span className="feeds-osint-card-risk-chip">{item.alertLevel}</span>
-            ) : null}
-          </div>
-          <h3 className="feeds-osint-card-title">{item.title || 'Untitled'}</h3>
-          {item.contentSnippet && (
-            <p className="feeds-osint-card-snippet">{String(item.contentSnippet).slice(0, 160)}</p>
-          )}
-        </div>
-      </button>
-      <ThreatScoreButton item={item} kind="news" placement="card" />
-    </article>
-  )
-}
-
 export default function FeedsView({ title, activeView, keywordFilter = '', onClearFilter, initialNews, onPinnedToMap }) {
   const homeSnap = typeof window !== 'undefined' ? readHomeSnapshot() : null
   const seedNews = initialNews || homeSnap?.news || null
@@ -333,15 +297,13 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
   const seedOsint = (typeof window !== 'undefined' && readLocalSnap(OSINT_FEED_SNAP_KEY)) || []
   const seedVideos = (typeof window !== 'undefined' && readLocalSnap(VIDEOS_FEED_SNAP_KEY)) || []
   const isNewsOnly = activeView === 'news-feeds'
-  const isOsintOnly = activeView === 'osint-feeds'
   const isVideosOnly = activeView === 'recent-videos'
-  const [feedMode, setFeedMode] = useState(isVideosOnly ? FEED_MODE.VIDEOS : isOsintOnly ? FEED_MODE.OSINT : FEED_MODE.NEWS)
+  const [feedMode, setFeedMode] = useState(isVideosOnly ? FEED_MODE.VIDEOS : FEED_MODE.NEWS)
   const [newsItems, setNewsItems] = useState(initialItems)
   const [newsMeta, setNewsMeta] = useState(seedNews?.meta || null)
-  const [osintItems, setOsintItems] = useState(seedOsint)
+  const [osintItems, setOsintItems] = useState(() => osintStoriesFrom(seedOsint))
   const [videoItems, setVideoItems] = useState(seedVideos)
   const [newsLoading, setNewsLoading] = useState(initialItems.length === 0)
-  const [osintLoading, setOsintLoading] = useState(seedOsint.length === 0)
   const [videoLoading, setVideoLoading] = useState(false)
   const [videoTagFilter, setVideoTagFilter] = useState('all')
   const [refreshing, setRefreshing] = useState(false)
@@ -349,7 +311,6 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [localSearch, setLocalSearch] = useState('')
   const [sortBy, setSortBy] = useState('newest')
-  const [osintSub, setOsintSub] = useState(OSINT_SUB.INTEL)
   const [pinningId, setPinningId] = useState(null)
   const [pinError, setPinError] = useState(null)
   const [expandedVideo, setExpandedVideo] = useState(null)
@@ -357,8 +318,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
 
   useEffect(() => {
     if (activeView === 'recent-videos') setFeedMode(FEED_MODE.VIDEOS)
-    else if (activeView === 'news-feeds') setFeedMode(FEED_MODE.NEWS)
-    else if (activeView === 'osint-feeds') setFeedMode(FEED_MODE.OSINT)
+    else setFeedMode(FEED_MODE.NEWS)
   }, [activeView])
 
   useEffect(() => {
@@ -469,18 +429,14 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
   }, [feedMode, isVideosOnly])
 
   useEffect(() => {
-    if (!API_BASE) {
-      setOsintLoading(false)
-      return
-    }
+    if (!API_BASE) return undefined
     let cancelled = false
-    // Soft: paint local snap immediately; only spin when empty
-    setOsintLoading(osintItems.length === 0)
+    // Soft: paint the local snap immediately, then refresh it.
     const t0 = Date.now()
     if (feedsDebugEnabled()) console.debug('[FEEDS osint] INPUT', { url: `${API_BASE}/api/osint` })
     axios.get(`${API_BASE}/api/osint`, { timeout: 12000 })
       .then((res) => {
-        const items = geoJsonToItems(res.data)
+        const items = osintStoriesFrom(geoJsonToItems(res.data))
         if (!cancelled && items.length > 0) {
           setOsintItems((prev) => {
             const chosen = preferRicherItems(items, prev)
@@ -494,7 +450,6 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
         // Keep cached OSINT on failure
         if (feedsDebugEnabled()) console.debug('[FEEDS osint] OUTPUT error', { message: err?.message || String(err), ms: Date.now() - t0 })
       })
-      .finally(() => { if (!cancelled) setOsintLoading(false) })
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -543,7 +498,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
           setNewsItems((prev) => preferRicherItems(nextNews, prev))
           setNewsMeta(responses[0].data?.meta || null)
         }
-        const nextOsint = geoJsonToItems(responses[1].data)
+        const nextOsint = osintStoriesFrom(geoJsonToItems(responses[1].data))
         if (nextOsint.length > 0) {
           setOsintItems((prev) => {
             const chosen = preferRicherItems(nextOsint, prev)
@@ -578,7 +533,6 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
       })
       .finally(() => {
         setNewsLoading(false)
-        setOsintLoading(false)
         if (feedMode === FEED_MODE.VIDEOS) setVideoLoading(false)
         setRefreshing(false)
       })
@@ -591,7 +545,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
 
   const publisherSources = useMemo(() => {
     const counts = new Map()
-    for (const item of newsItems) {
+    for (const item of mergedNews) {
       const src = String(item.source || '').trim()
       if (!src) continue
       counts.set(src, (counts.get(src) || 0) + 1)
@@ -600,10 +554,13 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .slice(0, 18)
       .map(([key, count]) => ({ key, label: key, count }))
-  }, [newsItems])
+  }, [mergedNews])
+
+  // GPN is one desk: publisher stories and intel stories together.
+  const mergedNews = useMemo(() => mergeDesks(newsItems, osintItems), [newsItems, osintItems])
 
   const filteredAndSortedNews = useMemo(() => {
-    const filtered = newsItems.filter((item) => {
+    const filtered = mergedNews.filter((item) => {
       if (!isGlowieRelevant(item)) return false
       if (!matchesSource(item, sourceFilter, FEED_MODE.NEWS)) return false
       if (categoryFilter !== 'all' && item.category !== categoryFilter) return false
@@ -618,22 +575,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
     else if (sortBy === 'oldest') list = [...list].sort((a, b) => new Date(a.pubDate || 0) - new Date(b.pubDate || 0))
     else if (sortBy === 'source') list = [...list].sort((a, b) => (a.source || '').localeCompare(b.source || ''))
     return list
-  }, [newsItems, sourceFilter, categoryFilter, sortBy, q])
-
-  const filteredAndSortedOsint = useMemo(() => {
-    let list = osintItems.filter(
-      (item) =>
-        matchesSource(item, sourceFilter, FEED_MODE.OSINT) &&
-        (!q ||
-          (item.title && item.title.toLowerCase().includes(q)) ||
-          (item.source && item.source.toLowerCase().includes(q)) ||
-          (item.contentSnippet && item.contentSnippet.toLowerCase().includes(q)))
-    )
-    if (sortBy === 'newest') list = [...list].sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0))
-    else if (sortBy === 'oldest') list = [...list].sort((a, b) => new Date(a.pubDate || 0) - new Date(b.pubDate || 0))
-    else if (sortBy === 'source') list = [...list].sort((a, b) => (a.source || '').localeCompare(b.source || ''))
-    return list
-  }, [osintItems, sourceFilter, sortBy, q])
+  }, [mergedNews, sourceFilter, categoryFilter, sortBy, q])
 
   const allVideoTags = useMemo(() => {
     const set = new Set()
@@ -648,13 +590,9 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
     return videoItems.filter((it) => Array.isArray(it.tags) && it.tags.includes(videoTagFilter))
   }, [videoItems, videoTagFilter])
 
-  const loading = feedMode === FEED_MODE.VIDEOS
-    ? videoLoading
-    : feedMode === FEED_MODE.NEWS
-      ? newsLoading
-      : osintLoading
-  const isEmpty = feedMode === FEED_MODE.VIDEOS ? !videoItems.length : feedMode === FEED_MODE.NEWS ? !newsItems.length : !osintItems.length
-  const filteredEmpty = feedMode === FEED_MODE.VIDEOS ? !filteredVideos.length : feedMode === FEED_MODE.NEWS ? !filteredAndSortedNews.length : !filteredAndSortedOsint.length
+  const loading = feedMode === FEED_MODE.VIDEOS ? videoLoading : newsLoading
+  const isEmpty = feedMode === FEED_MODE.VIDEOS ? !videoItems.length : !mergedNews.length
+  const filteredEmpty = feedMode === FEED_MODE.VIDEOS ? !filteredVideos.length : !filteredAndSortedNews.length
 
   const expandedVideoModal = useMemo(() => {
     if (!expandedVideo) return null
@@ -734,10 +672,10 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
     )
   }, [expandedVideo])
 
-  const showNewsDesk = feedMode === FEED_MODE.NEWS || isNewsOnly
+  const showNewsDesk = feedMode !== FEED_MODE.VIDEOS || isNewsOnly
 
   return (
-    <div className={`feeds-dashboard feeds-dashboard--${feedMode === FEED_MODE.VIDEOS ? 'videos' : feedMode === FEED_MODE.NEWS ? 'news' : 'osint'}${showNewsDesk ? ' feeds-dashboard--news-desk' : ''}`}>
+    <div className={`feeds-dashboard feeds-dashboard--${feedMode === FEED_MODE.VIDEOS ? 'videos' : 'news'}${showNewsDesk ? ' feeds-dashboard--news-desk' : ''}`}>
       {!showNewsDesk && (
         <div className="xp-page-tools" role="toolbar" aria-label={title}>
           <button
@@ -776,37 +714,6 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
           onOpen={setPreviewItem}
           toMenuItem={feedMenuItem}
         />
-      )}
-
-      {feedMode !== FEED_MODE.VIDEOS && !showNewsDesk && (
-        <div className="feeds-toolbar xp-page-tools">
-          <div className="feeds-source-filter">
-            <span className="feeds-toolbar-label">Source:</span>
-            {SOURCE_SECTIONS_OSINT.map((sec) => (
-              <button
-                key={sec.key}
-                type="button"
-                className={`feeds-source-chip ${sourceFilter === sec.key ? 'active' : ''}`}
-                onClick={() => setSourceFilter(sec.key)}
-              >
-                {sec.label}
-              </button>
-            ))}
-          </div>
-          <div className="feeds-sort">
-            <label htmlFor="feeds-sort-select" className="feeds-toolbar-label">Sort:</label>
-            <select
-              id="feeds-sort-select"
-              className="feeds-sort-select"
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-            >
-              {SORT_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
-        </div>
       )}
 
       {feedMode === FEED_MODE.VIDEOS && (
@@ -863,66 +770,11 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
         </div>
       )}
 
-      {(feedMode === FEED_MODE.OSINT || isOsintOnly) && !showNewsDesk && (
-        <div className="feeds-osint-section">
-          <div className="feeds-osint-subnav xp-page-tools">
-            <button
-              type="button"
-              className={`feeds-osint-subnav-btn ${osintSub === OSINT_SUB.INTEL ? 'active' : ''}`}
-              onClick={() => setOsintSub(OSINT_SUB.INTEL)}
-            >
-              Intel Feed
-            </button>
-          </div>
-
-          {osintSub === OSINT_SUB.INTEL && (
-            <>
-              {osintLoading && !osintItems.length ? (
-                <p className="feeds-loading">Loading OSINT…</p>
-              ) : filteredEmpty ? (
-                <div className="feeds-empty feeds-empty--osint">
-                  {isEmpty ? (
-                    <p>Couldn’t load OSINT feeds. Start the API and use <strong>Refresh</strong>.</p>
-                  ) : (
-                    <>
-                      <p>No items match the current filters.</p>
-                      {onClearFilter && (
-                        <button type="button" className="feeds-clear-filter" onClick={onClearFilter}>Clear search</button>
-                      )}
-                    </>
-                  )}
-                </div>
-              ) : (
-                <>
-                  {pinError && <p className="feeds-pin-error">{pinError}</p>}
-                  <div className="feeds-osint-desk" role="feed" aria-label="OSINT intel desk">
-                    {filteredAndSortedOsint.map((item, i) => (
-                      <OsintDeskCard
-                        key={item._key || item.link || item.id || i}
-                        item={item}
-                        onOpen={setPreviewItem}
-                        onPin={handlePinToMap}
-                        pinningId={pinningId}
-                        showPin={!!onPinnedToMap}
-                      />
-                    ))}
-                  </div>
-                </>
-              )}
-            </>
-          )}
-        </div>
-      )}
-
       <ArticlePreviewSheet
         item={previewItem}
         open={!!previewItem}
         onClose={() => { setPreviewItem(null); setPinError(null) }}
-        sourceLabel={
-          previewItem && (feedMode === FEED_MODE.OSINT || isOsintOnly)
-            ? osintSourceDisplayName(previewItem.source)
-            : previewItem?.source
-        }
+        sourceLabel={previewItem?.source}
         onPin={onPinnedToMap ? handlePinToMap : undefined}
         pinning={!!previewItem && pinningId === (previewItem.id || previewItem.link)}
         pinError={pinError}

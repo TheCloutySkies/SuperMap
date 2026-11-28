@@ -51,7 +51,7 @@ export default function SharedCaseView({ caseId }) {
       <header className="batman-head">
         <div className="batman-title">
           <h1>{caseDoc.title || 'Untitled case'}</h1>
-          <p>{caseDoc.description || 'A read-only case from Batman.'}</p>
+          <p>{caseDoc.description || 'A read-only case from Batman Mode.'}</p>
         </div>
         <span className="batman-badge is-shared">Read-only</span>
       </header>

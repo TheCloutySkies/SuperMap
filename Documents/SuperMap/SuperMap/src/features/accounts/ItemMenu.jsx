@@ -330,7 +330,7 @@ export default function ItemMenu({ item, inline = false, profilePost = false }) 
                   requestAddToCase(item)
                 }}
               >
-                🦇 Add to Batman case
+                🦇 Add to Batman Mode case
               </button>
               <button type="button" onClick={() => locatePin('mine')} disabled={busy}>Pin to my maps</button>
               <button type="button" onClick={() => locatePin('community')} disabled={busy}>Pin to community</button>

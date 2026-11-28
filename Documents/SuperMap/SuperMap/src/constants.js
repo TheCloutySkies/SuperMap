@@ -21,7 +21,7 @@ export const STRATEGIC_VIEW_ID = 'strategic'
 /** Batman: the investigation workspace — cases, evidence board, timeline, report. */
 export const BATMAN_VIEW_ID = 'batman'
 export function isBatmanView(viewId) {
-  return viewId === BATMAN_VIEW_ID
+  return viewId === BATMAN_VIEW_ID || viewId === 'batman-overview' || viewId === 'batman-cases'
 }
 
 export function resolveCrimeViewId(viewId) {

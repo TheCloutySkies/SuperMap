@@ -1,0 +1,155 @@
+/* Batman Mode Overview — search-first discovery, on-demand strategic lens. All styles scoped inside .batman-mode. */
+.batman-mode .bm-shell-head { align-items: center; margin-bottom: 18px; }
+.batman-mode .bm-switch {
+  display: inline-flex; gap: 2px; padding: 4px;
+  background: #060b13; border: 1px solid var(--bm-line); border-radius: 999px;
+}
+.batman-mode .bm-switch button {
+  border: 0; border-radius: 999px; padding: 8px 18px; cursor: pointer;
+  background: transparent; color: var(--bm-dim); font: inherit; font-weight: 600;
+}
+.batman-mode .bm-switch button.is-on { background: var(--bm-panel); color: var(--bm-ink); box-shadow: 0 0 0 1px var(--bm-good); }
+
+/* Search */
+.batman-mode .bm-overview { display: flex; flex-direction: column; gap: 18px; }
+.batman-mode .bm-search {
+  display: flex; gap: 8px; align-items: center; padding: 8px;
+  background: var(--bm-panel); border: 1px solid var(--bm-line); border-radius: 14px;
+}
+.batman-mode .bm-search > span { font-size: 22px; color: var(--bm-good); padding-left: 8px; }
+.batman-mode .bm-search input { flex: 1; min-width: 0; font-size: 16px; padding: 12px 14px; }
+
+/* Categories */
+.batman-mode .bm-types { display: flex; gap: 8px; flex-wrap: wrap; }
+.batman-mode .bm-type {
+  display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; cursor: pointer;
+  background: var(--bm-panel); color: var(--bm-ink); border: 1px solid var(--bm-line); border-radius: 12px; font: inherit;
+}
+.batman-mode .bm-type span:first-child { font-size: 16px; }
+.batman-mode .bm-type b { color: var(--bm-dim); font-size: 11px; }
+.batman-mode .bm-type.is-on { border-color: var(--bm-good); box-shadow: inset 0 0 0 1px var(--bm-good); }
+.batman-mode .bm-cloud { display: flex; gap: 6px; flex-wrap: wrap; }
+.batman-mode .bm-cloud button {
+  padding: 5px 10px; border-radius: 999px; cursor: pointer; font-size: 12px;
+  border: 1px solid var(--bm-line); background: transparent; color: var(--bm-dim);
+}
+.batman-mode .bm-cloud button b { margin-left: 4px; opacity: .7; }
+.batman-mode .bm-cloud button.is-on { color: var(--bm-good); border-color: var(--bm-good); }
+
+/* Saved / recent */
+.batman-mode .bm-searches { display: flex; gap: 24px; flex-wrap: wrap; }
+.batman-mode .bm-searches h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--bm-dim); margin-bottom: 6px; }
+.batman-mode .bm-saved, .batman-mode .bm-recent { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.batman-mode .bm-saved-row { display: inline-flex; align-items: center; gap: 2px; }
+.batman-mode .bm-saved-row > button:first-child, .batman-mode .bm-recent button {
+  background: var(--bm-panel); border: 1px solid var(--bm-line); border-radius: 8px;
+  color: var(--bm-ink); padding: 6px 10px; cursor: pointer; font: inherit; font-size: 12px;
+}
+.batman-mode .bm-saved-row em { display: block; color: var(--bm-dim); font-size: 10px; }
+.batman-mode .bm-saved-x { background: none; border: 0; color: var(--bm-dim); cursor: pointer; }
+
+/* Situation strip */
+.batman-mode .bm-situation { background: var(--bm-panel); border: 1px solid var(--bm-line); border-radius: 14px; overflow: hidden; }
+.batman-mode .bm-situation-toggle {
+  display: flex; gap: 10px; align-items: center; width: 100%; padding: 14px 16px;
+  background: none; border: 0; color: var(--bm-ink); cursor: pointer; font: inherit; text-align: left; flex-wrap: wrap;
+}
+.batman-mode .bm-situation-dot { width: 9px; height: 9px; border-radius: 50%; }
+.batman-mode .bm-situation-toggle strong { font-size: 14px; }
+.batman-mode .bm-situation-toggle em { color: var(--bm-dim); font-size: 12px; font-style: normal; }
+.batman-mode .bm-situation-chevron { margin-left: auto; color: var(--bm-dim); }
+.batman-mode .bm-situation-meta { padding: 0 16px 12px; }
+.batman-mode .bm-lens { border-top: 1px solid var(--bm-line); padding: 14px 16px 20px; display: flex; flex-direction: column; gap: 14px; }
+.batman-mode .bm-lens-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.batman-mode .bm-lens-bar p { margin: 0; color: var(--bm-dim); font-size: 12px; }
+.batman-mode .bm-lens-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.batman-mode .bm-lens-pills button {
+  padding: 5px 9px; border: 1px solid var(--bm-line); background: transparent;
+  color: var(--bm-dim); border-radius: 8px; font: inherit; font-size: 11px; cursor: pointer;
+}
+.batman-mode .bm-lens-section h3 { font-size: 13px; margin-bottom: 6px; }
+.batman-mode .bm-lens-latest { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.batman-mode .bm-lens-latest li {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  background: #060b13; border: 1px solid var(--bm-line); border-radius: 8px; padding: 8px 10px; font-size: 12px;
+}
+.batman-mode .bm-lens-latest li > span { color: var(--bm-warn); font-variant-numeric: tabular-nums; }
+.batman-mode .bm-lens-latest li > button:nth-child(2) { flex: 1; background: none; border: 0; color: var(--bm-ink); text-align: left; cursor: pointer; font: inherit; }
+.batman-mode .bm-lens-drawer-add { position: fixed; z-index: 10050; bottom: 20px; right: 20px; }
+
+/* Facets + results */
+.batman-mode .bm-discovery-body { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 16px; align-items: start; }
+.batman-mode .bm-facets { background: var(--bm-panel); border: 1px solid var(--bm-line); border-radius: 14px; padding: 14px; position: sticky; top: 12px; max-height: 82vh; overflow: auto; }
+.batman-mode .bm-facets-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.batman-mode .bm-facets h3 { font-size: 14px; }
+.batman-mode .bm-facet-active { background: var(--bm-good); color: #04120a; border-radius: 999px; padding: 1px 7px; font-size: 11px; }
+.batman-mode .bm-facet-scope { color: var(--bm-dim); font-size: 11px; margin: 4px 0 12px; }
+.batman-mode .bm-facet-group { border-top: 1px solid var(--bm-line); padding: 12px 0 4px; }
+.batman-mode .bm-facet-group h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--bm-dim); margin-bottom: 8px; }
+.batman-mode .bm-facet-group ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.batman-mode .bm-facet-group li button {
+  display: flex; justify-content: space-between; gap: 8px; width: 100%; text-align: left;
+  background: none; border: 0; color: var(--bm-ink); cursor: pointer; font: inherit; font-size: 12px; padding: 4px 6px; border-radius: 6px;
+}
+.batman-mode .bm-facet-group li button:hover { background: rgba(255,255,255,.04); }
+.batman-mode .bm-facet-group li button.is-on { color: var(--bm-good); background: rgba(87,227,137,.08); }
+.batman-mode .bm-facet-group li button b { color: var(--bm-dim); font-weight: 500; }
+.batman-mode .bm-facet-more { color: var(--bm-dim); font-size: 10px; margin: 4px 6px; }
+.batman-mode .bm-facet-times { display: flex; flex-wrap: wrap; gap: 4px; }
+.batman-mode .bm-facet-times button { padding: 4px 8px; border-radius: 6px; border: 1px solid var(--bm-line); background: none; color: var(--bm-dim); cursor: pointer; font: inherit; font-size: 11px; }
+.batman-mode .bm-facet-times button.is-on { color: var(--bm-good); border-color: var(--bm-good); }
+.batman-mode .bm-facet-group input[type="range"] { width: 100%; accent-color: var(--bm-good); }
+
+.batman-mode .bm-results { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.batman-mode .bm-results-head { display: flex; justify-content: space-between; gap: 10px; color: var(--bm-dim); font-size: 12px; }
+.batman-mode .bm-results-head h3 { color: var(--bm-ink); font-size: 14px; }
+.batman-mode .bm-result-group h4 { font-size: 12px; color: var(--bm-dim); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
+.batman-mode .bm-result-group h4 span { color: var(--bm-good); }
+.batman-mode .bm-result-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.batman-mode .bm-result-card { background: var(--bm-panel); border: 1px solid var(--bm-line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.batman-mode .bm-result-open { background: none; border: 0; padding: 0; color: var(--bm-ink); text-align: left; cursor: pointer; font: inherit; }
+.batman-mode .bm-result-open strong { display: block; font-size: 13px; line-height: 1.35; }
+.batman-mode .bm-result-open p { margin: 6px 0 0; color: var(--bm-dim); font-size: 11px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.batman-mode .bm-result-meta { display: flex; gap: 6px; flex-wrap: wrap; color: var(--bm-dim); font-size: 10px; }
+.batman-mode .bm-result-meta span { border: 1px solid var(--bm-line); border-radius: 999px; padding: 2px 6px; }
+.batman-mode .bm-result-actions { display: flex; gap: 6px; margin-top: auto; }
+.batman-mode .bm-results-empty { text-align: center; padding: 48px 20px; border: 1px dashed var(--bm-line); border-radius: 14px; color: var(--bm-dim); }
+.batman-mode .bm-results-empty h3 { color: var(--bm-ink); margin: 10px 0 6px; }
+.batman-mode .bm-results-empty p { max-width: 52ch; margin: 0 auto 12px; line-height: 1.6; }
+.batman-mode .bm-empty-mark { font-size: 40px; color: var(--bm-good); }
+
+/* Browser drawer */
+.batman-mode .bm-browser-scrim { position: fixed; inset: 0; z-index: 10020; background: rgba(3,7,13,.7); }
+.batman-mode .bm-browser {
+  position: fixed; z-index: 10021; top: 0; right: 0; bottom: 0; width: min(480px, 100vw);
+  background: #080e18; border-left: 1px solid var(--bm-line); color: var(--bm-ink);
+  display: flex; flex-direction: column; box-shadow: -20px 0 60px rgba(0,0,0,.6);
+}
+.batman-mode .bm-browser-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; padding: 18px; border-bottom: 1px solid var(--bm-line); }
+.batman-mode .bm-browser-kind { margin: 0 0 6px; color: var(--bm-good); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+.batman-mode .bm-browser-head h2 { font-size: 18px; line-height: 1.35; }
+.batman-mode .bm-browser-body { flex: 1; overflow: auto; padding: 14px 18px; display: flex; flex-direction: column; gap: 16px; }
+.batman-mode .bm-browser-block h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--bm-dim); margin-bottom: 8px; }
+.batman-mode .bm-browser-block p { line-height: 1.6; font-size: 13px; }
+.batman-mode .bm-browser-block a { color: var(--bm-good); font-size: 12px; }
+.batman-mode .bm-properties { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.batman-mode .bm-properties div { display: flex; gap: 10px; font-size: 12px; }
+.batman-mode .bm-properties dt { width: 90px; color: var(--bm-dim); }
+.batman-mode .bm-properties dd { margin: 0; }
+.batman-mode .bm-related { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.batman-mode .bm-related button { display: flex; gap: 8px; align-items: center; width: 100%; background: var(--bm-panel); border: 1px solid var(--bm-line); border-radius: 8px; padding: 8px 10px; color: var(--bm-ink); cursor: pointer; text-align: left; font: inherit; font-size: 12px; }
+.batman-mode .bm-related button span:nth-child(2) { flex: 1; }
+.batman-mode .bm-related em { color: var(--bm-dim); font-size: 10px; }
+.batman-mode .bm-browser-block textarea { width: 100%; }
+.batman-mode .bm-browser-actions { padding: 14px 18px; border-top: 1px solid var(--bm-line); display: flex; flex-wrap: wrap; gap: 6px; }
+.batman-mode .bm-overview-foot { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; border-top: 1px solid var(--bm-line); padding-top: 14px; }
+.batman-mode .bm-overview-foot p { margin: 0; color: var(--bm-dim); font-size: 11px; max-width: 70ch; }
+
+@media (max-width: 900px) {
+  .batman-mode .bm-shell-head { flex-direction: column; align-items: flex-start; }
+  .batman-mode .bm-discovery-body { grid-template-columns: 1fr; }
+  .batman-mode .bm-facets { position: static; max-height: none; }
+  .batman-mode .bm-search { flex-wrap: wrap; }
+  .batman-mode .bm-browser { width: 100vw; }
+  .batman-mode .bm-result-grid { grid-template-columns: 1fr; }
+}

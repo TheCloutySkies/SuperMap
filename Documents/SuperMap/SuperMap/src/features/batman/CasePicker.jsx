@@ -89,7 +89,7 @@ export default function CasePickerHost() {
 
   return createPortal(
     <div className="batman-modal-scrim" role="presentation" onPointerDown={(event) => { if (event.target === event.currentTarget) close() }}>
-      <div className="batman-modal" role="dialog" aria-modal="true" aria-label="Add to a Batman case">
+      <div className="batman-modal" role="dialog" aria-modal="true" aria-label="Add to a Batman Mode case">
         <header className="batman-modal-head">
           <h3>Add to a case</h3>
           <button type="button" className="batman-btn batman-btn-ghost" onClick={close} disabled={busy}>Close</button>

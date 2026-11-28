@@ -10,7 +10,6 @@ import {
   CRIME_VIEW_ID,
   isCrimeIntelligenceView,
   isWeatherView,
-  isStrategicView,
   isBatmanView,
   BRAND_LOGO_SRC,
   BRAND_LOGO_ALT,
@@ -26,7 +25,6 @@ import { loadChromePrefs, saveChromePrefs } from './lib/mapToolsPrefs'
 import HomeScreen from './components/HomeScreen'
 import CrimeIntelligenceView from './components/CrimeIntelligenceView'
 import WeatherView from './components/WeatherView'
-import StrategicView from './components/StrategicView'
 import BatmanView from './features/batman/BatmanView'
 import CasePickerHost from './features/batman/CasePicker'
 import SharedCaseView from './features/batman/SharedCaseView'
@@ -109,6 +107,10 @@ function App() {
   const activeView = route.viewId
   const appMode = modeFromView(activeView)
   const footerMode = appMode
+
+  useEffect(() => {
+    document.title = isBatmanView(activeView) ? 'Batman Mode · Good Palantir' : 'Good Palantir'
+  }, [activeView])
 
   useEffect(() => {
     if (route.unknown && !sharedCaseId) navigate('/', { replace: true })
@@ -356,7 +358,7 @@ function App() {
   const isLiveMapView = isMapView && !isPrintView && !isCommunityMap
   const isCrimeView = isCrimeIntelligenceView(activeView)
   const isWeatherPage = isWeatherView(activeView)
-  const isStrategicPage = isStrategicView(activeView)
+  const isStrategicPage = activeView === 'strategic' // legacy alias; routes redirect to Batman Overview
   const isBatmanPage = isBatmanView(activeView)
   const isFeedView = ['osint-feeds', 'news-feeds', 'recent-videos', 'osint-x', 'advanced-search', 'broadcasts'].includes(activeView)
   const isSettingsView = activeView === 'settings'
@@ -502,7 +504,7 @@ function App() {
   if (appMode === APP_MODES.MAPS) mobilePageTitle = 'Maps'
   else if (appMode === APP_MODES.CRIME) mobilePageTitle = 'Crime'
   else if (appMode === APP_MODES.WEATHER) mobilePageTitle = 'Weather'
-  else if (appMode === APP_MODES.STRATEGIC) mobilePageTitle = 'Strategic'
+  else if (appMode === APP_MODES.BATMAN) mobilePageTitle = 'Batman Mode'
   else if (appMode === APP_MODES.FEEDS) {
     mobilePageTitle = 'News'
     mobileChipItems = FEED_VIEWS
@@ -628,14 +630,9 @@ function App() {
             />
           </div>
         )}
-        {isStrategicPage && (
-          <div className="main-content-scroll main-content-scroll--strategic">
-            <StrategicView />
-          </div>
-        )}
         {isBatmanPage && (
-          <div className="main-content-scroll main-content-scroll--batman">
-            <BatmanView />
+          <div className={`main-content-scroll main-content-scroll--batman ${isStrategicPage ? 'main-content-scroll--strategic' : ''}`}>
+            <BatmanView view={activeView} />
           </div>
         )}
         {activeView === 'osint-feeds' && (

@@ -1,5 +1,9 @@
 import { BATMAN_VIEW_ID, CRIME_VIEW_ID, WEATHER_VIEW_ID, STRATEGIC_VIEW_ID, resolveCrimeViewId, CRIME_VIEW_ALIASES } from '../constants'
 
+export const BATMAN_OVERVIEW_VIEW_ID = 'batman-overview'
+export const BATMAN_CASES_VIEW_ID = 'batman-cases'
+const BATMAN_VIEW_IDS = new Set([BATMAN_VIEW_ID, BATMAN_OVERVIEW_VIEW_ID, BATMAN_CASES_VIEW_ID])
+
 /** Mode ids used by ModeRail / MobileShell / App. */
 export const APP_MODES = {
   HOME: 'HOME',
@@ -61,8 +65,10 @@ const VIEW_TO_PATH = Object.freeze({
   'crime-intel': '/crime',
   'crime-map': '/crime',
   [WEATHER_VIEW_ID]: '/weather',
-  [STRATEGIC_VIEW_ID]: '/strategic',
-  [BATMAN_VIEW_ID]: '/batman',
+  [STRATEGIC_VIEW_ID]: '/batman/overview', // legacy alias → Batman Mode Overview
+  [BATMAN_VIEW_ID]: '/batman/overview',
+  [BATMAN_OVERVIEW_VIEW_ID]: '/batman/overview',
+  [BATMAN_CASES_VIEW_ID]: '/batman/cases',
   'news-feeds': '/news',
   'osint-feeds': '/news/osint',
   'recent-videos': '/news/videos',
@@ -82,8 +88,10 @@ const PATH_TO_VIEW = Object.freeze({
   '/maps': 'community-map',
   '/crime': CRIME_VIEW_ID,
   '/weather': WEATHER_VIEW_ID,
-  '/strategic': STRATEGIC_VIEW_ID,
-  '/batman': BATMAN_VIEW_ID,
+  '/strategic': BATMAN_OVERVIEW_VIEW_ID, // old desk URL now lands in Batman Mode
+  '/batman': BATMAN_OVERVIEW_VIEW_ID,
+  '/batman/overview': BATMAN_OVERVIEW_VIEW_ID,
+  '/batman/cases': BATMAN_CASES_VIEW_ID,
   '/news': 'news-feeds',
   '/news/osint': 'osint-feeds',
   '/news/videos': 'recent-videos',
@@ -141,6 +149,7 @@ export function viewFromPath(pathname) {
     const viewId = MAP_TOOL_TO_VIEW[tool]
     if (viewId) return { viewId, mapTool: VIEW_TO_MAP_TOOL[viewId] }
   }
+  if (path.startsWith('/batman/shared/')) return { viewId: BATMAN_VIEW_ID }
   return { viewId: 'home', unknown: true }
 }
 
@@ -172,10 +181,8 @@ export function pathFromMode(mode) {
       return '/crime'
     case APP_MODES.WEATHER:
       return '/weather'
-    case APP_MODES.STRATEGIC:
-      return '/strategic'
     case APP_MODES.BATMAN:
-      return '/batman'
+      return '/batman/overview'
     case APP_MODES.FEEDS:
       return '/news'
     case APP_MODES.BULLETIN:
@@ -202,8 +209,7 @@ export function modeFromView(viewId) {
   const resolved = resolveCrimeViewId(viewId)
   if (resolved === CRIME_VIEW_ID) return APP_MODES.CRIME
   if (resolved === WEATHER_VIEW_ID) return APP_MODES.WEATHER
-  if (resolved === STRATEGIC_VIEW_ID) return APP_MODES.STRATEGIC
-  if (resolved === BATMAN_VIEW_ID) return APP_MODES.BATMAN
+  if (BATMAN_VIEW_IDS.has(resolved)) return APP_MODES.BATMAN
   if (MAP_VIEW_IDS.has(resolved)) return APP_MODES.MAPS
   if (FEED_VIEW_IDS.has(resolved) || resolved === 'search-results') return APP_MODES.FEEDS
   if (resolved === 'home') return APP_MODES.HOME
@@ -216,4 +222,4 @@ export function modeFromView(viewId) {
   return APP_MODES.HOME
 }
 
-export { MAP_VIEW_IDS, FEED_VIEW_IDS, MAP_TOOL_TO_VIEW }
+export { MAP_VIEW_IDS, FEED_VIEW_IDS, MAP_TOOL_TO_VIEW, BATMAN_VIEW_IDS }

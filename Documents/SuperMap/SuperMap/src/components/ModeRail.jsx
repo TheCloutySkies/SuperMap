@@ -7,7 +7,7 @@ const MODES = [
   { id: 'MAPS', label: 'Maps', icon: '◎' },
   { id: 'CRIME', label: 'Crime', icon: '📉' },
   { id: 'WEATHER', label: 'Weather', icon: '☁' },
-  { id: 'STRATEGIC', label: 'Strategic', icon: '◇' },
+  { id: 'BATMAN', label: 'Batman Mode', icon: '🦇' },
   { id: 'FEEDS', label: 'News', icon: '☰' },
   { id: 'TOOLS', label: 'Tools', icon: '⚒' },
   { id: 'RESOURCES', label: 'Resources', icon: '▣' },

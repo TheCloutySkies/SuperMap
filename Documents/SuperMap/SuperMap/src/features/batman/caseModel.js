@@ -309,7 +309,7 @@ export function caseKml(caseDoc) {
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<kml xmlns="http://www.opengis.net/kml/2.2">',
     '  <Document>',
-    `    <name>${esc(caseDoc?.title || 'Batman case')}</name>`,
+    `    <name>${esc(caseDoc?.title || 'Batman Mode case')}</name>`,
     ...placemarks,
     ...lines,
     '  </Document>',

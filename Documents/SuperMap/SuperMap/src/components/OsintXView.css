@@ -592,3 +592,77 @@ button.x-eng {
 .xp-window-body .x-post:hover { background: #e8f0f8; }
 .xp-window-body .x-post-tag { border-radius: 0; }
 .xp-window-body .x-post-avatar { border-radius: 0; }
+
+/* ── The feed wears the XP face ─────────────────────────────────────────
+   The window panes are white, so the palette flips: dark ink, grey meta,
+   blue links, Windows controls for the filter row. */
+.xp-window-body .osint-x-view.x-feed {
+  --x-bg: #ffffff;
+  --x-surface: #ffffff;
+  --x-border: #d6d2c2;
+  --x-text: #1a1a1a;
+  --x-muted: #555555;
+  --x-link: #003399;
+  --x-hover: #f2f7fd;
+  background: #ffffff;
+  color: #1a1a1a;
+  font-family: var(--xp-font);
+  font-size: 12px;
+  border-top: 0;
+}
+.xp-window-body .osint-x-view .x-feed-header {
+  background: var(--xp-face);
+  backdrop-filter: none;
+  border-bottom: 1px solid var(--xp-shadow);
+}
+.xp-window-body .osint-x-view :is(.x-feed-toolbar, .x-feed-filter) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.xp-window-body .osint-x-view :is(.x-feed-toolbar, .x-feed-filter) :is(select, input) {
+  background: #fff;
+  color: #1a1a1a;
+  border: 1px solid #7f9db9;
+  border-radius: 0;
+  min-height: 22px;
+  padding: 2px 4px;
+  font: 11px var(--xp-font);
+}
+.xp-window-body .osint-x-view .x-feed-clear {
+  border: 1px solid #7f9db9;
+  border-radius: 0;
+  background: #ece9d8;
+  color: #1a1a1a;
+  box-shadow: inset -1px -1px #aca899, inset 1px 1px #fff;
+}
+.xp-window-body .osint-x-view .x-post { border-bottom: 1px solid #f1efe2; }
+.xp-window-body .osint-x-view .x-post-body { color: #1a1a1a; }
+.xp-window-body .osint-x-view :is(.x-post-handle, .x-post-dot, .x-post-engagement) { color: #555; }
+.xp-window-body .osint-x-view :is(.x-post-action-btn, .x-post-action-link) {
+  border-radius: 0;
+  color: #003399;
+  background: transparent;
+  box-shadow: none;
+}
+/* A picture that will not load leaves no black cell behind. */
+.xp-window-body .osint-x-view .x-post-media-cell img,
+.xp-window-body .osint-x-view .x-post-media-grid--1 .x-post-media-cell img {
+  background: #f4f2e8;
+  border: 1px solid #aca899;
+}
+.xp-window-body .osint-x-view .x-post-video {
+  background: #f4f2e8;
+  border: 1px solid #aca899;
+  border-radius: 0;
+}
+.xp-window-body .osint-x-view .osint-x-video-dialog {
+  background: #fff;
+  border: 1px solid #7f9db9;
+  border-radius: 0;
+  color: #1a1a1a;
+}
+.xp-window-body .osint-x-view .x-feed-loading,
+.xp-window-body .osint-x-view .x-feed-empty { color: #444; }
+.xp-window-body .osint-x-view .x-feed-status--error { color: #a4262c; }

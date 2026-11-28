@@ -152,6 +152,7 @@ export default function OsintXView({ keywordFilter = '', onClearFilter }) {
   const [imageDialog, setImageDialog] = useState(null)
   const [imageDownloading, setImageDownloading] = useState(false)
   const [expandedReplies, setExpandedReplies] = useState(() => new Set())
+  const [failedMedia, setFailedMedia] = useState(() => new Set())
   const fetchGen = useRef(0)
 
   const openImageDialog = (post, src) => {
@@ -364,8 +365,20 @@ export default function OsintXView({ keywordFilter = '', onClearFilter }) {
     })
   }
 
+  // A source that will not load is remembered, so the post shows text only.
+  const dropMedia = (src) => {
+    if (!src) return
+    setFailedMedia((prev) => {
+      if (prev.has(src)) return prev
+      const next = new Set(prev)
+      next.add(src)
+      return next
+    })
+  }
+
   const renderMedia = (post) => {
-    const images = Array.isArray(post.images) ? post.images : []
+    const allImages = Array.isArray(post.images) ? post.images : []
+    const images = allImages.filter((src) => !failedMedia.has(src))
     const videos = Array.isArray(post.videos) ? post.videos : []
     if (!images.length && !videos.length) return null
 
@@ -381,7 +394,7 @@ export default function OsintXView({ keywordFilter = '', onClearFilter }) {
                 onClick={() => openImageDialog(post, src)}
                 title="Expand image"
               >
-                <img {...xImageProps(src)} alt="" loading="lazy" />
+                <img {...xImageProps(src)} alt="" loading="lazy" onError={() => dropMedia(src)} />
               </button>
             ))}
           </div>
@@ -424,17 +437,8 @@ export default function OsintXView({ keywordFilter = '', onClearFilter }) {
               </div>
             )
           }
-          return (
-            <a
-              key={`${post.id}-vid-${i}`}
-              href={post.url || src}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="x-post-video-fallback"
-            >
-              Watch video on X →
-            </a>
-          )
+          // Nothing playable here: no frame, and the post itself links out.
+          return null
         })}
       </div>
     )

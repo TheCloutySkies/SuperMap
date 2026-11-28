@@ -164,29 +164,24 @@ export default function ReportMakerView() {
   }, [report])
 
   return (
-    <div className="report-maker">
-      <div className="report-maker-header">
-        <div className="report-maker-title-wrap">
-          <input
-            className="report-maker-title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Report title"
-          />
-          <p className="report-maker-subtitle">
-            Draft a structured intelligence report and attach your key evidence in one place.
-          </p>
-        </div>
-        <div className="report-maker-export">
-          <button type="button" onClick={() => downloadFile(`${report.title}.md`, markdown, 'text/markdown;charset=utf-8')}>Export .md</button>
-          <button type="button" onClick={() => downloadFile(`${report.title}.txt`, markdown, 'text/plain;charset=utf-8')}>Export .txt</button>
-          <button type="button" onClick={() => downloadFile(`${report.title}.json`, JSON.stringify(report, null, 2), 'application/json;charset=utf-8')}>Export .json</button>
-        </div>
+    <div className="xp-page report-maker">
+      <div className="xp-page-tools">
+        <input
+          className="report-maker-title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Report title"
+          aria-label="Report title"
+        />
+        <span className="xp-spacer" />
+        <button type="button" onClick={() => downloadFile(`${report.title}.md`, markdown, 'text/markdown;charset=utf-8')}>Export .md</button>
+        <button type="button" onClick={() => downloadFile(`${report.title}.txt`, markdown, 'text/plain;charset=utf-8')}>Export .txt</button>
+        <button type="button" onClick={() => downloadFile(`${report.title}.json`, JSON.stringify(report, null, 2), 'application/json;charset=utf-8')}>Export .json</button>
       </div>
 
-      <div className="report-maker-grid">
-        <section className="report-maker-card">
-          <h3>Report narrative</h3>
+      <div className="xp-page-body">
+        <fieldset>
+          <legend>Report narrative</legend>
           <p className="report-maker-card-hint">
             Summarize what is happening, why it matters, and your assessment. Treat this as the single source of truth for the situation.
           </p>
@@ -196,10 +191,10 @@ export default function ReportMakerView() {
             placeholder="Write your report narrative, findings, and analysis..."
             rows={14}
           />
-        </section>
+        </fieldset>
 
-        <section className="report-maker-card">
-          <h3>Evidence builder</h3>
+        <fieldset>
+          <legend>Evidence builder</legend>
           <p className="report-maker-card-hint">
             Attach links, locations, and screenshots that support the narrative. Keep each item high-signal.
           </p>
@@ -270,7 +265,7 @@ export default function ReportMakerView() {
               <ul>{screenshots.map((s, i) => <li key={`${s.name}-${i}`}>{s.name}</li>)}</ul>
             </div>
           </div>
-        </section>
+        </fieldset>
       </div>
     </div>
   )

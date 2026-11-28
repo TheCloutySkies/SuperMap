@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSuperMapAccount } from './SuperMapAccounts'
 import ItemMenu from './ItemMenu'
 import ReportMakerView from '../../components/ReportMakerView'
 import { MODE_CATALOG, REPORT_OWNER_EMAIL, getModeVisibility, setModeVisibility } from './menuCatalog'
 import { personHandle, personNumber, personTitle } from './accountIdentity'
 import SystemEmojiButton from './SystemEmoji'
+import MsnMessenger from './MsnMessenger'
+import { presenceLabel, presenceValue, when } from './messageBits'
 import {
   hashVaultPasscode,
   passcodeDigitsOk,
@@ -13,22 +15,6 @@ import {
   vaultUnlocked,
 } from './vaultLock'
 import {
-  clearTyping,
-  conversationId,
-  DISAPPEAR_CHOICES,
-  disappearLabel,
-  markConversationRead,
-  recountUnread,
-  setTyping,
-  subscribeTyping,
-  TYPING_LIVE_MS,
-  openDirectConversation,
-  searchDiscoverableUsers,
-  sendDirectMessage,
-  setConversationBox,
-  setConversationTimer,
-  subscribeConversations,
-  subscribeMessages,
   createProfilePost,
   deleteProfilePost,
   subscribeProfilePosts,
@@ -36,58 +22,10 @@ import {
   markReportReviewed,
 } from './socialData'
 import ModerationPanel from './ModerationPanel'
-import { mediaReady } from './firebaseClient'
-import { MAX_MEDIA_BYTES } from './chatMedia'
-
-/** A ticking clock for live countdowns; pauses while the tab is hidden. */
-function useNow(intervalMs = 1000) {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    let timer = null
-    const start = () => {
-      if (timer) return
-      setNow(Date.now())
-      timer = setInterval(() => setNow(Date.now()), intervalMs)
-    }
-    const stop = () => {
-      if (!timer) return
-      clearInterval(timer)
-      timer = null
-    }
-    const onVisibility = () => (document.hidden ? stop() : start())
-    start()
-    document.addEventListener('visibilitychange', onVisibility)
-    return () => {
-      stop()
-      document.removeEventListener('visibilitychange', onVisibility)
-    }
-  }, [intervalMs])
-  return now
-}
-
-/** "0:28" under a minute, "1:04" under an hour, "2d 3h" above it. */
-function countdownText(msLeft) {
-  const left = Math.max(0, Number(msLeft) || 0)
-  const seconds = Math.ceil(left / 1000)
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
-  const hours = Math.floor(seconds / 3600)
-  if (hours < 24) return `${Math.floor(hours)}h ${String(Math.floor((seconds % 3600) / 60)).padStart(2, '0')}m`
-  return `${Math.floor(hours / 24)}d ${hours % 24}h`
-}
-
-function presenceValue(value) {
-  return value === 'online' || value === 'incognito' ? value : 'offline'
-}
 
 function PresenceDot({ presence }) {
-  const value = presenceValue(presence)
-  const label = value === 'online' ? 'Online' : value === 'incognito' ? 'Incognito' : 'Offline'
-  return <span className={`sm-presence sm-presence--${value}`} title={label} aria-label={label} />
-}
-
-function when(ms) {
-  if (!ms) return ''
-  return new Date(ms).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+  const label = presenceLabel(presence)
+  return <span className={`sm-presence sm-presence--${presenceValue(presence)}`} title={label} aria-label={label} />
 }
 
 export default function AccountWorkspace() {
@@ -140,7 +78,14 @@ export default function AccountWorkspace() {
           <main className="sm-workspace-main">
             {tab === 'vault' ? <VaultPanel /> : null}
             {tab === 'profile' ? <ProfilePanel /> : null}
-            {tab === 'messages' ? <MessagesPanel /> : null}
+            {tab === 'messages' ? (
+              <section className="sm-messages-standin">
+                <h3>GPN Messenger is open on the desktop</h3>
+                <p className="sm-local-note">
+                  The contact list and the conversation float above this page. Close the contact list to come back here.
+                </p>
+              </section>
+            ) : null}
             {tab === 'settings' ? <SettingsPanel /> : null}
             {tab === 'reports' ? (
               <section className="sm-account-reports">
@@ -153,6 +98,7 @@ export default function AccountWorkspace() {
           </main>
         </div>
       </div>
+      {tab === 'messages' ? <MsnMessenger /> : null}
     </div>
   )
 }
@@ -544,435 +490,6 @@ function ProfilePanel() {
   )
 }
 
-function ago(ms) {
-  if (!ms) return ''
-  const sec = Math.max(0, Math.floor((Date.now() - Number(ms)) / 1000))
-  if (sec < 60) return 'now'
-  if (sec < 3600) return `${Math.floor(sec / 60)}m`
-  if (sec < 86400) return `${Math.floor(sec / 3600)}h`
-  return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-}
-
-function MessagesPanel() {
-  const { user, messageDraft, firebaseReady: ready, openPublicProfile } = useSuperMapAccount()
-  const [conversations, setConversations] = useState([])
-  const [pickedId, setPickedId] = useState(null)
-  const [activePerson, setActivePerson] = useState(null)
-  const [messages, setMessages] = useState([])
-  const [text, setText] = useState('')
-  const [find, setFind] = useState('')
-  const [people, setPeople] = useState([])
-  const [searching, setSearching] = useState(false)
-  const [sendError, setSendError] = useState('')
-  const [menuId, setMenuId] = useState(null)
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [burst, setBurst] = useState('')
-  const [photo, setPhoto] = useState(null)
-  const [typingUids, setTypingUids] = useState([])
-  const [photoError, setPhotoError] = useState('')
-  const photoRef = useRef(null)
-  const now = useNow(1000)
-  const logRef = useRef(null)
-  const composerRef = useRef(null)
-
-  useEffect(() => subscribeConversations(user?.uid, setConversations), [user?.uid])
-
-  useEffect(() => {
-    if (!messageDraft?.uid || !user?.uid) return undefined
-    const person = {
-      uid: messageDraft.uid,
-      displayName: messageDraft.displayName || 'Anonymous',
-      emoji: messageDraft.emoji || '◈',
-      handle: personHandle(messageDraft),
-    }
-    const id = conversationId(user.uid, person.uid)
-    setActivePerson(person)
-    setPickedId(id)
-    openDirectConversation({ from: user, to: person }).catch(() => {})
-    return undefined
-  }, [messageDraft, user])
-
-  const activeId = pickedId
-  useEffect(() => {
-    if (!activeId || !user?.uid) return undefined
-    markConversationRead(activeId, user.uid).catch(() => {})
-    return subscribeMessages(activeId, setMessages)
-  }, [activeId, user?.uid])
-
-  useEffect(() => {
-    const q = find.trim()
-    if (!ready || q.length < 1) {
-      setPeople([])
-      setSearching(false)
-      return undefined
-    }
-    let cancel = false
-    setSearching(true)
-    const timer = setTimeout(async () => {
-      try {
-        const rows = await searchDiscoverableUsers(q)
-        if (!cancel) setPeople(rows.filter((person) => person.uid !== user?.uid))
-      } catch {
-        if (!cancel) setPeople([])
-      } finally {
-        if (!cancel) setSearching(false)
-      }
-    }, 180)
-    return () => {
-      cancel = true
-      clearTimeout(timer)
-    }
-  }, [find, ready, user?.uid])
-
-  useEffect(() => {
-    const el = logRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [messages, activeId])
-
-  useEffect(() => {
-    if (!activeId || !user?.uid) return undefined
-    return subscribeTyping(activeId, (rows) => {
-      setTypingUids(rows.filter((row) => row.uid !== user.uid))
-    })
-  }, [activeId, user?.uid])
-
-  // A typing row hides itself six seconds after the last keystroke.
-  useEffect(() => {
-    if (!typingUids.length) return undefined
-    const timer = setTimeout(() => setTypingUids([]), TYPING_LIVE_MS + 500)
-    return () => clearTimeout(timer)
-  }, [typingUids])
-
-  // Reading a thread while it is open keeps its badge at zero, and an expiry
-  // after that leaves it at zero because the count is recomputed, not stored.
-  useEffect(() => {
-    if (!activeId || !user?.uid) return
-    markConversationRead(activeId, user.uid).catch(() => {})
-    recountUnread(activeId).catch(() => {})
-  }, [activeId, user?.uid, messages.length])
-
-  const active = conversations.find((row) => row.id === activeId) || null
-  const partnerId = active?.memberUids?.find((id) => id !== user?.uid) || activePerson?.uid || null
-  const partner = (partnerId && active?.members?.[partnerId]) || (activePerson?.uid === partnerId ? activePerson : null)
-  const other = partner ? { uid: partnerId, displayName: partner.displayName || 'Anonymous', emoji: partner.emoji || '◈', handle: personHandle({ ...partner, uid: partnerId }) } : null
-  const knownIds = new Set(conversations.map((row) => row.id))
-  const inbox = conversations.filter((row) => (row.box?.[user?.uid] || 'inbox') !== 'archived' && row.box?.[user?.uid] !== 'deleted')
-  const archived = conversations.filter((row) => row.box?.[user?.uid] === 'archived')
-  const liveMessages = messages.filter((message) => !message.expiresAtMs || message.expiresAtMs > Date.now())
-
-  async function setBox(id, box) {
-    setMenuId(null)
-    setSettingsOpen(false)
-    await setConversationBox(id, user.uid, box).catch((error) => setSendError(error.message || 'Could not update the chat'))
-    if (box === 'deleted' && id === activeId) {
-      setPickedId(null)
-      setActivePerson(null)
-    }
-  }
-
-  function insertEmoji(mark) {
-    const el = composerRef.current
-    const start = el?.selectionStart ?? text.length
-    const end = el?.selectionEnd ?? start
-    const next = `${text.slice(0, start)}${mark}${text.slice(end)}`
-    setText(next)
-    requestAnimationFrame(() => {
-      el?.focus()
-      const caret = start + mark.length
-      el?.setSelectionRange?.(caret, caret)
-    })
-  }
-
-  function renderChat(row) {
-    const id = row.memberUids?.find((uid) => uid !== user.uid)
-    const person = row.members?.[id] || {}
-    const card = { uid: id, displayName: person.displayName, emoji: person.emoji, handle: person.handle }
-    const unread = row.unread?.[user.uid] || 0
-    const preview = row.lastBody || 'Start of the conversation'
-    const title = personTitle(card)
-    const boxed = row.box?.[user.uid] === 'archived'
-    return (
-      <div
-        key={row.id}
-        className={`sm-msg-row${row.id === activeId ? ' is-active' : ''}`}
-        aria-current={row.id === activeId ? 'true' : undefined}
-      >
-        <button type="button" className="sm-msg-avatar sm-msg-avatar-btn" onClick={() => openPublicProfile(card)} aria-label={`View ${title}'s profile`}>{person.emoji || '◈'}</button>
-        <button type="button" className="sm-msg-main" onClick={() => choose(card)}>
-          <span className="sm-msg-copy">
-            <strong>{title}</strong>
-            <em>{title === personHandle(card) ? preview : `${personHandle(card)} · ${preview}`}</em>
-          </span>
-          <span className="sm-msg-meta">
-            {row.updatedAtMs ? <time>{ago(row.updatedAtMs)}</time> : null}
-            {unread > 0 ? <strong className="sm-msg-unread">{unread}</strong> : null}
-          </span>
-        </button>
-        <div className="sm-msg-menu">
-          <button type="button" className="sm-msg-more" aria-label={`Options for ${title}`} aria-expanded={menuId === row.id} onClick={() => setMenuId(menuId === row.id ? null : row.id)}>···</button>
-          {menuId === row.id ? (
-            <div className="sm-msg-menu-pop" role="menu">
-              <button type="button" role="menuitem" onClick={() => setBox(row.id, boxed ? 'inbox' : 'archived')}>{boxed ? 'Unarchive' : 'Archive'}</button>
-              <button type="button" role="menuitem" onClick={() => setBox(row.id, 'deleted')}>Delete</button>
-            </div>
-          ) : null}
-        </div>
-      </div>
-    )
-  }
-
-  async function choose(person) {
-    if (!user?.uid || !person?.uid || person.uid === user.uid) return
-    const next = {
-      uid: person.uid,
-      displayName: person.displayName || 'Anonymous',
-      emoji: person.emoji || '◈',
-      handle: personHandle(person),
-    }
-    const id = conversationId(user.uid, next.uid)
-    setSendError('')
-    setActivePerson(next)
-    setPickedId(id)
-    setFind('')
-    setPeople([])
-    if (id !== pickedId) setMessages([])
-    await openDirectConversation({ from: user, to: next }).catch(() => {})
-    composerRef.current?.focus()
-  }
-
-  async function onSend(event) {
-    event.preventDefault()
-    if (!other) return
-    const expiresInMs = Number(burst) || Number(active?.disappearMs) || 0
-    await clearTyping(activeId, user.uid).catch(() => {})
-    const result = await sendDirectMessage({ from: user, to: other, body: text, photo, expiresInMs })
-    if (result.ok) {
-      setText('')
-      setPhoto(null)
-      setPhotoError('')
-      setSendError('')
-      setPickedId(result.id)
-      if (photoRef.current) photoRef.current.value = ''
-    } else {
-      setSendError(result.error || 'Could not send')
-    }
-  }
-
-  function pickPhoto(event) {
-    const file = event.target.files?.[0] || null
-    setPhotoError('')
-    if (!file) {
-      setPhoto(null)
-      return
-    }
-    if (!/^image\//i.test(file.type || '')) {
-      setPhotoError('Photos only.')
-      setPhoto(null)
-      event.target.value = ''
-      return
-    }
-    if (file.size > MAX_MEDIA_BYTES) {
-      setPhotoError(`Keep the photo under ${Math.round(MAX_MEDIA_BYTES / 1048576)} MB.`)
-      setPhoto(null)
-      event.target.value = ''
-      return
-    }
-    setPhoto(file)
-  }
-
-  function onComposerChange(event) {
-    setText(event.target.value)
-    if (event.target.value.trim()) setTyping(activeId, user.uid).catch(() => {})
-  }
-
-  function onComposerBlur() {
-    clearTyping(activeId, user.uid).catch(() => {})
-  }
-
-  const typingNames = typingUids.length
-    ? typingUids.map((row) => {
-      const person = active?.members?.[row.uid] || {}
-      return person.displayName || 'Someone'
-    })
-    : []
-
-  function onComposerKey(event) {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault()
-      event.currentTarget.form?.requestSubmit()
-    }
-  }
-
-  return (
-    <section className={`sm-messages${other ? ' is-thread-open' : ''}`}>
-      <aside className="sm-message-list">
-        <div className="sm-msg-search">
-          {ready ? (
-            <input
-              value={find}
-              onChange={(event) => setFind(event.target.value)}
-              placeholder="Search people"
-              aria-label="Search people"
-            />
-          ) : null}
-        </div>
-        <div className="sm-msg-scroll">
-          {find.trim() ? <p className="sm-msg-section">People</p> : null}
-          {people.map((person) => (
-            <div key={person.uid} className="sm-msg-row sm-msg-person">
-              <button type="button" className="sm-msg-main" onClick={() => openPublicProfile(person)} aria-label={`View ${personTitle(person)}'s profile`}>
-                <span className="sm-msg-avatar" aria-hidden>{person.emoji || '◈'}</span>
-                <span className="sm-msg-copy">
-                  <strong><PresenceDot presence={person.presence} />{personTitle(person)}</strong>
-                  <em>{personHandle(person)}{person.bulletinTagline ? ` · ${person.bulletinTagline}` : ''}</em>
-                </span>
-              </button>
-              <button type="button" className="sm-msg-go" onClick={() => choose(person)}>Message</button>
-            </div>
-          ))}
-          {find.trim() && !searching && people.length === 0 ? <p className="sm-local-note">No accounts match.</p> : null}
-          <p className="sm-msg-section">Chats</p>
-          {other && activeId && !knownIds.has(activeId) ? (
-            <div className="sm-msg-row is-active" aria-current="true">
-              <button type="button" className="sm-msg-avatar sm-msg-avatar-btn" onClick={() => openPublicProfile(other)} aria-label={`View ${personTitle(other)}'s profile`}>{other.emoji}</button>
-              <button type="button" className="sm-msg-main" onClick={() => choose(other)}>
-                <span className="sm-msg-copy">
-                  <strong>{personTitle(other)}</strong>
-                  <em>{personHandle(other)}</em>
-                </span>
-              </button>
-            </div>
-          ) : null}
-          {inbox.map((row) => renderChat(row))}
-          {inbox.length === 0 && !other ? <p className="sm-local-note">No chats yet. Search for someone to message.</p> : null}
-          {archived.length ? <p className="sm-msg-section">Archived</p> : null}
-          {archived.map((row) => renderChat(row))}
-        </div>
-      </aside>
-      <div className="sm-message-thread">
-        {other ? (
-          <>
-            <header className="sm-msg-head" aria-live="polite">
-              <button type="button" className="sm-msg-back" onClick={() => { setPickedId(null); setActivePerson(null) }}>Chats</button>
-              <button type="button" className="sm-msg-main" onClick={() => openPublicProfile(other)} aria-label={`View ${personTitle(other)}'s profile`}>
-                <span className="sm-msg-avatar sm-msg-avatar-lg" aria-hidden>{other.emoji}</span>
-                <span className="sm-msg-copy">
-                  <h3>{personTitle(other)}</h3>
-                  <p>{personHandle(other)} · Profile{active?.disappearMs ? ` · Disappears after ${disappearLabel(active.disappearMs)}` : ''}</p>
-                </span>
-              </button>
-              <button type="button" className="sm-ghost-btn" aria-expanded={settingsOpen} onClick={() => setSettingsOpen((open) => !open)}>Message settings</button>
-            </header>
-            {settingsOpen ? (
-              <div className="sm-msg-settings">
-                <label>
-                  Disappearing messages
-                  <select
-                    value={String(active?.disappearMs || '')}
-                    onChange={(event) => setConversationTimer(activeId, Number(event.target.value) || 0).catch((error) => setSendError(error.message || 'Could not save that timer'))}
-                  >
-                    <option value="">Off</option>
-                    {DISAPPEAR_CHOICES.map((choice) => <option key={choice.id} value={choice.ms}>{choice.label}</option>)}
-                  </select>
-                </label>
-                <div className="sm-card-actions">
-                  <button type="button" className="sm-ghost-btn" onClick={() => setBox(activeId, active?.box?.[user.uid] === 'archived' ? 'inbox' : 'archived')}>{active?.box?.[user.uid] === 'archived' ? 'Unarchive' : 'Archive chat'}</button>
-                  <button type="button" className="sm-danger-btn" onClick={() => setBox(activeId, 'deleted')}>Delete chat</button>
-                </div>
-              </div>
-            ) : null}
-            <div className="sm-message-log" ref={logRef}>
-              {liveMessages.length === 0 ? (
-                <p className="sm-msg-empty">This is the start of your conversation with {personTitle(other)}.</p>
-              ) : null}
-              {liveMessages.map((message) => {
-                const left = message.expiresAtMs ? Number(message.expiresAtMs) - now : null
-                return (
-                  <article
-                    key={message.id}
-                    className={`${message.fromUid === user.uid ? 'is-mine' : ''}${left != null && left <= 10000 ? ' is-expiring' : ''}`}
-                  >
-                    {message.item?.title ? <p className="sm-message-card">{message.item.title}</p> : null}
-                    {message.media?.path ? (
-                      <img
-                        className="sm-message-photo"
-                        src={message.media.url || null}
-                        alt=""
-                        loading="lazy"
-                        referrerPolicy="no-referrer"
-                        onError={(event) => { event.currentTarget.hidden = true }}
-                      />
-                    ) : null}
-                    {message.body ? <p>{message.body}</p> : null}
-                    <time>
-                      {when(message.createdAtMs)}
-                      {left != null ? ` · ⏳ ${countdownText(left)}` : ''}
-                    </time>
-                  </article>
-                )
-              })}
-              {typingNames.length ? (
-                <p className="sm-typing" aria-live="polite">
-                  <span className="sm-typing-dots" aria-hidden>•••</span> {typingNames.join(', ')} {typingNames.length === 1 ? 'is' : 'are'} typing
-                </p>
-              ) : null}
-            </div>
-            <form onSubmit={onSend} className="sm-reply-form">
-              <textarea
-                ref={composerRef}
-                rows={1}
-                value={text}
-                onChange={onComposerChange}
-                onBlur={onComposerBlur}
-                onKeyDown={onComposerKey}
-                placeholder={`Message ${personTitle(other)}`}
-                aria-label={`Message ${personTitle(other)}`}
-              />
-              <div className="sm-reply-tools">
-                <SystemEmojiButton label="Emoji" placement="up" targetRef={composerRef} onPick={insertEmoji} />
-                <input
-                  ref={photoRef}
-                  type="file"
-                  accept="image/*"
-                  className="sm-hidden-file"
-                  onChange={pickPhoto}
-                  aria-label="Attach a photo"
-                />
-                <button
-                  type="button"
-                  className={`sm-ghost-btn${photo ? ' is-on' : ''}`}
-                  onClick={() => photoRef.current?.click()}
-                  disabled={!mediaReady}
-                  title={mediaReady ? 'Attach a disappearing photo' : 'Photos need the live account database'}
-                >
-                  {photo ? 'Photo attached' : 'Photo'}
-                </button>
-                <label>
-                  This message
-                  <select value={burst} onChange={(event) => setBurst(event.target.value)} aria-label="Short disappearing time">
-                    <option value="">{active?.disappearMs ? `Chat timer (${disappearLabel(active.disappearMs)})` : 'Stays'}</option>
-                    {DISAPPEAR_CHOICES.filter((choice) => choice.short).map((choice) => (
-                      <option key={choice.id} value={choice.ms}>{choice.label}</option>
-                    ))}
-                  </select>
-                </label>
-                <button type="submit" className="sm-primary-btn" disabled={!text.trim() && !photo}>Send</button>
-              </div>
-            </form>
-            {sendError ? <p className="sm-auth-error">{sendError}</p> : null}
-            {photoError ? <p className="sm-auth-error">{photoError}</p> : null}
-          </>
-        ) : (
-          <div className="sm-msg-empty-pane">
-            <h3>Your messages</h3>
-            <p>Search for a person, then open their chat. Their name stays at the top of the thread.</p>
-          </div>
-        )}
-      </div>
-    </section>
-  )
-}
-
 function SettingsPanel() {
   const { user, updateAccount, deleteAccount } = useSuperMapAccount()
   const [name, setName] = useState(user?.displayName || '')
@@ -1023,8 +540,10 @@ function SettingsPanel() {
           Status
           <select value={presence} onChange={(event) => setPresence(event.target.value)}>
             <option value="online">Online</option>
+            <option value="away">Away</option>
+            <option value="busy">Busy</option>
+            <option value="incognito">Invisible</option>
             <option value="offline">Offline</option>
-            <option value="incognito">Incognito</option>
           </select>
         </label>
         <div>

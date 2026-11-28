@@ -19,6 +19,8 @@ export default function SystemEmojiButton({
   targetRef = null,
   label = 'Emoji',
   placement = 'down',
+  triggerClassName = '',
+  triggerContent = null,
 }) {
   const [open, setOpen] = useState(false)
   const boxRef = useRef(null)
@@ -44,16 +46,21 @@ export default function SystemEmojiButton({
     <div className="sm-emoji-pop" ref={boxRef}>
       <button
         type="button"
-        className="sm-ghost-btn sm-emoji-launch"
+        className={triggerClassName ? `sm-emoji-launch ${triggerClassName}` : 'sm-ghost-btn sm-emoji-launch'}
         aria-expanded={open}
         aria-label={label}
+        title={label}
         onClick={() => {
           setOpen((current) => !current)
           focusField()
         }}
       >
-        {value ? <span aria-hidden>{value}</span> : <span aria-hidden>☺</span>}
-        Emoji
+        {triggerContent || (
+          <>
+            {value ? <span aria-hidden>{value}</span> : <span aria-hidden>☺</span>}
+            Emoji
+          </>
+        )}
       </button>
       {open ? (
         <div className={`sm-emoji-panel${placement === 'up' ? ' is-up' : ''}`} role="dialog" aria-label="Emoji">

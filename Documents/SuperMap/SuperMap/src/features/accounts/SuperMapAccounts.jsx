@@ -250,7 +250,7 @@ export function AccountsProvider({ children }) {
         discoverable: stored.discoverable !== false && !fbUser.isAnonymous ? true : stored.discoverable === true,
         bio: String(stored.bio || '').slice(0, 280),
         bulletinTagline: String(stored.bulletinTagline || '').slice(0, 80),
-        presence: stored.presence === 'online' || stored.presence === 'incognito' ? stored.presence : 'offline',
+        presence: ['online', 'away', 'busy', 'incognito', 'offline'].includes(stored.presence) ? stored.presence : 'offline',
         anonymous: Boolean(fbUser.isAnonymous),
         provider: signInProvider(fbUser),
         vaultLock: readVaultLock(stored),
@@ -419,7 +419,7 @@ export function AccountsProvider({ children }) {
       discoverable: patch.discoverable != null ? Boolean(patch.discoverable) : user?.discoverable !== false,
       bio: patch.bio != null ? String(patch.bio).trim().slice(0, 280) : (user?.bio || ''),
       bulletinTagline: patch.bulletinTagline != null ? String(patch.bulletinTagline).trim().slice(0, 80) : (user?.bulletinTagline || ''),
-      presence: patch.presence === 'online' || patch.presence === 'incognito' || patch.presence === 'offline'
+      presence: ['online', 'away', 'busy', 'incognito', 'offline'].includes(patch.presence)
         ? patch.presence
         : (user?.presence || 'offline'),
     }

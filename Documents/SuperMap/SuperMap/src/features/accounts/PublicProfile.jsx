@@ -1,15 +1,11 @@
 import { useEffect, useState } from 'react'
 import { personHandle, personNumber, personTitle } from './accountIdentity'
+import { presenceLabel, presenceValue } from './messageBits'
 import { loadUserProfile, subscribeProfilePosts } from './socialData'
 
-function presenceValue(value) {
-  return value === 'online' || value === 'incognito' ? value : 'offline'
-}
-
 function PresenceDot({ presence }) {
-  const value = presenceValue(presence)
-  const label = value === 'online' ? 'Online' : value === 'incognito' ? 'Incognito' : 'Offline'
-  return <span className={`sm-presence sm-presence--${value}`} title={label} aria-label={label} />
+  const label = presenceLabel(presence)
+  return <span className={`sm-presence sm-presence--${presenceValue(presence)}`} title={label} aria-label={label} />
 }
 
 export default function PublicProfile({ seed, onClose }) {

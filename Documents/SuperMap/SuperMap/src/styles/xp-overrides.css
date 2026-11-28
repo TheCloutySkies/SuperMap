@@ -433,3 +433,10 @@ select,
   border-radius: 0;
   font: 11px var(--xp-font);
 }
+
+/* The old top strip (Clouty Skies logo + omnibar) is replaced by the taskbar,
+   the Start menu and the window title bars. */
+.app-omnibar-strip { display: none !important; }
+.app-omnibar-inner { display: none !important; }
+.ambient-background,
+.ambient-bg-light { display: none !important; }

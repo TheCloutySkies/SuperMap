@@ -62,8 +62,7 @@ import ReportMakerView from './components/ReportMakerView'
 import BulletinBoardView from './features/bulletin/BulletinBoardView'
 import { getModeVisibility, visibleModes } from './features/accounts/menuCatalog'
 import QuickTutorialModal from './components/QuickTutorialModal'
-import AmbientBackground from './components/AmbientBackground'
-import AmbientBgLight from './components/AmbientBgLight'
+
 import OmnibarBanner from './components/OmnibarBanner'
 import ModeRail from './components/ModeRail'
 import ModeSubnav from './components/ModeSubnav'
@@ -788,15 +787,13 @@ function App() {
 
   return (
     <>
-    <div className={appClass}>
-      <AmbientBackground />
+    <div className={`xp-desktop ${appClass}`}>
       <CasePickerHost />
       {sharedCaseId ? (
         <div className="batman-shared-shell">
           <SharedCaseView caseId={sharedCaseId} />
         </div>
       ) : null}
-      <AmbientBgLight />
       {!isMobileLayout && activeView !== 'home' && (
       <header className="app-omnibar-strip">
         <div className="app-omnibar-inner">

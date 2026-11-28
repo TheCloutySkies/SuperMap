@@ -568,3 +568,46 @@ button.sm-msg-go {
   cursor: pointer;
 }
 .sm-acct-min:hover { color: #e6f1ff; border-color: #2a6f5a; }
+
+
+/* XP pass: the membership and workspace sheets use Windows chrome. Emoji the
+   people chose stay as their avatars. */
+.xp-window-body .sm-workspace,
+.xp-window-body .sm-auth {
+  background: var(--xp-face);
+  border: 1px solid #0831d9;
+  border-radius: 8px 8px 0 0;
+  box-shadow: 3px 3px 14px rgba(0, 0, 0, 0.4);
+  color: #1a1a1a;
+  font-family: var(--xp-font);
+}
+.xp-window-body .sm-workspace-header {
+  background: var(--xp-face);
+  border-bottom: 1px solid var(--xp-shadow);
+  color: #1a1a1a;
+  padding: 4px 6px;
+}
+.xp-window-body .sm-workspace-header h2 { color: #1a1a1a; }
+.xp-window-body .sm-workspace-nav {
+  background: var(--xp-face);
+  border-bottom: 1px solid var(--xp-shadow);
+  padding: 2px 4px;
+}
+.xp-window-body .sm-workspace-nav button {
+  border-radius: 0 0 0 0;
+  color: #1a1a1a;
+}
+.xp-window-body .sm-workspace-nav button.active {
+  background: #fff;
+  color: #003399;
+}
+.xp-window-body .sm-workspace-main { background: #fff; color: #1a1a1a; }
+.xp-window-body .sm-auth-tabs { margin: 0 0 8px; }
+.xp-window-body .sm-auth-tabs button { color: #1a1a1a; }
+.xp-window-body .sm-auth-tabs button.active { background: #fff; color: #003399; }
+.xp-window-body .sm-vault {
+  background: #fff;
+  border: 1px solid var(--xp-shadow);
+  border-radius: 0;
+  color: #1a1a1a;
+}

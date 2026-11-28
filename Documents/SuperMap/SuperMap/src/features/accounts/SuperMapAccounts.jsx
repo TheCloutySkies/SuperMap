@@ -934,10 +934,10 @@ function AuthModal() {
             <p className="sm-auth-free">Don't worry it's 100% free.</p>
           </div>
         </div>
-        <div className="sm-auth-tabs">
-          <button type="button" className={mode === 'signin' ? 'active' : ''} onClick={() => setMode('signin')}>Sign in</button>
-          <button type="button" className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')}>Create account</button>
-        </div>
+        <menu role="tablist" className="sm-auth-tabs xp-tabs" aria-label="Membership">
+          <button type="button" role="tab" aria-selected={mode === 'signin'} className={mode === 'signin' ? 'active' : ''} onClick={() => setMode('signin')}>Sign in</button>
+          <button type="button" role="tab" aria-selected={mode === 'signup'} className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')}>Create account</button>
+        </menu>
         <form onSubmit={handleSubmit} className="sm-auth-form">
           {mode === 'signup' ? (
             <label>

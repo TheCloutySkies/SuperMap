@@ -105,7 +105,7 @@ export default function AccountWorkspace() {
   return (
     <div className="sm-workspace-scrim" role="dialog" aria-modal="true">
       <div className="sm-workspace">
-        <header className="sm-workspace-header">
+        <div className="sm-workspace-header xp-page-tools">
           <div className="sm-workspace-title">
             <span className="sm-auth-mark">{user?.emoji || '◈'}</span>
             <div>
@@ -121,15 +121,22 @@ export default function AccountWorkspace() {
               </svg>
             </button>
           </div>
-        </header>
+        </div>
         <div className="sm-workspace-body">
-          <nav className="sm-workspace-nav">
+          <menu role="tablist" className="sm-workspace-nav xp-tabs" aria-label="Account sections">
             {tabs.map(([id, label]) => (
-              <button key={id} type="button" className={tab === id ? 'active' : ''} onClick={() => setWorkspaceTab(id)}>
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={tab === id}
+                className={tab === id ? 'active' : ''}
+                onClick={() => setWorkspaceTab(id)}
+              >
                 {label}
               </button>
             ))}
-          </nav>
+          </menu>
           <main className="sm-workspace-main">
             {tab === 'vault' ? <VaultPanel /> : null}
             {tab === 'profile' ? <ProfilePanel /> : null}

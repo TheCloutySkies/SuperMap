@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import axios from 'axios'
 import ArticlePreviewSheet from './ArticlePreviewSheet'
 import DataFreshness from './DataFreshness'
-import XpListview from './xp/XpListview'
+import GpnNewsPage from './gpn/GpnNewsPage'
 import ThreatScoreButton from './ThreatScoreButton'
 import ItemMenu from '../features/accounts/ItemMenu'
 import { readHomeSnapshot, writeHomeSnapshot } from '../lib/homeBootstrap'
@@ -71,15 +71,6 @@ const CATEGORY_OPTIONS = [
   { key: 'technology', label: 'Technology' },
   { key: 'weather', label: 'Weather' },
   { key: 'science', label: 'Science' },
-]
-
-const TOPIC_SECTION_ORDER = [
-  { key: 'general', label: 'World & geopolitics' },
-  { key: 'politics', label: 'Politics & policy' },
-  { key: 'business', label: 'Markets & economy' },
-  { key: 'technology', label: 'Technology & cyber' },
-  { key: 'weather', label: 'Weather & hazards' },
-  { key: 'science', label: 'Science & space' },
 ]
 
 /** Display name for OSINT source (actual source, not alert type). */
@@ -275,16 +266,6 @@ function geoJsonToItems(data) {
   return out
 }
 
-function formatStoryDate(item) {
-  const d = item.pubDate || item.timestamp
-  if (!d) return ''
-  try {
-    return new Date(d).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
-  } catch {
-    return ''
-  }
-}
-
 function relativeOsintTime(item) {
   const raw = item?.pubDate || item?.timestamp
   if (!raw) return '—'
@@ -311,63 +292,6 @@ function feedMenuItem(item) {
     lon: item.lon ?? item.lng ?? item.longitude ?? coords?.[0],
     coordinates: coords,
   }
-}
-
-function NewsHeroStory({ item, onOpen }) {
-  const img = articleImage(item)
-  return (
-    <div className="has-item-menu">
-    <button
-      type="button"
-      className="news-desk-hero-story"
-      onClick={() => onOpen?.(item)}
-    >
-      {img && (
-        <div className="news-desk-hero-media" aria-hidden>
-          <img src={img} alt="" className="news-desk-hero-img" />
-        </div>
-      )}
-      <div className="news-desk-hero-copy">
-        <span className="news-desk-kicker">{item.source}</span>
-        <h2 className="news-desk-hero-title">{item.title || 'Untitled'}</h2>
-        {(item.contentSnippet || item.description) && (
-          <p className="news-desk-hero-deck">
-            {String(item.contentSnippet || item.description).slice(0, 180)}
-          </p>
-        )}
-        <span className="news-desk-meta">{formatStoryDate(item)}</span>
-      </div>
-    </button>
-    <ThreatScoreButton item={item} kind="news" placement="card" />
-    <ItemMenu item={feedMenuItem(item)} />
-    </div>
-  )
-}
-
-function NewsTile({ item, size = 'md', onOpen }) {
-  const img = articleImage(item)
-  return (
-    <div className="has-item-menu">
-    <button
-      type="button"
-      className={`news-desk-tile news-desk-tile--${size}`}
-      onClick={() => onOpen?.(item)}
-    >
-      {img && (
-        <div className="news-desk-tile-media" aria-hidden>
-          <img src={img} alt="" loading="lazy" />
-        </div>
-      )}
-      <div className="news-desk-tile-body">
-        <span className="news-desk-kicker">{item.source}</span>
-        <h3 className="news-desk-tile-title">{item.title || 'Untitled'}</h3>
-        <span className="news-desk-meta">{formatStoryDate(item)}</span>
-      </div>
-    </button>
-    <ThreatScoreButton item={item} kind="news" placement="card" />
-    <ItemMenu item={feedMenuItem(item)} />
-    </div>
-  )
 }
 
 function OsintDeskCard({ item, onOpen }) {
@@ -696,38 +620,6 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
     return list
   }, [newsItems, sourceFilter, categoryFilter, sortBy, q])
 
-  const imageLed = useMemo(
-    () => filteredAndSortedNews.filter((it) => articleImage(it)),
-    [filteredAndSortedNews]
-  )
-  const hero = imageLed[0] || null
-  const secondaryTiles = imageLed.slice(1, 4)
-  const heroKeys = useMemo(() => {
-    const set = new Set()
-    ;[hero, ...secondaryTiles].filter(Boolean).forEach((it) => set.add(it._key || it.link || it.id))
-    return set
-  }, [hero, secondaryTiles])
-
-  const topicSections = useMemo(() => {
-    const remaining = filteredAndSortedNews.filter((it) => !heroKeys.has(it._key || it.link || it.id))
-    const byCat = new Map()
-    for (const item of remaining) {
-      const cat = item.category || 'general'
-      if (!byCat.has(cat)) byCat.set(cat, [])
-      byCat.get(cat).push(item)
-    }
-    const sections = []
-    for (const def of TOPIC_SECTION_ORDER) {
-      const items = byCat.get(def.key) || []
-      if (items.length) sections.push({ ...def, items })
-    }
-    for (const [key, items] of byCat) {
-      if (TOPIC_SECTION_ORDER.some((d) => d.key === key)) continue
-      if (items.length) sections.push({ key, label: key, items })
-    }
-    return sections
-  }, [filteredAndSortedNews, heroKeys])
-
   const filteredAndSortedOsint = useMemo(() => {
     let list = osintItems.filter(
       (item) =>
@@ -844,31 +736,6 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
 
   const showNewsDesk = feedMode === FEED_MODE.NEWS || isNewsOnly
 
-  const storyColumns = [
-    {
-      key: 'title',
-      label: 'Headline',
-      render: (row) => (
-        <button type="button" className="feeds-list-row" onClick={() => setPreviewItem(row)}>
-          <span className="feeds-list-source">{row.source}</span>
-          <span className="feeds-list-title">{row.title || 'Untitled'}</span>
-          <span className="feeds-list-date">{formatStoryDate(row)}</span>
-        </button>
-      ),
-    },
-    {
-      key: 'actions',
-      label: '',
-      width: '84px',
-      render: (row) => (
-        <span className="feeds-list-actions">
-          <ThreatScoreButton item={row} kind="news" placement="row" />
-          <ItemMenu item={feedMenuItem(row)} />
-        </span>
-      ),
-    },
-  ]
-
   return (
     <div className={`feeds-dashboard feeds-dashboard--${feedMode === FEED_MODE.VIDEOS ? 'videos' : feedMode === FEED_MODE.NEWS ? 'news' : 'osint'}${showNewsDesk ? ' feeds-dashboard--news-desk' : ''}`}>
       {!showNewsDesk && (
@@ -887,131 +754,28 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
       )}
 
       {showNewsDesk && (
-        <div className="news-desk">
-          <div className="xp-page-tools" role="toolbar" aria-label="Glowie Report">
-            <label className="news-desk-search-label" htmlFor="news-desk-search">
-              {quotaExhausted ? 'Quota reached — search the cache' : 'Search'}
-            </label>
-            <input
-              id="news-desk-search"
-              type="search"
-              className="news-desk-search"
-              placeholder={quotaExhausted ? 'Search cached articles…' : 'Search titles, publishers, topics…'}
-              value={localSearch}
-              onChange={(e) => setLocalSearch(e.target.value)}
-              autoFocus={quotaExhausted}
-            />
-            {(localQ || omnibarQ) && (
-              <button
-                type="button"
-                onClick={() => {
-                  setLocalSearch('')
-                  if (onClearFilter) onClearFilter()
-                }}
-              >
-                Clear search
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={refreshFeeds}
-              disabled={refreshing || loading}
-            >
-              {refreshing || loading ? 'Updating…' : 'Refresh'}
-            </button>
-            <span className="xp-spacer" />
-            <DataFreshness />
-          </div>
-          {quotaExhausted && (
-            <p className="xp-note">Live search is paused. Saved headlines are still below.</p>
-          )}
-
-          <div className="news-desk-sources xp-page-tools" role="toolbar" aria-label="Filter by publisher">
-            <button
-              type="button"
-              className={`news-desk-source-btn${sourceFilter === 'all' ? ' is-active' : ''}`}
-              onClick={() => setSourceFilter('all')}
-            >
-              All sources
-            </button>
-            {publisherSources.map((sec) => (
-              <button
-                key={sec.key}
-                type="button"
-                className={`news-desk-source-btn${sourceFilter === sec.key ? ' is-active' : ''}`}
-                onClick={() => setSourceFilter(sec.key)}
-              >
-                {sec.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="news-desk-categories xp-page-tools" role="toolbar" aria-label="Filter by category">
-            {CATEGORY_OPTIONS.map((cat) => (
-              <button
-                key={cat.key}
-                type="button"
-                className={`news-desk-cat-btn${categoryFilter === cat.key ? ' is-active' : ''}`}
-                onClick={() => setCategoryFilter(cat.key)}
-              >
-                {cat.label}
-              </button>
-            ))}
-          </div>
-
-          {newsLoading && newsItems.length === 0 ? (
-            <p className="news-desk-loading">Loading the desk…</p>
-          ) : filteredEmpty ? (
-            <div className="news-desk-empty">
-              {isEmpty ? (
-                <p>Couldn’t load news. Start the API, then use Refresh.</p>
-              ) : (
-                <p>No stories match these filters. Try another source, category, or search term.</p>
-              )}
-            </div>
-          ) : (
-            <>
-              {(hero || secondaryTiles.length > 0) && (
-                <section className="news-desk-visual" aria-label="Image stories">
-                  {hero && <NewsHeroStory item={hero} onOpen={setPreviewItem} />}
-                  {secondaryTiles.length > 0 && (
-                    <div className="news-desk-secondary">
-                      {secondaryTiles.map((item) => (
-                        <NewsTile key={item._key || item.link} item={item} size="lg" onOpen={setPreviewItem} />
-                      ))}
-                    </div>
-                  )}
-                </section>
-              )}
-
-              {topicSections.map((section) => (
-                <section key={section.key} className="news-desk-topic" aria-labelledby={`topic-${section.key}`}>
-                  <div className="news-desk-topic-head">
-                    <h2 id={`topic-${section.key}`} className="news-desk-topic-title">{section.label}</h2>
-                    <span className="news-desk-topic-count">{section.items.length}</span>
-                  </div>
-                  <div className="news-desk-topic-grid">
-                    {section.items.slice(0, 3).filter((it) => articleImage(it)).map((item) => (
-                      <NewsTile key={item._key || item.link} item={item} size="md" onOpen={setPreviewItem} />
-                    ))}
-                  </div>
-                  <XpListview
-                    label={`${section.label} stories`}
-                    columns={storyColumns}
-                    rows={section.items
-                      .filter((it, idx) => !(idx < 3 && articleImage(it)))
-                      .slice(0, 12)
-                      .map((item) => ({ ...item, id: item._key || item.link }))}
-                    rowKey={(row) => row.id}
-                    sortable={false}
-                    onOpen={(row) => setPreviewItem(row)}
-                    emptyLabel="No more stories in this topic."
-                  />
-                </section>
-              ))}
-            </>
-          )}
-        </div>
+        <GpnNewsPage
+          items={filteredAndSortedNews}
+          categories={CATEGORY_OPTIONS}
+          sorts={SORT_OPTIONS}
+          sources={publisherSources}
+          categoryFilter={categoryFilter}
+          sourceFilter={sourceFilter}
+          sortBy={sortBy}
+          search={localSearch || keywordFilter || ''}
+          loading={loading}
+          refreshing={refreshing}
+          isEmpty={isEmpty}
+          quotaExhausted={quotaExhausted}
+          onSetCategory={setCategoryFilter}
+          onSetSource={setSourceFilter}
+          onSetSort={setSortBy}
+          onSetSearch={setLocalSearch}
+          onClearSearch={() => { if (onClearFilter) onClearFilter() }}
+          onRefresh={refreshFeeds}
+          onOpen={setPreviewItem}
+          toMenuItem={feedMenuItem}
+        />
       )}
 
       {feedMode !== FEED_MODE.VIDEOS && !showNewsDesk && (

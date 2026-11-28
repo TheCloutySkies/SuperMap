@@ -18,7 +18,7 @@ const TAB_LABELS = {
   liveWebcams: 'Live Webcams',
   printMap: 'Print Map',
   osintFeeds: 'OSINT Feeds',
-  newsFeeds: 'Glowie Report',
+  newsFeeds: 'GPN — Good Palantir News',
   osintX: 'OSINT (X)',
   broadcasts: 'Broadcasts',
 }

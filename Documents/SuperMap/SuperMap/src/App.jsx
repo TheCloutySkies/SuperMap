@@ -103,7 +103,7 @@ const MAP_VIEWS = [
 const MAP_VIEW_IDS = MAP_VIEWS.map((v) => v.id)
 
 const FEED_VIEWS = [
-  { id: 'news-feeds', label: 'Glowie Report', tabKey: 'newsFeeds' },
+  { id: 'news-feeds', label: 'GPN — Good Palantir News', tabKey: 'newsFeeds' },
   { id: 'osint-feeds', label: 'OSINT Feeds', tabKey: 'osintFeeds' },
   { id: 'recent-videos', label: 'Recent Videos', tabKey: 'recentVideos' },
   { id: 'osint-x', label: 'OSINT (X/Twitter)', tabKey: 'osintX' },
@@ -201,6 +201,20 @@ function App() {
     if (activeView !== 'search-results') return
     const q = new URLSearchParams(location.search).get('q')
     if (q != null) setSearchQuery(q)
+  }, [activeView, location.search])
+
+  // The GPN weather box sends a city as /weather?lat=..&lon=..; reading it here
+  // rather than in an effect means the desk opens on that city straight away.
+  const weatherQueryCoords = useMemo(() => {
+    if (activeView !== 'weather') return null
+    const params = new URLSearchParams(location.search)
+    const rawLat = params.get('lat')
+    const rawLon = params.get('lon')
+    if (rawLat == null || rawLon == null) return null
+    const lat = Number(rawLat)
+    const lon = Number(rawLon)
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
+    return { lat, lon }
   }, [activeView, location.search])
 
   const [searchResultsGeoJson, setSearchResultsGeoJson] = useState(null)
@@ -679,8 +693,8 @@ function App() {
         {isWeatherPage && (
           <div className="main-content-scroll main-content-scroll--weather">
             <WeatherView
-              initialLat={weatherCoords.lat ?? userCoords.lat}
-              initialLon={weatherCoords.lon ?? userCoords.lon}
+              initialLat={weatherQueryCoords?.lat ?? weatherCoords.lat ?? userCoords.lat}
+              initialLon={weatherQueryCoords?.lon ?? weatherCoords.lon ?? userCoords.lon}
               onLocationChange={(lat, lon) => setWeatherCoords({ lat, lon })}
             />
           </div>
@@ -697,7 +711,7 @@ function App() {
           <OsintXView keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} onPinnedToMap={handlePinnedToMap} />
         )}
         {activeView === 'news-feeds' && (
-          <FeedsView title="Glowie Report" activeView="news-feeds" keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} initialNews={prefetchedNews} />
+          <FeedsView title="GPN — Good Palantir News" activeView="news-feeds" keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} initialNews={prefetchedNews} />
         )}
         {activeView === 'recent-videos' && (
           <FeedsView title="Recent Videos" activeView="recent-videos" keywordFilter={searchQuery} onClearFilter={() => setSearchQuery('')} />

@@ -1,6 +1,4 @@
 .has-item-menu { position: relative; min-width: 0; }
-.has-item-menu > .news-desk-tile,
-.has-item-menu > .news-desk-text-row,
 .has-item-menu > .feeds-video-card { width: 100%; }
 
 .item-menu {

@@ -9,7 +9,7 @@ const TAB_LABELS = {
   liveWebcams: 'Live Webcams',
   printMap: 'Print Map',
   osintFeeds: 'OSINT Feeds',
-  newsFeeds: 'Glowie Report',
+  newsFeeds: 'GPN — Good Palantir News',
 }
 
 export default function SettingsModal({ onClose }) {

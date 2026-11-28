@@ -69,7 +69,7 @@ export const OMNIBAR_CORE_ENTRIES = Object.freeze([
     id: 'mode-feeds',
     label: 'News',
     category: 'Mode',
-    keywords: ['feeds', 'news', 'rss', 'glowie', 'glowie report'],
+    keywords: ['feeds', 'news', 'rss', 'glowie', 'glowie report', 'gpn'],
     synonyms: ['timeline', 'news desk'],
     action: 'navigate',
     viewId: 'news-feeds',
@@ -289,9 +289,9 @@ export const OMNIBAR_CORE_ENTRIES = Object.freeze([
   // Feeds
   {
     id: 'feed-news',
-    label: 'Glowie Report',
+    label: 'GPN — Good Palantir News',
     category: 'Feeds',
-    keywords: ['news', 'headlines', 'feeds', 'glowie', 'glowie report', 'news desk'],
+    keywords: ['news', 'headlines', 'feeds', 'glowie', 'glowie report', 'gpn', 'news desk'],
     synonyms: ['breaking', 'glowie', 'news desk'],
     action: 'navigate',
     viewId: 'news-feeds',

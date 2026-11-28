@@ -29,16 +29,15 @@
 }
 
 /* Buttons are links here; only .gpn-btn and the side blocks are real controls.
-   The XP window face styles every button, so this clears it inside the page —
-   except the two shared chips, which keep their own skin. */
-.gpn-page :where(button, input, select):not(.threat-score-chip):not(.item-menu-btn) {
+   The XP window face draws a bevel on every button, so this clears that chrome
+   inside the page — except the two shared chips, which keep their own skin.
+   Colour and type are left to .gpn-link and the controls below. */
+.gpn-page :where(button, input, select):where(:not(.threat-score-chip)):where(:not(.item-menu-btn)) {
   box-sizing: border-box;
   min-height: 0 !important;
   padding: 0 !important;
   border: 0 !important;
   background: transparent !important;
-  color: inherit !important;
-  font: inherit !important;
   box-shadow: none !important;
   border-radius: 0 !important;
 }
@@ -52,13 +51,14 @@
   text-transform: none;
 }
 
-.gpn-link {
+.gpn-page .gpn-link {
   color: var(--gpn-link);
+  font: inherit;
   text-decoration: none;
   cursor: pointer;
   text-align: left;
 }
-.gpn-link:hover { text-decoration: underline; }
+.gpn-page .gpn-link:hover { text-decoration: underline; }
 .gpn-page .gpn-link--bold { font-weight: bold; }
 
 .gpn-page .gpn-btn {

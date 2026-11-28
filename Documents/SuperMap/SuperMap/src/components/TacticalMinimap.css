@@ -91,3 +91,14 @@
     min-height: 44px;
   }
 }
+
+
+/* XP pass: the minimap keeps its dark map plate and gets a Windows frame. */
+.tactical-minimap {
+  background: var(--xp-face);
+  border: 1px solid var(--xp-shadow);
+  border-radius: 0;
+  color: #1a1a1a;
+  font: 11px/1.3 var(--xp-font);
+}
+.tactical-minimap :is(h2, h3, p, span, label) { color: #1a1a1a; }

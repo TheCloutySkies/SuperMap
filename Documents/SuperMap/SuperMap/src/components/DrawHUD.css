@@ -95,3 +95,22 @@
   display: flex;
   gap: 0.35rem;
 }
+
+
+/* XP pass: the draw HUD is a Windows box over the map. */
+.draw-hud {
+  background: var(--xp-face);
+  border: 1px solid var(--xp-shadow);
+  border-radius: 0;
+  color: #1a1a1a;
+  font: 11px/1.3 var(--xp-font);
+}
+.draw-hud :is(h2, h3, p, span, label) { color: #1a1a1a; }
+.draw-hud button {
+  min-height: 21px;
+  border: 0;
+  border-radius: 0;
+  background: var(--xp-face);
+  color: #1a1a1a;
+  box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px grey, inset 2px 2px #dfdfdf;
+}

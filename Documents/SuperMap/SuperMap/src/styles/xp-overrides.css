@@ -564,3 +564,34 @@ select,
 .xp-context-sep { height: 1px; margin: 3px 4px; background: var(--xp-shadow); }
 .xp-context-check { display: inline-block; width: 12px; }
 .xp-context button { display: flex; align-items: center; gap: 2px; }
+
+/* ── one bar at every width ─────────────────────────────── */
+.xp-tray-presence {
+  width: 10px;
+  height: 10px;
+  min-width: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  box-shadow: none;
+  cursor: pointer;
+}
+.xp-tray-presence:hover { outline: 1px solid rgba(255, 255, 255, 0.85); outline-offset: 1px; }
+
+@media (max-width: 900px) {
+  /* The window fills the phone above the one taskbar. */
+  .xp-frame {
+    position: fixed;
+    inset: 0 0 var(--xp-taskbar-h) 0;
+    width: auto;
+    border-radius: 0;
+  }
+  .xp-window-body { border: 0; }
+  .xp-taskbar {
+    height: var(--xp-taskbar-h);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+  .xp-start-btn { min-height: 34px; }
+  .xp-tray-quick-btn { width: 30px; height: 30px; }
+  .xp-tray { gap: 4px; padding: 0 6px; }
+}

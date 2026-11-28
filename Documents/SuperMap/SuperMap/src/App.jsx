@@ -68,7 +68,6 @@ import QuickTutorialModal from './components/QuickTutorialModal'
 
 import OmnibarBanner from './components/OmnibarBanner'
 import ModeRail from './components/ModeRail'
-import MobileShell from './components/MobileShell'
 import MobileLayoutPrompt from './components/MobileLayoutPrompt'
 import { osintXToBannerItems, readHomeSnapshot } from './lib/homeBootstrap'
 import { metallicss } from 'metallicss'
@@ -525,11 +524,6 @@ function App() {
   const appClass = ['app', `app--theme-${visuals.theme || 'dark'}`, visuals.compact ? 'app--compact' : '', `app--font-${visuals.fontSize || 'normal'}`, `app--device-${resolvedDeviceType}`].filter(Boolean).join(' ')
 
   const isMobileLayout = resolvedDeviceType === 'mobile'
-  const isHub = isMobileLayout && activeView === 'home'
-
-  const goHome = useCallback(() => {
-    handleFooterNav(APP_MODES.HOME)
-  }, [handleFooterNav])
 
   useEffect(() => {
     if (isMobileLayout) setIsRightSidebarOpen(false)
@@ -551,55 +545,6 @@ function App() {
     }
     prevFooterModeRef.current = footerMode
   }, [footerMode])
-
-  const mapChips = MAP_VIEWS
-    .filter((v) => tabVisibility[v.tabKey] !== false)
-    .map((v) => ({
-      id: v.id,
-      label: v.label.replace(/\s*Map$/i, ''),
-      active: activeView === v.id,
-      onClick: () => setActiveViewWithMode(v.id),
-    }))
-
-  let mobilePageTitle = 'Good Palantir'
-  let mobileChipItems = []
-  if (appMode === APP_MODES.MAPS) mobilePageTitle = 'Maps'
-  else if (appMode === APP_MODES.CRIME) mobilePageTitle = 'Crime'
-  else if (appMode === APP_MODES.WEATHER) mobilePageTitle = 'Weather'
-  else if (appMode === APP_MODES.BATMAN) mobilePageTitle = 'Batman Mode'
-  else if (appMode === APP_MODES.FEEDS) {
-    mobilePageTitle = 'News'
-    mobileChipItems = FEED_VIEWS
-      .filter((v) => (v.id === 'osint-x' ? true : tabVisibility[v.tabKey] !== false))
-      .map((v) => ({
-        id: v.id,
-        label: v.label,
-        active: activeView === v.id,
-        onClick: () => setActiveViewWithMode(v.id),
-      }))
-  } else if (appMode === APP_MODES.TOOLS) {
-    mobilePageTitle = 'Tools'
-    mobileChipItems = TOOLS_LIST.map((t) => ({
-      id: t.id,
-      label: t.title,
-      active: activeView === 'forensics' ? t.id === 'forensics' : activeView === 'tools' && activeToolId === t.id,
-      onClick: () => openTool(t.id),
-    }))
-  } else if (appMode === APP_MODES.RESOURCES) {
-    mobilePageTitle = 'Resources'
-    mobileChipItems = RESOURCE_SECTIONS.map((s) => ({
-      id: s.id,
-      label: s.title,
-      active: false,
-      onClick: () => {
-        setActiveViewWithMode('resources')
-        setTimeout(() => resourcesScrollRef.current?.scrollToSection?.(s.id), 50)
-      },
-    }))
-  }   else if (appMode === APP_MODES.REPORTS) mobilePageTitle = 'Report Maker'
-  else if (appMode === APP_MODES.BULLETIN) mobilePageTitle = 'The Bulletin Board'
-  else if (appMode === APP_MODES.SETTINGS) mobilePageTitle = 'Settings'
-  else if (activeView === 'search-results') mobilePageTitle = 'Search'
 
   // Each mode's sub-views are a menu under the window's title bar now.
   const windowMenu = (() => {
@@ -895,26 +840,7 @@ function App() {
       <div className={`app-body ${isMobileLayout ? 'app-body--mobile' : ''}`}>
       {!isMobileLayout && activeView !== 'home' && <ModeRail appMode={appMode} onModeSelect={handleFooterNav} modes={menuModes} />}
 
-      {isMobileLayout ? (
-        <MobileShell
-          isHub={isHub}
-          pageTitle={mobilePageTitle}
-          chipItems={mobileChipItems}
-          isMapPage={isMapView}
-          mapChips={mapChips}
-          onFlyTo={handleFlyTo}
-          layersOpen={isRightSidebarOpen}
-          onToggleLayers={() => setIsRightSidebarOpen((open) => !open)}
-          onGoHome={goHome}
-          activeMode={appMode}
-          onModeSelect={(mode) => handleFooterNav(mode)}
-        >
-          <main className={`main main--mobile ${footerTransition ? 'main--y2k-transition' : ''} ${isMapView ? 'main--map' : ''} ${isCrimeView ? 'main--crime' : ''}`}>
-            {mainContent}
-          </main>
-          {sidebar}
-        </MobileShell>
-      ) : (
+      {(
         <>
       {activeView === 'desktop' ? (
         <main className="main main--desktop">{mainContent}</main>
@@ -932,7 +858,7 @@ function App() {
             onRefresh={() => refreshHomeNow({ force: true })}
             onAbout={() => setWelcomeOpen(true)}
           />
-          <main className={`main ${activeView === 'home' ? 'main--operations' : ''} ${isMapView ? 'main--map xp-dark-island' : ''} ${isBatmanPage ? 'main--batman xp-dark-island' : ''} ${isCrimeView ? 'main--crime' : ''}`}>
+          <main className={`main${isMobileLayout ? ' main--mobile' : ''}${footerTransition ? ' main--y2k-transition' : ''} ${activeView === 'home' ? 'main--operations' : ''} ${isMapView ? 'main--map xp-dark-island' : ''} ${isBatmanPage ? 'main--batman xp-dark-island' : ''} ${isCrimeView ? 'main--crime' : ''}`}>
             {mainContent}
           </main>
         </XpWindow>

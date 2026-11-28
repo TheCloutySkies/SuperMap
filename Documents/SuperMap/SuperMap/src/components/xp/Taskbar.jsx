@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom'
 import { Grid2X2, House, CloudSun, Vault, Settings } from 'lucide-react'
 import { useSuperMapAccount } from '../../features/accounts/SuperMapAccounts'
 import { HOME_STATE, getHomeState, subscribeHome } from '../../lib/homeStore'
+import { presenceLabel, presenceValue } from '../../features/accounts/messageBits'
 
 function useClock() {
   const [now, setNow] = useState(() => new Date())
@@ -32,10 +33,21 @@ export default function Taskbar({
   const now = useClock()
   const navigate = useNavigate()
   const { user, unread, vault, setOverlay, setWorkspaceTab } = useSuperMapAccount()
+  const presence = presenceValue(user?.presence)
+  const presenceWord = user ? presenceLabel(user.presence) : 'Sign in'
   const badge = unread > 0 ? unread : vault.length > 0 ? vault.length : 0
   const [homeState, setHomeState] = useState(() => getHomeState()?.state || HOME_STATE.SEED)
   useEffect(() => subscribeHome((next) => setHomeState(next?.state || HOME_STATE.SEED)), [])
   const dot = homeState === HOME_STATE.FAILED ? 'is-error' : homeState === HOME_STATE.SEED ? 'is-stale' : ''
+
+  function openMessages() {
+    if (!user) {
+      setOverlay('auth')
+      return
+    }
+    setWorkspaceTab('messages')
+    navigate('/accounts')
+  }
 
   function openVault() {
     if (!user) {
@@ -71,7 +83,14 @@ export default function Taskbar({
         ))}
       </div>
       <div className="xp-tray">
-        <span className={`xp-tray-dot ${dot}`} aria-hidden />
+        <span className={`xp-tray-dot ${dot}`} aria-hidden title="Data freshness" />
+        <button
+          type="button"
+          className={`xp-tray-presence sm-presence sm-presence--${presence}`}
+          title={`${presenceWord} — open Messages`}
+          aria-label={`${presenceWord}. Open Messages`}
+          onClick={openMessages}
+        />
         <div className="xp-tray-quick" role="toolbar" aria-label="Quick launch">
           <button
             type="button"

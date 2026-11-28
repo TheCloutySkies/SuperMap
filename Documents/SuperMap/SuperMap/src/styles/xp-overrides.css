@@ -462,3 +462,87 @@ select,
 .app-omnibar-inner { display: none !important; }
 .ambient-background,
 .ambient-bg-light { display: none !important; }
+
+/* ── the menu bar under a window's title bar ─────────────── */
+.xp-menubar {
+  display: flex;
+  align-items: stretch;
+  gap: 1px;
+  flex: 0 0 auto;
+  padding: 1px 2px;
+  background: var(--xp-face);
+  border-bottom: 1px solid var(--xp-shadow);
+}
+.xp-menu { position: relative; }
+.xp-menubar > .xp-menu > button {
+  min-height: 0;
+  padding: 2px 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  box-shadow: none;
+  color: #1a1a1a;
+  font: 11px var(--xp-font);
+  cursor: pointer;
+}
+.xp-menubar > .xp-menu > button:hover,
+.xp-menubar > .xp-menu > button.is-open { background: #316ac5; color: #fff; }
+.xp-menu-pop {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 40;
+  min-width: 176px;
+  padding: 2px;
+  background: #fff;
+  border: 1px solid #7f9db9;
+  box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.28);
+}
+.xp-menu-pop button {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  padding: 3px 8px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #1a1a1a;
+  font: 11px var(--xp-font);
+  text-align: left;
+  cursor: pointer;
+}
+.xp-menu-pop button.is-active { font-weight: 700; }
+.xp-menu-pop button:hover { background: #316ac5; color: #fff; }
+.xp-menu-check { display: inline-block; width: 12px; text-align: center; }
+.xp-menu-sep { height: 1px; margin: 3px 4px; background: var(--xp-shadow); }
+
+/* ── the phone shell wears XP bevels too ─────────────────── */
+.mobile-chip-bar {
+  gap: 3px;
+  padding: 4px 6px;
+  background: var(--xp-face);
+  border-bottom: 1px solid var(--xp-shadow);
+}
+.mobile-chip-bar button,
+.mobile-chip {
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid #7f9db9;
+  border-radius: 0;
+  background: var(--xp-face);
+  color: #1a1a1a;
+  box-shadow: inset -1px -1px #aca899, inset 1px 1px #fff;
+  font: 11px var(--xp-font);
+}
+.mobile-chip.is-active,
+.mobile-chip-bar button.is-active,
+.mobile-chip-bar button[aria-pressed="true"] {
+  border-color: #316ac5;
+  background: #dbe7ff;
+  font-weight: 700;
+}
+.mobile-page-header {
+  background: var(--xp-face);
+  border-bottom: 1px solid var(--xp-shadow);
+}
+.mobile-page-title { font: 700 11px var(--xp-font); color: #1a1a1a; }

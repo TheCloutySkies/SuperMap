@@ -53,6 +53,7 @@ import OsintXView from './components/OsintXView'
 import BroadcastsView from './components/BroadcastsView'
 import SettingsView from './components/SettingsView'
 import AccountWorkspace from './features/accounts/AccountWorkspace'
+import XpMenuBar from './components/xp/XpMenuBar'
 import { useSuperMapAccount } from './features/accounts/SuperMapAccounts'
 import ResourcesView, { RESOURCE_SECTIONS } from './components/ResourcesView'
 import ToolsView from './components/ToolsView'
@@ -66,7 +67,6 @@ import QuickTutorialModal from './components/QuickTutorialModal'
 
 import OmnibarBanner from './components/OmnibarBanner'
 import ModeRail from './components/ModeRail'
-import ModeSubnav from './components/ModeSubnav'
 import MobileShell from './components/MobileShell'
 import MobileLayoutPrompt from './components/MobileLayoutPrompt'
 import { osintXToBannerItems, readHomeSnapshot } from './lib/homeBootstrap'
@@ -134,7 +134,6 @@ function App() {
   }, [route.unknown, sharedCaseId, navigate])
 
   const [configured, setConfigured] = useState(() => hasConfigured())
-  const [subnavOpen, setSubnavOpen] = useState(true)
   const [basemapId, setBasemapId] = useState('arcgis-topo')
   const [overlayBasemapId, setOverlayBasemapId] = useState(null)
   const [layerToggles, setLayerToggles] = useState(() => ({ ...DEFAULT_LAYER_TOGGLES }))
@@ -429,12 +428,10 @@ function App() {
   const tabVisibility = getTabVisibility()
 
   const handleFooterNav = useCallback((mode) => {
-    setSubnavOpen(true)
     navigate(pathFromMode(mode))
   }, [navigate])
 
   const setActiveViewWithMode = useCallback((viewId) => {
-    setSubnavOpen(true)
     navigate(pathFromView(viewId))
   }, [navigate])
 
@@ -602,6 +599,53 @@ function App() {
   else if (appMode === APP_MODES.BULLETIN) mobilePageTitle = 'The Bulletin Board'
   else if (appMode === APP_MODES.SETTINGS) mobilePageTitle = 'Settings'
   else if (activeView === 'search-results') mobilePageTitle = 'Search'
+
+  // Each mode's sub-views are a menu under the window's title bar now.
+  const windowMenu = (() => {
+    if (isMobileLayout) return { label: 'View', items: [] }
+    if (appMode === APP_MODES.MAPS) {
+      return {
+        label: 'Maps',
+        items: MAP_VIEWS
+          .filter((v) => tabVisibility[v.tabKey] !== false)
+          .map((v) => ({ id: v.id, label: v.label, active: activeView === v.id, onSelect: () => setActiveViewWithMode(v.id) })),
+      }
+    }
+    if (appMode === APP_MODES.FEEDS) {
+      return {
+        label: 'News',
+        items: FEED_VIEWS
+          .filter((v) => (v.id === 'osint-x' ? true : tabVisibility[v.tabKey] !== false))
+          .map((v) => ({ id: v.id, label: v.label, active: activeView === v.id, onSelect: () => setActiveViewWithMode(v.id) })),
+      }
+    }
+    if (appMode === APP_MODES.TOOLS) {
+      return {
+        label: 'Tools',
+        items: TOOLS_LIST.map((tool) => ({
+          id: tool.id,
+          label: tool.title,
+          active: activeView === 'forensics' ? tool.id === 'forensics' : activeView === 'tools' && activeToolId === tool.id,
+          onSelect: () => openTool(tool.id),
+        })),
+      }
+    }
+    if (appMode === APP_MODES.RESOURCES) {
+      return {
+        label: 'Resources',
+        items: RESOURCE_SECTIONS.map((section) => ({
+          id: section.id,
+          label: section.title,
+          active: false,
+          onSelect: () => {
+            setActiveViewWithMode('resources')
+            setTimeout(() => resourcesScrollRef.current?.scrollToSection?.(section.id), 50)
+          },
+        })),
+      }
+    }
+    return { label: 'View', items: [] }
+  })()
 
   const mainContent = (
     <>
@@ -848,64 +892,6 @@ function App() {
       )}
       <div className={`app-body ${isMobileLayout ? 'app-body--mobile' : ''}`}>
       {!isMobileLayout && activeView !== 'home' && <ModeRail appMode={appMode} onModeSelect={handleFooterNav} modes={menuModes} />}
-      {!isMobileLayout && activeView !== 'home' && (() => {
-        const showSubnav =
-          subnavOpen &&
-          (appMode === APP_MODES.MAPS ||
-            appMode === APP_MODES.FEEDS ||
-            appMode === APP_MODES.TOOLS ||
-            appMode === APP_MODES.RESOURCES)
-        let subnavTitle = ''
-        let subnavItems = []
-        if (appMode === APP_MODES.MAPS) {
-          subnavTitle = 'Maps'
-          subnavItems = MAP_VIEWS
-            .filter((v) => tabVisibility[v.tabKey] !== false)
-            .map((v) => ({
-              id: v.id,
-              label: v.label,
-              active: activeView === v.id,
-              onClick: () => setActiveViewWithMode(v.id),
-            }))
-        } else if (appMode === APP_MODES.FEEDS) {
-          subnavTitle = 'News'
-          subnavItems = FEED_VIEWS
-            .filter((v) => (v.id === 'osint-x' ? true : tabVisibility[v.tabKey] !== false))
-            .map((v) => ({
-              id: v.id,
-              label: v.label,
-              active: activeView === v.id,
-              onClick: () => setActiveViewWithMode(v.id),
-            }))
-        } else if (appMode === APP_MODES.TOOLS) {
-          subnavTitle = 'Tools'
-          subnavItems = TOOLS_LIST.map((t) => ({
-            id: t.id,
-            label: t.title,
-            active: activeView === 'forensics' ? t.id === 'forensics' : activeView === 'tools' && activeToolId === t.id,
-            onClick: () => openTool(t.id),
-          }))
-        } else if (appMode === APP_MODES.RESOURCES) {
-          subnavTitle = 'Resources'
-          subnavItems = RESOURCE_SECTIONS.map((s) => ({
-            id: s.id,
-            label: s.title,
-            active: false,
-            onClick: () => {
-              setActiveViewWithMode('resources')
-              setTimeout(() => resourcesScrollRef.current?.scrollToSection?.(s.id), 50)
-            },
-          }))
-        }
-        return (
-          <ModeSubnav
-            open={showSubnav}
-            title={subnavTitle}
-            items={subnavItems}
-            onClose={() => setSubnavOpen(false)}
-          />
-        )
-      })()}
 
       {isMobileLayout ? (
         <MobileShell
@@ -937,6 +923,13 @@ function App() {
           onToggleMaximized={() => setXpMaximized((value) => !value)}
           onHome={() => navigate('/')}
         >
+          <XpMenuBar
+            viewLabel={windowMenu.label}
+            viewItems={windowMenu.items}
+            onClose={() => navigate('/')}
+            onRefresh={() => refreshHomeNow({ force: true })}
+            onAbout={() => setWelcomeOpen(true)}
+          />
           <main className={`main ${activeView === 'home' ? 'main--operations' : ''} ${isMapView ? 'main--map xp-dark-island' : ''} ${isBatmanPage ? 'main--batman xp-dark-island' : ''} ${isCrimeView ? 'main--crime' : ''}`}>
             {mainContent}
           </main>

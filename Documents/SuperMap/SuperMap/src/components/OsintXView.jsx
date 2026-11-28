@@ -442,19 +442,15 @@ export default function OsintXView({ keywordFilter = '', onClearFilter }) {
 
   return (
     <div className="osint-x-view x-feed">
-      <header className="x-feed-header">
-        <div className="x-feed-header-top">
-          <h2 className="x-feed-title">OSINT</h2>
-          <button
-            type="button"
-            className="x-feed-refresh"
-            onClick={handleRefresh}
-            disabled={loading || refreshing}
-            title="Refresh"
-          >
-            {refreshing ? '…' : '↻'}
-          </button>
-        </div>
+      <div className="x-feed-header xp-page-tools" role="toolbar" aria-label="OSINT on X">
+        <button
+          type="button"
+          onClick={handleRefresh}
+          disabled={loading || refreshing}
+          title="Refresh"
+        >
+          {refreshing ? '…' : '↻'} Refresh
+        </button>
         <div className="x-feed-toolbar">
           <label className="x-feed-filter">
             Sort
@@ -483,7 +479,7 @@ export default function OsintXView({ keywordFilter = '', onClearFilter }) {
           )}
         </div>
         {loadError && !loading && <p className="x-feed-status" role="status">{loadError}</p>}
-      </header>
+      </div>
 
       {loading && !refreshing && posts.length === 0 ? (
         <p className="x-feed-loading">Loading timeline…</p>

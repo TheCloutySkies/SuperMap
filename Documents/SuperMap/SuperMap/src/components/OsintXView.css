@@ -557,3 +557,38 @@ button.x-eng {
     max-width: none;
   }
 }
+
+
+/* XP pass: the feed reads as a Windows face, not a black timeline. The hero and
+   media keep their shape; only the surface, type and rules change. */
+.xp-window-body .osint-x-view.x-feed {
+  --x-bg: #ffffff;
+  --x-surface: #ffffff;
+  --x-border: #d6d2c2;
+  --x-text: #1a1a1a;
+  --x-muted: #555555;
+  --x-link: #0000cc;
+  --x-hover: #e8f0f8;
+  --x-like: #a4262c;
+  --x-repost: #2f6b47;
+  background: #fff;
+  border-top: 0;
+  font-family: var(--xp-font);
+}
+.xp-window-body .x-feed-header {
+  position: static;
+  background: var(--xp-face);
+  backdrop-filter: none;
+  border-bottom: 1px solid var(--xp-shadow);
+  padding: 4px 6px;
+  z-index: auto;
+}
+.xp-window-body .x-feed-toolbar { gap: 6px; }
+.xp-window-body .x-timeline { max-width: none; }
+.xp-window-body .x-post {
+  padding: 8px;
+  border-bottom: 1px solid #f1efe2;
+}
+.xp-window-body .x-post:hover { background: #e8f0f8; }
+.xp-window-body .x-post-tag { border-radius: 0; }
+.xp-window-body .x-post-avatar { border-radius: 0; }

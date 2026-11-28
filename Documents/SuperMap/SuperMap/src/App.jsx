@@ -31,7 +31,10 @@ import WelcomeWindow from './components/xp/WelcomeWindow'
 import { shouldShowWelcome } from './lib/welcomePrefs'
 import TrashWindow from './components/xp/TrashWindow'
 import XpDialog from './components/xp/XpDialog'
-import { getXpWindows, minimizeWindow, restoreWindow, setActiveWindow, subscribeXpWindows, toggleStart } from './lib/xpWindows'
+import AppletWindow from './components/xp/AppletWindow'
+import {
+  getXpWindows, minimizeWindow, openApplet, restorePage, restoreSession, setActiveWindow, subscribeXpWindows, toggleStart,
+} from './lib/xpWindows'
 import { refreshHomeNow } from './lib/homeStore'
 import CrimeIntelligenceView from './components/CrimeIntelligenceView'
 import WeatherView from './components/WeatherView'
@@ -335,6 +338,16 @@ function App() {
 
   useEffect(() => subscribeXpWindows(setXpState), [])
 
+  // Bring back the previews that were open when this browser was last here.
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem('supermap.xp.restored')) {
+        localStorage.setItem('supermap.xp.restored', '1')
+        restoreSession()
+      }
+    } catch { /* private mode */ }
+  }, [])
+
   useEffect(() => {
     setActiveWindow({ route: location.pathname, title: xpTitle, id: activeView })
   }, [location.pathname, activeView, xpTitle])
@@ -585,6 +598,7 @@ function App() {
               requestAnimationFrame(() => document.querySelector('.sm-acct-dock-btn')?.click())
             }}
             onOpenTrash={() => setTrashOpen(true)}
+            onOpenApplet={(panel) => openApplet(panel)}
           />
         )}
         {activeView === 'home' && (
@@ -923,13 +937,25 @@ function App() {
       )}
       </div>
     </div>
+    {(() => {
+      const applets = (xpState.order || []).map((id) => xpState.applets?.[id]).filter(Boolean)
+      const visible = isMobileLayout ? applets.slice(-1) : applets
+      return visible.map((win) => (
+        <AppletWindow
+          key={win.id}
+          win={win}
+          active={xpState.activeId === win.id}
+          onOpenPage={(panel) => setActiveViewWithMode(panel.pageView)}
+        />
+      ))
+    })()}
     <Taskbar
-      title={xpState.title === 'Good Palantir' ? '' : xpState.title}
-      minimized={xpState.minimized}
+      title={xpState.page?.route ? xpState.page.title : ''}
+      minimized={xpState.page?.minimized || []}
       startOpen={xpState.startOpen}
       onToggleStart={() => toggleStart()}
       onMinimize={() => { minimizeWindow(); navigate('/') }}
-      onRestore={(entry) => { restoreWindow(entry.route); navigate(entry.route) }}
+      onRestore={(entry) => { restorePage(entry.route); navigate(entry.route) }}
       onSettings={() => handleFooterNav('SETTINGS')}
     />
     <StartMenu

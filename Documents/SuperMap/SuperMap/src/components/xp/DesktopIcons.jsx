@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from 'react'
 import XpIcon from './XpIcon'
 import { visibleModes } from '../../features/accounts/menuCatalog'
+import { PANEL_PREVIEWS } from '../operations/panels/panelRegistry'
 
 const SHORTCUTS = [
   { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', view: 'home' },
@@ -27,12 +28,18 @@ const MODE_ICONS = {
   SETTINGS: 'settings',
 }
 
-export default function DesktopIcons({ onMode, onView, onOpenVault, onOpenTrash }) {
+export default function DesktopIcons({ onMode, onView, onOpenVault, onOpenTrash, onOpenApplet }) {
   const [selected, setSelected] = useState('dashboard')
   const [menu, setMenu] = useState(null)
   const gridRef = useRef(null)
   const touchRef = useRef(null)
 
+  const previews = PANEL_PREVIEWS.map((panel) => ({
+    id: `preview-${panel.id}`,
+    label: panel.title,
+    icon: panel.icon,
+    applet: panel,
+  }))
   const icons = [
     ...SHORTCUTS,
     ...visibleModes().filter((mode) => mode.id !== 'HOME').map((mode) => ({
@@ -41,10 +48,12 @@ export default function DesktopIcons({ onMode, onView, onOpenVault, onOpenTrash 
       icon: MODE_ICONS[mode.id] || 'folder',
       mode: mode.id,
     })),
+    ...previews,
   ]
 
   const open = (entry) => {
-    if (entry.view) onView?.(entry.view)
+    if (entry.applet) onOpenApplet?.(entry.applet)
+    else if (entry.view) onView?.(entry.view)
     else if (entry.vault) onOpenVault?.()
     else if (entry.trash) onOpenTrash?.()
     else if (entry.mode) onMode?.(entry.mode)

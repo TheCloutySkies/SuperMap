@@ -2,6 +2,8 @@
  * The XP icon set: inline SVG, flat XP palette, 16 or 32 px. No emoji.
  * One `name` prop keeps every surface on the same drawing.
  */
+import { iconArt } from './xpIconArt'
+
 const FACE = '#ece9d8'
 const FOLDER = '#ffd77e'
 const FOLDER_EDGE = '#c9a227'
@@ -130,6 +132,21 @@ function Draw({ name }) {
 
 export default function XpIcon({ name, size = 16, className = '', title }) {
   const box = { width: size, height: size, display: 'block' }
+  const art = iconArt(name, size)
+  if (art) {
+    return (
+      <img
+        src={art}
+        width={size}
+        height={size}
+        alt={title || ''}
+        aria-hidden={title ? undefined : 'true'}
+        draggable={false}
+        className={`xp-icon xp-icon-art ${className}`}
+        style={box}
+      />
+    )
+  }
   return (
     <svg
       viewBox="0 0 16 16"

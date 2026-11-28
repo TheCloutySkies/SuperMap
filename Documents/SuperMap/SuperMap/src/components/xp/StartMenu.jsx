@@ -52,6 +52,9 @@ export default function StartMenu({ open, onClose, onMode, onView, onRefresh }) 
           </button>
         </div>
         <div className="xp-start-side">
+          <button type="button" role="menuitem" className="xp-start-item" onClick={() => { onView('home'); onClose() }}>
+            <em>Dashboard</em>
+          </button>
           <button type="button" role="menuitem" className="xp-start-item" onClick={() => { onMode('SETTINGS'); onClose() }}>
             <em>Settings</em>
           </button>

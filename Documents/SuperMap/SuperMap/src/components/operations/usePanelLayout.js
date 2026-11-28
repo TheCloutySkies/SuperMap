@@ -103,11 +103,7 @@ export default function usePanelLayout(defaultOrder) {
     }
   }, [drag, onPointerMove, endDrag])
 
-  const startDrag = useCallback((id, event) => {
-    if (event.button !== 0) return
-    if (event.target.closest('button, a, input, select, textarea')) return
-    const panel = event.currentTarget.closest('.op-panel')
-    if (!panel) return
+  const lift = useCallback((id, panel, event) => {
     const rect = panel.getBoundingClientRect()
     dragRef.current = {
       id,
@@ -116,6 +112,40 @@ export default function usePanelLayout(defaultOrder) {
       point: { x: event.clientX, y: event.clientY },
     }
     setDrag({ id, left: rect.left, top: rect.top, width: rect.width, height: rect.height, landing: false })
+    document.body.classList.add('xp-dragging')
+  }, [])
+
+  const startDrag = useCallback((id, event) => {
+    if (event.button !== 0) return
+    if (event.target.closest('button, a, input, select, textarea')) return
+    const panel = event.currentTarget.closest('.op-panel')
+    if (!panel) return
+    // On touch a panel is lifted by holding it, so a swipe still scrolls the page.
+    if (event.pointerType === 'touch') {
+      const timer = setTimeout(() => lift(id, panel, event), 400)
+      const cancel = () => {
+        clearTimeout(timer)
+        window.removeEventListener('pointerup', cancel)
+        window.removeEventListener('pointercancel', cancel)
+      }
+      window.addEventListener('pointerup', cancel)
+      window.addEventListener('pointercancel', cancel)
+      return
+    }
+    lift(id, panel, event)
+  }, [lift])
+
+  /** Keyboard/tap reordering: move a panel one slot left or right. */
+  const move = useCallback((id, delta) => {
+    setOrder((prev) => {
+      const from = prev.indexOf(id)
+      const to = from + delta
+      if (from < 0 || to < 0 || to >= prev.length) return prev
+      const next = [...prev]
+      next.splice(from, 1)
+      next.splice(to, 0, id)
+      return next
+    })
   }, [])
 
   const startResize = useCallback((id, event) => {
@@ -141,14 +171,19 @@ export default function usePanelLayout(defaultOrder) {
     panelId: id,
     onDragHandle: (event) => startDrag(id, event),
     onResize: (event) => startResize(id, event),
+    onMove: (delta) => move(id, delta),
     maxHeight: heights[id] || undefined,
     floating: drag?.id === id ? drag : null,
-  }), [order, heights, drag, startDrag, startResize])
+  }), [order, heights, drag, startDrag, startResize, move])
 
   const reset = useCallback(() => {
     setOrder(defaultOrder)
     setHeights({})
   }, [defaultOrder])
 
-  return { order, props, reset, dragging: Boolean(drag) }
+  useEffect(() => {
+    if (!drag) document.body.classList.remove('xp-dragging')
+  }, [drag])
+
+  return { order, props, reset, move, dragging: Boolean(drag) }
 }

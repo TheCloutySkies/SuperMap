@@ -1,0 +1,231 @@
+/* XP content styling inside a window.
+   Scoped to .xp-window-body and never applied to a dark island (maps, radar,
+   the strategic lens, Batman), which keep their own dark surfaces. */
+
+.xp-window-body {
+  font-family: var(--xp-font);
+  font-size: 12px;
+  color: #1a1a1a;
+}
+
+.xp-window-body :is(h1, h2, h3, h4) {
+  font-family: var(--xp-font);
+  font-weight: 700;
+  color: #003399;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.xp-window-body :is(h1) { font-size: 15px; }
+.xp-window-body :is(h2) { font-size: 13px; }
+.xp-window-body :is(h3, h4) { font-size: 12px; }
+.xp-window-body :is(p, li, label, span, td, th) { color: #1a1a1a; }
+.xp-window-body a { color: #0000cc; text-decoration: underline; }
+.xp-window-body a:hover { color: #3333cc; }
+
+/* Native controls inherit the XP look; only spacing is ours. */
+.xp-window-body :is(button, input, select, textarea) { font-family: var(--xp-font); font-size: 11px; }
+.xp-window-body :is(button):not(.title-bar-controls button) { min-height: 23px; }
+.xp-window-body :is(fieldset) {
+  border: 1px solid var(--xp-shadow);
+  border-top-color: #fff;
+  border-left-color: #fff;
+  padding: 8px 10px;
+  margin: 0 0 10px;
+}
+.xp-window-body :is(legend) { padding: 0 4px; font-weight: 700; color: #1a1a1a; }
+
+/* Primitives the app's own views use, mapped to XP faces. */
+.xp-window-body :is(.widget-card, .bb-card, .sm-card, .op-panel, .resources-card, .tools-card) {
+  background: #fff !important;
+  border: 1px solid var(--xp-shadow) !important;
+  color: #1a1a1a !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+.xp-window-body :is(.widget-card, .bb-card, .sm-card, .op-panel, .resources-card, .tools-card) :is(h2, h3, h4, strong) {
+  color: #003399 !important;
+}
+
+/* Text the dark themes set light must stay readable on a white face. */
+.xp-window-body :is(.op-muted, .op-faint, .sm-muted, .bb-muted, .feed-muted, .resources-muted) {
+  color: #444 !important;
+}
+
+/* The listview and the key/value rows are shared primitives. */
+.xp-listview { border: 1px solid #7f9db9; background: #fff; }
+.xp-listview-head {
+  display: flex;
+  gap: 0;
+  background: var(--xp-face);
+  border-bottom: 1px solid var(--xp-shadow);
+}
+.xp-listview-head button {
+  flex: 1 1 auto;
+  padding: 3px 6px;
+  border: 0;
+  border-right: 1px solid var(--xp-shadow);
+  background: transparent;
+  font: 11px var(--xp-font);
+  text-align: left;
+  cursor: pointer;
+}
+.xp-listview-head button.is-sorted { background: #dcd9c8; }
+.xp-listview-scroll { max-height: 60vh; overflow: auto; outline: 0; }
+.xp-listview-row {
+  display: flex;
+  align-items: center;
+  min-height: 22px;
+  border-bottom: 1px solid #f1efe2;
+  cursor: default;
+}
+.xp-listview-row span { flex: 1 1 auto; padding: 3px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xp-listview-row span.is-mono { font-variant-numeric: tabular-nums; }
+.xp-listview-row:hover { background: #e8f0f8; }
+.xp-listview-row.is-selected { background: var(--xp-sel); color: #fff; }
+.xp-listview-row.is-selected span { color: #fff; }
+.xp-listview-empty { margin: 0; padding: 12px; color: var(--xp-disabled); text-align: center; }
+
+.xp-dialog { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: var(--z-dialog); }
+.xp-dialog-actions { display: flex; gap: 6px; justify-content: flex-end; padding: 6px 8px 8px; }
+.xp-welcome-list { margin: 6px 0 10px 18px; padding: 0; }
+.xp-welcome-list li { margin: 3px 0; }
+.xp-welcome-check { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+.xp-note {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  background: var(--xp-balloon);
+  border: 1px solid #000;
+  font-size: 11px;
+}
+
+.xp-desktop-icons {
+  position: absolute;
+  inset: 12px auto 40px 12px;
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(10, 74px);
+  gap: 2px 6px;
+  align-content: start;
+}
+.xp-desk-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 84px;
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font: 11px/1.2 var(--xp-font);
+  text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.6);
+  cursor: default;
+}
+.xp-desk-icon span { max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: pre-line; text-align: center; }
+.xp-desk-icon.is-selected { background: rgba(49, 106, 197, 0.55); outline: 1px dotted #fff; }
+.xp-desk-icon:focus-visible { outline: 1px dotted #fff; }
+.xp-context {
+  position: fixed;
+  z-index: var(--z-start);
+  min-width: 130px;
+  background: #fff;
+  border: 1px solid var(--xp-shadow);
+  box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.3);
+  padding: 2px;
+}
+.xp-context button {
+  display: block;
+  width: 100%;
+  padding: 3px 8px;
+  border: 0;
+  background: transparent;
+  font: 11px var(--xp-font);
+  text-align: left;
+  cursor: pointer;
+}
+.xp-context button:hover { background: var(--xp-sel); color: #fff; }
+
+.xp-balloons {
+  position: fixed;
+  right: 8px;
+  bottom: calc(var(--xp-taskbar-h) + 8px);
+  z-index: var(--z-balloon);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 280px;
+}
+.xp-balloon {
+  position: relative;
+  background: var(--xp-balloon);
+  border: 1px solid #000;
+  border-radius: 4px;
+  padding: 7px 22px 7px 8px;
+  font: 11px/1.35 var(--xp-font);
+  color: #1a1a1a;
+}
+.xp-balloon::after {
+  content: '';
+  position: absolute;
+  right: 18px;
+  bottom: -7px;
+  border: 6px solid transparent;
+  border-top-color: #000;
+  border-bottom: 0;
+}
+.xp-balloon-title { font-weight: 700; margin-bottom: 2px; }
+.xp-balloon p { margin: 0; }
+.xp-balloon-close {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: 11px var(--xp-font);
+}
+.xp-balloon.is-danger { border-color: #a4262c; }
+.xp-balloon.is-success { border-color: #2f6b47; }
+
+/* Mobile: the desktop icons become a 4-column grid. */
+@media (max-width: 900px) {
+  .xp-desktop-icons {
+    position: static;
+    grid-auto-flow: row;
+    grid-template-rows: none;
+    grid-template-columns: repeat(4, 1fr);
+    padding: 12px;
+    gap: 10px;
+  }
+  .xp-desk-icon { width: 100%; }
+  .xp-listview-row { min-height: 44px; }
+  .xp-balloons { left: 8px; right: 8px; max-width: none; }
+}
+
+/* Move buttons on a dashboard panel and the drag lock. */
+.op-panel-move {
+  position: absolute;
+  top: 4px;
+  right: 42px;
+  display: inline-flex;
+  gap: 2px;
+}
+.op-panel-move button {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--op-border, #242c37);
+  background: transparent;
+  color: var(--op-dim, #9aa7b4);
+  cursor: pointer;
+}
+.op-panel-move button:hover { color: var(--op-ink, #e8ecf1); }
+body.xp-dragging { overflow: hidden; }
+@media (pointer: coarse) {
+  .op-panel-move button { width: 28px; height: 28px; }
+  .op-panel-resize { width: 24px; height: 24px; }
+}

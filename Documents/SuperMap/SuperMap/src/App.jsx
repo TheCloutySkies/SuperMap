@@ -26,6 +26,11 @@ import OperationsHome from './components/operations/OperationsHome'
 import XpWindow from './components/xp/XpWindow'
 import Taskbar from './components/xp/Taskbar'
 import StartMenu from './components/xp/StartMenu'
+import DesktopIcons from './components/xp/DesktopIcons'
+import WelcomeWindow from './components/xp/WelcomeWindow'
+import { shouldShowWelcome } from './lib/welcomePrefs'
+import TrashWindow from './components/xp/TrashWindow'
+import XpDialog from './components/xp/XpDialog'
 import { getXpWindows, minimizeWindow, restoreWindow, setActiveWindow, subscribeXpWindows, toggleStart } from './lib/xpWindows'
 import { refreshHomeNow } from './lib/homeStore'
 import CrimeIntelligenceView from './components/CrimeIntelligenceView'
@@ -313,6 +318,17 @@ function App() {
   const menuModes = visibleModes(modeVisibility)
   const [xpState, setXpState] = useState(() => getXpWindows())
   const [xpMaximized, setXpMaximized] = useState(true)
+  const [trashOpen, setTrashOpen] = useState(false)
+  const [welcomeOpen, setWelcomeOpen] = useState(() => shouldShowWelcome())
+
+  // First visit lands on the dashboard, so nobody meets an empty desktop.
+  useEffect(() => {
+    if (location.pathname !== '/') return
+    try {
+      if (localStorage.getItem('supermap.xp.welcomed')) return
+    } catch { /* private mode */ }
+    navigate('/dashboard', { replace: true })
+  }, [location.pathname, navigate])
   const xpTitle = activeView === 'home'
     ? 'Good Palantir'
     : (menuModes.find((mode) => mode.id === appMode)?.label || 'Good Palantir')
@@ -560,6 +576,17 @@ function App() {
 
   const mainContent = (
     <>
+        {activeView === 'desktop' && (
+          <DesktopIcons
+            onView={(viewId) => setActiveViewWithMode(viewId)}
+            onMode={(mode) => handleFooterNav(mode)}
+            onOpenVault={() => {
+              setActiveViewWithMode('settings')
+              requestAnimationFrame(() => document.querySelector('.sm-acct-dock-btn')?.click())
+            }}
+            onOpenTrash={() => setTrashOpen(true)}
+          />
+        )}
         {activeView === 'home' && (
               <OperationsHome
                 onNavigate={setActiveViewWithMode}
@@ -877,16 +904,20 @@ function App() {
         </MobileShell>
       ) : (
         <>
-      <XpWindow
-        title={xpTitle}
-        maximized={xpMaximized}
-        onToggleMaximized={() => setXpMaximized((value) => !value)}
-        onHome={() => navigate('/')}
-      >
-        <main className={`main ${activeView === 'home' ? 'main--operations' : ''} ${isMapView ? 'main--map' : ''} ${isCrimeView ? 'main--crime' : ''}`}>
-          {mainContent}
-        </main>
-      </XpWindow>
+      {activeView === 'desktop' ? (
+        <main className="main main--desktop">{mainContent}</main>
+      ) : (
+        <XpWindow
+          title={xpTitle}
+          maximized={xpMaximized}
+          onToggleMaximized={() => setXpMaximized((value) => !value)}
+          onHome={() => navigate('/')}
+        >
+          <main className={`main ${activeView === 'home' ? 'main--operations' : ''} ${isMapView ? 'main--map xp-dark-island' : ''} ${isCrimeView ? 'main--crime' : ''}`}>
+            {mainContent}
+          </main>
+        </XpWindow>
+      )}
       {sidebar}
         </>
       )}
@@ -908,6 +939,12 @@ function App() {
       onView={(viewId) => setActiveViewWithMode(viewId)}
       onRefresh={() => refreshHomeNow({ force: true })}
     />
+    {welcomeOpen ? <WelcomeWindow onClose={() => setWelcomeOpen(false)} /> : null}
+    {trashOpen ? (
+      <XpDialog title="Recycle Bin" width={560} onClose={() => setTrashOpen(false)}>
+        <TrashWindow />
+      </XpDialog>
+    ) : null}
     <MobileLayoutPrompt onChoice={() => setVisualsKey((k) => k + 1)} />
     {showTutorial && (
       <QuickTutorialModal

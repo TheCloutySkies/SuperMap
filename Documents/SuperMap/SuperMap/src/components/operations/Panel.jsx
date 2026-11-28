@@ -1,12 +1,12 @@
 /** Reusable operations-panel chrome: index number, title, meta and corner ticks. */
-import { ArrowUpRight, GripVertical } from 'lucide-react'
+import { ArrowUpRight, ChevronLeft, ChevronRight, GripVertical } from 'lucide-react'
 import './operations.css'
 
 export default function Panel({
   index, title, meta, openLabel = 'Open',
   onOpen, children, area, className = '', flush = false,
   refreshing = false, style,
-  panelId, onDragHandle, onResize, maxHeight, floating,
+  panelId, onDragHandle, onResize, onMove, maxHeight, floating,
 }) {
   const head = (
     <>
@@ -42,6 +42,12 @@ export default function Panel({
         <header className="op-panel-head">{head}</header>
       )}
       <div className={`op-panel-body${flush ? ' is-flush' : ''}`}>{children}</div>
+      {onMove ? (
+        <span className="op-panel-move">
+          <button type="button" onClick={() => onMove(-1)} aria-label={`Move ${title} left`}><ChevronLeft size={12} strokeWidth={1.6} /></button>
+          <button type="button" onClick={() => onMove(1)} aria-label={`Move ${title} right`}><ChevronRight size={12} strokeWidth={1.6} /></button>
+        </span>
+      ) : null}
       {onDragHandle ? (
         <span className="op-panel-grip" onPointerDown={onDragHandle} aria-hidden>
           <GripVertical size={12} strokeWidth={1.5} />

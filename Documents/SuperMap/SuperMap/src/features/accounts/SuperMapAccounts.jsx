@@ -7,6 +7,7 @@ import {
   useMemo,
   useState,
 } from 'react'
+import XpBalloon from '../../components/xp/XpBalloon'
 import { UserRound, VenetianMask } from 'lucide-react'
 import {
   GoogleAuthProvider,
@@ -842,7 +843,7 @@ export function AccountsOverlay() {
       {overlay === 'auth' ? <AuthModal /> : null}
       {overlay === 'workspace' ? <AccountWorkspace /> : null}
       {publicProfile ? <PublicProfile seed={publicProfile} onClose={closePublicProfile} /> : null}
-      <Toast />
+      <XpBalloon toast={toast} onClose={() => setToast(null)} />
     </>
   )
 }

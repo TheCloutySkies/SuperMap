@@ -145,8 +145,45 @@ export function scheduleSave(caseDoc) {
   }
 }
 
+const TRASH_KEY = 'supermap.batman.trash.v1'
+
+function readTrash() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(TRASH_KEY) || '[]')
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function writeTrash(rows) {
+  try {
+    localStorage.setItem(TRASH_KEY, JSON.stringify(rows.slice(0, 40)))
+  } catch { /* private mode */ }
+}
+
+/** A deleted case goes to the bin first, so the desktop can bring it back. */
+export function listTrash() {
+  return readTrash()
+}
+
+export function restoreTrash(caseId) {
+  const rows = readTrash()
+  const found = rows.find((row) => row.id === caseId)
+  if (!found) return null
+  writeTrash(rows.filter((row) => row.id !== caseId))
+  const restored = { ...found, deletedAtMs: null, updatedAtMs: Date.now() }
+  upsertLocal(restored)
+  return restored
+}
+
+export function emptyTrash() {
+  writeTrash([])
+}
+
 export async function removeCase(caseDoc) {
   if (!caseDoc?.id) return { ok: false }
+  writeTrash([{ ...caseDoc, deletedAtMs: Date.now() }, ...readTrash().filter((row) => row.id !== caseDoc.id)])
   writeLocal(readLocal().filter((row) => row.id !== caseDoc.id))
   const firestore = db()
   if (!firestore || !caseDoc.ownerUid || caseDoc.ownerUid === LOCAL_OWNER) return { ok: true }

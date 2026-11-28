@@ -11,6 +11,8 @@ import { Shield } from 'lucide-react'
 import { useSuperMapAccount } from '../accounts/SuperMapAccounts'
 import OverviewView from './overview/OverviewView'
 import CasesWorkspace from './CasesWorkspace'
+import DraggableTabs from '../../components/operations/DraggableTabs'
+import useTabOrder from '../../lib/tabOrder'
 import './batman.css'
 import './overview/overview.css'
 
@@ -34,6 +36,7 @@ export default function BatmanView({ view }) {
   const navigate = useNavigate()
   const { user } = useSuperMapAccount()
   const [tab, setTab] = useState(() => initialView(view))
+  const [viewOrder, reorderViews] = useTabOrder('batman', ['overview', 'cases'])
   const choose = useCallback((next) => {
     setTab(next)
     try { localStorage.setItem(VIEW_KEY, next) } catch { /* private mode */ }
@@ -47,22 +50,13 @@ export default function BatmanView({ view }) {
           <h1><Shield size={16} strokeWidth={1.5} aria-hidden /> Batman Mode</h1>
           <p>Explore what is published, then build the case. {user ? `Signed in as ${user.email || user.uid}.` : 'Sign in to save cases to your account.'}</p>
         </div>
-        <div className="bm-switch" role="tablist" aria-label="Batman Mode views">
-          <button
-            type="button" role="tab" aria-selected={tab === 'overview'}
-            className={tab === 'overview' ? 'is-on' : ''}
-            onClick={() => choose('overview')}
-          >
-            Overview
-          </button>
-          <button
-            type="button" role="tab" aria-selected={tab === 'cases'}
-            className={tab === 'cases' ? 'is-on' : ''}
-            onClick={() => choose('cases')}
-          >
-            Cases
-          </button>
-        </div>
+        <DraggableTabs
+          tabs={viewOrder}
+          active={tab}
+          onChange={choose}
+          onReorder={reorderViews}
+          label="Batman Mode views"
+        />
       </header>
 
       {tab === 'overview' ? (

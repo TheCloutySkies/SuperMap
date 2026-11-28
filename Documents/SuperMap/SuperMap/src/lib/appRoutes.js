@@ -52,7 +52,8 @@ const VIEW_TO_MAP_TOOL = Object.freeze({
 })
 
 const VIEW_TO_PATH = Object.freeze({
-  home: '/',
+  desktop: '/',
+  home: '/dashboard',
   'community-map': '/maps',
   'osint-map': '/maps/osint',
   'conflict-map': '/maps/conflict',
@@ -84,7 +85,8 @@ const VIEW_TO_PATH = Object.freeze({
 })
 
 const PATH_TO_VIEW = Object.freeze({
-  '/': 'home',
+  '/': 'desktop',
+  '/dashboard': 'home',
   '/maps': 'community-map',
   '/crime': CRIME_VIEW_ID,
   '/weather': WEATHER_VIEW_ID,
@@ -213,6 +215,7 @@ export function modeFromView(viewId) {
   if (MAP_VIEW_IDS.has(resolved)) return APP_MODES.MAPS
   if (FEED_VIEW_IDS.has(resolved) || resolved === 'search-results') return APP_MODES.FEEDS
   if (resolved === 'home') return APP_MODES.HOME
+  if (resolved === 'desktop') return APP_MODES.HOME
   if (resolved === 'forensics') return APP_MODES.TOOLS
   if (resolved === 'tools') return APP_MODES.TOOLS
   if (resolved === 'resources') return APP_MODES.RESOURCES

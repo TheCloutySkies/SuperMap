@@ -548,3 +548,19 @@ select,
 .mobile-page-title { font: 700 11px var(--xp-font); color: #1a1a1a; }
 
 .xp-error-text { margin: 0; font: 11px/1.45 var(--xp-font); color: #1a1a1a; }
+
+/* ── desktop icons on cells, dragged from one to the next ─── */
+.xp-desktop-icons.is-manual {
+  position: absolute;
+  inset: 12px 0 40px 12px;
+  display: block;
+}
+.xp-desktop-icons.is-manual .xp-desk-icon {
+  position: absolute;
+  margin: 0;
+  touch-action: none;
+}
+.xp-desktop-icons.is-manual .xp-desk-icon.is-dragging { z-index: 3; opacity: 0.85; }
+.xp-context-sep { height: 1px; margin: 3px 4px; background: var(--xp-shadow); }
+.xp-context-check { display: inline-block; width: 12px; }
+.xp-context button { display: flex; align-items: center; gap: 2px; }

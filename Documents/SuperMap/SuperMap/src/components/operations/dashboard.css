@@ -177,3 +177,30 @@
   .op-mobile-modes button { background: none; border: 0; color: var(--op-dim); padding: 8px; }
   .op-split { grid-template-columns: 1fr; }
 }
+
+
+/* XP pass: dashboard panels are Windows panes with a face-coloured title row. */
+.xp-window-body .op-panel,
+.dashboard-window .op-panel {
+  background: #fff;
+  border: 1px solid var(--xp-shadow);
+  border-radius: 0;
+  box-shadow: none;
+  color: #1a1a1a;
+  font-family: var(--xp-font);
+}
+.xp-window-body .op-panel-head,
+.dashboard-window .op-panel-head {
+  background: var(--xp-face);
+  border-bottom: 1px solid var(--xp-shadow);
+  color: #1a1a1a;
+  border-radius: 0;
+}
+.xp-window-body .op-panel-title,
+.dashboard-window .op-panel-title { color: #003399; font-size: 12px; }
+.xp-window-body .op-panel-index,
+.dashboard-window .op-panel-index { color: #444; }
+.xp-window-body .op-panel-body,
+.dashboard-window .op-panel-body { color: #1a1a1a; }
+.xp-window-body .op-panel-meta,
+.dashboard-window .op-panel-meta { color: #555; }

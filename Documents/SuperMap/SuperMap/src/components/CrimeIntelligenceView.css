@@ -43,22 +43,6 @@
   box-sizing: border-box;
 }
 
-.ci-brand h1 {
-  margin: 0;
-  font-family: var(--ci-serif);
-  font-size: clamp(1.55rem, 2.2vw, 2rem);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--ci-accent-bright);
-  text-shadow: 0 0 24px rgba(110, 217, 160, 0.25);
-}
-
-.ci-brand p {
-  margin: 0.2rem 0 0;
-  font-size: 0.72rem;
-  color: var(--ci-muted);
-}
-
 .ci-segments {
   display: flex;
   flex-wrap: nowrap;
@@ -1536,9 +1520,7 @@
     padding: 0.7rem 0.85rem 0.55rem;
   }
 
-  .ci-brand h1 {
-    font-size: 1.25rem;
-  }
+  
 
   .ci-scroll {
     padding: 0.85rem 0.85rem 5.5rem;
@@ -1552,3 +1534,54 @@
     flex-direction: column;
   }
 }
+
+/* XP pass: the crime desk is a light research face on Windows chrome. Its map
+   panel stays dark, because imagery reads better on it. */
+.xp-window-body .ci-view {
+  --ci-bg0: #ffffff;
+  --ci-bg1: #f4f2e8;
+  --ci-panel: #ffffff;
+  --ci-panel-solid: #ffffff;
+  --ci-border: #d6d2c2;
+  --ci-accent: #316ac5;
+  --ci-accent-bright: #1f4fa8;
+  --ci-accent-soft: #dbe7ff;
+  --ci-text: #1a1a1a;
+  --ci-muted: #555555;
+  background: #fff;
+  color: #1a1a1a;
+  font-family: var(--xp-font);
+}
+.xp-window-body .ci-topbar {
+  align-items: center;
+  background: var(--xp-face);
+  border-bottom: 1px solid var(--xp-shadow);
+  padding: 4px 6px;
+}
+.xp-window-body .ci-segments {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  border-radius: 0;
+}
+.xp-window-body .ci-segments button {
+  border-radius: 0;
+  color: #1a1a1a;
+}
+.xp-window-body .ci-segments button:hover { background: #e8f0f8; color: #1a1a1a; }
+.xp-window-body .ci-segments button.is-active {
+  background: #fff;
+  border-color: var(--xp-shadow);
+  color: #003399;
+  transform: none;
+}
+.xp-window-body .ci-scroll { background: #fff; padding: 8px; }
+.xp-window-body .ci-panel { background: #fff; }
+.xp-window-body .ci-chart {
+  background: #fff;
+  border: 1px solid var(--xp-shadow);
+  border-radius: 0;
+}
+.xp-window-body .ci-chart-svg { background: #fff; }
+.xp-window-body .ci-chart-axis { fill: #444; }
+.xp-window-body .ci-compare-table { border-radius: 0; }

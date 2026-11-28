@@ -1303,27 +1303,25 @@ export default function CrimeIntelligenceView({ focusSegment = null, focusEntity
   }, [national, compareStateA, compareStateB, offenseBreakdown, pins, hateCrimeTop])
 
   return (
-    <div className="ci-view" role="region" aria-label="Crime Intelligence">
-      <header className="ci-topbar">
-        <div className="ci-brand">
-          <h1>Crime</h1>
-          <p>Intelligence research desk · PlainCrime + FBI UCR</p>
-        </div>
-        <nav className="ci-segments" aria-label="Crime sections">
+    <div className="ci-view xp-page" role="region" aria-label="Crime Intelligence">
+      <div className="ci-topbar xp-page-tools">
+        <menu role="tablist" className="ci-segments xp-tabs" aria-label="Crime sections">
           {SEGMENTS.map((s) => (
             <button
               key={s.id}
               type="button"
+              role="tab"
+              aria-selected={segment === s.id}
               className={segment === s.id ? 'is-active' : ''}
               onClick={() => goSegment(s.id)}
             >
               {s.label}
             </button>
           ))}
-        </nav>
-      </header>
+        </menu>
+      </div>
 
-      <div className="ci-scroll" ref={panelRef}>
+      <div className="ci-scroll xp-page-body" ref={panelRef}>
         {loading && <p className="ci-muted ci-enter">Loading crime pack…</p>}
         {error && <p className="ci-error ci-enter">{error}</p>}
 

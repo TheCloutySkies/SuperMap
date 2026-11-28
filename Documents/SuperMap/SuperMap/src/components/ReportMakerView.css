@@ -44,3 +44,21 @@
   .report-maker-label input { min-width: 0; }
   .report-maker-title { width: 100%; }
 }
+
+/* A field per row: label above, field full width, its button under it. */
+.report-maker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px 14px;
+  margin: 0 0 10px;
+  align-items: start;
+}
+.report-maker-grid--3 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.report-maker-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.report-maker-label { min-width: 0; }
+.report-maker-label input { min-width: 0; width: 100%; box-sizing: border-box; }
+.report-maker-field-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.report-maker-place { border: 1px solid var(--xp-shadow); padding: 6px 8px; margin: 0 0 10px; }
+.report-maker-place legend { padding: 0 4px; font-weight: 700; color: #003399; }
+.report-maker textarea { min-height: 200px; }
+.report-maker .report-maker-title { min-width: 200px; }

@@ -199,45 +199,56 @@ export default function ReportMakerView() {
             Attach links, locations, and screenshots that support the narrative. Keep each item high-signal.
           </p>
 
-          <div className="report-maker-row">
-            <label className="report-maker-label">
-              Article URL
-              <input value={articleInput} onChange={(e) => setArticleInput(e.target.value)} placeholder="Paste article link and click Add" />
-            </label>
-            <button type="button" onClick={addArticle}>Add Article</button>
+          <div className="report-maker-grid">
+            <div className="report-maker-field">
+              <label className="report-maker-label">
+                Article URL
+                <input value={articleInput} onChange={(e) => setArticleInput(e.target.value)} placeholder="Paste an article link" />
+              </label>
+              <div className="report-maker-field-actions">
+                <button type="button" onClick={addArticle}>Add Article</button>
+              </div>
+            </div>
+
+            <div className="report-maker-field">
+              <label className="report-maker-label">
+                X / Twitter
+                <input value={xInput} onChange={(e) => setXInput(e.target.value)} placeholder="Paste a post link" />
+              </label>
+              <div className="report-maker-field-actions">
+                <button type="button" onClick={addX}>Add X link</button>
+                <button type="button" className="report-maker-btn-secondary" onClick={importPinnedXPosts}>Import pinned</button>
+              </div>
+            </div>
+
+            <div className="report-maker-field">
+              <label className="report-maker-label">
+                Screenshots
+                <input type="file" accept="image/*" multiple onChange={(e) => onScreenshotFiles(e.target.files)} />
+              </label>
+            </div>
           </div>
 
-          <div className="report-maker-row">
-            <label className="report-maker-label">
-              X / Twitter
-              <input value={xInput} onChange={(e) => setXInput(e.target.value)} placeholder="Post URL (or use Import pinned below)" />
-            </label>
-            <button type="button" onClick={addX}>Add X link</button>
-            <button type="button" className="report-maker-btn-secondary" onClick={importPinnedXPosts}>Import pinned X posts</button>
-          </div>
-
-          <div className="report-maker-row report-maker-row-3">
-            <label className="report-maker-label">
-              Name
-              <input value={locationName} onChange={(e) => setLocationName(e.target.value)} placeholder="e.g. Kharkiv industrial district" />
-            </label>
-            <label className="report-maker-label">
-              Lat
-              <input value={locationLat} onChange={(e) => setLocationLat(e.target.value)} placeholder="Lat" />
-            </label>
-            <label className="report-maker-label">
-              Lon
-              <input value={locationLon} onChange={(e) => setLocationLon(e.target.value)} placeholder="Lon" />
-            </label>
-            <button type="button" onClick={addLocation}>Add Location</button>
-          </div>
-
-          <div className="report-maker-row">
-            <label className="report-maker-label">
-              Screenshots
-              <input type="file" accept="image/*" multiple onChange={(e) => onScreenshotFiles(e.target.files)} />
-            </label>
-          </div>
+          <fieldset className="report-maker-place">
+            <legend>Place</legend>
+            <div className="report-maker-grid report-maker-grid--3">
+              <label className="report-maker-label">
+                Name
+                <input value={locationName} onChange={(e) => setLocationName(e.target.value)} placeholder="e.g. Kharkiv industrial district" />
+              </label>
+              <label className="report-maker-label">
+                Lat
+                <input value={locationLat} onChange={(e) => setLocationLat(e.target.value)} placeholder="Lat" />
+              </label>
+              <label className="report-maker-label">
+                Lon
+                <input value={locationLon} onChange={(e) => setLocationLon(e.target.value)} placeholder="Lon" />
+              </label>
+            </div>
+            <div className="report-maker-field-actions">
+              <button type="button" onClick={addLocation}>Add Location</button>
+            </div>
+          </fieldset>
 
           <div className="report-maker-lists">
             <div>

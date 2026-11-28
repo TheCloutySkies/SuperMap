@@ -167,7 +167,6 @@ export default function usePanelLayout(defaultOrder) {
   }, [])
 
   const props = useCallback((id) => ({
-    area: PANEL_AREAS[order.indexOf(id)] || PANEL_AREAS[0],
     panelId: id,
     onDragHandle: (event) => startDrag(id, event),
     onResize: (event) => startResize(id, event),

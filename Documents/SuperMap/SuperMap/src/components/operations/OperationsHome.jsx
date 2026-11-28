@@ -105,8 +105,6 @@ export default function OperationsHome({
   const [bootstrapState, setBootstrapState] = useState(HOME_STATE.SEED)
   const [consoleState, setConsoleState] = useState(null)
   const [clock, setClock] = useState(clockUtc)
-  const [railOpen, setRailOpen] = useState(true)
-  const [railCollapsed, setRailCollapsed] = useState(false)
   const [activeTab, setActiveTab] = useState('situation')
   const layout = usePanelLayout(['situation', 'map', 'news', 'x', 'markets', 'hazards', 'orbital', 'batman', 'bulletin', 'crime'])
   const [tabOrder, setTabOrder] = useState(['situation', 'conflict', 'outages'])
@@ -213,31 +211,6 @@ export default function OperationsHome({
       </header>
 
       <div className="op-workspace">
-        <nav className={`op-rail${railCollapsed ? ' is-collapsed' : ''}`} aria-label="Primary modes">
-          <div className="op-rail-head">
-            <button type="button" className="op-btn" onClick={() => setRailCollapsed(!railCollapsed)} aria-label="Toggle navigation rail">
-              {railCollapsed ? <ChevronRight size={14} strokeWidth={1.5} /> : <ChevronLeft size={14} strokeWidth={1.5} />}
-            </button>
-            {!railCollapsed ? <span className="op-rail-label">Modes</span> : null}
-          </div>
-          <ul>
-            {MODES.map((mode, index) => {
-              const Icon = mode.icon
-              const count = mode.id === 'BATMAN' ? cases.length : mode.id === 'FEEDS' ? headlines.length : null
-              return (
-                <li key={mode.id}>
-                  <button type="button" className={mode.id === 'HOME' ? 'is-on' : ''} onClick={() => open(mode.view)} title={mode.label}>
-                    <Icon size={15} strokeWidth={1.5} aria-hidden />
-                    {!railCollapsed ? <span className="op-rail-label">{mode.label}</span> : null}
-                    {!railCollapsed && count != null ? <b className="op-num">{count}</b> : null}
-                    {!railCollapsed ? <em className="op-num">{index + 1}</em> : null}
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-        </nav>
-
         <main className="op-grid">
           {showSituation ? (
             <Panel index="01" title="Situation" {...layout.props('situation')} meta={threat?.threat_level || '—'} onOpen={go('batman-overview')} refreshing={bootstrapState === HOME_STATE.WAKING}>
@@ -389,7 +362,6 @@ export default function OperationsHome({
             const Icon = mode.icon
             return <button key={mode.id} type="button" onClick={() => open(mode.view)} aria-label={mode.label}><Icon size={16} strokeWidth={1.5} /></button>
           })}
-          <button type="button" onClick={() => setRailOpen(!railOpen)} aria-label="More modes"><Menu size={16} strokeWidth={1.5} /></button>
         </nav>
       ) : null}
     </div>

@@ -41,26 +41,6 @@
 
 /* Rail */
 .op-workspace { display: flex; flex: 1; min-height: 0; }
-.op-rail {
-  width: 180px; min-width: 180px; display: flex; flex-direction: column;
-  border-right: 1px solid var(--op-border); background: var(--op-surface); overflow-y: auto;
-  transition: width .15s ease, min-width .15s ease;
-}
-.op-rail.is-collapsed { width: 56px; min-width: 56px; }
-.op-rail-head { display: flex; align-items: center; gap: 8px; padding: 8px; border-bottom: 1px solid var(--op-border); }
-.op-rail-label { font-size: 11px; color: var(--op-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.op-rail ul { list-style: none; margin: 0; padding: 6px; display: flex; flex-direction: column; gap: 1px; }
-.op-rail li button {
-  display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 8px;
-  background: transparent; border: 1px solid transparent; border-radius: var(--op-radius);
-  color: var(--op-dim); cursor: pointer; font: inherit; font-size: 11px; text-align: left;
-}
-.op-rail li button:hover { background: var(--op-surface-2); color: var(--op-ink); }
-.op-rail li button.is-on { background: var(--op-surface-2); border-color: var(--op-accent); color: var(--op-ink); }
-.op-rail li button svg { flex: none; }
-.op-rail li button .op-rail-label { flex: 1; }
-.op-rail li button b { font-size: 10px; font-weight: 500; color: var(--op-accent); }
-.op-rail li button em { font-size: 9px; font-style: normal; color: var(--op-faint); }
 
 /* Grid */
 .op-grid {
@@ -165,7 +145,6 @@
   .op-command-search { order: 3; max-width: none; flex-basis: 100%; }
   .op-command-right { margin-left: auto; }
   .op-workspace { display: block; }
-  .op-rail { display: none; }
   .op-grid {
     display: flex; flex-direction: column; overflow: visible; padding: 10px; gap: 10px;
   }
@@ -177,7 +156,6 @@
   .op-mobile-modes button { background: none; border: 0; color: var(--op-dim); padding: 8px; }
   .op-split { grid-template-columns: 1fr; }
 }
-
 
 /* XP pass: dashboard panels are Windows panes with a face-coloured title row. */
 .xp-window-body .op-panel,

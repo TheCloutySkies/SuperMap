@@ -15,9 +15,7 @@ import './overview/overview.css'
 
 const VIEW_KEY = 'supermap.batman.view.v1'
 
-function initialView(view) {
-  if (view === 'batman-cases') return 'cases'
-  if (view === 'batman-overview' || view === 'batman') return 'overview'
+function savedView() {
   try {
     return localStorage.getItem(VIEW_KEY) === 'cases' ? 'cases' : 'overview'
   } catch {
@@ -25,13 +23,16 @@ function initialView(view) {
   }
 }
 
+function initialView(view) {
+  if (view === 'batman-cases') return 'cases'
+  if (view === 'batman-overview') return 'overview'
+  return savedView() // /batman and the legacy /strategic alias honor the last view
+}
+
 export default function BatmanView({ view }) {
   const navigate = useNavigate()
   const { user } = useSuperMapAccount()
   const [tab, setTab] = useState(() => initialView(view))
-
-  // The route is the source of truth; remount when it changes (keyed in App),
-  // and the localStorage preference is only the fallback for /batman itself.
   const choose = useCallback((next) => {
     setTab(next)
     try { localStorage.setItem(VIEW_KEY, next) } catch { /* private mode */ }

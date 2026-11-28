@@ -632,7 +632,7 @@ function App() {
         )}
         {isBatmanPage && (
           <div className={`main-content-scroll main-content-scroll--batman ${isStrategicPage ? 'main-content-scroll--strategic' : ''}`}>
-            <BatmanView view={activeView} />
+            <BatmanView key={activeView} view={activeView} />
           </div>
         )}
         {activeView === 'osint-feeds' && (

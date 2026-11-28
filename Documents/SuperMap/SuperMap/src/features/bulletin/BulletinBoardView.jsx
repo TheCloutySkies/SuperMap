@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSuperMapAccount } from '../accounts/SuperMapAccounts'
 import { personTitle } from '../accounts/accountIdentity'
+import XpListview from '../../components/xp/XpListview'
 import {
   addThreadPost,
   createBoard,
@@ -186,50 +187,64 @@ export default function BulletinBoardView() {
 
   return (
     <div className="bb">
-      <header className="bb-mast">
-        <p className="bb-kicker">Good Palantir</p>
-        <h1>The Bulletin Board</h1>
-        <p className="bb-lede">An exclusive community to discuss world/local events.</p>
-      </header>
+      <div className="xp-page-tools">
+        <p>World and local events, by group.</p>
+      </div>
 
       {error ? <p className="bb-error">{error}</p> : null}
 
       {!boardId ? (
         <section>
-          <table className="bb-index">
-            <thead>
-              <tr>
-                <th>Group</th>
-                <th>Threads</th>
-                <th>Last post</th>
-              </tr>
-            </thead>
-            <tbody>
-              {boards.map((item) => (
-                <tr key={item.id}>
-                  <td>
-                    <button type="button" className="bb-group" onClick={() => { setBoardId(item.id); setThreadId(null) }}>
-                      <span className="bb-emoji" aria-hidden>{item.emoji || '▤'}</span>
-                      <span>
-                        <strong>{item.name}</strong>
-                        <em>{item.description}</em>
-                      </span>
-                    </button>
-                  </td>
-                  <td className="bb-num">{item.threadCount || 0}</td>
-                  <td className="bb-last">
-                    {item.lastTitle ? (
-                      <>
-                        <PersonButton uid={item.lastAuthorUid} name={item.lastAuthorName} emoji={item.lastEmoji} onOpen={openPublicProfile} />
-                        <em>{item.lastTitle}</em>
-                        <time>{when(item.lastPostAtMs)}</time>
-                      </>
-                    ) : <em>No posts yet</em>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <XpListview
+            label="Groups"
+            columns={[
+              {
+                key: 'name',
+                label: 'Group',
+                render: (row) => (
+                  <button
+                    type="button"
+                    className="bb-group"
+                    onClick={() => { setBoardId(row.id); setThreadId(null) }}
+                  >
+                    <span className="bb-emoji" aria-hidden>{row.emoji || '▤'}</span>
+                    <span>
+                      <strong>{row.name}</strong>
+                      <em>{row.description}</em>
+                    </span>
+                  </button>
+                ),
+              },
+              {
+                key: 'threadCount',
+                label: 'Threads',
+                width: '80px',
+                mono: true,
+                render: (row) => row.threadCount || 0,
+              },
+              {
+                key: 'lastTitle',
+                label: 'Last post',
+                render: (row) => (row.lastTitle ? (
+                  <span className="bb-last">
+                    <PersonButton
+                      uid={row.lastAuthorUid}
+                      name={row.lastAuthorName}
+                      emoji={row.lastEmoji}
+                      onOpen={openPublicProfile}
+                    />
+                    <em>{row.lastTitle}</em>
+                    <time>{when(row.lastPostAtMs)}</time>
+                  </span>
+                ) : <em>No posts yet</em>),
+              },
+            ]}
+            rows={boards.map((item) => ({ ...item, id: item.id }))}
+            rowKey={(row) => row.id}
+            sortable={false}
+            onOpen={(row) => { setBoardId(row.id); setThreadId(null) }}
+            emptyLabel="No groups yet."
+          />
           <form className="bb-compose" onSubmit={onCreateGroup}>
             <h2>New group</h2>
             <label>Name<input value={groupName} onChange={(event) => setGroupName(event.target.value)} required maxLength={80} /></label>

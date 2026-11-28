@@ -42,12 +42,12 @@ export default function MobileShell({
           onToggleLayers={onToggleLayers}
         />
       ) : (
-        <header className="mobile-page-header">
+        <div className="mobile-page-header xp-page-tools">
           <h1 className="mobile-page-title">{pageTitle || 'Good Palantir'}</h1>
           {chipItems.length > 0 && (
             <MobileChipBar items={chipItems} ariaLabel={`${pageTitle || 'Page'} views`} />
           )}
-        </header>
+        </div>
       )}
       <div className={`mobile-page-body ${isMapPage ? 'mobile-page-body--map' : ''}`}>
         {children}

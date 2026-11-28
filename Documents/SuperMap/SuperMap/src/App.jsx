@@ -924,7 +924,7 @@ function App() {
           onToggleMaximized={() => setXpMaximized((value) => !value)}
           onHome={() => navigate('/')}
         >
-          <main className={`main ${activeView === 'home' ? 'main--operations' : ''} ${isMapView ? 'main--map xp-dark-island' : ''} ${isCrimeView ? 'main--crime' : ''}`}>
+          <main className={`main ${activeView === 'home' ? 'main--operations' : ''} ${isMapView ? 'main--map xp-dark-island' : ''} ${isBatmanPage ? 'main--batman xp-dark-island' : ''} ${isCrimeView ? 'main--crime' : ''}`}>
             {mainContent}
           </main>
         </XpWindow>

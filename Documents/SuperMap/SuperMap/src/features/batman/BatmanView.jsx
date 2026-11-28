@@ -44,7 +44,7 @@ export default function BatmanView({ view }) {
   }, [navigate])
 
   return (
-    <div className="batman-mode">
+    <div className="batman-mode xp-dark-island">
       <header className="batman-head bm-shell-head">
         <div className="batman-title">
           <h1><Shield size={16} strokeWidth={1.5} aria-hidden /> Batman Mode</h1>

@@ -1,0 +1,121 @@
+/**
+ * Phase 1 — one flat chrome. Imported last by App so it overrides the metallic
+ * y2k rules without deleting the theme used by legacy views.
+ */
+.app {
+  --op-bg: #0c0f14;
+  --op-surface: #12161d;
+  --op-surface-2: #181d26;
+  --op-border: #242c37;
+  --op-ink: #e8ecf1;
+  --op-dim: #9aa7b4;
+  --op-faint: #5f6b7a;
+  --op-accent: #4a90d9;
+  --op-alert: #d9822b;
+  --op-danger: #c0392b;
+  --op-ok: #3d8b5f;
+  --op-radius: 4px;
+  --op-font: 'Inter', 'IBM Plex Sans', system-ui, sans-serif;
+  --op-mono: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+}
+
+.app-omnibar-strip {
+  height: 48px;
+  min-height: 48px;
+  background: var(--op-surface) !important;
+  border-bottom: 1px solid var(--op-border) !important;
+  box-shadow: none !important;
+}
+.app-omnibar-inner { max-width: none; gap: 12px; }
+.app-omnibar-logo img { filter: none; }
+.app-omnibar-copyright { display: none; }
+
+.omnibar {
+  min-height: 34px;
+  padding: 4px 8px;
+  background: var(--op-bg) !important;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius) !important;
+  box-shadow: none !important;
+}
+.omnibar:focus-within {
+  border-color: var(--op-accent) !important;
+  box-shadow: none !important;
+}
+.omnibar-input { font-size: 12px; }
+.omnibar-search-btn,
+.omnibar-search-btn--primary,
+.omnibar-search-btn--primary:hover {
+  color: var(--op-ink) !important;
+  background: var(--op-surface-2) !important;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius) !important;
+  box-shadow: none !important;
+  font-weight: 500;
+}
+.omnibar-search-btn:hover { border-color: var(--op-accent) !important; }
+.omnibar-thiel { border-radius: var(--op-radius) !important; letter-spacing: 0; }
+.omnibar-thiel.is-on {
+  color: var(--op-accent) !important;
+  background: transparent !important;
+  border-color: var(--op-accent) !important;
+}
+.omnibar-thiel-links { border-radius: 0; }
+.omnibar-thiel-links button {
+  background: transparent !important;
+  border-radius: var(--op-radius) !important;
+  border-color: var(--op-border) !important;
+}
+
+/* Rail: flat, quiet, steel-blue selection. */
+.mode-rail { width: 64px !important; min-width: 64px !important; }
+.mode-rail-brand-text { display: none; }
+.mode-rail-btn { border-radius: var(--op-radius) !important; text-transform: none !important; letter-spacing: 0 !important; }
+.mode-rail-btn:hover { background: var(--op-surface-2) !important; transform: none !important; }
+.mode-rail-btn.active {
+  color: var(--op-accent) !important;
+  background: var(--op-surface-2) !important;
+  border-left: 2px solid var(--op-accent);
+}
+.mode-rail-label { font-size: 9px !important; font-weight: 500 !important; letter-spacing: 0 !important; text-transform: none !important; }
+.mode-rail-indicator { background: var(--op-accent) !important; animation: none !important; }
+
+/* In-view nav tabs and footer buttons. */
+.nav-tab,
+.nav-tab.active,
+.footer-btn,
+.footer-btn.active {
+  color: var(--op-ink) !important;
+  background: var(--op-surface-2) !important;
+  border: 1px solid var(--op-border) !important;
+  border-radius: var(--op-radius) !important;
+  box-shadow: none !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+.nav-tab.active,
+.footer-btn.active {
+  color: var(--op-accent) !important;
+  border-color: var(--op-accent) !important;
+  border-bottom: 2px solid var(--op-accent);
+}
+.nav-tab:hover,
+.footer-btn:hover { background: var(--op-bg) !important; border-color: var(--op-accent) !important; padding-left: inherit !important; }
+
+/* Banner/subnav are quiet strips when a view still renders them. */
+.omnibar-banner,
+.mode-subnav {
+  background: var(--op-surface) !important;
+  border-color: var(--op-border) !important;
+  box-shadow: none !important;
+}
+
+/* Mobile: one top header, bottom tabs replace the rail and chip strip. */
+@media (max-width: 900px) {
+  .mode-rail { display: none !important; }
+  .app-omnibar-strip { height: 44px; min-height: 44px; padding: 0 8px; }
+  .omnibar-banner { display: none !important; }
+  .mobile-page-header { padding-top: env(safe-area-inset-top, 0px); }
+  .mobile-chip-bar { display: none !important; }
+  .mobile-page-body { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)) !important; }
+}

@@ -1,5 +1,3 @@
-import './SearchResultsView.css'
-
 function formatResultAge(ts) {
   if (ts == null) return null
   const ms = Number(ts)
@@ -19,112 +17,102 @@ function formatResultAge(ts) {
 }
 
 /**
- * Full-page search results (hidden from main nav). Opened when user searches from the Omnibar.
- * Shows widget/section matches first, then map/event features.
+ * Search results inside the window: a toolbar with the query and count, then
+ * the app's own sections and the map/feed matches as Windows list rows.
  */
 export default function SearchResultsView({ query, features = [], widgetMatches = [], onFlyTo, onShowOnMap, onBack, onNavigateToWidget }) {
   const hasCoords = (f) => f?.geometry?.coordinates?.length >= 2
   const totalCount = features.length + widgetMatches.length
 
   return (
-    <div className="search-results-view">
-      <header className="search-results-header">
-        <button type="button" className="search-results-back" onClick={onBack} aria-label="Back">
-          ← Back
-        </button>
-        <h1 className="search-results-title">Search results</h1>
-        <p className="search-results-query">“{query || '—'}”</p>
-        <p className="search-results-meta">
-          {totalCount} result{totalCount !== 1 ? 's' : ''}
+    <div className="xp-page">
+      <div className="xp-page-tools">
+        <button type="button" onClick={onBack}>Back</button>
+        <p>
+          “{query || '—'}” · {totalCount} result{totalCount !== 1 ? 's' : ''}
         </p>
-      </header>
-      {totalCount === 0 ? (
-        <div className="search-results-empty">
-          <p>No results. Try a different search in the bar above.</p>
-          <p className="search-results-empty-hint">Start both the app and the API with <strong>npm run dev</strong> from the project root (the folder that contains SuperMap and situational-awareness-api). The API runs on port 3001 so search and geocoding work.</p>
-        </div>
-      ) : (
-        <ul className="search-results-list">
-          {widgetMatches.map((w) => (
-            <li key={w.id} className="search-results-item search-results-item--widget">
-              <div className="search-results-item-main">
-                <span className="search-results-item-type">Homepage</span>
-                <h3 className="search-results-item-title">{w.title}</h3>
-                {w.description && (
-                  <p className="search-results-item-desc">{w.description}</p>
-                )}
-              </div>
-              <div className="search-results-item-actions">
-                {onNavigateToWidget && (
-                  <button
-                    type="button"
-                    className="search-results-item-btn search-results-item-btn--primary"
-                    onClick={() => onNavigateToWidget(w.id)}
-                  >
-                    View
-                  </button>
-                )}
-              </div>
-            </li>
-          ))}
-          {features.map((feature, i) => {
-            const props = feature.properties || {}
-            const title = props.title || props.name || 'Untitled'
-            const coords = feature.geometry?.coordinates
-            const canShowOnMap = hasCoords(feature)
-            const age = formatResultAge(props.timestamp || props.pubDate || props.publishedAt)
-            const typeLabel = props.type || props.source || 'Result'
-            const isNewsOrX = /news|x|osint|twitter/i.test(String(typeLabel)) || props.source === 'x'
-            return (
-              <li key={feature.id || i} className="search-results-item">
-                <div className="search-results-item-main">
-                  <div className="search-results-item-type-row">
-                    <span className="search-results-item-type">{typeLabel}</span>
-                    {age ? (
-                      <span
-                        className={`search-results-item-age${isNewsOrX ? '' : ' search-results-item-age--muted'}`}
-                        title="Recency"
-                      >
-                        {age}
-                      </span>
-                    ) : null}
-                  </div>
-                  <h3 className="search-results-item-title">{title}</h3>
-                  {props.source && (
-                    <span className="search-results-item-source">{props.source}</span>
-                  )}
-                  {props.description && (
-                    <p className="search-results-item-desc">{String(props.description).slice(0, 200)}…</p>
-                  )}
-                </div>
-                <div className="search-results-item-actions">
-                  {canShowOnMap && onShowOnMap && (
-                    <button
-                      type="button"
-                      className="search-results-item-btn"
-                      onClick={() => onShowOnMap(feature)}
-                    >
-                      Show on map
-                    </button>
-                  )}
-                  {canShowOnMap && onFlyTo && (
-                    <button
-                      type="button"
-                      className="search-results-item-btn search-results-item-btn--primary"
-                      onClick={() => {
-                        const [lng, lat] = coords
-                        onFlyTo({ lng, lat, zoom: 12, properties: props })
-                      }}
-                    >
-                      Fly to
-                    </button>
-                  )}
-                </div>
-              </li>
-            )
-          })}
-        </ul>
-      )}
+      </div>
+      <div className="xp-page-body">
+        {totalCount === 0 ? (
+          <>
+            <p className="xp-note">No results. Try a different search in the bar above.</p>
+            <p className="xp-note">
+              Start both the app and the API with npm run dev from the project root (the folder that
+              contains SuperMap and situational-awareness-api). The API runs on port 3001 so search
+              and geocoding work.
+            </p>
+          </>
+        ) : (
+          <>
+            {widgetMatches.length > 0 && (
+              <fieldset>
+                <legend>In the app</legend>
+                <ul className="xp-list">
+                  {widgetMatches.map((w) => (
+                    <li key={w.id}>
+                      <div className="xp-list-main">
+                        <span className="xp-list-title">{w.title}</span>
+                        {w.description && <span className="xp-list-desc">{w.description}</span>}
+                      </div>
+                      <div className="xp-list-actions">
+                        {onNavigateToWidget && (
+                          <button type="button" onClick={() => onNavigateToWidget(w.id)}>View</button>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </fieldset>
+            )}
+            {features.length > 0 && (
+              <fieldset>
+                <legend>Map and feeds</legend>
+                <ul className="xp-list">
+                  {features.map((feature, i) => {
+                    const props = feature.properties || {}
+                    const title = props.title || props.name || 'Untitled'
+                    const coords = feature.geometry?.coordinates
+                    const canShowOnMap = hasCoords(feature)
+                    const age = formatResultAge(props.timestamp || props.pubDate || props.publishedAt)
+                    const typeLabel = props.type || props.source || 'Result'
+                    return (
+                      <li key={feature.id || i}>
+                        <div className="xp-list-main">
+                          <span className="xp-list-title">{title}</span>
+                          <span className="xp-list-desc">
+                            {typeLabel}
+                            {props.source && props.source !== typeLabel ? ` · ${props.source}` : ''}
+                            {age ? ` · ${age}` : ''}
+                          </span>
+                          {props.description && (
+                            <span className="xp-list-desc">{String(props.description).slice(0, 200)}…</span>
+                          )}
+                        </div>
+                        <div className="xp-list-actions">
+                          {canShowOnMap && onShowOnMap && (
+                            <button type="button" onClick={() => onShowOnMap(feature)}>Show on map</button>
+                          )}
+                          {canShowOnMap && onFlyTo && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const [lng, lat] = coords
+                                onFlyTo({ lng, lat, zoom: 12, properties: props })
+                              }}
+                            >
+                              Fly to
+                            </button>
+                          )}
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </fieldset>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }

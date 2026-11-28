@@ -1,5 +1,3 @@
-import './BroadcastsView.css'
-
 const BROADCASTS = [
   { id: 'aljazeera', name: 'Al Jazeera English', officialLink: 'https://www.aljazeera.com/live', ytLink: 'https://www.youtube.com/@aljazeeraenglish/live' },
   { id: 'france24', name: 'France 24 English', officialLink: 'https://www.france24.com/en/live', ytLink: 'https://www.youtube.com/@FRANCE24/live' },
@@ -17,45 +15,23 @@ const BROADCASTS = [
 
 export default function BroadcastsView() {
   return (
-    <div className="broadcasts-view">
-      <header className="broadcasts-header">
-        <h2 className="broadcasts-title">Live Broadcasts</h2>
-        <p className="broadcasts-subtitle">
-          Open the <strong>Official stream</strong> or <strong>YouTube</strong> Live page in a new tab. There is no in-app player.
+    <div className="xp-page">
+      <div className="xp-page-body">
+        <p className="xp-note">
+          Each stream opens in a new tab. There is no in-app player.
         </p>
-      </header>
-      <div className="broadcasts-grid">
         {BROADCASTS.map((b) => (
-          <div key={b.id} className="broadcasts-card">
-            <div className="broadcasts-card-header">
-              <h3 className="broadcasts-card-title">{b.name}</h3>
+          <fieldset key={b.id}>
+            <legend>{b.name}</legend>
+            <div className="field-row">
+              {b.officialLink && (
+                <a href={b.officialLink} target="_blank" rel="noopener noreferrer">Official stream</a>
+              )}
+              {b.ytLink && (
+                <a href={b.ytLink} target="_blank" rel="noopener noreferrer">YouTube Live</a>
+              )}
             </div>
-            <div className="broadcasts-card-links-only">
-              <p className="broadcasts-card-links-hint">Open the live stream in a new tab:</p>
-              <div className="broadcasts-card-buttons">
-                {b.officialLink && (
-                  <a
-                    href={b.officialLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="broadcasts-card-btn broadcasts-card-btn--primary"
-                  >
-                    Official stream
-                  </a>
-                )}
-                {b.ytLink && (
-                  <a
-                    href={b.ytLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="broadcasts-card-btn"
-                  >
-                    YouTube
-                  </a>
-                )}
-              </div>
-            </div>
-          </div>
+          </fieldset>
         ))}
       </div>
     </div>

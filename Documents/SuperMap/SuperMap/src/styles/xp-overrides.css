@@ -376,3 +376,60 @@ body .app .xp-frame {
   .xp-applet { left: 0 !important; top: 0 !important; width: 100% !important; height: calc(100dvh - var(--xp-taskbar-h)) !important; border-radius: 0; }
   .xp-applet-resize { display: none; }
 }
+
+
+/* The Start menu and taskbar are the navigation now: the left rail is gone. */
+.mode-rail { display: none !important; }
+.sidebar-left { display: none !important; }
+
+/* Menus and pop-out panels: white face, 1px hairline, XP type. */
+.item-menu-pop,
+.sm-msg-menu-pop,
+.xp-context,
+.settings-menu-pop,
+.omnibar-results,
+.omnibar-pop,
+.popover-panel {
+  background: #fff !important;
+  border: 1px solid var(--xp-shadow) !important;
+  border-radius: 0 !important;
+  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3) !important;
+  color: #1a1a1a !important;
+  font: 11px/1.3 var(--xp-font) !important;
+}
+.item-menu-pop button,
+.sm-msg-menu-pop button,
+.omnibar-results button,
+.omnibar-pop button {
+  color: #1a1a1a !important;
+  border-radius: 0 !important;
+  font: 11px/1.3 var(--xp-font) !important;
+}
+.item-menu-pop button:hover,
+.sm-msg-menu-pop button:hover,
+.omnibar-results button:hover {
+  background: var(--xp-sel) !important;
+  color: #fff !important;
+}
+
+/* The right-hand panel keeps its function (layers, tools) but not its neon. */
+.sidebar-right,
+.right-sidebar {
+  background: var(--xp-face) !important;
+  border-left: 1px solid var(--xp-shadow) !important;
+  color: #1a1a1a !important;
+  font: 11px/1.3 var(--xp-font) !important;
+}
+.sidebar-right :is(h2, h3, h4),
+.right-sidebar :is(h2, h3, h4) { color: #003399 !important; }
+
+/* Native pickers read as system controls. */
+select,
+.xp-window-body select,
+.xp-applet-body select {
+  background: #fff;
+  color: #1a1a1a;
+  border: 1px solid #7f9db9;
+  border-radius: 0;
+  font: 11px var(--xp-font);
+}

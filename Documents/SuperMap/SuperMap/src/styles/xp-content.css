@@ -8,19 +8,18 @@
   color: #1a1a1a;
 }
 
+/* Type only: the ink itself comes from each view and from the token set above,
+   so a dark island keeps light text and a light view keeps dark text. */
 .xp-window-body :is(h1, h2, h3, h4) {
   font-family: var(--xp-font);
   font-weight: 700;
-  color: #003399;
   letter-spacing: normal;
   text-transform: none;
 }
 .xp-window-body :is(h1) { font-size: 15px; }
 .xp-window-body :is(h2) { font-size: 13px; }
 .xp-window-body :is(h3, h4) { font-size: 12px; }
-.xp-window-body :is(p, li, label, span, td, th) { color: #1a1a1a; }
-.xp-window-body a { color: #0000cc; text-decoration: underline; }
-.xp-window-body a:hover { color: #3333cc; }
+.xp-window-body a { text-decoration: underline; }
 
 /* Native controls inherit the XP look; only spacing is ours. */
 .xp-window-body :is(button, input, select, textarea) { font-family: var(--xp-font); font-size: 11px; }
@@ -34,21 +33,32 @@
 }
 .xp-window-body :is(legend) { padding: 0 4px; font-weight: 700; color: #1a1a1a; }
 
-/* Primitives the app's own views use, mapped to XP faces. */
-.xp-window-body :is(.widget-card, .bb-card, .sm-card, .op-panel, .resources-card, .tools-card) {
-  background: #fff !important;
-  border: 1px solid var(--xp-shadow) !important;
-  color: #1a1a1a !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-}
-.xp-window-body :is(.widget-card, .bb-card, .sm-card, .op-panel, .resources-card, .tools-card) :is(h2, h3, h4, strong) {
-  color: #003399 !important;
+/* Views that read the theme tokens flip with them, so nothing is forced white
+   on top of light text: the token set is the light XP palette. */
+body .xp-window-body,
+body .xp-applet-body,
+body .xp-dialog .window-body,
+body .xp-window-body .window-body {
+  --y2k-bg: #ffffff;
+  --y2k-surface: #ffffff;
+  --y2k-surface-2: #f4f2e8;
+  --y2k-surface-3: #ece9d8;
+  --y2k-text: #1a1a1a;
+  --y2k-text-muted: #444444;
+  --y2k-text-dim: #6b6b6b;
+  --y2k-border: #aca899;
+  --y2k-border-strong: #7f9db9;
+  --y2k-accent: #316ac5;
+  --y2k-accent-soft: #dbe7ff;
+  --y2k-shadow: rgba(0, 0, 0, 0.18);
+  color: #1a1a1a;
 }
 
-/* Text the dark themes set light must stay readable on a white face. */
-.xp-window-body :is(.op-muted, .op-faint, .sm-muted, .bb-muted, .feed-muted, .resources-muted) {
-  color: #444 !important;
+/* Cards keep their own text colours; only the frame becomes an XP hairline. */
+.xp-window-body :is(.widget-card, .bb-card, .sm-card) {
+  border: 1px solid var(--xp-shadow) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
 }
 
 /* The listview and the key/value rows are shared primitives. */

@@ -36,20 +36,6 @@
   backdrop-filter: blur(12px);
 }
 
-.weather-desk-brand h1 {
-  margin: 0;
-  font-size: 1.35rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--wx-accent-bright);
-}
-
-.weather-desk-brand p {
-  margin: 0.2rem 0 0;
-  font-size: 0.72rem;
-  color: var(--wx-muted);
-}
-
 .weather-desk-locate {
   display: flex;
   flex-wrap: wrap;
@@ -793,3 +779,48 @@
     max-height: min(52vh, 420px);
   }
 }
+
+/* XP pass: the forecast desk is a light face on Windows chrome; the radar zone
+   keeps its dark map surface. */
+.xp-window-body .weather-desk {
+  --wx-bg0: #ffffff;
+  --wx-bg1: #f4f2e8;
+  --wx-panel: #ffffff;
+  --wx-glass: #ffffff;
+  --wx-border: #d6d2c2;
+  --wx-accent: #316ac5;
+  --wx-text: #1a1a1a;
+  --wx-muted: #555555;
+  --wx-shadow: none;
+  background: #fff;
+  color: #1a1a1a;
+  font-family: var(--xp-font);
+}
+.xp-window-body .weather-desk-topbar {
+  align-items: center;
+  background: var(--xp-face);
+  border-bottom: 1px solid var(--xp-shadow);
+  padding: 4px 6px;
+}
+.xp-window-body .weather-desk-chrome {
+  background: var(--xp-face);
+  border-bottom: 1px solid var(--xp-shadow);
+  padding: 4px 6px;
+}
+.xp-window-body .weather-hero,
+.xp-window-body .weather-section,
+.xp-window-body .weather-details {
+  background: #fff;
+  border: 1px solid var(--xp-shadow);
+  border-radius: 0;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+.xp-window-body .weather-main { padding: 8px; }
+.xp-window-body .weather-hero { color: #1a1a1a; }
+.xp-window-body .weather-desk-zone--radar {
+  background: #060a08;
+  color: #e8ecf1;
+  border-radius: 0;
+}
+.xp-window-body .weather-desk-status { color: #444; }

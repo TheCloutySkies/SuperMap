@@ -801,12 +801,8 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
   const windUsesWindy = Boolean(windLayerOn && (radarMeta?.windyConfigured || windyReady || windyStatus === 'loading'))
 
   return (
-    <div className={`weather-desk${mapFullscreen ? ' weather-desk--map-fs' : ''}`}>
-      <header className="weather-desk-topbar">
-        <div className="weather-desk-brand">
-          <h1>Weather</h1>
-          <p>Forecast desk + radar · Open-Meteo · NWS · Windy wind</p>
-        </div>
+    <div className={`weather-desk xp-page${mapFullscreen ? ' weather-desk--map-fs' : ''}`}>
+      <div className="weather-desk-topbar xp-page-tools">
         <form className="weather-desk-locate" onSubmit={handleSearch}>
           <label className="weather-desk-sr" htmlFor="weather-place-search">Location</label>
           <input
@@ -822,7 +818,7 @@ export default function WeatherView({ initialLat, initialLon, onLocationChange }
             {geoStatus === 'locating' ? 'Locating…' : 'Locate'}
           </button>
         </form>
-      </header>
+      </div>
 
       {locationPrompt && !locationReady && (
         <div className="weather-desk-gate" role="status">

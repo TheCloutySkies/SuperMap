@@ -116,6 +116,26 @@
 .op-cases li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--op-border); }
 .op-cases button { background: none; border: 0; color: var(--op-ink); font: inherit; font-size: 11px; cursor: pointer; text-align: left; }
 .op-cases span { color: var(--op-dim); font-size: 10px; }
+/* Gas controls and detail */
+.op-gas-controls { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.op-gas-controls .op-tabs { flex: 1; margin: 0; }
+.op-gas-controls select { background: var(--op-bg); border: 1px solid var(--op-border); color: var(--op-ink); border-radius: var(--op-radius); padding: 4px 6px; font: inherit; font-size: 10px; }
+.op-gas-detail .op-stat-row { margin-bottom: 8px; }
+.op-gas-extremes { display: flex; gap: 14px; flex-wrap: wrap; font-size: 10px; color: var(--op-dim); border-top: 1px solid var(--op-border); padding-top: 7px; }
+.op-gas-extremes b { color: var(--op-ink); font-weight: 500; }
+.op-gas-regions { list-style: none; margin: 8px 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; font-size: 10px; }
+.op-gas-regions li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--op-border); }
+.op-gas-regions b { font-weight: 500; }
+
+/* Reused bulletin keeps its data but drops its old card chrome here */
+.operations-home .bb-home { background: transparent; border: 0; padding: 0; box-shadow: none; }
+.operations-home .bb-home-head { border-bottom: 1px solid var(--op-border); padding-bottom: 7px; margin-bottom: 6px; }
+.operations-home .bb-home-head h2 { font-size: 12px; color: var(--op-ink); }
+.operations-home .bb-home-head button, .operations-home .bb-home li button { background: transparent; border: 0; color: var(--op-ink); font: inherit; font-size: 11px; cursor: pointer; }
+.operations-home .bb-home li { border-bottom: 1px solid var(--op-border); }
+.operations-home .bb-home-meta { color: var(--op-faint); font-size: 10px; }
+.operations-home .bb-home-empty { color: var(--op-dim); font-size: 11px; }
+
 .op-panel .widget-card-content { font-size: 11px; }
 .op-panel .widget-headlines-list li { border-bottom: 1px solid var(--op-border); }
 

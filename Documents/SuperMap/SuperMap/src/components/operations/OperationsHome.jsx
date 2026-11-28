@@ -10,14 +10,15 @@ import {
   FileText, Globe2, HardDrive, Map, Menu, Newspaper, Radio, Settings,
   Shield, Telescope, Search, ChevronLeft, ChevronRight,
 } from 'lucide-react'
-import Panel, { Skeleton, Status } from './Panel'
+import Panel, { Skeleton } from './Panel'
+import GasPrices from './GasPrices'
 import DataFreshness from '../DataFreshness'
 import { LatestBulletin } from '../../features/bulletin/BulletinBoardView'
 import ItemMenu from '../../features/accounts/ItemMenu'
 import { useSuperMapAccount } from '../../features/accounts/SuperMapAccounts'
 import { xImageProps } from '../../lib/snapshotClient'
 import { CRIME_VIEW_ID, WEATHER_VIEW_ID, BRAND_LOGO_SRC, BRAND_LOGO_ALT } from '../../constants'
-import { getApiBase, readHomeSnapshot, osintXToImages } from '../../lib/homeBootstrap'
+import { readHomeSnapshot, osintXToImages } from '../../lib/homeBootstrap'
 import { HOME_STATE, subscribeHome, startHomePolling, refreshHomeNow } from '../../lib/homeStore'
 import { subscribeConsole, startConsole } from '../../lib/consoleStore'
 import { computeConvergence, computePosture } from '../../lib/consoleSignals'
@@ -32,9 +33,10 @@ const HeadlinesWidget = lazy(() => import('../widgets/HeadlinesWidget'))
 const EarthquakesWidget = lazy(() => import('../widgets/EarthquakesWidget'))
 const StrategicOverviewWidget = lazy(() => import('../widgets/StrategicOverviewWidget'))
 const NextLaunchWidget = lazy(() => import('../widgets/NextLaunchWidget'))
+const ConflictMetricsWidget = lazy(() => import('../widgets/ConflictMetricsWidget'))
+const OutageWidget = lazy(() => import('../widgets/OutageWidget'))
 const WorldClock = lazy(() => import('../widgets/WorldClock'))
 
-const API_BASE = getApiBase()
 const DOOMSDAY_SECONDS = 85
 
 const MODES = [
@@ -269,10 +271,13 @@ export default function OperationsHome({
                 </div>
               ) : <Skeleton rows={5} label="Loading threat summary" />
             ) : activeTab === 'conflict' ? (
-              <Suspense fallback={<Skeleton />}><StrategicOverviewWidget bootstrapState={bootstrapState} /></Suspense>
+              <Suspense fallback={<Skeleton />}><ConflictMetricsWidget /></Suspense>
             ) : (
-              <Suspense fallback={<Skeleton />}><PanelOutages /></Suspense>
+              <Suspense fallback={<Skeleton />}><OutageWidget /></Suspense>
             )}
+            {activeTab === 'situation' ? (
+              <Suspense fallback={<Skeleton />}><StrategicOverviewWidget bootstrapState={bootstrapState} /></Suspense>
+            ) : null}
           </Panel>
 
           <Panel index="02" title="Live map" area="map" meta="community" onOpen={go('osint-map')} flush>
@@ -306,15 +311,8 @@ export default function OperationsHome({
           </Panel>
 
           <Panel index="05" title="Markets" area="mkt" onOpen={go('home')}>
-            <div className="op-split">
-              <Suspense fallback={<Skeleton />}><StockWidget onOpenSettings={() => open('settings')} initialData={piece(home?.stocks, Boolean(home?.stocks?.current))} bootstrapState={bootstrapState} /></Suspense>
-              <div className="op-gas">
-                <span className="op-stat-label">US gasoline</span>
-                <strong className="op-num op-stat-value">{gas?.national != null ? `$${Number(gas.national).toFixed(2)}` : (gas?.gasoline?.national != null ? `$${Number(gas.gasoline.national).toFixed(2)}` : '—')}</strong>
-                {gas?.sourceLabel ? <span className="op-faint">{gas.sourceLabel}</span> : null}
-                {gas?.asOf ? <span className="op-faint op-num">Week ending {gas.asOf}</span> : null}
-              </div>
-            </div>
+            <Suspense fallback={<Skeleton />}><StockWidget onOpenSettings={() => open('settings')} initialData={piece(home?.stocks, Boolean(home?.stocks?.current))} bootstrapState={bootstrapState} /></Suspense>
+            <GasPrices gas={gas} states={home?.gasStates || []} onRefresh={() => refreshHomeNow({ force: true })} />
           </Panel>
 
           <Panel index="06" title="Hazards" area="hzd" onOpen={go(WEATHER_VIEW_ID)}>
@@ -370,20 +368,4 @@ export default function OperationsHome({
       ) : null}
     </div>
   )
-}
-
-/** Outage panel tab, kept lazy so its API call is never made unless opened. */
-function PanelOutages() {
-  const [rows, setRows] = useState(null)
-  useEffect(() => {
-    let cancelled = false
-    fetch(`${API_BASE}/api/outages/internet`, { signal: AbortSignal.timeout(8000) })
-      .then((r) => r.json())
-      .then((data) => { if (!cancelled) setRows(Array.isArray(data?.countries) ? data.countries : []) })
-      .catch(() => { if (!cancelled) setRows([]) })
-    return () => { cancelled = true }
-  }, [])
-  if (!rows) return <Skeleton rows={4} />
-  if (!rows.length) return <p className="op-muted">No active internet outages published.</p>
-  return <ul className="op-bullets">{rows.slice(0, 8).map((row, i) => <li key={i}>{row.country || row.name || 'Unknown'}</li>)}</ul>
 }

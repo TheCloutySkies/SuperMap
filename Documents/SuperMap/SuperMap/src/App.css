@@ -315,6 +315,9 @@
   transform: scale(0.98);
 }
 
+.main--operations { overflow: hidden; }
+.main--operations > .operations-home { flex: 1; min-height: 0; }
+
 .main {
   flex: 1;
   display: flex;

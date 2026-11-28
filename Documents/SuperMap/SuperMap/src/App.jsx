@@ -22,7 +22,7 @@ import {
   modeFromView,
 } from './lib/appRoutes'
 import { loadChromePrefs, saveChromePrefs } from './lib/mapToolsPrefs'
-import HomeScreen from './components/HomeScreen'
+import OperationsHome from './components/operations/OperationsHome'
 import CrimeIntelligenceView from './components/CrimeIntelligenceView'
 import WeatherView from './components/WeatherView'
 import BatmanView from './features/batman/BatmanView'
@@ -542,14 +542,10 @@ function App() {
   const mainContent = (
     <>
         {activeView === 'home' && (
-              <HomeScreen
+              <OperationsHome
                 onNavigate={setActiveViewWithMode}
-                footerMode={appMode}
                 onFooterNav={handleFooterNav}
-                footerTabs={menuModes.map((mode) => ({ key: mode.id, label: mode.label.toUpperCase() }))}
-                menuModes={menuModes}
                 isMobileLayout={isMobileLayout}
-                activeView={activeView}
                 onShowLocationOnMap={handleShowLocationOnMap}
                 onHomeBootstrap={handleHomeBootstrap}
               />
@@ -741,7 +737,7 @@ function App() {
         </div>
       ) : null}
       <AmbientBgLight />
-      {!isMobileLayout && (
+      {!isMobileLayout && activeView !== 'home' && (
       <header className="app-omnibar-strip">
         <div className="app-omnibar-inner">
           <a href="https://cloutyskies.org" className="app-omnibar-logo" target="_blank" rel="noopener noreferrer" aria-label="Clouty Skies">
@@ -781,8 +777,8 @@ function App() {
       </header>
       )}
       <div className={`app-body ${isMobileLayout ? 'app-body--mobile' : ''}`}>
-      {!isMobileLayout && <ModeRail appMode={appMode} onModeSelect={handleFooterNav} modes={menuModes} />}
-      {!isMobileLayout && (() => {
+      {!isMobileLayout && activeView !== 'home' && <ModeRail appMode={appMode} onModeSelect={handleFooterNav} modes={menuModes} />}
+      {!isMobileLayout && activeView !== 'home' && (() => {
         const showSubnav =
           subnavOpen &&
           (appMode === APP_MODES.MAPS ||
@@ -860,7 +856,7 @@ function App() {
         </MobileShell>
       ) : (
         <>
-      <main className={`main ${footerTransition ? 'main--y2k-transition' : ''} ${isMapView ? 'main--map' : ''} ${isCrimeView ? 'main--crime' : ''}`}>
+      <main className={`main ${activeView === 'home' ? 'main--operations' : ''} ${footerTransition ? 'main--y2k-transition' : ''} ${isMapView ? 'main--map' : ''} ${isCrimeView ? 'main--crime' : ''}`}>
         {mainContent}
       </main>
       {sidebar}

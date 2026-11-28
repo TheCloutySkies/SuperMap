@@ -1,0 +1,131 @@
+/* Operations console design system. Reusable across surfaces; opt in with .op-console. */
+.op-console {
+  --op-bg: #0c0f14;
+  --op-surface: #12161d;
+  --op-surface-2: #181d26;
+  --op-border: #242c37;
+  --op-ink: #e8ecf1;
+  --op-dim: #9aa7b4;
+  --op-faint: #5f6b7a;
+  --op-accent: #4a90d9;
+  --op-alert: #d9822b;
+  --op-danger: #c0392b;
+  --op-ok: #3d8b5f;
+  --op-radius: 4px;
+  --op-font: 'Inter', 'IBM Plex Sans', system-ui, sans-serif;
+  --op-mono: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+  color: var(--op-ink);
+  font-family: var(--op-font);
+  font-size: 13px;
+}
+
+/* Technical drawing background: 1px hairlines ~48px apart, no glow. */
+.op-console.op-dashboard {
+  background-color: var(--op-bg);
+  background-image:
+    linear-gradient(to right, rgba(154, 167, 180, .03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(154, 167, 180, .03) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.op-console *,
+.op-console *::before,
+.op-console *::after { box-sizing: border-box; }
+.op-console .op-num { font-family: var(--op-mono); font-variant-numeric: tabular-nums; }
+.op-console a { color: var(--op-accent); text-decoration: none; }
+.op-console a:hover { text-decoration: underline; }
+.op-console button { font-family: inherit; }
+
+/* Panel: the reusable chrome. An index number, a title, corner ticks, hairline rule. */
+.op-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--op-surface);
+  border: 1px solid var(--op-border);
+  border-radius: var(--op-radius);
+}
+.op-panel::before,
+.op-panel::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  pointer-events: none;
+  z-index: 1;
+}
+.op-panel::before { top: 4px; left: 4px; border-top: 1px solid var(--op-faint); border-left: 1px solid var(--op-faint); }
+.op-panel::after { bottom: 4px; right: 4px; border-bottom: 1px solid var(--op-faint); border-right: 1px solid var(--op-faint); }
+.op-panel:hover { border-color: #3a4756; }
+
+.op-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--op-border);
+  background: var(--op-surface-2);
+  flex: none;
+}
+.op-panel-head.is-link { width: 100%; text-align: left; cursor: pointer; color: inherit; }
+.op-panel-head.is-link:hover .op-panel-open { opacity: 1; }
+.op-panel-index { font-family: var(--op-mono); font-size: 11px; color: var(--op-accent); }
+.op-panel-title { margin: 0; font-size: 13px; font-weight: 600; color: var(--op-ink); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.op-panel-meta { font-size: 10px; color: var(--op-dim); font-family: var(--op-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.op-panel-open { font-size: 10px; color: var(--op-accent); opacity: 0; transition: opacity .12s ease; white-space: nowrap; }
+.op-panel-body { flex: 1; min-height: 0; overflow: auto; padding: 12px; scrollbar-width: thin; scrollbar-color: var(--op-border) transparent; }
+.op-panel-body.is-flush { padding: 0; }
+
+/* Quiet buttons, skeleton rows, state badges */
+.op-btn {
+  border: 1px solid var(--op-border); background: var(--op-surface-2); color: var(--op-ink);
+  border-radius: var(--op-radius); padding: 4px 9px; font-size: 11px; cursor: pointer;
+}
+.op-btn:hover { border-color: var(--op-accent); }
+.op-btn-primary { background: var(--op-accent); border-color: var(--op-accent); color: #07121e; }
+.op-btn:disabled { opacity: .5; cursor: default; }
+.op-skeleton { display: flex; flex-direction: column; gap: 7px; padding: 4px 0; }
+.op-skeleton i {
+  display: block; height: 9px; border-radius: 2px;
+  background: linear-gradient(90deg, var(--op-surface-2) 0%, #212936 50%, var(--op-surface-2) 100%);
+  background-size: 200% 100%;
+  animation: op-sweep 1.2s linear infinite;
+}
+.op-skeleton i:nth-child(2) { width: 82%; }
+.op-skeleton i:nth-child(3) { width: 64%; }
+@keyframes op-sweep { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+.op-status {
+  font-family: var(--op-mono); font-size: 10px; padding: 2px 6px;
+  border: 1px solid var(--op-border); border-radius: var(--op-radius); color: var(--op-dim);
+}
+.op-status.is-live { color: var(--op-accent); border-color: var(--op-accent); }
+.op-status.is-stale { color: var(--op-alert); border-color: var(--op-alert); }
+.op-status.is-error { color: var(--op-danger); border-color: var(--op-danger); }
+.op-muted { color: var(--op-dim); }
+.op-faint { color: var(--op-faint); }
+.op-mono { font-family: var(--op-mono); font-variant-numeric: tabular-nums; }
+.op-alert { color: var(--op-alert); }
+.op-danger { color: var(--op-danger); }
+.op-ok { color: var(--op-ok); }
+
+/* A thin data-sweep line crosses a panel when its payload changes. */
+.op-panel.is-refreshing::after {
+  animation: op-panel-sweep .6s ease-out;
+  border-color: var(--op-accent);
+}
+@keyframes op-panel-sweep {
+  0% { transform: translate(-8px, -8px); }
+  100% { transform: translate(0, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .op-console *, .op-console *::before, .op-console *::after {
+    animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

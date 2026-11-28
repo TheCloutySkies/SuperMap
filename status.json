@@ -1,0 +1,298 @@
+{
+  "version": "20261128T1357Z",
+  "generatedAt": "2026-11-28T14:01:19.304Z",
+  "runMs": 214464,
+  "ok": 46,
+  "failed": 5,
+  "gated": 0,
+  "results": [
+    {
+      "name": "news",
+      "status": "ok",
+      "ms": 16667,
+      "count": 120
+    },
+    {
+      "name": "osint",
+      "status": "ok",
+      "ms": 17,
+      "count": 200
+    },
+    {
+      "name": "osint-x",
+      "status": "ok",
+      "ms": 13771,
+      "count": 97
+    },
+    {
+      "name": "videos",
+      "status": "ok",
+      "ms": 1858,
+      "count": 90
+    },
+    {
+      "name": "threat-summary",
+      "status": "ok",
+      "ms": 217,
+      "count": 11
+    },
+    {
+      "name": "stocks",
+      "status": "ok",
+      "ms": 287,
+      "count": 4
+    },
+    {
+      "name": "gas-prices",
+      "status": "ok",
+      "ms": 2577,
+      "count": 16
+    },
+    {
+      "name": "space",
+      "status": "ok",
+      "ms": 6,
+      "count": 8
+    },
+    {
+      "name": "defcon",
+      "status": "ok",
+      "ms": 252,
+      "count": 4
+    },
+    {
+      "name": "netblocks",
+      "status": "ok",
+      "ms": 86,
+      "count": 2
+    },
+    {
+      "name": "earthquakes",
+      "status": "ok",
+      "ms": 3,
+      "count": 12
+    },
+    {
+      "name": "earthquakes-feed",
+      "status": "ok",
+      "ms": 14343,
+      "count": 372
+    },
+    {
+      "name": "hazards-nws",
+      "status": "ok",
+      "ms": 3827,
+      "count": 1
+    },
+    {
+      "name": "hazards-emsc",
+      "status": "ok",
+      "ms": 1368,
+      "count": 100
+    },
+    {
+      "name": "volcanoes",
+      "status": "ok",
+      "ms": 144,
+      "count": 3
+    },
+    {
+      "name": "nhc",
+      "status": "ok",
+      "ms": 113,
+      "count": 0
+    },
+    {
+      "name": "space-weather",
+      "status": "ok",
+      "ms": 133,
+      "count": 4
+    },
+    {
+      "name": "outages-internet",
+      "status": "fail",
+      "ms": 60005,
+      "error": "timeout of 60000ms exceeded"
+    },
+    {
+      "name": "frontline",
+      "status": "ok",
+      "ms": 226,
+      "count": 4
+    },
+    {
+      "name": "liveuamap",
+      "status": "fail",
+      "ms": 98,
+      "error": "HTTP 502 Request failed with status code 403"
+    },
+    {
+      "name": "datacenters",
+      "status": "fail",
+      "ms": 398,
+      "error": "HTTP 502 Request failed with status code 404"
+    },
+    {
+      "name": "firms",
+      "status": "fail",
+      "ms": 1,
+      "error": "empty payload kept out of the snapshot"
+    },
+    {
+      "name": "utility-outages",
+      "status": "ok",
+      "ms": 123,
+      "count": 16
+    },
+    {
+      "name": "fcc-towers",
+      "status": "fail",
+      "ms": 3,
+      "error": "empty payload kept out of the snapshot"
+    },
+    {
+      "name": "conflict-gdelt",
+      "status": "ok",
+      "ms": 616,
+      "count": 200
+    },
+    {
+      "name": "conflict-acled",
+      "status": "ok",
+      "ms": 10,
+      "count": 200
+    },
+    {
+      "name": "major-hazards",
+      "status": "ok",
+      "ms": 3416,
+      "count": 190
+    },
+    {
+      "name": "strategic-warspotting",
+      "status": "ok",
+      "ms": 2,
+      "count": 46
+    },
+    {
+      "name": "strategic-satellites",
+      "status": "ok",
+      "ms": 6,
+      "count": 170
+    },
+    {
+      "name": "strategic-launches",
+      "status": "ok",
+      "ms": 1,
+      "count": 6
+    },
+    {
+      "name": "strategic-briefs",
+      "status": "ok",
+      "ms": 1,
+      "count": 12
+    },
+    {
+      "name": "strategic-ucdp",
+      "status": "ok",
+      "ms": 2,
+      "count": 5
+    },
+    {
+      "name": "strategic-censorship",
+      "status": "ok",
+      "ms": 1,
+      "count": 8
+    },
+    {
+      "name": "strategic-kev",
+      "status": "ok",
+      "ms": 1,
+      "count": 10
+    },
+    {
+      "name": "strategic-ransomware",
+      "status": "ok",
+      "ms": 1,
+      "count": 8
+    },
+    {
+      "name": "strategic-radiation",
+      "status": "ok",
+      "ms": 1,
+      "count": 20
+    },
+    {
+      "name": "strategic-balloons",
+      "status": "ok",
+      "ms": 4,
+      "count": 500
+    },
+    {
+      "name": "free-abuse-ch",
+      "status": "ok",
+      "ms": 2,
+      "count": 16
+    },
+    {
+      "name": "free-ripestat",
+      "status": "ok",
+      "ms": 1,
+      "count": 12
+    },
+    {
+      "name": "free-unhcr",
+      "status": "ok",
+      "ms": 1,
+      "count": 27
+    },
+    {
+      "name": "free-nwss",
+      "status": "ok",
+      "ms": 1,
+      "count": 14
+    },
+    {
+      "name": "free-hpai",
+      "status": "ok",
+      "ms": 2,
+      "count": 48
+    },
+    {
+      "name": "free-usgs-water",
+      "status": "ok",
+      "ms": 1,
+      "count": 1
+    },
+    {
+      "name": "free-meteoalarm",
+      "status": "ok",
+      "ms": 2,
+      "count": 45
+    },
+    {
+      "name": "free-advisories",
+      "status": "ok",
+      "ms": 3,
+      "count": 218
+    },
+    {
+      "name": "free-nas-airspace",
+      "status": "ok",
+      "ms": 2,
+      "count": 4
+    },
+    {
+      "name": "free-cyclones",
+      "status": "ok",
+      "ms": 431,
+      "count": 0
+    },
+    {
+      "name": "home",
+      "status": "ok",
+      "ms": 27,
+      "count": 12
+    }
+  ]
+}

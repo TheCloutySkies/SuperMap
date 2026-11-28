@@ -1,0 +1,422 @@
+{
+  "sources": {
+    "news": {
+      "lastSuccessAt": "2026-11-28T13:59:27.684Z",
+      "lastOkAt": "2026-11-28T13:59:27.684Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 120,
+      "etag": null,
+      "lastModified": null
+    },
+    "osint": {
+      "lastSuccessAt": "2026-11-28T13:59:27.702Z",
+      "lastOkAt": "2026-11-28T13:59:27.702Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 200,
+      "etag": null,
+      "lastModified": null
+    },
+    "osint-x": {
+      "lastSuccessAt": "2026-11-28T13:59:41.474Z",
+      "lastOkAt": "2026-11-28T13:59:41.474Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 97,
+      "etag": null,
+      "lastModified": null
+    },
+    "videos": {
+      "lastSuccessAt": "2026-11-28T13:59:43.332Z",
+      "lastOkAt": "2026-11-28T13:59:43.332Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 90,
+      "etag": null,
+      "lastModified": null
+    },
+    "threat-summary": {
+      "lastSuccessAt": "2026-11-28T13:59:43.549Z",
+      "lastOkAt": "2026-11-28T13:59:43.549Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 11,
+      "etag": null,
+      "lastModified": null
+    },
+    "stocks": {
+      "lastSuccessAt": "2026-11-28T13:59:43.836Z",
+      "lastOkAt": "2026-11-28T13:59:43.836Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 4,
+      "etag": null,
+      "lastModified": null
+    },
+    "gas-prices": {
+      "lastSuccessAt": "2026-11-28T13:59:46.414Z",
+      "lastOkAt": "2026-11-28T13:59:46.414Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 16,
+      "etag": null,
+      "lastModified": null
+    },
+    "space": {
+      "lastSuccessAt": "2026-11-28T13:59:46.420Z",
+      "lastOkAt": "2026-11-28T13:59:46.420Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 8,
+      "etag": null,
+      "lastModified": null
+    },
+    "defcon": {
+      "lastSuccessAt": "2026-11-28T13:59:46.672Z",
+      "lastOkAt": "2026-11-28T13:59:46.672Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 4,
+      "etag": null,
+      "lastModified": null
+    },
+    "netblocks": {
+      "lastSuccessAt": "2026-11-28T13:59:46.759Z",
+      "lastOkAt": "2026-11-28T13:59:46.759Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 2,
+      "etag": null,
+      "lastModified": null
+    },
+    "earthquakes": {
+      "lastSuccessAt": "2026-11-28T13:59:46.762Z",
+      "lastOkAt": "2026-11-28T13:59:46.762Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 12,
+      "etag": null,
+      "lastModified": null
+    },
+    "earthquakes-feed": {
+      "lastSuccessAt": "2026-11-28T14:00:01.107Z",
+      "lastOkAt": "2026-11-28T14:00:01.107Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 372,
+      "etag": null,
+      "lastModified": null
+    },
+    "hazards-nws": {
+      "lastSuccessAt": "2026-11-28T14:00:04.934Z",
+      "lastOkAt": "2026-11-28T14:00:04.934Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 1,
+      "etag": null,
+      "lastModified": null
+    },
+    "hazards-emsc": {
+      "lastSuccessAt": "2026-11-28T14:00:06.302Z",
+      "lastOkAt": "2026-11-28T14:00:06.302Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 100,
+      "etag": null,
+      "lastModified": null
+    },
+    "volcanoes": {
+      "lastSuccessAt": "2026-11-28T14:00:06.447Z",
+      "lastOkAt": "2026-11-28T14:00:06.447Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 3,
+      "etag": null,
+      "lastModified": null
+    },
+    "nhc": {
+      "lastSuccessAt": "2026-11-28T14:00:06.561Z",
+      "lastOkAt": "2026-11-28T14:00:06.561Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 0,
+      "etag": null,
+      "lastModified": null
+    },
+    "space-weather": {
+      "lastSuccessAt": "2026-11-28T14:00:06.694Z",
+      "lastOkAt": "2026-11-28T14:00:06.694Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 4,
+      "etag": "W/\"1213-661569517430e\"",
+      "lastModified": "Sat, 28 Nov 2026 13:59:16 GMT"
+    },
+    "outages-internet": {
+      "consecutiveFailures": 1,
+      "breakerUntil": null,
+      "lastError": "timeout of 60000ms exceeded",
+      "lastErrorAt": "2026-11-28T14:01:06.699Z"
+    },
+    "frontline": {
+      "lastSuccessAt": "2026-11-28T14:01:06.937Z",
+      "lastOkAt": "2026-11-28T14:01:06.937Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 4,
+      "etag": "W/\"9871c-EZGWvYxCPYoSph4+R/hyWzUUwng\"",
+      "lastModified": null
+    },
+    "liveuamap": {
+      "consecutiveFailures": 1,
+      "breakerUntil": null,
+      "lastError": "HTTP 502 Request failed with status code 403",
+      "lastErrorAt": "2026-11-28T14:01:07.035Z"
+    },
+    "datacenters": {
+      "consecutiveFailures": 1,
+      "breakerUntil": null,
+      "lastError": "HTTP 502 Request failed with status code 404",
+      "lastErrorAt": "2026-11-28T14:01:07.433Z"
+    },
+    "firms": {
+      "consecutiveFailures": 1,
+      "breakerUntil": null,
+      "lastError": "empty payload kept out of the snapshot",
+      "lastErrorAt": "2026-11-28T14:01:07.434Z"
+    },
+    "utility-outages": {
+      "lastSuccessAt": "2026-11-28T14:01:07.558Z",
+      "lastOkAt": "2026-11-28T14:01:07.558Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 16,
+      "etag": "sd39151_-1210243497",
+      "lastModified": "Sat, 28 Nov 2026 13:58:57 GMT"
+    },
+    "fcc-towers": {
+      "consecutiveFailures": 1,
+      "breakerUntil": null,
+      "lastError": "empty payload kept out of the snapshot",
+      "lastErrorAt": "2026-11-28T14:01:07.561Z"
+    },
+    "conflict-gdelt": {
+      "lastSuccessAt": "2026-11-28T14:01:08.178Z",
+      "lastOkAt": "2026-11-28T14:01:08.178Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 200,
+      "etag": null,
+      "lastModified": null
+    },
+    "conflict-acled": {
+      "lastSuccessAt": "2026-11-28T14:01:08.189Z",
+      "lastOkAt": "2026-11-28T14:01:08.189Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 200,
+      "etag": null,
+      "lastModified": null
+    },
+    "major-hazards": {
+      "lastSuccessAt": "2026-11-28T14:01:11.606Z",
+      "lastOkAt": "2026-11-28T14:01:11.606Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 190,
+      "etag": null,
+      "lastModified": null
+    },
+    "strategic-warspotting": {
+      "lastSuccessAt": "2026-11-28T14:01:11.609Z",
+      "lastOkAt": "2026-11-28T14:01:11.609Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 46,
+      "etag": null,
+      "lastModified": null
+    },
+    "strategic-satellites": {
+      "lastSuccessAt": "2026-11-28T14:01:11.617Z",
+      "lastOkAt": "2026-11-28T14:01:11.617Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 170,
+      "etag": null,
+      "lastModified": null
+    },
+    "strategic-launches": {
+      "lastSuccessAt": "2026-11-28T14:01:11.619Z",
+      "lastOkAt": "2026-11-28T14:01:11.619Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 6,
+      "etag": null,
+      "lastModified": null
+    },
+    "strategic-briefs": {
+      "lastSuccessAt": "2026-11-28T14:01:11.620Z",
+      "lastOkAt": "2026-11-28T14:01:11.620Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 12,
+      "etag": null,
+      "lastModified": null
+    },
+    "strategic-ucdp": {
+      "lastSuccessAt": "2026-11-28T14:01:11.622Z",
+      "lastOkAt": "2026-11-28T14:01:11.622Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 5,
+      "etag": null,
+      "lastModified": null
+    },
+    "strategic-censorship": {
+      "lastSuccessAt": "2026-11-28T14:01:11.623Z",
+      "lastOkAt": "2026-11-28T14:01:11.623Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 8,
+      "etag": null,
+      "lastModified": null
+    },
+    "strategic-kev": {
+      "lastSuccessAt": "2026-11-28T14:01:11.625Z",
+      "lastOkAt": "2026-11-28T14:01:11.625Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 10,
+      "etag": null,
+      "lastModified": null
+    },
+    "strategic-ransomware": {
+      "lastSuccessAt": "2026-11-28T14:01:11.626Z",
+      "lastOkAt": "2026-11-28T14:01:11.626Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 8,
+      "etag": null,
+      "lastModified": null
+    },
+    "strategic-radiation": {
+      "lastSuccessAt": "2026-11-28T14:01:11.628Z",
+      "lastOkAt": "2026-11-28T14:01:11.628Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 20,
+      "etag": null,
+      "lastModified": null
+    },
+    "strategic-balloons": {
+      "lastSuccessAt": "2026-11-28T14:01:11.632Z",
+      "lastOkAt": "2026-11-28T14:01:11.632Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 500,
+      "etag": null,
+      "lastModified": null
+    },
+    "free-abuse-ch": {
+      "lastSuccessAt": "2026-11-28T14:01:11.634Z",
+      "lastOkAt": "2026-11-28T14:01:11.634Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 16,
+      "etag": null,
+      "lastModified": null
+    },
+    "free-ripestat": {
+      "lastSuccessAt": "2026-11-28T14:01:11.636Z",
+      "lastOkAt": "2026-11-28T14:01:11.636Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 12,
+      "etag": null,
+      "lastModified": null
+    },
+    "free-unhcr": {
+      "lastSuccessAt": "2026-11-28T14:01:11.637Z",
+      "lastOkAt": "2026-11-28T14:01:11.637Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 27,
+      "etag": null,
+      "lastModified": null
+    },
+    "free-nwss": {
+      "lastSuccessAt": "2026-11-28T14:01:11.638Z",
+      "lastOkAt": "2026-11-28T14:01:11.638Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 14,
+      "etag": null,
+      "lastModified": null
+    },
+    "free-hpai": {
+      "lastSuccessAt": "2026-11-28T14:01:11.640Z",
+      "lastOkAt": "2026-11-28T14:01:11.640Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 48,
+      "etag": null,
+      "lastModified": null
+    },
+    "free-usgs-water": {
+      "lastSuccessAt": "2026-11-28T14:01:11.641Z",
+      "lastOkAt": "2026-11-28T14:01:11.641Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 1,
+      "etag": null,
+      "lastModified": null
+    },
+    "free-meteoalarm": {
+      "lastSuccessAt": "2026-11-28T14:01:11.643Z",
+      "lastOkAt": "2026-11-28T14:01:11.643Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 45,
+      "etag": null,
+      "lastModified": null
+    },
+    "free-advisories": {
+      "lastSuccessAt": "2026-11-28T14:01:11.647Z",
+      "lastOkAt": "2026-11-28T14:01:11.647Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 218,
+      "etag": null,
+      "lastModified": null
+    },
+    "free-nas-airspace": {
+      "lastSuccessAt": "2026-11-28T14:01:11.649Z",
+      "lastOkAt": "2026-11-28T14:01:11.649Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 4,
+      "etag": null,
+      "lastModified": null
+    },
+    "free-cyclones": {
+      "lastSuccessAt": "2026-11-28T14:01:12.081Z",
+      "lastOkAt": "2026-11-28T14:01:12.081Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 0,
+      "etag": null,
+      "lastModified": null
+    },
+    "home": {
+      "lastSuccessAt": "2026-11-28T14:01:12.110Z",
+      "lastOkAt": "2026-11-28T14:01:12.110Z",
+      "consecutiveFailures": 0,
+      "breakerUntil": null,
+      "lastCount": 12,
+      "etag": null,
+      "lastModified": null
+    }
+  },
+  "lastRunId": "20261128T1357Z"
+}

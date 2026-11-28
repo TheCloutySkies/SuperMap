@@ -1,0 +1,375 @@
+{
+  "version": "20261128T1357Z",
+  "generatedAt": "2026-11-28T14:01:19.304Z",
+  "runMs": 214464,
+  "dryRun": false,
+  "sources": {
+    "news": {
+      "file": "news.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T13:59:27.684Z",
+      "ok": true,
+      "stale": false,
+      "count": 120
+    },
+    "osint": {
+      "file": "osint.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T13:59:27.702Z",
+      "ok": true,
+      "stale": false,
+      "count": 200
+    },
+    "osint-x": {
+      "file": "osint-x.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T13:59:41.474Z",
+      "ok": true,
+      "stale": false,
+      "count": 97
+    },
+    "videos": {
+      "file": "videos.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T13:59:43.332Z",
+      "ok": true,
+      "stale": false,
+      "count": 90
+    },
+    "threat-summary": {
+      "file": "threat-summary.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T13:59:43.549Z",
+      "ok": true,
+      "stale": false,
+      "count": 11
+    },
+    "stocks": {
+      "file": "stocks.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T13:59:43.836Z",
+      "ok": true,
+      "stale": false,
+      "count": 4
+    },
+    "gas-prices": {
+      "file": "gas-prices.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T13:59:46.414Z",
+      "ok": true,
+      "stale": false,
+      "count": 16
+    },
+    "space": {
+      "file": "space.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T13:59:46.420Z",
+      "ok": true,
+      "stale": false,
+      "count": 8
+    },
+    "defcon": {
+      "file": "defcon.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T13:59:46.672Z",
+      "ok": true,
+      "stale": false,
+      "count": 4
+    },
+    "netblocks": {
+      "file": "netblocks.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T13:59:46.759Z",
+      "ok": true,
+      "stale": false,
+      "count": 2
+    },
+    "earthquakes": {
+      "file": "earthquakes.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T13:59:46.762Z",
+      "ok": true,
+      "stale": false,
+      "count": 12
+    },
+    "earthquakes-feed": {
+      "file": "earthquakes-feed.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:00:01.107Z",
+      "ok": true,
+      "stale": false,
+      "count": 372
+    },
+    "hazards-nws": {
+      "file": "hazards-nws.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:00:04.934Z",
+      "ok": true,
+      "stale": false,
+      "count": 1
+    },
+    "hazards-emsc": {
+      "file": "hazards-emsc.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:00:06.302Z",
+      "ok": true,
+      "stale": false,
+      "count": 100
+    },
+    "volcanoes": {
+      "file": "volcanoes.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:00:06.447Z",
+      "ok": true,
+      "stale": false,
+      "count": 3
+    },
+    "nhc": {
+      "file": "nhc.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:00:06.561Z",
+      "ok": true,
+      "stale": false,
+      "count": 0
+    },
+    "space-weather": {
+      "file": "space-weather.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:00:06.694Z",
+      "ok": true,
+      "stale": false,
+      "count": 4
+    },
+    "outages-internet": {
+      "file": null,
+      "fetchedAt": null,
+      "ok": false,
+      "stale": false,
+      "optional": true,
+      "error": "timeout of 60000ms exceeded",
+      "count": 0
+    },
+    "frontline": {
+      "file": "frontline.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:06.937Z",
+      "ok": true,
+      "stale": false,
+      "count": 4
+    },
+    "liveuamap": {
+      "file": null,
+      "fetchedAt": null,
+      "ok": false,
+      "stale": false,
+      "optional": true,
+      "error": "HTTP 502 Request failed with status code 403",
+      "count": 0
+    },
+    "datacenters": {
+      "file": null,
+      "fetchedAt": null,
+      "ok": false,
+      "stale": false,
+      "optional": true,
+      "error": "HTTP 502 Request failed with status code 404",
+      "count": 0
+    },
+    "firms": {
+      "file": null,
+      "fetchedAt": null,
+      "ok": false,
+      "stale": true,
+      "optional": false,
+      "error": "empty payload kept out of the snapshot",
+      "count": 0
+    },
+    "utility-outages": {
+      "file": "utility-outages.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:07.558Z",
+      "ok": true,
+      "stale": false,
+      "count": 16
+    },
+    "fcc-towers": {
+      "file": null,
+      "fetchedAt": null,
+      "ok": false,
+      "stale": false,
+      "optional": true,
+      "error": "empty payload kept out of the snapshot",
+      "count": 0
+    },
+    "conflict-gdelt": {
+      "file": "conflict-gdelt.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:08.178Z",
+      "ok": true,
+      "stale": false,
+      "count": 200
+    },
+    "conflict-acled": {
+      "file": "conflict-acled.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:08.189Z",
+      "ok": true,
+      "stale": false,
+      "count": 200
+    },
+    "major-hazards": {
+      "file": "major-hazards.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:11.606Z",
+      "ok": true,
+      "stale": false,
+      "count": 190
+    },
+    "strategic-warspotting": {
+      "file": "strategic-warspotting.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:11.609Z",
+      "ok": true,
+      "stale": false,
+      "count": 46
+    },
+    "strategic-satellites": {
+      "file": "strategic-satellites.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:11.617Z",
+      "ok": true,
+      "stale": false,
+      "count": 170
+    },
+    "strategic-launches": {
+      "file": "strategic-launches.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:11.619Z",
+      "ok": true,
+      "stale": false,
+      "count": 6
+    },
+    "strategic-briefs": {
+      "file": "strategic-briefs.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:11.620Z",
+      "ok": true,
+      "stale": false,
+      "count": 12
+    },
+    "strategic-ucdp": {
+      "file": "strategic-ucdp.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:11.622Z",
+      "ok": true,
+      "stale": false,
+      "count": 5
+    },
+    "strategic-censorship": {
+      "file": "strategic-censorship.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:11.623Z",
+      "ok": true,
+      "stale": false,
+      "count": 8
+    },
+    "strategic-kev": {
+      "file": "strategic-kev.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:11.625Z",
+      "ok": true,
+      "stale": false,
+      "count": 10
+    },
+    "strategic-ransomware": {
+      "file": "strategic-ransomware.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:11.626Z",
+      "ok": true,
+      "stale": false,
+      "count": 8
+    },
+    "strategic-radiation": {
+      "file": "strategic-radiation.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:11.628Z",
+      "ok": true,
+      "stale": false,
+      "count": 20
+    },
+    "strategic-balloons": {
+      "file": "strategic-balloons.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:11.632Z",
+      "ok": true,
+      "stale": false,
+      "count": 500
+    },
+    "free-abuse-ch": {
+      "file": "free-abuse-ch.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:11.634Z",
+      "ok": true,
+      "stale": false,
+      "count": 16
+    },
+    "free-ripestat": {
+      "file": "free-ripestat.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:11.636Z",
+      "ok": true,
+      "stale": false,
+      "count": 12
+    },
+    "free-unhcr": {
+      "file": "free-unhcr.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:11.637Z",
+      "ok": true,
+      "stale": false,
+      "count": 27
+    },
+    "free-nwss": {
+      "file": "free-nwss.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:11.638Z",
+      "ok": true,
+      "stale": false,
+      "count": 14
+    },
+    "free-hpai": {
+      "file": "free-hpai.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:11.640Z",
+      "ok": true,
+      "stale": false,
+      "count": 48
+    },
+    "free-usgs-water": {
+      "file": "free-usgs-water.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:11.641Z",
+      "ok": true,
+      "stale": false,
+      "count": 1
+    },
+    "free-meteoalarm": {
+      "file": "free-meteoalarm.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:11.643Z",
+      "ok": true,
+      "stale": false,
+      "count": 45
+    },
+    "free-advisories": {
+      "file": "free-advisories.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:11.647Z",
+      "ok": true,
+      "stale": false,
+      "count": 218
+    },
+    "free-nas-airspace": {
+      "file": "free-nas-airspace.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:11.649Z",
+      "ok": true,
+      "stale": false,
+      "count": 4
+    },
+    "free-cyclones": {
+      "file": "free-cyclones.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:12.081Z",
+      "ok": true,
+      "stale": false,
+      "count": 0
+    },
+    "home": {
+      "file": "home.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:12.110Z",
+      "ok": true,
+      "stale": false,
+      "count": 12
+    },
+    "keyword-tags": {
+      "file": "keyword-tags.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:12.129Z",
+      "ok": true,
+      "stale": false,
+      "count": 3
+    },
+    "events": {
+      "file": "events.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:12.164Z",
+      "ok": true,
+      "stale": false,
+      "count": 793
+    },
+    "entities": {
+      "file": "entities.20261128T1357Z.json",
+      "fetchedAt": "2026-11-28T14:01:19.299Z",
+      "ok": true,
+      "stale": false,
+      "count": 1039
+    }
+  }
+}

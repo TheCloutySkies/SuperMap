@@ -204,3 +204,74 @@
 .dashboard-window .op-panel-body { color: #1a1a1a; }
 .xp-window-body .op-panel-meta,
 .dashboard-window .op-panel-meta { color: #555; }
+
+/* ── Content-height panels on a scrolling page ──────────────────────────
+   The pane is white now, so the palette below is the light one: dark ink,
+   grey meta, blue links. */
+.xp-window-body .operations-home,
+.dashboard-window .operations-home {
+  --op-bg: #ffffff;
+  --op-surface: #ffffff;
+  --op-surface-2: #f4f2e8;
+  --op-border: #aca899;
+  --op-ink: #1a1a1a;
+  --op-dim: #444444;
+  --op-faint: #666666;
+  --op-accent: #003399;
+  --op-alert: #a4262c;
+  --op-danger: #a4262c;
+  --op-ok: #2f6b47;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background-color: #ffffff;
+  background-image: none;
+}
+.xp-window-body .operations-home .op-grid,
+.dashboard-window .operations-home .op-grid {
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  grid-template-rows: none;
+  grid-template-areas: none;
+  grid-auto-rows: auto;
+  align-items: start;
+  overflow-y: auto;
+  padding: 12px;
+  gap: 10px;
+}
+.xp-window-body .operations-home .op-panel,
+.dashboard-window .operations-home .op-panel {
+  grid-area: auto;
+  min-height: 0;
+  max-height: none;
+}
+.xp-window-body .operations-home .op-panel-body,
+.dashboard-window .operations-home .op-panel-body {
+  flex: none;
+  overflow: visible;
+  padding: 10px;
+}
+.xp-window-body .operations-home .op-panel[data-panel-id="map"],
+.dashboard-window .operations-home .op-panel[data-panel-id="map"] { min-height: 360px; }
+.xp-window-body .operations-home .op-panel[data-panel-id="map"] .op-panel-body,
+.dashboard-window .operations-home .op-panel[data-panel-id="map"] .op-panel-body {
+  height: 320px;
+  overflow: hidden;
+}
+.xp-window-body .operations-home .op-headlines a,
+.dashboard-window .operations-home .op-headlines a { color: #003399; }
+.xp-window-body .operations-home .op-btn,
+.dashboard-window .operations-home .op-btn {
+  border-radius: 0;
+  background: #ece9d8;
+  color: #1a1a1a;
+  box-shadow: inset -1px -1px #aca899, inset 1px 1px #fff;
+}
+@media (max-width: 900px) {
+  .xp-window-body .operations-home,
+  .dashboard-window .operations-home { height: auto; }
+  .xp-window-body .operations-home .op-grid,
+  .dashboard-window .operations-home .op-grid {
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+}

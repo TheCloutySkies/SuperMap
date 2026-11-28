@@ -178,6 +178,14 @@ export default function OperationsHome({
     })
   }, [consoleState, signals, threat, defcon, consoleNow])
 
+  const showSituation = Boolean(threat)
+  const showNews = headlines.length > 0
+  const showX = images.length > 0
+  const showMarkets = Boolean(gas) || Boolean(home?.stocks?.current)
+  const showHazards = Array.isArray(home?.earthquakes?.events) && home.earthquakes.events.length > 0
+  const showOrbital = Boolean(home?.space?.eonet) || Boolean(home?.space?.apod)
+  const showBatman = cases.length > 0
+
   const go = (view) => () => open(view)
   const piece = (value, present) => (bootstrapState === HOME_STATE.LIVE || bootstrapState === HOME_STATE.FAILED) && !present ? undefined : value
 
@@ -231,111 +239,125 @@ export default function OperationsHome({
         </nav>
 
         <main className="op-grid">
-          <Panel index="01" title="Situation" {...layout.props('situation')} meta={threat?.threat_level || '—'} onOpen={go('batman-overview')} refreshing={bootstrapState === HOME_STATE.WAKING}>
-            <DraggableTabs
-              tabs={tabOrder}
-              active={activeTab}
-              onChange={setActiveTab}
-              onReorder={(from, to) => setTabOrder((prev) => {
-                const next = [...prev]
-                const [moved] = next.splice(from, 1)
-                next.splice(to, 0, moved)
-                return next
-              })}
-              label="Situation tabs"
-            />
-            {activeTab === 'situation' ? (
-              threat ? (
-                <div className="op-situation">
-                  <div className="op-stat-row">
-                    <div><span className="op-stat-label">Threat level</span><strong className="op-num op-stat-value">{threat.threat_level || '—'}</strong></div>
-                    <div><span className="op-stat-label">Average</span><strong className="op-num op-stat-value">{Number(threat.average_score || 0).toFixed(1)}<small>/5</small></strong></div>
-                    <div><span className="op-stat-label">High risk</span><strong className="op-num op-stat-value">{threat.high_risk_count ?? '—'}</strong></div>
-                  </div>
-                  <div className="op-defcon">
-                    <span className="op-stat-label">DEFCON</span>
-                    <div className="op-defcon-scale">
-                      {[1, 2, 3, 4, 5].map((n) => <span key={n} className={defcon?.level === n ? 'is-on op-num' : 'op-num'}>{n}</span>)}
+          {showSituation ? (
+            <Panel index="01" title="Situation" {...layout.props('situation')} meta={threat?.threat_level || '—'} onOpen={go('batman-overview')} refreshing={bootstrapState === HOME_STATE.WAKING}>
+              <DraggableTabs
+                tabs={tabOrder}
+                active={activeTab}
+                onChange={setActiveTab}
+                onReorder={(from, to) => setTabOrder((prev) => {
+                  const next = [...prev]
+                  const [moved] = next.splice(from, 1)
+                  next.splice(to, 0, moved)
+                  return next
+                })}
+                label="Situation tabs"
+              />
+              {activeTab === 'situation' ? (
+                threat ? (
+                  <div className="op-situation">
+                    <div className="op-stat-row">
+                      <div><span className="op-stat-label">Threat level</span><strong className="op-num op-stat-value">{threat.threat_level || '—'}</strong></div>
+                      <div><span className="op-stat-label">Average</span><strong className="op-num op-stat-value">{Number(threat.average_score || 0).toFixed(1)}<small>/5</small></strong></div>
+                      <div><span className="op-stat-label">High risk</span><strong className="op-num op-stat-value">{threat.high_risk_count ?? '—'}</strong></div>
                     </div>
-                    <span className="op-muted">{defcon?.label || '—'}</span>
+                    <div className="op-defcon">
+                      <span className="op-stat-label">DEFCON</span>
+                      <div className="op-defcon-scale">
+                        {[1, 2, 3, 4, 5].map((n) => <span key={n} className={defcon?.level === n ? 'is-on op-num' : 'op-num'}>{n}</span>)}
+                      </div>
+                      <span className="op-muted">{defcon?.label || '—'}</span>
+                    </div>
+                    <div className="op-clock-line">
+                      <span className="op-num">{DOOMSDAY_SECONDS}s to midnight</span>
+                      <span className="op-clock-track"><i style={{ width: `${((threat.threat_score || 2) / 5) * 100}%` }} /></span>
+                    </div>
+                    {threat.narrative ? <p className="op-narrative">{threat.narrative}</p> : threat.summary ? <p className="op-narrative">{threat.summary}</p> : null}
+                    {Array.isArray(threat.bullets) && threat.bullets.length ? (
+                      <ul className="op-bullets">{threat.bullets.slice(0, 5).map((b, i) => <li key={i}>{b}</li>)}</ul>
+                    ) : null}
+                    {Array.isArray(threat.sources) && threat.sources.length ? <p className="op-faint">Sources: {threat.sources.slice(0, 6).join(', ')}</p> : null}
+                    <div className="op-panel-actions">
+                      <button type="button" className="op-btn" onClick={() => refreshHomeNow({ force: true })}>Refresh</button>
+                      <span className="op-faint op-num">Updated {ago(threat.timestamp)}</span>
+                    </div>
                   </div>
-                  <div className="op-clock-line">
-                    <span className="op-num">{DOOMSDAY_SECONDS}s to midnight</span>
-                    <span className="op-clock-track"><i style={{ width: `${((threat.threat_score || 2) / 5) * 100}%` }} /></span>
-                  </div>
-                  {threat.narrative ? <p className="op-narrative">{threat.narrative}</p> : threat.summary ? <p className="op-narrative">{threat.summary}</p> : null}
-                  {Array.isArray(threat.bullets) && threat.bullets.length ? (
-                    <ul className="op-bullets">{threat.bullets.slice(0, 5).map((b, i) => <li key={i}>{b}</li>)}</ul>
-                  ) : null}
-                  {Array.isArray(threat.sources) && threat.sources.length ? <p className="op-faint">Sources: {threat.sources.slice(0, 6).join(', ')}</p> : null}
-                  <div className="op-panel-actions">
-                    <button type="button" className="op-btn" onClick={() => refreshHomeNow({ force: true })}>Refresh</button>
-                    <span className="op-faint op-num">Updated {ago(threat.timestamp)}</span>
-                  </div>
-                </div>
-              ) : <Skeleton rows={5} label="Loading threat summary" />
-            ) : activeTab === 'conflict' ? (
-              <Suspense fallback={<Skeleton />}><ConflictMetricsWidget /></Suspense>
-            ) : (
-              <Suspense fallback={<Skeleton />}><OutageWidget /></Suspense>
-            )}
-            {activeTab === 'situation' ? (
-              <Suspense fallback={<Skeleton />}><StrategicOverviewWidget bootstrapState={bootstrapState} /></Suspense>
-            ) : null}
-          </Panel>
+                ) : <Skeleton rows={5} label="Loading threat summary" />
+              ) : activeTab === 'conflict' ? (
+                <Suspense fallback={<Skeleton />}><ConflictMetricsWidget /></Suspense>
+              ) : (
+                <Suspense fallback={<Skeleton />}><OutageWidget /></Suspense>
+              )}
+              {activeTab === 'situation' ? (
+                <Suspense fallback={<Skeleton />}><StrategicOverviewWidget bootstrapState={bootstrapState} /></Suspense>
+              ) : null}
+            </Panel>
+          ) : null}
 
           <Panel index="02" title="Live map" {...layout.props('map')} meta="community" onOpen={go('osint-map')} flush>
             <Suspense fallback={<Skeleton rows={6} />}><CommunityMapView variant="home" /></Suspense>
           </Panel>
 
-          <Panel index="03" title="Headlines" {...layout.props('news')} meta={`${headlines.length} items`} onOpen={go('news-feeds')}>
-            {headlines.length ? (
-              <ul className="op-headlines">
-                {headlines.map((item) => (
-                  <li key={item.id}>
-                    <span className="op-headline-meta"><b>{item.source}</b> <span className="op-num">{item.time ? ago(item.time) : '—'}</span></span>
-                    <a href={item.url || '#'} target="_blank" rel="noopener noreferrer">{item.title}</a>
-                  </li>
-                ))}
-              </ul>
-            ) : <Skeleton rows={6} />}
-          </Panel>
+          {showNews ? (
+            <Panel index="03" title="Headlines" {...layout.props('news')} meta={`${headlines.length} items`} onOpen={go('news-feeds')}>
+              {headlines.length ? (
+                <ul className="op-headlines">
+                  {headlines.map((item) => (
+                    <li key={item.id}>
+                      <span className="op-headline-meta"><b>{item.source}</b> <span className="op-num">{item.time ? ago(item.time) : '—'}</span></span>
+                      <a href={item.url || '#'} target="_blank" rel="noopener noreferrer">{item.title}</a>
+                    </li>
+                  ))}
+                </ul>
+              ) : <Skeleton rows={6} />}
+            </Panel>
+          ) : null}
 
-          <Panel index="04" title="X / OSINT" {...layout.props('x')} meta={`${images.length} images`} onOpen={go('osint-x')}>
-            {images.length ? (
-              <div className="op-filmstrip">
-                {images.map((item, i) => (
-                  <div className="op-film-cell has-item-menu" key={`${item.src}-${i}`}>
-                    <button type="button" onClick={() => setPhoto(item)} aria-label="Expand image"><img {...xImageProps(item.src)} alt="" loading="lazy" /></button>
-                    <ItemMenu item={{ type: 'article', kind: 'image', title: item.caption || 'Photo', url: item.postUrl || '', image: item.src || '' }} />
-                  </div>
-                ))}
-              </div>
-            ) : <Skeleton rows={3} />}
-          </Panel>
+          {showX ? (
+            <Panel index="04" title="X / OSINT" {...layout.props('x')} meta={`${images.length} images`} onOpen={go('osint-x')}>
+              {images.length ? (
+                <div className="op-filmstrip">
+                  {images.map((item, i) => (
+                    <div className="op-film-cell has-item-menu" key={`${item.src}-${i}`}>
+                      <button type="button" onClick={() => setPhoto(item)} aria-label="Expand image"><img {...xImageProps(item.src)} alt="" loading="lazy" /></button>
+                      <ItemMenu item={{ type: 'article', kind: 'image', title: item.caption || 'Photo', url: item.postUrl || '', image: item.src || '' }} />
+                    </div>
+                  ))}
+                </div>
+              ) : <Skeleton rows={3} />}
+            </Panel>
+          ) : null}
 
-          <Panel index="05" title="Markets" {...layout.props('markets')} onOpen={go('home')}>
-            <Suspense fallback={<Skeleton />}><StockWidget onOpenSettings={() => open('settings')} initialData={piece(home?.stocks, Boolean(home?.stocks?.current))} bootstrapState={bootstrapState} /></Suspense>
-            <GasPrices gas={gas} states={home?.gasStates || []} onRefresh={() => refreshHomeNow({ force: true })} />
-          </Panel>
+          {showMarkets ? (
+            <Panel index="05" title="Markets" {...layout.props('markets')} onOpen={go('home')}>
+              <Suspense fallback={<Skeleton />}><StockWidget onOpenSettings={() => open('settings')} initialData={piece(home?.stocks, Boolean(home?.stocks?.current))} bootstrapState={bootstrapState} /></Suspense>
+              <GasPrices gas={gas} states={home?.gasStates || []} onRefresh={() => refreshHomeNow({ force: true })} />
+            </Panel>
+          ) : null}
 
-          <Panel index="06" title="Hazards" {...layout.props('hazards')} onOpen={go(WEATHER_VIEW_ID)}>
-            <Suspense fallback={<Skeleton />}><EarthquakesWidget onShowOnMap={onShowLocationOnMap} initialData={piece(home?.earthquakes, Array.isArray(home?.earthquakes?.events) && home.earthquakes.events.length > 0)} bootstrapState={bootstrapState} /></Suspense>
-          </Panel>
+          {showHazards ? (
+            <Panel index="06" title="Hazards" {...layout.props('hazards')} onOpen={go(WEATHER_VIEW_ID)}>
+              <Suspense fallback={<Skeleton />}><EarthquakesWidget onShowOnMap={onShowLocationOnMap} initialData={piece(home?.earthquakes, Array.isArray(home?.earthquakes?.events) && home.earthquakes.events.length > 0)} bootstrapState={bootstrapState} /></Suspense>
+            </Panel>
+          ) : null}
 
-          <Panel index="07" title="Orbital" {...layout.props('orbital')} onOpen={go('batman-overview')}>
-            <Suspense fallback={<Skeleton />}><SpaceWidget initialData={piece(home?.space, Boolean(home?.space?.eonet || home?.space?.apod))} bootstrapState={bootstrapState} /></Suspense>
-            <Suspense fallback={<Skeleton />}><NextLaunchWidget bootstrapState={bootstrapState} /></Suspense>
-          </Panel>
+          {showOrbital ? (
+            <Panel index="07" title="Orbital" {...layout.props('orbital')} onOpen={go('batman-overview')}>
+              <Suspense fallback={<Skeleton />}><SpaceWidget initialData={piece(home?.space, Boolean(home?.space?.eonet || home?.space?.apod))} bootstrapState={bootstrapState} /></Suspense>
+              <Suspense fallback={<Skeleton />}><NextLaunchWidget bootstrapState={bootstrapState} /></Suspense>
+            </Panel>
+          ) : null}
 
-          <Panel index="08" title="Batman" {...layout.props('batman')} onOpen={go('batman-cases')}>
-            {cases.length ? (
-              <ul className="op-cases">
-                {cases.map((item) => <li key={item.id}><button type="button" onClick={() => open('batman-cases')}>{item.title || 'Untitled case'}</button><span className="op-num">{(item.nodes || []).length}</span></li>)}
-              </ul>
-            ) : <p className="op-muted">No cases yet.</p>}
-            <button type="button" className="op-btn op-btn-primary" onClick={() => open('batman-cases')}>New case</button>
-          </Panel>
+          {showBatman ? (
+            <Panel index="08" title="Batman" {...layout.props('batman')} onOpen={go('batman-cases')}>
+              {cases.length ? (
+                <ul className="op-cases">
+                  {cases.map((item) => <li key={item.id}><button type="button" onClick={() => open('batman-cases')}>{item.title || 'Untitled case'}</button><span className="op-num">{(item.nodes || []).length}</span></li>)}
+                </ul>
+              ) : <p className="op-muted">No cases yet.</p>}
+              <button type="button" className="op-btn op-btn-primary" onClick={() => open('batman-cases')}>New case</button>
+            </Panel>
+          ) : null}
 
           <Panel index="09" title="Bulletin" {...layout.props('bulletin')} onOpen={go('bulletin')}>
             <LatestBulletin onOpen={() => open('bulletin')} />

@@ -216,11 +216,6 @@
   color: var(--y2k-text-muted);
 }
 
-@keyframes feeds-osint-desk-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
 .feeds-terminal-table {
   width: 100%;
   border-collapse: collapse;

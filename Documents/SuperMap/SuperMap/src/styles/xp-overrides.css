@@ -595,3 +595,47 @@ select,
   .xp-tray-quick-btn { width: 30px; height: 30px; }
   .xp-tray { gap: 4px; padding: 0 6px; }
 }
+
+/* ── one sheet contract on a phone ─────────────────────── */
+@media (max-width: 900px) {
+  body { overflow-x: hidden; }
+  img { max-width: 100%; }
+
+  /* Dialogs rise from the taskbar, one shape everywhere. */
+  .xp-scrim { align-items: end; padding: 0; }
+  .xp-dialog {
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important;
+    bottom: calc(var(--xp-taskbar-h) + 4px) !important;
+    transform: none !important;
+    width: 100% !important;
+    max-height: 82dvh;
+    border-radius: 0;
+  }
+  .xp-dialog .title-bar { position: sticky; top: 0; z-index: 2; }
+  .xp-dialog .window-body { overflow: auto; padding-bottom: 12px; }
+  .xp-dialog-actions button { min-height: 44px; padding: 0 16px; }
+  .xp-dialog .title-bar-controls button { min-width: 44px; }
+
+  .msn-modal { align-items: end; padding: 0; }
+  .msn-dialog { width: 100% !important; max-height: 82dvh; }
+  .msn-dialog .window-body { overflow: auto; }
+
+  .sm-auth-card,
+  .sm-public {
+    width: 100% !important;
+    max-height: 82dvh;
+    border-radius: 0;
+  }
+
+  /* The account window is the whole page above the bar. */
+  .sm-account-page { height: 100%; }
+  .sm-account-page .xp-tabs { flex-wrap: nowrap; overflow-x: auto; }
+  .sm-account-page .xp-tabs button { flex: 0 0 auto; min-height: 34px; }
+  .sm-account-page :is(input, select, textarea) { font-size: 16px; }
+  .sm-account-page .xp-page-body { padding: 8px; }
+  .sm-account-page .sm-row,
+  .sm-account-page .sm-card-actions button { min-height: 44px; }
+}

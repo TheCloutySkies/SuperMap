@@ -59,6 +59,9 @@ import MobileLayoutPrompt from './components/MobileLayoutPrompt'
 import { osintXToBannerItems, readHomeSnapshot } from './lib/homeBootstrap'
 import { metallicss } from 'metallicss'
 import './App.css'
+import './components/operations/operations.css'
+import './components/operations/chrome.css'
+import './components/operations/scroll.css'
 import { getApiBase } from './lib/homeBootstrap'
 
 function initMetallicss() {
@@ -848,6 +851,8 @@ function App() {
           layersOpen={isRightSidebarOpen}
           onToggleLayers={() => setIsRightSidebarOpen((open) => !open)}
           onGoHome={goHome}
+          activeMode={appMode}
+          onModeSelect={(mode) => handleFooterNav(mode)}
         >
           <main className={`main main--mobile ${footerTransition ? 'main--y2k-transition' : ''} ${isMapView ? 'main--map' : ''} ${isCrimeView ? 'main--crime' : ''}`}>
             {mainContent}

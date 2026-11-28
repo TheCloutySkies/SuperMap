@@ -1,0 +1,83 @@
+/**
+ * Phase 0 — one scroll architecture for the whole app.
+ *
+ * The frame owns the viewport; each route owns exactly one scroll region.
+ * Imported last by App so it overrides the older chrome rules.
+ */
+.app {
+  height: 100dvh;
+  overflow: hidden;
+}
+.app-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  overflow: hidden;
+}
+.main {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.main > * {
+  min-height: 0;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Document-style routes: one inner scroller, no nested page scrollbars. */
+.main-content-scroll,
+.main-feed-view,
+.view-scroll,
+.home-screen,
+.batman-mode,
+.bm-overview {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* A map owns gestures — never nest it in a vertical scroller. */
+.main--map,
+.main--map > *,
+.main--operations,
+.main--operations > * { overflow: hidden; }
+
+/* Grid/flex children that contain scrolling content need explicit floors. */
+.batman-board-wrap,
+.batman-inspector,
+.bm-discovery-body,
+.gm-panes,
+.gm-navigator,
+.gm-results,
+.gm-detail,
+.home-screen-main { min-height: 0; min-width: 0; }
+
+/* The console panes scroll inside their own fixed-height frame. */
+.batman-mode .bm-overview { display: flex; flex-direction: column; }
+.batman-mode .gm-panes { min-height: 320px; }
+
+/* Wide content gets its own horizontal scroller, never the page. */
+.gm-table-wrap,
+.batman-timeline-holder,
+.data-table-wrap { overflow-x: auto; max-width: 100%; }
+
+@media (max-width: 900px) {
+  .app { height: 100dvh; }
+  .main-content-scroll,
+  .main-feed-view,
+  .home-screen,
+  .batman-mode,
+  .bm-overview {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+    -webkit-tap-highlight-color: transparent;
+  }
+  .app-body { padding-bottom: 0; }
+}

@@ -4,7 +4,6 @@
  */
 import { useMemo, useState } from 'react'
 import { getApiBase } from '../../lib/homeBootstrap'
-import { kindMeta } from './caseModel'
 
 const API_BASE = getApiBase()
 
@@ -126,7 +125,7 @@ export default function AiPanel({ caseDoc, selectedId, onSaveNote }) {
           ) : null}
           <p className="batman-hint">
             Confidence {Math.round((Number(answer.confidence) || 0) * 100)}% · from {chosen.length} items ·{' '}
-            {chosen.slice(0, 6).map((node) => `${kindMeta(node.kind).icon} ${node.title}`).join(' · ')}
+            {chosen.slice(0, 6).map((node) => node.title).join(' · ')}
           </p>
         </article>
       ) : null}

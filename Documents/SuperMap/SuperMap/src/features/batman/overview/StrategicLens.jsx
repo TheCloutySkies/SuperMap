@@ -4,6 +4,7 @@
  * and adds an Add-to-Case action to the evidence drawer.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Search, Plus } from 'lucide-react'
 import SituationBrief from '../../../components/strategic/SituationBrief'
 import ConvergenceStrip from '../../../components/strategic/ConvergenceStrip'
 import SignalBoard from '../../../components/strategic/SignalBoard'
@@ -90,7 +91,7 @@ export default function StrategicLens({ onAddToCase }) {
         <select value={prefs.windowHours} onChange={(event) => patchPrefs({ windowHours: Number(event.target.value) })} aria-label="Time window">
           {[1, 6, 24, 72, 168].map((hours) => <option key={hours} value={hours}>Last {hours}h</option>)}
         </select>
-        <button type="button" className="batman-btn batman-btn-ghost" onClick={() => setAskOpen(true)}>⌕ Ask</button>
+        <button type="button" className="batman-btn batman-btn-ghost" onClick={() => setAskOpen(true)}><Search size={13} strokeWidth={1.5} aria-hidden /> Ask</button>
         {store.error ? <button type="button" className="batman-btn batman-btn-ghost" onClick={() => refreshConsole({ force: true })}>Retry</button> : null}
       </div>
 
@@ -181,7 +182,7 @@ export default function StrategicLens({ onAddToCase }) {
             now={now}
           />
           <div className="bm-lens-drawer-add">
-            <button type="button" className="batman-btn" onClick={() => addSignal(selectedSignal)}>🦇 Add this signal to a case</button>
+            <button type="button" className="batman-btn" onClick={() => addSignal(selectedSignal)}><Plus size={13} strokeWidth={1.5} aria-hidden /> Add this signal to a case</button>
           </div>
         </>
       ) : null}

@@ -1,14 +1,14 @@
 /**
- * Batman Mode Overview — the discovery surface.
+ * Batman Mode Overview — a record-centric console.
  *
- * Empty on arrival: a search box, object types, tags, saved searches and a
- * collapsed situation strip. Results appear only when the visitor searches or
- * narrows. The strategic desk is a lens here, opened deliberately, not a page.
+ * Empty on arrival: one search field, an object navigator and a collapsed
+ * situation strip. Results appear only when the visitor searches or narrows.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Search, ChevronDown, ChevronUp, Bookmark, Trash2, Clock3 } from 'lucide-react'
 import { useSuperMapAccount } from '../../accounts/SuperMapAccounts'
 import {
-  OBJECT_KINDS, getDiscoveryIndex, facetCounts, searchIndex,
+  getDiscoveryIndex, searchIndex,
   startDiscoverySources, subscribePins, setDiscoveryVault, readLocalVault,
 } from './discoveryIndex'
 import FacetRail from './FacetRail'
@@ -25,6 +25,7 @@ const RECENT_KEY = 'supermap.batman.recentSearches.v1'
 const DEFAULT_FILTERS = {
   kind: [], source: [], theater: [], tag: [], time: 'any', minConfidence: 0,
 }
+const TIME_MS = { any: 0, '24h': 86400000, '7d': 604800000, '30d': 2592000000 }
 
 function readJson(key, fallback) {
   try {
@@ -40,8 +41,6 @@ function writeJson(key, value) {
 function toggle(list, value) {
   return list.includes(value) ? list.filter((entry) => entry !== value) : [...list, value]
 }
-
-const TIME_MS = { any: 0, '24h': 86400000, '7d': 604800000, '30d': 2592000000 }
 
 export default function OverviewView({ onGoCases }) {
   const { user, vault } = useSuperMapAccount()
@@ -74,14 +73,12 @@ export default function OverviewView({ onGoCases }) {
 
   useEffect(() => {
     setDiscoveryVault(vault || readLocalVault(), user?.uid || null)
-    const bump = () => setIndexVersion((n) => n + 1)
-    const timer = setTimeout(bump, 0)
+    const timer = setTimeout(() => setIndexVersion((n) => n + 1), 0)
     return () => clearTimeout(timer)
   }, [vault, user?.uid])
 
   const index = useMemo(
     () => getDiscoveryIndex({ userUid: user?.uid || null, force: indexVersion > 0 }),
-    // indexVersion signals the underlying stores changed; the index is cached inside.
     [user?.uid, indexVersion],
   )
 
@@ -103,11 +100,6 @@ export default function OverviewView({ onGoCases }) {
     || filters.kind.length > 0 || filters.source.length > 0
     || filters.theater.length > 0 || filters.tag.length > 0
     || filters.time !== 'any' || filters.minConfidence > 0
-
-  const scopedCounts = useMemo(() => ({
-    tags: facetCounts(index.records, 'tags').slice(0, 18),
-    kinds: facetCounts(index.records, 'kind'),
-  }), [index])
 
   const onToggle = useCallback((field, value) => {
     setFilters((prev) => {
@@ -166,109 +158,80 @@ export default function OverviewView({ onGoCases }) {
 
   const posture = situation.posture
   return (
-    <div className="bm-overview">
-      <form className="bm-search" onSubmit={runSearch} role="search">
-        <span aria-hidden>⌕</span>
+    <div className="gm-console">
+      <div className="gm-app-tabs" role="tablist" aria-label="Batman Mode applications">
+        <button type="button" className="is-on" role="tab" aria-selected="true">Search</button>
+        <button type="button" role="tab" aria-selected={lensOpen} onClick={() => setLensOpen(true)}>Situation</button>
+        <button type="button" role="tab" aria-selected="false" onClick={() => {
+          const withCoords = index.records.filter((row) => row.lat != null)
+          if (withCoords.length) openInMap(withCoords[0])
+        }}>Map</button>
+        <button type="button" role="tab" aria-selected="false" onClick={() => selected && setSelected(selected)}>Browser</button>
+        <button type="button" className="gm-app-cases" onClick={onGoCases}>Cases</button>
+      </div>
+
+      <form className="gm-search" onSubmit={runSearch} role="search">
+        <Search size={16} strokeWidth={1.5} aria-hidden />
         <input
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search everything — a name, place, event, source…"
-          aria-label="Search all published data"
+          placeholder="Search all indexed records"
+          aria-label="Search all published records"
           autoComplete="off"
         />
-        <button type="submit" className="batman-btn">Search</button>
-        <button type="button" className="batman-btn batman-btn-ghost" onClick={saveSearch}>Save search</button>
+        <button type="submit" className="gm-btn gm-btn-primary">Search</button>
+        <button type="button" className="gm-btn" onClick={saveSearch}><Bookmark size={14} strokeWidth={1.5} aria-hidden /> Save</button>
       </form>
 
-      <div className="bm-types" aria-label="Object types">
-        {OBJECT_KINDS.map((kind) => {
-          const count = scopedCounts.kinds.find((entry) => entry.value === kind.id)?.count || 0
-          const on = filters.kind.includes(kind.id)
-          return (
-            <button
-              key={kind.id}
-              type="button"
-              className={`bm-type ${on ? 'is-on' : ''}`}
-              aria-pressed={on}
-              onClick={() => onToggle('kind', kind.id)}
-            >
-              <span aria-hidden>{kind.icon}</span>
-              <span>{kind.label}</span>
-              <b>{count}</b>
-            </button>
-          )
-        })}
-      </div>
-
-      <section className="bm-cloud" aria-label="Common tags">
-        {scopedCounts.tags.map((entry) => (
-          <button
-            key={entry.value}
-            type="button"
-            className={filters.tag.includes(entry.value) ? 'is-on' : ''}
-            onClick={() => onToggle('tag', entry.value)}
-          >
-            {entry.value} <b>{entry.count}</b>
-          </button>
-        ))}
-      </section>
-
       {(saved.length || recent.length) ? (
-        <section className="bm-searches">
+        <div className="gm-query-strips">
           {saved.length ? (
-            <div className="bm-saved">
-              <h3>Saved searches</h3>
+            <div className="gm-query-strip">
+              <span className="gm-query-label">Saved queries</span>
               {saved.map((entry) => (
-                <div key={entry.id} className="bm-saved-row">
-                  <button type="button" onClick={() => applySaved(entry)}>
-                    {entry.query || 'Filtered view'}
-                    <em>{entry.filters.kind.length ? entry.filters.kind.join(', ') : 'all types'}</em>
-                  </button>
-                  <button type="button" className="bm-saved-x" onClick={() => removeSaved(entry.id)} aria-label="Remove saved search">✕</button>
-                </div>
+                <span className="gm-query-row" key={entry.id}>
+                  <button type="button" onClick={() => applySaved(entry)}>{entry.query || 'Filtered view'}</button>
+                  <button type="button" className="gm-icon-btn" onClick={() => removeSaved(entry.id)} aria-label="Remove saved query"><Trash2 size={12} strokeWidth={1.5} /></button>
+                </span>
               ))}
             </div>
           ) : null}
           {recent.length ? (
-            <div className="bm-recent">
-              <h3>Recent</h3>
+            <div className="gm-query-strip">
+              <span className="gm-query-label"><Clock3 size={12} strokeWidth={1.5} aria-hidden /> Recent</span>
               {recent.map((entry) => <button type="button" key={entry} onClick={() => setQuery(entry)}>{entry}</button>)}
             </div>
           ) : null}
-        </section>
+        </div>
       ) : null}
 
-      <section className={`bm-situation ${lensOpen ? 'is-open' : ''}`}>
-        <button type="button" className="bm-situation-toggle" onClick={() => setLensOpen(!lensOpen)} aria-expanded={lensOpen}>
-          <span className="bm-situation-dot" style={{ background: posture?.color || '#8494b3' }} aria-hidden />
-          <strong>Situation at a glance</strong>
-          {posture ? <span>{posture.band} · {posture.score}/100</span> : <span>reading published feeds…</span>}
-          {situation.convergence?.length ? <em>{situation.convergence.length} places where reports line up</em> : null}
-          <span className="bm-situation-chevron">{lensOpen ? '▴' : '▾'}</span>
+      <section className="gm-situation">
+        <button type="button" onClick={() => setLensOpen(!lensOpen)} aria-expanded={lensOpen}>
+          <span>Situation at a glance</span>
+          {posture ? <span className="gm-num">{posture.band} · {posture.score}/100</span> : <span className="gm-hint">reading published data…</span>}
+          {situation.convergence?.length ? <span className="gm-num">{situation.convergence.length} converging theaters</span> : null}
+          <span className="gm-situation-toggle">{lensOpen ? <ChevronUp size={14} strokeWidth={1.5} /> : <ChevronDown size={14} strokeWidth={1.5} />}</span>
         </button>
-        <div className="bm-situation-meta"><DataFreshness /></div>
-        {lensOpen ? <StrategicLens onAddToCase={(item) => requestAddToCase(item)} /> : null}
+        <div className="gm-situation-meta"><DataFreshness /></div>
+        {lensOpen ? <StrategicLens onAddToCase={requestAddToCase} /> : null}
       </section>
 
-      <div className="bm-discovery-body">
-        {active ? <FacetRail scoped={results} filters={filters} onToggle={onToggle} onClear={clear} indexSize={index.records.length} /> : null}
-        <ResultsGrid rows={active ? results : []} active={active} onOpen={setSelected} onClear={clear} />
+      <div className="gm-panes">
+        <FacetRail
+          records={results} filters={filters}
+          onToggle={onToggle} onClear={clear} active={active}
+        />
+        <ResultsGrid
+          rows={active ? results : []} active={active} indexSize={index.records.length}
+          selectedId={selected?.id || null} onSelect={setSelected} onClear={clear}
+        />
+        <ObjectBrowser object={selected} index={index} onOpen={setSelected} onOpenInMap={openInMap} />
       </div>
 
-      {selected ? (
-        <ObjectBrowser
-          object={selected}
-          index={index}
-          onClose={() => setSelected(null)}
-          onOpen={(row) => setSelected(row)}
-          onOpenInMap={openInMap}
-        />
-      ) : null}
-
-      <footer className="bm-overview-foot">
-        <p>Everything here comes from published data already in the app. Nothing is invented, and nothing on this page writes to a case until you choose Add to Case.</p>
-        <button type="button" className="batman-btn" onClick={onGoCases}>Go to Cases →</button>
+      <footer className="gm-console-foot">
+        <span>All records come from published sources. Nothing is displayed until you search or narrow.</span>
+        <button type="button" className="gm-btn" onClick={onGoCases}>Open Cases</button>
       </footer>
     </div>
   )

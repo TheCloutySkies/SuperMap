@@ -8,7 +8,6 @@ import Graph from 'graphology'
 import louvain from 'graphology-communities-louvain'
 import betweenness from 'graphology-metrics/centrality/betweenness.js'
 import { bidirectional } from 'graphology-shortest-path'
-import { kindMeta } from './caseModel'
 
 export default function AnalysisPanel({ caseDoc, selectedId, onSelect }) {
   const [fromId, setFromId] = useState('')
@@ -80,7 +79,7 @@ export default function AnalysisPanel({ caseDoc, selectedId, onSelect }) {
         {analysis.key.map((row) => (
           <li key={row.id}>
             <button type="button" onClick={() => onSelect?.(row.id)}>
-              {kindMeta(byId.get(row.id)?.kind).icon} {byId.get(row.id)?.title || row.id}
+              {byId.get(row.id)?.title || row.id}
             </button>
             <em>{row.degree} links · betweenness {row.betweenness.toFixed(2)}</em>
           </li>

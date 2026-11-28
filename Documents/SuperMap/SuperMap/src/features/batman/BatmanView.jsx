@@ -7,6 +7,7 @@
  */
 import { useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Shield } from 'lucide-react'
 import { useSuperMapAccount } from '../accounts/SuperMapAccounts'
 import OverviewView from './overview/OverviewView'
 import CasesWorkspace from './CasesWorkspace'
@@ -43,7 +44,7 @@ export default function BatmanView({ view }) {
     <div className="batman-mode">
       <header className="batman-head bm-shell-head">
         <div className="batman-title">
-          <h1><span aria-hidden>🦇</span> Batman Mode</h1>
+          <h1><Shield size={16} strokeWidth={1.5} aria-hidden /> Batman Mode</h1>
           <p>Explore what is published, then build the case. {user ? `Signed in as ${user.email || user.uid}.` : 'Sign in to save cases to your account.'}</p>
         </div>
         <div className="bm-switch" role="tablist" aria-label="Batman Mode views">

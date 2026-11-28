@@ -1,14 +1,15 @@
 /**
- * Browser-style drawer for one object: properties, the original source, media,
- * related objects and the actions that carry it into a case / graph / map.
+ * The object record panel: Properties / Relationships / Sources.
+ * Every displayed value is tethered to the published source that produced it.
  */
 import { useState } from 'react'
+import { ExternalLink, Link2, MapPin, Plus } from 'lucide-react'
 import { OBJECT_KINDS, relatedObjects, theaterLabel } from './discoveryIndex'
 import { requestAddToCase } from '../caseStore'
 
 function stamp(ms) {
   if (!Number.isFinite(ms) || ms <= 0) return '—'
-  return new Date(ms).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+  return new Date(ms).toLocaleString('en-CA', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 function toCaseItem(row) {
@@ -28,87 +29,112 @@ function toCaseItem(row) {
   }
 }
 
-export default function ObjectBrowser({ object, index, onClose, onOpen, onOpenInMap }) {
-  const noteKey = object ? `bm:notes:${object.id}` : ''
-  const [note, setNote] = useState(() => {
-    try { return localStorage.getItem(noteKey) || '' } catch { return '' }
-  })
+export default function ObjectBrowser({ object, index, onOpen, onOpenInMap }) {
+  const [note, setNote] = useState('')
   const [saved, setSaved] = useState(false)
-
   if (!object) return null
+
   const meta = OBJECT_KINDS.find((entry) => entry.id === object.kind)
   const related = relatedObjects(index, object)
+  const noteKey = `bm:notes:${object.id}`
+  const currentNote = note || (() => { try { return localStorage.getItem(noteKey) || '' } catch { return '' } })()
   const saveNote = () => {
-    try { localStorage.setItem(`bm:notes:${object.id}`, note) } catch { /* private mode */ }
+    try { localStorage.setItem(noteKey, currentNote) } catch { /* private mode */ }
+    setNote(currentNote)
     setSaved(true)
   }
+  const properties = [
+    ['Type', meta?.label || object.kind],
+    ['Source', object.source || '—'],
+    ['Theater', theaterLabel(object.theater)],
+    ['Time', stamp(object.t)],
+    ['Coordinates', object.lat != null ? `${object.lat.toFixed(4)}, ${object.lon?.toFixed(4)}` : '—'],
+    ['Confidence', `${Math.round(object.confidence * 100)}%`],
+    ['Record id', object.sourceId || object.id],
+    ...(object.tags?.length ? [['Tags', object.tags.join(', ')]] : []),
+  ]
 
   return (
-    <>
-      <div className="bm-browser-scrim" onClick={onClose} aria-hidden />
-      <aside className="bm-browser" role="dialog" aria-modal="true" aria-label={object.title}>
-        <header className="bm-browser-head">
-          <div>
-            <p className="bm-browser-kind">{meta?.icon || '◈'} {meta?.label || object.kind} · {theaterLabel(object.theater)}</p>
-            <h2>{object.title}</h2>
-          </div>
-          <button type="button" className="batman-btn batman-btn-ghost" onClick={onClose}>✕</button>
-        </header>
-
-        <div className="bm-browser-body">
-          <section className="bm-browser-block">
-            <h3>What it says</h3>
-            <p>{object.summary || 'No summary was published with this object.'}</p>
-            {object.url ? (
-              <a href={/^https?:\/\//.test(object.url) ? object.url : undefined} onClick={! /^https?:\/\//.test(object.url) ? (event) => { event.preventDefault(); onOpenInMap?.(object) } : undefined} target={/^https?:\/\//.test(object.url) ? '_blank' : undefined} rel="noopener noreferrer">
-                {/^https?:\/\//.test(object.url) ? 'Open the original →' : 'Open in map →'}
-              </a>
-            ) : null}
-          </section>
-
-          <section className="bm-browser-block">
-            <h3>Properties</h3>
-            <dl className="bm-properties">
-              <div><dt>Source</dt><dd>{object.source || '—'}</dd></div>
-              <div><dt>Type</dt><dd>{meta?.label || object.kind}</dd></div>
-              <div><dt>Time</dt><dd>{stamp(object.t)}</dd></div>
-              <div><dt>Confidence</dt><dd>{Math.round(object.confidence * 100)}%</dd></div>
-              <div><dt>Location</dt><dd>{object.lat != null ? `${object.lat.toFixed(3)}, ${object.lon?.toFixed(3)}` : '—'}</dd></div>
-              <div><dt>Region</dt><dd>{theaterLabel(object.theater)}</dd></div>
-              {object.tags?.length ? <div><dt>Tags</dt><dd>{object.tags.join(', ')}</dd></div> : null}
-            </dl>
-          </section>
-
-          <section className="bm-browser-block">
-            <h3>Related objects</h3>
-            {related.length ? (
-              <ul className="bm-related">
-                {related.map((row) => (
-                  <li key={row.id}>
-                    <button type="button" onClick={() => onOpen(row)}>
-                      <span>{OBJECT_KINDS.find((entry) => entry.id === row.kind)?.icon || '◈'}</span>
-                      <span>{row.title}</span>
-                      <em>{row.source}</em>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : <p className="batman-hint">Nothing else published here shares its tags, place or time.</p>}
-          </section>
-
-          <section className="bm-browser-block">
-            <h3>My note <span className="batman-hint">{saved ? ' · saved' : ''}</span></h3>
-            <textarea rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder="What matters about this?" />
-            <button type="button" className="batman-btn batman-btn-ghost" onClick={saveNote}>Save note</button>
-          </section>
+    <aside className="gm-detail" aria-label={object.title}>
+      <header className="gm-detail-head">
+        <div>
+          <p className="gm-detail-kind">{meta?.label || object.kind} · {theaterLabel(object.theater)}</p>
+          <h2>{object.title}</h2>
+          <p className="gm-detail-summary">{object.summary || 'No summary was published with this record.'}</p>
         </div>
+      </header>
 
-        <footer className="bm-browser-actions">
-          <button type="button" className="batman-btn" onClick={() => requestAddToCase(toCaseItem(object))}>🦇 Add to Case</button>
-          <button type="button" className="batman-btn batman-btn-ghost" onClick={() => requestAddToCase({ ...toCaseItem(object), type: 'signal' })}>Open in Graph</button>
-          <button type="button" className="batman-btn batman-btn-ghost" onClick={() => onOpenInMap?.(object)}>Open in Map</button>
-        </footer>
-      </aside>
-    </>
+      <div className="gm-detail-body">
+        <section className="gm-detail-section">
+          <h3>Properties</h3>
+          <dl className="gm-properties">
+            {properties.map(([label, value]) => (
+              <div key={label}><dt>{label}</dt><dd className="gm-num">{value}</dd></div>
+            ))}
+          </dl>
+        </section>
+
+        <section className="gm-detail-section">
+          <h3>Relationships <span className="gm-num">{related.length}</span></h3>
+          {related.length ? (
+            <ul className="gm-related">
+              {related.map((row) => (
+                <li key={row.id}>
+                  <button type="button" onClick={() => onOpen(row)}>
+                    <Link2 size={13} strokeWidth={1.5} aria-hidden />
+                    <span>{row.title}</span>
+                    <em>{OBJECT_KINDS.find((entry) => entry.id === row.kind)?.label || row.kind}</em>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : <p className="gm-hint">No other records share this one's tags, theater or time.</p>}
+        </section>
+
+        <section className="gm-detail-section">
+          <h3>Sources</h3>
+          <ul className="gm-sources">
+            <li>
+              <span className="gm-source-label">Published feed</span>
+              <span className="gm-num">{object.source || '—'}</span>
+            </li>
+            {object.url ? (
+              <li>
+                <span className="gm-source-label">Original document</span>
+                {/^https?:\/\//.test(object.url) ? (
+                  <a href={object.url} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink size={13} strokeWidth={1.5} aria-hidden /> {object.url}
+                  </a>
+                ) : (
+                  <button type="button" onClick={() => onOpenInMap?.(object)}>
+                    <MapPin size={13} strokeWidth={1.5} aria-hidden /> Show on map
+                  </button>
+                )}
+              </li>
+            ) : null}
+            {object.ref?.entity ? (
+              <li>
+                <span className="gm-source-label">Derived from</span>
+                <span className="gm-num">{object.ref.entity.eventCount} ingested events</span>
+              </li>
+            ) : null}
+          </ul>
+        </section>
+
+        <section className="gm-detail-section">
+          <h3>Analyst note</h3>
+          <textarea rows={3} value={currentNote} onChange={(event) => setNote(event.target.value)} placeholder="Note about this record" />
+          <button type="button" className="gm-btn" onClick={saveNote}>Save note{saved ? ' · saved' : ''}</button>
+        </section>
+      </div>
+
+      <footer className="gm-detail-actions">
+        <button type="button" className="gm-btn gm-btn-primary" onClick={() => requestAddToCase(toCaseItem(object))}>
+          <Plus size={14} strokeWidth={1.5} aria-hidden /> Add to case
+        </button>
+        <button type="button" className="gm-btn" onClick={() => requestAddToCase({ ...toCaseItem(object), type: 'signal' })}>Open in graph</button>
+        <button type="button" className="gm-btn" onClick={() => onOpenInMap?.(object)} disabled={object.lat == null}>Open in map</button>
+      </footer>
+    </aside>
   )
 }

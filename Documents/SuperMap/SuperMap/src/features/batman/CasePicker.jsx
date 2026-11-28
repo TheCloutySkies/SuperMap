@@ -9,6 +9,7 @@ import { createPortal } from 'react-dom'
 import { useSuperMapAccount } from '../accounts/SuperMapAccounts'
 import { createCase, fetchCase, persistCase, subscribeCases } from './caseStore'
 import { cleanItemForNode, nodeFromItem, NODE_KINDS } from './caseModel'
+import KindIcon from './kindIcons'
 import './batman.css'
 
 export default function CasePickerHost() {
@@ -95,7 +96,7 @@ export default function CasePickerHost() {
           <button type="button" className="batman-btn batman-btn-ghost" onClick={close} disabled={busy}>Close</button>
         </header>
         <p className="batman-modal-item">
-          <span aria-hidden>{kind.icon}</span> {String(item.title || item.name || 'Untitled').slice(0, 120)}
+          <span aria-hidden><KindIcon name={kind.icon} /></span> {String(item.title || item.name || 'Untitled').slice(0, 120)}
         </p>
 
         <form

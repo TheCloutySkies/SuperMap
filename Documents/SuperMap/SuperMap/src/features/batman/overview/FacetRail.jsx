@@ -1,89 +1,114 @@
-/**
- * Gotham-style facet rail. Counts come from the records in scope before the
- * facet itself is applied, so each number tells you what narrowing would give.
- */
+/** Object-type list and histogram facets — the console's left navigator. */
 import { useMemo } from 'react'
+import {
+  Building2, Briefcase, Crosshair, FileText, FolderOpen, Globe,
+  MapPin, Radio, User, AtSign,
+} from 'lucide-react'
 import { OBJECT_KINDS, facetCounts, theaterLabel } from './discoveryIndex'
 
+const ICONS = {
+  FileText, AtSign, MapPin, Radio, User, Building2,
+  Globe, FolderOpen, Crosshair, Briefcase,
+}
+
 const TIME_RANGES = [
-  { id: 'any', label: 'Any time', ms: 0 },
-  { id: '24h', label: 'Last 24 hours', ms: 24 * 60 * 60 * 1000 },
-  { id: '7d', label: 'Last 7 days', ms: 7 * 24 * 60 * 60 * 1000 },
-  { id: '30d', label: 'Last 30 days', ms: 30 * 24 * 60 * 60 * 1000 },
+  { id: 'any', label: 'Any time' },
+  { id: '24h', label: 'Last 24 hours' },
+  { id: '7d', label: 'Last 7 days' },
+  { id: '30d', label: 'Last 30 days' },
 ]
 
-function FacetGroup({ title, entries, selected, onToggle, format = (value) => value, limit = 8 }) {
-  const [shown, more] = [entries.slice(0, limit), entries.length - limit]
+function FacetGroup({ title, entries, selected, onToggle, format = (value) => value, limit = 7 }) {
+  const shown = entries.slice(0, limit)
+  const max = entries[0]?.count || 1
   if (!entries.length) return null
   return (
-    <section className="bm-facet-group">
+    <section className="gm-facet">
       <h4>{title}</h4>
       <ul>
-        {shown.map((entry) => {
-          const on = selected.includes(entry.value)
-          return (
-            <li key={entry.value}>
-              <button type="button" className={on ? 'is-on' : ''} onClick={() => onToggle(entry.value)} aria-pressed={on}>
-                <span>{format(entry.value)}</span><b>{entry.count}</b>
-              </button>
-            </li>
-          )
-        })}
+        {shown.map((entry) => (
+          <li key={entry.value}>
+            <button
+              type="button"
+              className={selected.includes(entry.value) ? 'is-on' : ''}
+              onClick={() => onToggle(entry.value)}
+              aria-pressed={selected.includes(entry.value)}
+              title={`${format(entry.value)} — ${entry.count} records`}
+            >
+              <span className="gm-facet-name">{format(entry.value)}</span>
+              <span className="gm-facet-bar" aria-hidden><i style={{ width: `${Math.round((entry.count / max) * 100)}%` }} /></span>
+              <b>{entry.count}</b>
+            </button>
+          </li>
+        ))}
       </ul>
-      {more > 0 ? <p className="bm-facet-more">+{more} more</p> : null}
     </section>
   )
 }
 
-export default function FacetRail({ scoped, filters, onToggle, onClear, indexSize }) {
-  const kinds = useMemo(() => facetCounts(scoped, 'kind', (row) => !filters.kind.length || filters.kind.includes(row.kind)), [scoped, filters.kind])
-  const sources = useMemo(() => facetCounts(scoped, 'source', (row) => !filters.source.length || filters.source.includes(row.source)), [scoped, filters.source])
-  const theaters = useMemo(() => facetCounts(scoped, 'theater', (row) => !filters.theater.length || filters.theater.includes(row.theater)), [scoped, filters.theater])
-  const tags = useMemo(() => facetCounts(scoped, 'tags', (row) => !filters.tag.length || row.tags.some((tag) => filters.tag.includes(tag))), [scoped, filters.tag])
-  const active = filters.kind.length + filters.source.length + filters.theater.length + filters.tag.length
-    + (filters.time !== 'any' ? 1 : 0) + (filters.minConfidence > 0 ? 1 : 0)
+export default function FacetRail({ records, filters, onToggle, onClear, active }) {
+  const types = useMemo(
+    () => OBJECT_KINDS
+      .map((kind) => ({ id: kind.id, count: records.filter((row) => row.kind === kind.id).length }))
+      .filter((entry) => entry.count > 0),
+    [records],
+  )
+  const sources = useMemo(() => facetCounts(records, 'source', (row) => !filters.source.length || filters.source.includes(row.source)), [records, filters.source])
+  const theaters = useMemo(() => facetCounts(records, 'theater', (row) => !filters.theater.length || filters.theater.includes(row.theater)), [records, filters.theater])
+  const tags = useMemo(() => facetCounts(records, 'tags', (row) => !filters.tag.length || row.tags.some((tag) => filters.tag.includes(tag))), [records, filters.tag])
 
   return (
-    <aside className="bm-facets" aria-label="Filters">
-      <div className="bm-facets-head">
-        <h3>Filters {active ? <span className="bm-facet-active">{active}</span> : null}</h3>
-        {active ? <button type="button" className="batman-btn batman-btn-ghost" onClick={onClear}>Clear</button> : null}
-      </div>
-      <p className="bm-facet-scope">{scoped.length} of {indexSize} objects in view</p>
-
-      <FacetGroup
-        title="Object type" entries={kinds} selected={filters.kind} limit={10}
-        onToggle={(value) => onToggle('kind', value)}
-        format={(value) => {
-          const kind = OBJECT_KINDS.find((entry) => entry.id === value)
-          return kind ? `${kind.icon} ${kind.label}` : value
-        }}
-      />
-      <FacetGroup title="Source" entries={sources} selected={filters.source} onToggle={(value) => onToggle('source', value)} />
-      <FacetGroup
-        title="Region" entries={theaters} selected={filters.theater} onToggle={(value) => onToggle('theater', value)}
-        format={theaterLabel}
-      />
-      <FacetGroup title="Tags" entries={tags} selected={filters.tag} onToggle={(value) => onToggle('tag', value)} />
-
-      <section className="bm-facet-group">
-        <h4>Time</h4>
-        <div className="bm-facet-times">
-          {TIME_RANGES.map((range) => (
-            <button
-              key={range.id}
-              type="button"
-              className={filters.time === range.id ? 'is-on' : ''}
-              onClick={() => onToggle('time', range.id)}
-            >
-              {range.label}
-            </button>
-          ))}
-        </div>
+    <aside className="gm-navigator" aria-label="Object navigator">
+      <section className="gm-nav-section">
+        <h3>Object types</h3>
+        <ul className="gm-type-list">
+          {OBJECT_KINDS.map((kind) => {
+            const Icon = ICONS[kind.icon] || FileText
+            const count = types.find((entry) => entry.id === kind.id)?.count || 0
+            return (
+              <li key={kind.id}>
+                <button
+                  type="button"
+                  className={filters.kind.includes(kind.id) ? 'is-on' : ''}
+                  onClick={() => onToggle('kind', kind.id)}
+                  aria-pressed={filters.kind.includes(kind.id)}
+                  disabled={!count}
+                >
+                  <Icon size={15} strokeWidth={1.5} aria-hidden />
+                  <span>{kind.label}</span>
+                  <b>{count}</b>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
       </section>
 
-      <section className="bm-facet-group">
-        <h4>Confidence at least {Math.round(filters.minConfidence * 100)}%</h4>
+      <FacetGroup title="Source" entries={sources} selected={filters.source} onToggle={(value) => onToggle('source', value)} />
+      <FacetGroup title="Theater" entries={theaters} selected={filters.theater} onToggle={(value) => onToggle('theater', value)} format={theaterLabel} />
+      <FacetGroup title="Tags" entries={tags} selected={filters.tag} onToggle={(value) => onToggle('tag', value)} />
+
+      <section className="gm-facet">
+        <h4>Time</h4>
+        <ul>
+          {TIME_RANGES.map((range) => (
+            <li key={range.id}>
+              <button
+                type="button"
+                className={filters.time === range.id ? 'is-on' : ''}
+                onClick={() => onToggle('time', range.id)}
+                aria-pressed={filters.time === range.id}
+              >
+                <span className="gm-facet-name">{range.label}</span>
+                <b>{filters.time === range.id ? '•' : ''}</b>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="gm-facet">
+        <h4>Confidence ≥ {Math.round(filters.minConfidence * 100)}%</h4>
         <input
           type="range" min="0" max="90" step="10"
           value={Math.round(filters.minConfidence * 100)}
@@ -91,6 +116,8 @@ export default function FacetRail({ scoped, filters, onToggle, onClear, indexSiz
           aria-label="Minimum confidence"
         />
       </section>
+
+      {active ? <button type="button" className="gm-clear" onClick={onClear}>Clear all filters</button> : null}
     </aside>
   )
 }

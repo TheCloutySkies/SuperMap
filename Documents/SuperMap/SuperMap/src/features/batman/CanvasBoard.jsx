@@ -18,6 +18,7 @@ import {
 import dagre from 'dagre'
 import '@xyflow/react/dist/style.css'
 import { EDGE_TYPES, edgeMeta, kindMeta } from './caseModel'
+import KindIcon from './kindIcons'
 
 const NODE_WIDTH = 190
 const NODE_HEIGHT = 86
@@ -28,7 +29,7 @@ function EvidenceNode({ data, selected }) {
     <article className={`batman-rf-card${selected ? ' is-selected' : ''}`}>
       <Handle type="target" position={Position.Left} className="batman-rf-handle" />
       <header>
-        <span aria-hidden>{meta.icon}</span>
+        <span aria-hidden><KindIcon name={meta.icon} /></span>
         <strong title={data.title}>{data.title}</strong>
       </header>
       <p>{data.subtitle || meta.label}</p>

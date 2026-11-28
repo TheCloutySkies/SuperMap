@@ -9,19 +9,20 @@
 
 export const SCHEMA_VERSION = 1
 
+/** Lucide component names — icons are rendered by lucide-react, never emoji. */
 export const NODE_KINDS = [
-  { id: 'person', label: 'Person', icon: '👤' },
-  { id: 'org', label: 'Organisation', icon: '🏛' },
-  { id: 'article', label: 'Article', icon: '📰' },
-  { id: 'event', label: 'Event', icon: '📍' },
-  { id: 'xpost', label: 'X post', icon: '𝕏' },
-  { id: 'text', label: 'Note', icon: '📝' },
-  { id: 'link', label: 'Link', icon: '🔗' },
-  { id: 'location', label: 'Location', icon: '🗺' },
-  { id: 'image', label: 'Image', icon: '🖼' },
-  { id: 'aircraft', label: 'Aircraft', icon: '✈' },
-  { id: 'vessel', label: 'Vessel', icon: '🚢' },
-  { id: 'signal', label: 'Signal', icon: '📡' },
+  { id: 'person', label: 'Person', icon: 'User' },
+  { id: 'org', label: 'Organisation', icon: 'Building2' },
+  { id: 'article', label: 'Article', icon: 'FileText' },
+  { id: 'event', label: 'Event', icon: 'MapPin' },
+  { id: 'xpost', label: 'X post', icon: 'AtSign' },
+  { id: 'text', label: 'Note', icon: 'StickyNote' },
+  { id: 'link', label: 'Link', icon: 'Link2' },
+  { id: 'location', label: 'Location', icon: 'Globe' },
+  { id: 'image', label: 'Image', icon: 'Image' },
+  { id: 'aircraft', label: 'Aircraft', icon: 'Plane' },
+  { id: 'vessel', label: 'Vessel', icon: 'Ship' },
+  { id: 'signal', label: 'Signal', icon: 'Radio' },
 ]
 
 export const NODE_KIND_IDS = NODE_KINDS.map((kind) => kind.id)

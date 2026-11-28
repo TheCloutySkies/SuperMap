@@ -33,6 +33,7 @@ import TimelineBoard from './TimelineBoard'
 import AnalysisPanel from './AnalysisPanel'
 import AiPanel from './AiPanel'
 import EnrichmentPanel from './EnrichmentPanel'
+import KindIcon from './kindIcons'
 import './batman.css'
 
 const TABS = [
@@ -302,7 +303,7 @@ export default function CasesWorkspace() {
                     onClick={() => addNode(kind.id)}
                     title={`Add ${kind.label.toLowerCase()}`}
                   >
-                    <span aria-hidden>{kind.icon}</span> {kind.label}
+                    <span aria-hidden><KindIcon name={kind.icon} /></span> {kind.label}
                   </button>
                 ))}
               </div>
@@ -414,7 +415,7 @@ export default function CasesWorkspace() {
                           aria-label="Link confidence"
                         />
                         <em style={{ color: edgeMeta(edge.type).color }}>{Math.round((edge.confidence || 0) * 100)}%</em>
-                        <button type="button" className="batman-btn batman-btn-ghost" onClick={() => removeEdge(edge.id)}>✕</button>
+                        <button type="button" className="batman-btn batman-btn-ghost" onClick={() => removeEdge(edge.id)} aria-label="Remove link">Remove</button>
                       </li>
                     ))}
                   </ul>
@@ -445,7 +446,7 @@ export default function CasesWorkspace() {
               <ul>
                 {nodes.map((node) => (
                   <li key={node.id}>
-                    <span aria-hidden>{kindMeta(node.kind).icon}</span>
+                    <span aria-hidden><KindIcon name={kindMeta(node.kind).icon} /></span>
                     <span>
                       <strong>{node.title}</strong>
                       <em>{node.ref?.source || kindMeta(node.kind).label}{node.t ? ` · ${stamp(node.t)}` : ''}</em>

@@ -13,7 +13,7 @@ export default function TimelineBoard({ caseDoc, onRetime, onSelect }) {
 
   const groups = useMemo(() => NODE_KINDS
     .filter((kind) => (caseDoc?.nodes || []).some((node) => node.kind === kind.id && Number.isFinite(node.t)))
-    .map((kind) => ({ id: kind.id, content: `${kind.icon} ${kind.label}` })), [caseDoc])
+    .map((kind) => ({ id: kind.id, content: kind.label })), [caseDoc])
 
   const items = useMemo(() => (caseDoc?.nodes || [])
     .filter((node) => Number.isFinite(node.t))

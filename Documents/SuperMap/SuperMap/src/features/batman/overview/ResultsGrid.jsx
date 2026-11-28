@@ -1,104 +1,133 @@
-/** Results appear only after a search or a narrowed view. Never a data firehose. */
+/** Dense, sortable results table. Empty until the user searches or narrows. */
 import { useMemo, useState } from 'react'
+import { ArrowDown, ArrowUp } from 'lucide-react'
 import { OBJECT_KINDS, theaterLabel } from './discoveryIndex'
 import { requestAddToCase } from '../caseStore'
 
-const PAGE_SIZE = 24
+const PAGE_SIZE = 80
 
 function stamp(ms) {
-  if (!Number.isFinite(ms) || ms <= 0) return ''
-  return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+  if (!Number.isFinite(ms) || ms <= 0) return '—'
+  return new Date(ms).toLocaleDateString('en-CA')
 }
 
-function cardItem(row) {
-  return {
-    title: row.title,
-    summary: row.summary,
-    type: row.kind,
-    source: row.source,
-    url: row.url,
-    id: row.sourceId || row.id,
-    tags: row.tags,
-    timestampMs: row.t,
-    lat: row.lat,
-    lon: row.lon,
-  }
-}
+const KIND_LABEL = Object.fromEntries(OBJECT_KINDS.map((kind) => [kind.id, kind.label]))
 
-export default function ResultsGrid({ rows, active, onOpen, onClear }) {
+const COLUMNS = [
+  { id: 'title', label: 'Title' },
+  { id: 'kind', label: 'Type' },
+  { id: 'source', label: 'Source' },
+  { id: 'theater', label: 'Theater' },
+  { id: 't', label: 'Time', mono: true },
+  { id: 'confidence', label: 'Confidence', mono: true },
+]
+
+export default function ResultsGrid({ rows, active, selectedId, onSelect, onClear, indexSize }) {
+  const [sort, setSort] = useState({ field: 't', dir: 'desc' })
   const [page, setPage] = useState(0)
-  const grouped = useMemo(() => {
-    const map = new Map()
-    for (const row of rows) {
-      const list = map.get(row.kind) || []
-      list.push(row)
-      map.set(row.kind, list)
-    }
-    return [...map.entries()]
-      .sort((a, b) => OBJECT_KINDS.findIndex((k) => k.id === a[0]) - OBJECT_KINDS.findIndex((k) => k.id === b[0]))
-  }, [rows])
+
+  const sorted = useMemo(() => {
+    const list = rows.slice()
+    list.sort((a, b) => {
+      const av = a[sort.field] ?? ''
+      const bv = b[sort.field] ?? ''
+      const result = typeof av === 'number' && typeof bv === 'number'
+        ? av - bv
+        : String(av).localeCompare(String(bv))
+      return sort.dir === 'asc' ? result : -result
+    })
+    return list
+  }, [rows, sort])
+
+  const visible = sorted.slice(0, (page + 1) * PAGE_SIZE)
+  const toggleSort = (field) => setSort((prev) => ({
+    field,
+    dir: prev.field === field && prev.dir === 'desc' ? 'asc' : 'desc',
+  }))
 
   if (!active) {
     return (
-      <section className="bm-results bm-results-empty">
-        <div className="bm-empty-mark" aria-hidden>⌕</div>
-        <h3>Start with a question</h3>
-        <p>
-          Search for a name, place or event, or pick an object type above. Nothing is loaded into this
-          page until you ask — the published data is indexed quietly in the background.
-        </p>
+      <section className="gm-results gm-empty">
+        <h2>No query active</h2>
+        <p>Enter a name, place or event in the search field, or select an object type or filter in the navigator.</p>
+        <p className="gm-empty-note">{indexSize} objects are indexed from published sources. Nothing is displayed until you ask for it.</p>
       </section>
     )
   }
   if (!rows.length) {
     return (
-      <section className="bm-results bm-results-empty">
-        <h3>No matches</h3>
-        <p>Try a shorter word, clear a filter, or widen the time range.</p>
-        <button type="button" className="batman-btn batman-btn-ghost" onClick={onClear}>Clear filters</button>
+      <section className="gm-results gm-empty">
+        <h2>No matching records</h2>
+        <p>Widen the time range or remove a filter.</p>
+        <button type="button" className="gm-btn" onClick={onClear}>Clear filters</button>
       </section>
     )
   }
 
-  const visibleCount = (page + 1) * PAGE_SIZE
   return (
-    <section className="bm-results" aria-label="Search results">
-      <div className="bm-results-head">
-        <h3>{rows.length} objects found</h3>
-        <span>Showing the first {Math.min(visibleCount, rows.length)}</span>
+    <section className="gm-results" aria-label="Results">
+      <div className="gm-results-head">
+        <h2>Results <span className="gm-num">{rows.length}</span></h2>
+        <span className="gm-hint">Showing {visible.length} of {rows.length}</span>
       </div>
-      {grouped.map(([kind, group]) => {
-        const meta = OBJECT_KINDS.find((entry) => entry.id === kind)
-        return (
-          <div className="bm-result-group" key={kind}>
-            <h4>{meta?.icon || '◈'} {meta?.label || kind} <span>{group.length}</span></h4>
-            <div className="bm-result-grid">
-              {group.slice(0, visibleCount).map((row) => (
-                <article className="bm-result-card" key={row.id}>
-                  <button type="button" className="bm-result-open" onClick={() => onOpen(row)}>
-                    <strong>{row.title}</strong>
-                    <p>{row.summary || 'No summary published.'}</p>
+      <div className="gm-table-wrap">
+        <table className="gm-table">
+          <thead>
+            <tr>
+              {COLUMNS.map((column) => (
+                <th key={column.id} className={column.mono ? 'gm-num' : ''}>
+                  <button type="button" onClick={() => toggleSort(column.id)} aria-label={`Sort by ${column.label}`}>
+                    {column.label}
+                    {sort.field === column.id ? (
+                      sort.dir === 'asc' ? <ArrowUp size={12} strokeWidth={1.5} aria-hidden /> : <ArrowDown size={12} strokeWidth={1.5} aria-hidden />
+                    ) : null}
                   </button>
-                  <div className="bm-result-meta">
-                    <span>{row.source || '—'}</span>
-                    <span>{stamp(row.t)}</span>
-                    <span>{theaterLabel(row.theater)}</span>
-                    <span>{Math.round(row.confidence * 100)}%</span>
-                  </div>
-                  <div className="bm-result-actions">
-                    <button type="button" className="batman-btn batman-btn-ghost" onClick={() => onOpen(row)}>Open</button>
-                    <button type="button" className="batman-btn" onClick={() => requestAddToCase(cardItem(row))}>Add to Case</button>
-                  </div>
-                </article>
+                </th>
               ))}
-            </div>
-          </div>
-        )
-      })}
-      {visibleCount < rows.length ? (
-        <button type="button" className="batman-btn batman-btn-ghost" onClick={() => setPage(page + 1)}>
-          Show more ({rows.length - visibleCount} left)
-        </button>
+              <th aria-label="Actions" />
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((row) => (
+              <tr
+                key={row.id}
+                className={selectedId === row.id ? 'is-selected' : ''}
+                onClick={() => onSelect(row)}
+                tabIndex={0}
+                onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') onSelect(row) }}
+              >
+                <td className="gm-title-cell">
+                  <strong>{row.title}</strong>
+                  {row.summary ? <span className="gm-row-summary">{row.summary}</span> : null}
+                </td>
+                <td>{KIND_LABEL[row.kind] || row.kind}</td>
+                <td>{row.source || '—'}</td>
+                <td>{theaterLabel(row.theater)}</td>
+                <td className="gm-num">{stamp(row.t)}</td>
+                <td className="gm-num">{Math.round(row.confidence * 100)}%</td>
+                <td>
+                  <button
+                    type="button"
+                    className="gm-row-action"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      requestAddToCase({
+                        title: row.title, summary: row.summary, type: row.kind,
+                        source: row.source, url: row.url, id: row.sourceId || row.id,
+                        tags: row.tags, timestampMs: row.t, lat: row.lat, lon: row.lon,
+                      })
+                    }}
+                  >
+                    Add to case
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {visible.length < rows.length ? (
+        <button type="button" className="gm-btn" onClick={() => setPage(page + 1)}>Load {Math.min(PAGE_SIZE, rows.length - visible.length)} more rows</button>
       ) : null}
     </section>
   )

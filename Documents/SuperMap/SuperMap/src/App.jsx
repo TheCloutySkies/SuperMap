@@ -23,6 +23,11 @@ import {
 } from './lib/appRoutes'
 import { loadChromePrefs, saveChromePrefs } from './lib/mapToolsPrefs'
 import OperationsHome from './components/operations/OperationsHome'
+import XpWindow from './components/xp/XpWindow'
+import Taskbar from './components/xp/Taskbar'
+import StartMenu from './components/xp/StartMenu'
+import { getXpWindows, minimizeWindow, restoreWindow, setActiveWindow, subscribeXpWindows, toggleStart } from './lib/xpWindows'
+import { refreshHomeNow } from './lib/homeStore'
 import CrimeIntelligenceView from './components/CrimeIntelligenceView'
 import WeatherView from './components/WeatherView'
 import BatmanView from './features/batman/BatmanView'
@@ -306,6 +311,17 @@ function App() {
   }, [navigate])
 
   const menuModes = visibleModes(modeVisibility)
+  const [xpState, setXpState] = useState(() => getXpWindows())
+  const [xpMaximized, setXpMaximized] = useState(true)
+  const xpTitle = activeView === 'home'
+    ? 'Good Palantir'
+    : (menuModes.find((mode) => mode.id === appMode)?.label || 'Good Palantir')
+
+  useEffect(() => subscribeXpWindows(setXpState), [])
+
+  useEffect(() => {
+    setActiveWindow({ route: location.pathname, title: xpTitle, id: activeView })
+  }, [location.pathname, activeView, xpTitle])
 
   const handleFlyTo = useCallback((opts) => {
     if (opts?.lng != null && opts?.lat != null) {
@@ -861,14 +877,37 @@ function App() {
         </MobileShell>
       ) : (
         <>
-      <main className={`main ${activeView === 'home' ? 'main--operations' : ''} ${footerTransition ? 'main--y2k-transition' : ''} ${isMapView ? 'main--map' : ''} ${isCrimeView ? 'main--crime' : ''}`}>
-        {mainContent}
-      </main>
+      <XpWindow
+        title={xpTitle}
+        maximized={xpMaximized}
+        onToggleMaximized={() => setXpMaximized((value) => !value)}
+        onHome={() => navigate('/')}
+      >
+        <main className={`main ${activeView === 'home' ? 'main--operations' : ''} ${isMapView ? 'main--map' : ''} ${isCrimeView ? 'main--crime' : ''}`}>
+          {mainContent}
+        </main>
+      </XpWindow>
       {sidebar}
         </>
       )}
       </div>
     </div>
+    <Taskbar
+      title={xpState.title === 'Good Palantir' ? '' : xpState.title}
+      minimized={xpState.minimized}
+      startOpen={xpState.startOpen}
+      onToggleStart={() => toggleStart()}
+      onMinimize={() => { minimizeWindow(); navigate('/') }}
+      onRestore={(entry) => { restoreWindow(entry.route); navigate(entry.route) }}
+      onSettings={() => handleFooterNav('SETTINGS')}
+    />
+    <StartMenu
+      open={xpState.startOpen}
+      onClose={() => toggleStart(false)}
+      onMode={(mode) => handleFooterNav(mode)}
+      onView={(viewId) => setActiveViewWithMode(viewId)}
+      onRefresh={() => refreshHomeNow({ force: true })}
+    />
     <MobileLayoutPrompt onChoice={() => setVisualsKey((k) => k + 1)} />
     {showTutorial && (
       <QuickTutorialModal

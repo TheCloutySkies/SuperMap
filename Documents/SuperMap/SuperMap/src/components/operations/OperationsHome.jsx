@@ -8,16 +8,18 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import {
   Activity, Bell, BriefcaseBusiness, ChartNoAxesCombined, CloudSun, Compass,
   FileText, Globe2, HardDrive, Map, Menu, Newspaper, Radio, Settings,
-  Shield, Telescope, Search, ChevronLeft, ChevronRight,
+  Telescope, Search, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import Panel, { Skeleton } from './Panel'
+import DraggableTabs from './DraggableTabs'
+import usePanelLayout from './usePanelLayout'
 import GasPrices from './GasPrices'
 import DataFreshness from '../DataFreshness'
 import { LatestBulletin } from '../../features/bulletin/BulletinBoardView'
 import ItemMenu from '../../features/accounts/ItemMenu'
 import { useSuperMapAccount } from '../../features/accounts/SuperMapAccounts'
 import { xImageProps } from '../../lib/snapshotClient'
-import { CRIME_VIEW_ID, WEATHER_VIEW_ID, BRAND_LOGO_SRC, BRAND_LOGO_ALT } from '../../constants'
+import { CRIME_VIEW_ID, WEATHER_VIEW_ID } from '../../constants'
 import { readHomeSnapshot, osintXToImages } from '../../lib/homeBootstrap'
 import { HOME_STATE, subscribeHome, startHomePolling, refreshHomeNow } from '../../lib/homeStore'
 import { subscribeConsole, startConsole } from '../../lib/consoleStore'
@@ -35,7 +37,6 @@ const StrategicOverviewWidget = lazy(() => import('../widgets/StrategicOverviewW
 const NextLaunchWidget = lazy(() => import('../widgets/NextLaunchWidget'))
 const ConflictMetricsWidget = lazy(() => import('../widgets/ConflictMetricsWidget'))
 const OutageWidget = lazy(() => import('../widgets/OutageWidget'))
-const WorldClock = lazy(() => import('../widgets/WorldClock'))
 
 const DOOMSDAY_SECONDS = 85
 
@@ -44,8 +45,7 @@ const MODES = [
   { id: 'MAPS', label: 'Maps', icon: Map, view: 'community-map' },
   { id: 'CRIME', label: 'Crime', icon: ChartNoAxesCombined, view: CRIME_VIEW_ID },
   { id: 'WEATHER', label: 'Weather', icon: CloudSun, view: WEATHER_VIEW_ID },
-  { id: 'STRATEGIC', label: 'Strategic', icon: Shield, view: 'batman-overview' },
-  { id: 'BATMAN', label: 'Batman', icon: BriefcaseBusiness, view: 'batman-overview' },
+  { id: 'BATMAN', label: 'Batman Mode', icon: BriefcaseBusiness, view: 'batman-overview' },
   { id: 'FEEDS', label: 'News', icon: Newspaper, view: 'news-feeds' },
   { id: 'BULLETIN', label: 'Bulletin', icon: Bell, view: 'bulletin' },
   { id: 'TOOLS', label: 'Tools', icon: Compass, view: 'tools' },
@@ -108,6 +108,8 @@ export default function OperationsHome({
   const [railOpen, setRailOpen] = useState(true)
   const [railCollapsed, setRailCollapsed] = useState(false)
   const [activeTab, setActiveTab] = useState('situation')
+  const layout = usePanelLayout(['situation', 'map', 'news', 'x', 'markets', 'hazards', 'orbital', 'batman', 'bulletin', 'crime'])
+  const [tabOrder, setTabOrder] = useState(['situation', 'conflict', 'outages'])
   const [cases, setCases] = useState([])
   const [photo, setPhoto] = useState(null)
   const searchRef = useRef(null)
@@ -182,10 +184,6 @@ export default function OperationsHome({
   return (
     <div className={`op-console op-dashboard operations-home${isMobileLayout ? ' operations-home--mobile' : ''}`}>
       <header className="op-command-bar">
-        <button type="button" className="op-brand" onClick={go('home')} aria-label="Home">
-          <img src={BRAND_LOGO_SRC} alt="" />
-          <span>{BRAND_LOGO_ALT}</span>
-        </button>
         <div className="op-command-search">
           <Search size={14} strokeWidth={1.5} aria-hidden />
           <input ref={searchRef} type="search" placeholder="Search or jump to a mode" aria-label="Search or jump" onKeyDown={(event) => {
@@ -197,7 +195,6 @@ export default function OperationsHome({
           <span className="op-key-hint">/</span>
         </div>
         <div className="op-command-right">
-          <Suspense fallback={<span className="op-muted">—</span>}><WorldClock /></Suspense>
           <span className="op-num op-command-clock">{clock.time} UTC · {clock.date}</span>
           {posture ? <span className="op-command-posture op-num">{posture.band} {posture.score}</span> : null}
           <DataFreshness />
@@ -234,12 +231,19 @@ export default function OperationsHome({
         </nav>
 
         <main className="op-grid">
-          <Panel index="01" title="Situation" area="sit" meta={threat?.threat_level || '—'} onOpen={go('batman-overview')} refreshing={bootstrapState === HOME_STATE.WAKING}>
-            <div className="op-tabs" role="tablist">
-              {['situation', 'conflict', 'outages'].map((tab) => (
-                <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} className={activeTab === tab ? 'is-on' : ''} onClick={() => setActiveTab(tab)}>{tab}</button>
-              ))}
-            </div>
+          <Panel index="01" title="Situation" {...layout.props('situation')} meta={threat?.threat_level || '—'} onOpen={go('batman-overview')} refreshing={bootstrapState === HOME_STATE.WAKING}>
+            <DraggableTabs
+              tabs={tabOrder}
+              active={activeTab}
+              onChange={setActiveTab}
+              onReorder={(from, to) => setTabOrder((prev) => {
+                const next = [...prev]
+                const [moved] = next.splice(from, 1)
+                next.splice(to, 0, moved)
+                return next
+              })}
+              label="Situation tabs"
+            />
             {activeTab === 'situation' ? (
               threat ? (
                 <div className="op-situation">
@@ -280,11 +284,11 @@ export default function OperationsHome({
             ) : null}
           </Panel>
 
-          <Panel index="02" title="Live map" area="map" meta="community" onOpen={go('osint-map')} flush>
+          <Panel index="02" title="Live map" {...layout.props('map')} meta="community" onOpen={go('osint-map')} flush>
             <Suspense fallback={<Skeleton rows={6} />}><CommunityMapView variant="home" /></Suspense>
           </Panel>
 
-          <Panel index="03" title="Headlines" area="news" meta={`${headlines.length} items`} onOpen={go('news-feeds')}>
+          <Panel index="03" title="Headlines" {...layout.props('news')} meta={`${headlines.length} items`} onOpen={go('news-feeds')}>
             {headlines.length ? (
               <ul className="op-headlines">
                 {headlines.map((item) => (
@@ -297,7 +301,7 @@ export default function OperationsHome({
             ) : <Skeleton rows={6} />}
           </Panel>
 
-          <Panel index="04" title="X / OSINT" area="x" meta={`${images.length} images`} onOpen={go('osint-x')}>
+          <Panel index="04" title="X / OSINT" {...layout.props('x')} meta={`${images.length} images`} onOpen={go('osint-x')}>
             {images.length ? (
               <div className="op-filmstrip">
                 {images.map((item, i) => (
@@ -310,21 +314,21 @@ export default function OperationsHome({
             ) : <Skeleton rows={3} />}
           </Panel>
 
-          <Panel index="05" title="Markets" area="mkt" onOpen={go('home')}>
+          <Panel index="05" title="Markets" {...layout.props('markets')} onOpen={go('home')}>
             <Suspense fallback={<Skeleton />}><StockWidget onOpenSettings={() => open('settings')} initialData={piece(home?.stocks, Boolean(home?.stocks?.current))} bootstrapState={bootstrapState} /></Suspense>
             <GasPrices gas={gas} states={home?.gasStates || []} onRefresh={() => refreshHomeNow({ force: true })} />
           </Panel>
 
-          <Panel index="06" title="Hazards" area="hzd" onOpen={go(WEATHER_VIEW_ID)}>
+          <Panel index="06" title="Hazards" {...layout.props('hazards')} onOpen={go(WEATHER_VIEW_ID)}>
             <Suspense fallback={<Skeleton />}><EarthquakesWidget onShowOnMap={onShowLocationOnMap} initialData={piece(home?.earthquakes, Array.isArray(home?.earthquakes?.events) && home.earthquakes.events.length > 0)} bootstrapState={bootstrapState} /></Suspense>
           </Panel>
 
-          <Panel index="07" title="Orbital" area="orb" onOpen={go('batman-overview')}>
+          <Panel index="07" title="Orbital" {...layout.props('orbital')} onOpen={go('batman-overview')}>
             <Suspense fallback={<Skeleton />}><SpaceWidget initialData={piece(home?.space, Boolean(home?.space?.eonet || home?.space?.apod))} bootstrapState={bootstrapState} /></Suspense>
             <Suspense fallback={<Skeleton />}><NextLaunchWidget bootstrapState={bootstrapState} /></Suspense>
           </Panel>
 
-          <Panel index="08" title="Batman" area="bat" onOpen={go('batman-cases')}>
+          <Panel index="08" title="Batman" {...layout.props('batman')} onOpen={go('batman-cases')}>
             {cases.length ? (
               <ul className="op-cases">
                 {cases.map((item) => <li key={item.id}><button type="button" onClick={() => open('batman-cases')}>{item.title || 'Untitled case'}</button><span className="op-num">{(item.nodes || []).length}</span></li>)}
@@ -333,11 +337,11 @@ export default function OperationsHome({
             <button type="button" className="op-btn op-btn-primary" onClick={() => open('batman-cases')}>New case</button>
           </Panel>
 
-          <Panel index="09" title="Bulletin" area="bul" onOpen={go('bulletin')}>
+          <Panel index="09" title="Bulletin" {...layout.props('bulletin')} onOpen={go('bulletin')}>
             <LatestBulletin onOpen={() => open('bulletin')} />
           </Panel>
 
-          <Panel index="10" title="Crime" area="crime" onOpen={go(CRIME_VIEW_ID)}>
+          <Panel index="10" title="Crime" {...layout.props('crime')} onOpen={go(CRIME_VIEW_ID)}>
             <p className="op-muted">National crime snapshot, state and city detail.</p>
             <button type="button" className="op-btn" onClick={() => open(CRIME_VIEW_ID)}>Open Crime Intelligence</button>
           </Panel>

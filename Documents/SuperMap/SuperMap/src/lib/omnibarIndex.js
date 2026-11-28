@@ -299,7 +299,7 @@ export const OMNIBAR_CORE_ENTRIES = Object.freeze([
   },
   {
     id: 'feed-osint',
-    label: 'OSINT Feeds',
+    label: 'OSINT (in GPN)',
     category: 'Feeds',
     keywords: ['osint', 'feeds', 'intel feed'],
     synonyms: ['signals'],

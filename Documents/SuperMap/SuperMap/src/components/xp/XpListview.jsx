@@ -6,14 +6,14 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 export default function XpListview({
   columns = [], rows = [], rowKey = (row, i) => row.id || String(i),
-  selectedId, onSelect, onOpen, emptyLabel = 'Nothing to show', label = 'List',
+  selectedId, onSelect, onOpen, emptyLabel = 'Nothing to show', label = 'List', sortable = true,
 }) {
   const [sort, setSort] = useState({ field: columns[0]?.key, dir: 'asc' })
   const bodyRef = useRef(null)
 
   const sorted = useMemo(() => {
     const list = rows.slice()
-    if (!sort.field) return list
+    if (!sortable || !sort.field) return list
     list.sort((a, b) => {
       const av = a[sort.field]
       const bv = b[sort.field]
@@ -23,7 +23,7 @@ export default function XpListview({
       return sort.dir === 'asc' ? result : -result
     })
     return list
-  }, [rows, sort])
+  }, [rows, sort, sortable])
 
   useEffect(() => {
     if (!selectedId || !bodyRef.current) return
@@ -48,14 +48,15 @@ export default function XpListview({
             role="columnheader"
             className={sort.field === column.key ? 'is-sorted' : ''}
             style={column.width ? { flex: `0 0 ${column.width}` } : undefined}
-            aria-sort={sort.field === column.key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+            aria-sort={sortable && sort.field === column.key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+            disabled={!sortable}
             onClick={() => setSort((prev) => ({
               field: column.key,
               dir: prev.field === column.key && prev.dir === 'asc' ? 'desc' : 'asc',
             }))}
           >
             {column.label}
-            {sort.field === column.key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
+            {sortable && sort.field === column.key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
           </button>
         ))}
       </div>

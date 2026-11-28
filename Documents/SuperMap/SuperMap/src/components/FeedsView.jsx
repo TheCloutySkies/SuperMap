@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import axios from 'axios'
 import ArticlePreviewSheet from './ArticlePreviewSheet'
 import DataFreshness from './DataFreshness'
+import XpListview from './xp/XpListview'
 import ThreatScoreButton from './ThreatScoreButton'
 import ItemMenu from '../features/accounts/ItemMenu'
 import { readHomeSnapshot, writeHomeSnapshot } from '../lib/homeBootstrap'
@@ -364,24 +365,6 @@ function NewsTile({ item, size = 'md', onOpen }) {
       </div>
     </button>
     <ThreatScoreButton item={item} kind="news" placement="card" />
-    <ItemMenu item={feedMenuItem(item)} />
-    </div>
-  )
-}
-
-function NewsTextRow({ item, onOpen }) {
-  return (
-    <div className="has-item-menu news-desk-text-wrap">
-    <ThreatScoreButton item={item} kind="news" placement="row" />
-    <button
-      type="button"
-      className="news-desk-text-row"
-      onClick={() => onOpen?.(item)}
-    >
-      <span className="news-desk-text-row-source">{item.source}</span>
-      <span className="news-desk-text-row-title">{item.title || 'Untitled'}</span>
-      <span className="news-desk-text-row-date">{formatStoryDate(item)}</span>
-    </button>
     <ItemMenu item={feedMenuItem(item)} />
     </div>
   )
@@ -861,74 +844,66 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
 
   const showNewsDesk = feedMode === FEED_MODE.NEWS || isNewsOnly
 
+  const storyColumns = [
+    {
+      key: 'title',
+      label: 'Headline',
+      render: (row) => (
+        <button type="button" className="feeds-list-row" onClick={() => setPreviewItem(row)}>
+          <span className="feeds-list-source">{row.source}</span>
+          <span className="feeds-list-title">{row.title || 'Untitled'}</span>
+          <span className="feeds-list-date">{formatStoryDate(row)}</span>
+        </button>
+      ),
+    },
+    {
+      key: 'actions',
+      label: '',
+      width: '84px',
+      render: (row) => (
+        <span className="feeds-list-actions">
+          <ThreatScoreButton item={row} kind="news" placement="row" />
+          <ItemMenu item={feedMenuItem(row)} />
+        </span>
+      ),
+    },
+  ]
+
   return (
     <div className={`feeds-dashboard feeds-dashboard--${feedMode === FEED_MODE.VIDEOS ? 'videos' : feedMode === FEED_MODE.NEWS ? 'news' : 'osint'}${showNewsDesk ? ' feeds-dashboard--news-desk' : ''}`}>
       {!showNewsDesk && (
-        <div className="feeds-dashboard-header">
-          <div className="feeds-dashboard-title-row">
-            <h1>{title}</h1>
-            <button
-              type="button"
-              className="feeds-refresh-btn"
-              onClick={refreshFeeds}
-              disabled={refreshing || loading}
-              title="Refresh"
-            >
-              {refreshing || loading ? '…' : '↻'} Refresh
-            </button>
-          </div>
-          <p className="feeds-dashboard-subtitle">
-            Breaking alerts, investigations, and defense OSINT
-          </p>
+        <div className="xp-page-tools" role="toolbar" aria-label={title}>
+          <button
+            type="button"
+            onClick={refreshFeeds}
+            disabled={refreshing || loading}
+            title="Refresh"
+          >
+            {refreshing || loading ? '…' : '↻'} Refresh
+          </button>
+          <span className="xp-spacer" />
+          <DataFreshness />
         </div>
       )}
 
       {showNewsDesk && (
         <div className="news-desk">
-          <header className="news-desk-masthead">
-            <div className="news-desk-masthead-brand">
-              <p className="news-desk-brand">Good Palantir</p>
-              <h1 className="news-desk-title">
-                <span className="news-desk-glowie">Glowie</span>{' '}
-                <span className="news-desk-title-rest">Report</span>
-              </h1>
-              <p className="news-desk-tagline">War, weather, politics, technology, and markets.</p>
-              <DataFreshness />
-            </div>
-            <button
-              type="button"
-              className="news-desk-refresh"
-              onClick={refreshFeeds}
-              disabled={refreshing || loading}
-            >
-              {refreshing || loading ? 'Updating…' : 'Refresh'}
-            </button>
-          </header>
-
-          <div className={`news-desk-search-wrap${quotaExhausted ? ' news-desk-search-wrap--emphasized' : ''}`}>
+          <div className="xp-page-tools" role="toolbar" aria-label="Glowie Report">
             <label className="news-desk-search-label" htmlFor="news-desk-search">
-              {quotaExhausted
-                ? 'MediaStack quota reached — search the local cache'
-                : 'Search headlines'}
+              {quotaExhausted ? 'Quota reached — search the cache' : 'Search'}
             </label>
             <input
               id="news-desk-search"
               type="search"
               className="news-desk-search"
-              placeholder={quotaExhausted ? 'Search cached articles by title, source, or topic…' : 'Search titles, publishers, topics…'}
+              placeholder={quotaExhausted ? 'Search cached articles…' : 'Search titles, publishers, topics…'}
               value={localSearch}
               onChange={(e) => setLocalSearch(e.target.value)}
               autoFocus={quotaExhausted}
             />
-            {quotaExhausted && (
-              <p className="news-desk-quota-note">
-                Live search is paused. Saved headlines are still below.
-              </p>
-            )}
             {(localQ || omnibarQ) && (
               <button
                 type="button"
-                className="news-desk-clear-search"
                 onClick={() => {
                   setLocalSearch('')
                   if (onClearFilter) onClearFilter()
@@ -937,9 +912,21 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
                 Clear search
               </button>
             )}
+            <button
+              type="button"
+              onClick={refreshFeeds}
+              disabled={refreshing || loading}
+            >
+              {refreshing || loading ? 'Updating…' : 'Refresh'}
+            </button>
+            <span className="xp-spacer" />
+            <DataFreshness />
           </div>
+          {quotaExhausted && (
+            <p className="xp-note">Live search is paused. Saved headlines are still below.</p>
+          )}
 
-          <div className="news-desk-sources" role="toolbar" aria-label="Filter by publisher">
+          <div className="news-desk-sources xp-page-tools" role="toolbar" aria-label="Filter by publisher">
             <button
               type="button"
               className={`news-desk-source-btn${sourceFilter === 'all' ? ' is-active' : ''}`}
@@ -959,7 +946,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
             ))}
           </div>
 
-          <div className="news-desk-categories" role="toolbar" aria-label="Filter by category">
+          <div className="news-desk-categories xp-page-tools" role="toolbar" aria-label="Filter by category">
             {CATEGORY_OPTIONS.map((cat) => (
               <button
                 key={cat.key}
@@ -1008,14 +995,18 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
                       <NewsTile key={item._key || item.link} item={item} size="md" onOpen={setPreviewItem} />
                     ))}
                   </div>
-                  <div className="news-desk-topic-list">
-                    {section.items
+                  <XpListview
+                    label={`${section.label} stories`}
+                    columns={storyColumns}
+                    rows={section.items
                       .filter((it, idx) => !(idx < 3 && articleImage(it)))
                       .slice(0, 12)
-                      .map((item) => (
-                        <NewsTextRow key={item._key || item.link} item={item} onOpen={setPreviewItem} />
-                      ))}
-                  </div>
+                      .map((item) => ({ ...item, id: item._key || item.link }))}
+                    rowKey={(row) => row.id}
+                    sortable={false}
+                    onOpen={(row) => setPreviewItem(row)}
+                    emptyLabel="No more stories in this topic."
+                  />
                 </section>
               ))}
             </>
@@ -1024,7 +1015,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
       )}
 
       {feedMode !== FEED_MODE.VIDEOS && !showNewsDesk && (
-        <div className="feeds-toolbar">
+        <div className="feeds-toolbar xp-page-tools">
           <div className="feeds-source-filter">
             <span className="feeds-toolbar-label">Source:</span>
             {SOURCE_SECTIONS_OSINT.map((sec) => (
@@ -1055,7 +1046,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
       )}
 
       {feedMode === FEED_MODE.VIDEOS && (
-        <div className="feeds-videos-toolbar">
+        <div className="feeds-videos-toolbar xp-page-tools">
           <span className="feeds-toolbar-label">Filter by tag:</span>
           <div className="feeds-video-tags">
             <button
@@ -1110,7 +1101,7 @@ export default function FeedsView({ title, activeView, keywordFilter = '', onCle
 
       {(feedMode === FEED_MODE.OSINT || isOsintOnly) && !showNewsDesk && (
         <div className="feeds-osint-section">
-          <div className="feeds-osint-subnav">
+          <div className="feeds-osint-subnav xp-page-tools">
             <button
               type="button"
               className={`feeds-osint-subnav-btn ${osintSub === OSINT_SUB.INTEL ? 'active' : ''}`}
